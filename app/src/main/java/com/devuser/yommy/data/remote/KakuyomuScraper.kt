@@ -17,7 +17,7 @@ class KakuyomuScraper @Inject constructor(
 
     private fun fetchHtml(url: String): String {
         val request = Request.Builder().url(url).build()
-        valresponse = okHttpClient.newCall(request).execute()
+        val response = okHttpClient.newCall(request).execute()
         if (!response.isSuccessful) throw IOException("Unexpected code $response")
         return response.body?.string() ?: throw IOException("Empty body")
     }

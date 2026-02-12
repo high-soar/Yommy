@@ -101,6 +101,10 @@ class NovelRepository @Inject constructor(
     }
 
     // --- Reading Progress ---
+    suspend fun updateReadingProgress(novelId: String, url: String, scrollY: Int) {
+        novelDao.updateReadingProgress(novelId, url, scrollY)
+    }
+
     // --- Background Task Helpers ---
 
     suspend fun checkAllUpdates() = withContext(Dispatchers.IO) {
