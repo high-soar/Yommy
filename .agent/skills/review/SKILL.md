@@ -53,7 +53,8 @@ When the reviewee notifies you of fixes:
 4.  Update the review file:
     -   Change `Status: Open` to `Status: Resolved` for addressed items.
     -   Add new comments if fixes are inadequate or new issues arise.
-5.  If *all* comments are resolved:
+5.  **DO NOT modify any file other than the review file.**
+6.  If *all* comments are resolved:
     -   Move the review file to `.agent/skills/review/review/Complete/`.
     -   Notify the user that the review is complete for that file.
 
