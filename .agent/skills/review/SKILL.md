@@ -34,12 +34,22 @@ When users ask for a review of a file or code:
 5.  Save the comments to a new file in `.agent/skills/review/review/In-Progress/`.
     -   Filename convention: `review_<target_filename_base>_<YYYYMMDD_HHmmss>.md` (e.g., `review_REQUIREMENTS_20241027_103000.md`).
 
-### 2. Verifying Fixes
+### 2. Workflow for Reviewees (実装者の対応)
 
-When users ask to verify fixes or check status:
+When you receive a review report:
+1.  **Analyze**: Read the comments and the target file.
+2.  **Fix**: Modify the *target file* (code or document) to address the issues.
+3.  **Report**: Add a response comment in the review file if necessary (e.g., to explain the fix or argue against it), but **DO NOT change the Status**.
+    -   Example: `Response: Fixed in commit abc1234.`
+4.  **Notify**: Tell the reviewer that fixes are ready for verification.
+    -   **PROHIBITED**: marking issues as `Resolved` or moving the file to `Complete`.
+
+### 3. Workflow for Reviewers (レビュアーの対応 - Verification)
+
+When the reviewee notifies you of fixes:
 1.  Identify the relevant review file in `.agent/skills/review/review/In-Progress/`.
 2.  Read the target file and the review file.
-3.  Check if the comments have been addressed.
+3.  Check if the comments have been properly addressed.
 4.  Update the review file:
     -   Change `Status: Open` to `Status: Resolved` for addressed items.
     -   Add new comments if fixes are inadequate or new issues arise.
