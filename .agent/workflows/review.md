@@ -1,5 +1,5 @@
 ---
-description: Devil's Advocate Review: Critically review design docs or code for fatal defects, logic gaps, and maintainability issues.
+description: Critically review design docs or code for fatal defects, logic gaps, and maintainability issues.
 ---
 
 1.  Read the `review` skill instructions (`.agent/skills/review/SKILL.md`) and the viewpoints (`.agent/skills/review/references/viewpoints.md`).

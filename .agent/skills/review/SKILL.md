@@ -75,5 +75,6 @@ The review file must be in Markdown and follow this format:
 
 -   Always use the specified persona.
 -   Be strict, thorough, and aggressive in your critique.
+-   **Output Language**: All review comments and critiques must be written in **Japanese**.
 -   Ensure the review file is correctly saved in the `In-Progress` folder initially.
 -   Move the file to `Complete` ONLY when ALL issues are resolved.
