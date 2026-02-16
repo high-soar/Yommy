@@ -76,48 +76,12 @@
 
 ---
 
-## 4. データ構造（データベース設計案）
+## 4. データ構造（データベース設計）
 
-### ① Novels テーブル（作品管理）
+詳細なデータベース設計については、以下の設計書を参照すること。
 
-| カラム名 | 型 | 説明 |
-| --- | --- | --- |
-| `id` | String | 作品ID（主キー） |
-| `title` | String | 作品タイトル |
-| `author` | String | 作者名 |
-| `total_chapters` | Int | **更新チェック用（最新の総話数）** |
-| `last_read_episode_id` | Long | 最後に読んだ話のID（修正: URLではなくID参照） |
-| `last_read_position` | String | 最後に読んだ位置（パラグラフIDまたはIndex） |
-| `id` | String | 作品ID（主キー） |
-| `source_url` | String | 作品URL（ブラウザで開く用） |
-| `title` | String | 作品タイトル |
-| `author` | String | 作者名 |
-| `tags` | String | タグ一覧（JSON形式などで保存） |
-| `total_chapters` | Int | **更新チェック用（最新の総話数）** |
-| `last_read_episode_id` | Long | 最後に読んだ話のID（修正: URLではなくID参照） |
-| `last_read_position` | String | 最後に読んだ位置（パラグラフIDまたはIndex） |
-| `site_source` | Enum | サイト識別（カクヨム/なろう） |
+* [DB設計書](file:///home/devuser/repos/Yommy/docs/02_基本設計書/02_DB設計書/01_DB設計書.md)
 
-### ② Episodes テーブル（キャッシュ・目次）
-
-**※ 必須要件（オフライン対応・高速化）**
-
-| カラム名 | 型 | 説明 |
-| :--- | :--- | :--- |
-| `id` | Long | エピソード一意識別子（主キー・AutoIncrement） |
-| `novel_id` | String | 親作品ID（外部キー） |
-| `url` | String | 話のURL（ユニーク制約だがPKではない） |
-| `title` | String | サブタイトル |
-| `index_order` | Int | 話数順序 |
-| `content_html` | String | **本文HTML（キャッシュ用）** |
-| `id` | Long | エピソード一意識別子（主キー・AutoIncrement） |
-| `novel_id` | String | 親作品ID（外部キー） |
-| `url` | String | 話のURL（ユニーク制約だがPKではない） |
-| `title` | String | サブタイトル |
-| `index_order` | Int | 話数順序 |
-| `is_read` | Boolean | 既読フラグ（true: 既読, false: 未読） |
-| `content_html` | String | **本文HTML（キャッシュ用）** |
-| `last_fetched_at` | Long | 最終取得日時 |
 
 ---
 
