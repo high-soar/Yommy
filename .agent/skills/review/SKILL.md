@@ -5,69 +5,81 @@ description: Acts as a Devil's Advocate to critically review design documents an
 
 # Review Skill
 
-This skill allows Claude to act as a "Devil's Advocate" reviewer, providing critical feedback on design documents and code.
+This skill manages a structured code/document review process with two distinct roles: **Reviewer** and **Reviewee**.
 
-## Persona
+## Roles
 
-You are a "Supreme Critic" specialized in logical consistency and risk management.
-You must adopt the "Devil's Advocate" persona:
--   **DO NOT** mention any good points.
--   Aggressively point out ambiguous expressions, logical leaps, and lack of evidence.
--   Assume the worst-case scenario: "What if X happens? Won't this collapse?"
+Each role is defined in a separate file. **Read only the role file relevant to the current step.**
 
-See [references/viewpoints.md](references/viewpoints.md) for detailed definitions and criteria for each category.
+| Role | File | When to Read |
+|------|------|-------------|
+| Reviewer | [reviewer.md](references/roles/reviewer.md) | Step 1 (レビュー依頼), Step 3 (修正確認) |
+| Reviewee | [reviewee.md](references/roles/reviewee.md) | Step 2 (レビュー修正) |
 
-1.  **Fatal Defect (致命的な欠陥)**
-2.  **Logical Contradiction (論理的矛盾)**
-3.  **Lack of Concreteness (具体性の欠如)**
+## Review Viewpoints
+
+See [viewpoints.md](references/viewpoints.md) for detailed review criteria and categories:
+
+1. **Fatal Defect (致命的な欠陥)**
+2. **Logical Contradiction (論理的矛盾)**
+3. **Lack of Concreteness (具体性の欠如)**
+
+## Directory Structure
+
+Review comments are project assets stored at the **project root**:
+
+```
+<project_root>/
+└── review/
+    ├── Pending/        # Step 1: レビュー指摘（未修正）
+    ├── In-Progress/    # Step 2: 修正済み（確認待ち）
+    └── Complete/       # Step 3: 完了
+```
 
 ## Workflow
 
-### 1. Drafting Review
+### Step 1: レビュー依頼（Reviewer）
 
-When users ask for a review of a file or code:
-1.  Read the target file.
-2.  Read [references/viewpoints.md](references/viewpoints.md) to understand the review criteria.
-3.  If in a git repository, get the current commit ID using `git rev-parse HEAD`. If not, use "Uncommitted".
-3.  Analyze the file using the "Devil's Advocate" persona.
-4.  Generate review comments in the specified Markdown format.
-5.  Save the comments to a new file in `.agent/skills/review/review/In-Progress/`.
-    -   Filename convention: `review_<target_filename_base>_<YYYYMMDD_HHmmss>.md` (e.g., `review_REQUIREMENTS_20241027_103000.md`).
+**Role**: [reviewer.md](references/roles/reviewer.md) を読み込む。
 
-### 2. Workflow for Reviewees (実装者の対応)
+1. レビュー対象ファイルを精読する。
+2. [viewpoints.md](references/viewpoints.md) のレビュー観点を確認する。
+3. Gitリポジトリ内であれば `git rev-parse HEAD` で Commit ID を取得する。
+4. Devil's Advocateペルソナで分析し、レビューコメントを生成する。
+5. コメントファイルを `review/Pending/` に保存する。
+   - ファイル名: `review_<対象ファイル名>_<YYYYMMDD_HHmmss>.md`
 
-When you receive a review report:
-1.  **Analyze**: Read the comments and the target file.
-2.  **Fix**: Modify the *target file* (code or document) to address the issues.
-3.  **Report**: Add a response comment in the review file if necessary (e.g., to explain the fix or argue against it), but **DO NOT change the Status**.
-    -   Example: `Response: Fixed in commit abc1234.`
-4.  **Notify**: Tell the reviewer that fixes are ready for verification.
-    -   **PROHIBITED**: marking issues as `Resolved` or moving the file to `Complete`.
+### Step 2: レビュー修正（Reviewee）
 
-### 3. Workflow for Reviewers (レビュアーの対応 - Verification)
+**Role**: [reviewee.md](references/roles/reviewee.md) を読み込む。
 
-When the reviewee notifies you of fixes:
-1.  Identify the relevant review file in `.agent/skills/review/review/In-Progress/`.
-2.  Read the target file and the review file.
-3.  Check if the comments have been properly addressed.
-4.  Update the review file:
-    -   Change `Status: Open` to `Status: Resolved` for addressed items.
-    -   Add new comments if fixes are inadequate or new issues arise.
-5.  **DO NOT modify any file other than the review file.**
-6.  If *all* comments are resolved:
-    -   Move the review file to `.agent/skills/review/review/Complete/`.
-    -   Notify the user that the review is complete for that file.
+1. `review/Pending/` からレビューファイルを読む。
+2. 対象ファイルを修正する。
+3. レビューファイルを更新する（Response, 水平展開を記入）。
+4. レビューファイルを `review/In-Progress/` に移動する。
+5. レビュアーに修正完了を通知する。
+
+### Step 3: 修正確認（Reviewer）
+
+**Role**: [reviewer.md](references/roles/reviewer.md) を読み込む。
+
+1. `review/In-Progress/` からレビューファイルを読む。
+2. 修正内容と水平展開の妥当性を確認する。
+3. `Reviewer Verification` セクションを記入する。
+4. 判定:
+   - **全コメントOK** → Status を Resolved に変更。ファイルを `review/Complete/` に移動。
+   - **NGあり** → 再コメントを記載。ファイルを `review/Pending/` に移動。Step 2 に戻す。
+
+**IMPORTANT**: レビューファイル以外のファイルを修正してはならない。
 
 ## Review File Format
-
-The review file must be in Markdown and follow this format:
 
 ```markdown
 # Review Report
 
 *   **Target File**: <Absolute Path to File>
 *   **Review Date**: <YYYY-MM-DD HH:mm:ss>
-*   **Commit ID**: <Commit ID or "Uncommited">
+*   **Commit ID**: <Commit ID or "Uncommitted">
 
 ## Comments
 
@@ -77,6 +89,15 @@ The review file must be in Markdown and follow this format:
 *   **Critique**:
     <Critical comment content>
 *   **Status**: Open
+*   **Response**:
+    （レビューイが記入: 修正内容の説明、または反論の理由）
+*   **Horizontal Deployment (水平展開)**:
+    *   **Required**: Yes / No
+    *   **Details**: （Yes: 対象ファイルと変更内容 / No: 不要の理由）
+*   **Reviewer Verification (修正確認)**:
+    *   **Fix Result**: OK / NG
+    *   **Horizontal Deployment Check**: OK / NG / N/A
+    *   **Re-comment**: （NGの場合の再コメント）
 
 ### 2. <Title of the Issue>
 ...
@@ -84,8 +105,8 @@ The review file must be in Markdown and follow this format:
 
 ## Instructions for Claude
 
--   Always use the specified persona.
--   Be strict, thorough, and aggressive in your critique.
--   **Output Language**: All review comments and critiques must be written in **Japanese**.
--   Ensure the review file is correctly saved in the `In-Progress` folder initially.
--   Move the file to `Complete` ONLY when ALL issues are resolved.
+- ステップに応じて対応するロールファイルのみを読み込むこと。
+- レビュー時は厳格かつ徹底的に批評すること。
+- **出力言語**: レビューコメントは **日本語** で記述すること。
+- Step 1 では `review/Pending/` にファイルを保存すること。
+- Step 3 で全コメントが Resolved の場合のみ `review/Complete/` に移動すること。
