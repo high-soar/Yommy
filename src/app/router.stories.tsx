@@ -1,0 +1,132 @@
+import type { Meta, StoryObj } from "@storybook/react";
+import React from "react";
+import { RouterProvider, useRouter } from "./router";
+
+export const RouterStateInspector: React.FC = () => {
+  const router = useRouter();
+
+  return (
+    <div
+      data-testid="router-inspector"
+      className="p-4 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 space-y-3 font-sans max-w-md"
+    >
+      <h2 className="text-base font-bold text-slate-900">
+        ルーター状態インスペクター
+      </h2>
+      <div className="space-y-1 font-mono text-sm bg-white p-3 rounded border border-slate-200">
+        <div data-testid="current-path">Path: {router.currentPath}</div>
+        <div data-testid="route-name">Route: {router.route.name}</div>
+        {router.route.name === "novel-detail" && (
+          <div data-testid="route-novel-id">
+            Novel ID: {router.route.novelId}
+          </div>
+        )}
+        {router.route.name === "reader" && (
+          <>
+            <div data-testid="route-novel-id">
+              Novel ID: {router.route.novelId}
+            </div>
+            <div data-testid="route-chapter-index">
+              Chapter: {router.route.chapterIndex}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-2 pt-2">
+        <button
+          type="button"
+          data-testid="nav-bookshelf-button"
+          onClick={() => router.navigateToBookshelf()}
+          className="px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700"
+        >
+          本棚へ
+        </button>
+        <button
+          type="button"
+          data-testid="nav-detail-button"
+          onClick={() =>
+            router.navigateToNovelDetail("kakuyomu:16817330658027210412")
+          }
+          className="px-3 py-1.5 bg-emerald-600 text-white rounded text-xs font-medium hover:bg-emerald-700"
+        >
+          作品詳細へ
+        </button>
+        <button
+          type="button"
+          data-testid="nav-reader-button"
+          onClick={() =>
+            router.navigateToReader("kakuyomu:16817330658027210412", 2)
+          }
+          className="px-3 py-1.5 bg-purple-600 text-white rounded text-xs font-medium hover:bg-purple-700"
+        >
+          第2話へ
+        </button>
+        <button
+          type="button"
+          data-testid="nav-unknown-button"
+          onClick={() => router.navigate("/unknown/route")}
+          className="px-3 py-1.5 bg-slate-600 text-white rounded text-xs font-medium hover:bg-slate-700"
+        >
+          未知ルートへ
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const meta: Meta<typeof RouterProvider> = {
+  title: "App/Router",
+  component: RouterProvider,
+};
+
+export default meta;
+type Story = StoryObj<typeof RouterProvider>;
+
+/**
+ * 本棚画面ルート（/）の初期表示ストーリー
+ */
+export const BookshelfRoute: Story = {
+  name: "本棚画面ルート（/）",
+  render: () => (
+    <RouterProvider initialPath="/">
+      <RouterStateInspector />
+    </RouterProvider>
+  ),
+};
+
+/**
+ * 作品詳細・目次画面ルート（/novels/:novelId）の初期表示ストーリー
+ */
+export const NovelDetailRoute: Story = {
+  name: "作品詳細画面ルート（/novels/:novelId）",
+  render: () => (
+    <RouterProvider initialPath="/novels/kakuyomu%3A16817330658027210412">
+      <RouterStateInspector />
+    </RouterProvider>
+  ),
+};
+
+/**
+ * 小説リーダー画面ルート（/novels/:novelId/chapters/:chapterIndex）の初期表示ストーリー
+ */
+export const ReaderRoute: Story = {
+  name: "小説リーダー画面ルート（/novels/:novelId/chapters/:chapterIndex）",
+  render: () => (
+    <RouterProvider initialPath="/novels/kakuyomu%3A16817330658027210412/chapters/1">
+      <RouterStateInspector />
+    </RouterProvider>
+  ),
+};
+
+/**
+ * 未知のパスアクセス時の本棚フォールバック表示ストーリー
+ */
+export const UnknownFallbackRoute: Story = {
+  name: "未知パスフォールバックルート",
+  render: () => (
+    <RouterProvider initialPath="/unknown/non-existent-page">
+      <RouterStateInspector />
+    </RouterProvider>
+  ),
+};
