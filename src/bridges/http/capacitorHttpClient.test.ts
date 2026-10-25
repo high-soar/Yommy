@@ -1,17 +1,26 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { CapacitorHttp } from "@capacitor/core";
+import {
+  CapacitorHttp,
+  type HttpResponse as CapHttpResponse,
+} from "@capacitor/core";
 import { CapacitorHttpClient, HttpError } from "./capacitorHttpClient";
+
+vi.mock("@capacitor/core", () => ({
+  CapacitorHttp: {
+    get: vi.fn(),
+  },
+}));
 
 describe("CapacitorHttpClient", () => {
   let client: CapacitorHttpClient;
 
   beforeEach(() => {
     client = new CapacitorHttpClient();
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   describe("正常系リクエストの送信とレスポンス解決", () => {
@@ -96,6 +105,20 @@ describe("CapacitorHttpClient", () => {
       });
 
       expect(res.url).toBe("https://example.com/fallback-check");
+    });
+
+    it("レスポンスの headers が未定義の場合は空オブジェクトをフォールバック利用すること", async () => {
+      vi.spyOn(CapacitorHttp, "get").mockResolvedValueOnce({
+        status: 200,
+        url: "https://example.com/no-headers",
+        data: "<p>ヘッダーなし</p>",
+      } as unknown as CapHttpResponse);
+
+      const res = await client.getHtml({
+        url: "https://example.com/no-headers",
+      });
+
+      expect(res.headers).toEqual({});
     });
   });
 
@@ -230,7 +253,7 @@ describe("CapacitorHttpClient", () => {
 
   describe("HTTP エラーとネットワーク例外のハンドリング", () => {
     it("ステータスコードが 400 以上の場合は HttpError を送出すること", async () => {
-      vi.spyOn(CapacitorHttp, "get").mockResolvedValueOnce({
+      vi.spyOn(CapacitorHttp, "get").mockResolvedValue({
         status: 404,
         url: "https://example.com/not-found",
         data: "Not Found",

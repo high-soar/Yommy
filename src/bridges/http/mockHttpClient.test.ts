@@ -94,6 +94,17 @@ describe("MockHttpClient", () => {
       expect(res.headers).toEqual({});
     });
 
+    it("レスポンスオブジェクトで html が省略された場合に空文字がデフォルト適用されること", async () => {
+      client.setResponse("https://example.com/no-html", {
+        status: 204,
+      });
+
+      const res = await client.getHtml({ url: "https://example.com/no-html" });
+
+      expect(res.status).toBe(204);
+      expect(res.html).toBe("");
+    });
+
     it("カスタムステータスコードやリダイレクト後 URL が明示された場合は指定値が尊重されること", async () => {
       client.setResponse("https://example.com/redirect", {
         status: 302,
