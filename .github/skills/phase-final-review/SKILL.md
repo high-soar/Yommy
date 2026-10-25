@@ -8,6 +8,7 @@ description: "Use when orchestrating a cross-deliverable review at the end of a 
 このスキルは、Phase 完了時（Phase 3 PoC 完了等）やミニリリース Milestone（`v0.1`, `v0.2` 等）の完了節目に実施する **全体横断レビューおよび品質分析（Kaizen）連携のオーケストレーション手順** を定めます。
 
 3段階ゲート運用およびレビューコメント集約フォーマットの正本（SSOT）は以下を参照してください：
+
 - [docs/guidelines/workflow.md](../../../docs/guidelines/workflow.md#5-ミニリリース-milestone-と品質改善kaizenループ)
 - [docs/guidelines/review-comment-format.md](../../../docs/guidelines/review-comment-format.md#5-節目横断レビューphase--ミニmilestone-完了レビューの集約形式)
 
@@ -34,6 +35,7 @@ description: "Use when orchestrating a cross-deliverable review at the end of a 
    - **観点 C（結合テスト回帰保証と品質記録の整合性）**: `test/it/` の `SCN-01`〜 が過去機能を含め最新仕様を網羅しているか、`docs/quality/bug-and-handover-log.md` に原因 `D` の設計同期漏れがないか。
 
    各サブエージェントへの指示プロンプトには以下を明記する：
+
    ```text
    - レビュー対象 SHA: <commit-sha>
    - 参照正本: docs/guidelines/testing.md, docs/guidelines/workflow.md, docs/specs/
@@ -41,6 +43,7 @@ description: "Use when orchestrating a cross-deliverable review at the end of a 
    - 制約: 読み取り専用（ファイル編集・コミット・GitHub コメント投稿は禁止）
    - 出力形式: docs/guidelines/review-comment-format.md に従い、[P0]〜[P3] の重要度と 4要素（Location, Problem, Impact, Recommendation）で報告すること（指摘なしの場合も確認範囲を報告）。
    ```
+
 3. **メインセッションでの事実検証と品質ゲート実行**:
    - 全サブエージェントの応答完了後、サブエージェントを明示的に終了（`manage_subagents` の `kill` / `kill_all`）する。
    - 報告された候補をメインセッションで実際のコード・正本と照合し、誤検知を除外して重複を整理する。
@@ -61,4 +64,3 @@ Round 1 横断レビュー完了後、以下の手順で Step 2（Sub-issue に�
    - 多発した原因や IT/横断レビューまで流出した不備について、再発防止策として **`docs/guidelines/` や `.github/skills/*/SKILL.md` のチェック項目・規約を直接アップデート（Kaizen）** し、同一 PR に含める。
 3. **Round 2 収束確認と人間承認（Step 3）**:
    - Kaizen PR がマージされた後、追跡 Issue 上で全指摘の解消（Round 2 指摘なし）をコメント報告し、人間による Milestone 最終承認を待つ。
-

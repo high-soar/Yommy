@@ -22,12 +22,12 @@ related_tests: []
 
 プロジェクトのフェーズに応じて、スピードと品質ガバナンスのバランスを最適化したハイブリッド進行を採用します。
 
-| フェーズ | 名称・目的 | 進行・コミット方式 |
-| :--- | :--- | :--- |
-| **Phase 1** | **AI開発基盤構築**<br>（`docs/guidelines/`, `AGENTS.md`, Skills, Agents 整備） | 人間と対話しながら `main` ブランチ等へ**直接コミット**で迅速に構築 |
-| **Phase 2** | **新要求仕様の深掘り・全体骨格設計**<br>（`docs/specs/` 初期正本4冊の策定・合意） | 人間と対話しながら**直接コミット**でスピーディに合意形成（合意後 `Approved` 化） |
-| **Phase 3** | **PoC（Walking Skeleton）**<br>（Vite+React+Capacitor+CI 構築、技術リスク4点の最小縦貫通） | **GitHub Issue ＋ PR ＋ 独立AIレビュー（`pr-reviewer`）＋ Task Completion Gate（7条件）** を実地検証 |
-| **Phase 4〜** | **本開発（イテレーティブ開発）**<br>（PoC基盤を進化継承し、要望単位で機能開発） | 要望（親Issue）単位の **Issue駆動マイクロ・ウォーターフォール** ＋ **ミニリリース Milestone 横断レビュー** |
+| フェーズ      | 名称・目的                                                                                 | 進行・コミット方式                                                                                         |
+| :------------ | :----------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- |
+| **Phase 1**   | **AI開発基盤構築**<br>（`docs/guidelines/`, `AGENTS.md`, Skills, Agents 整備）             | 人間と対話しながら `main` ブランチ等へ**直接コミット**で迅速に構築                                         |
+| **Phase 2**   | **新要求仕様の深掘り・全体骨格設計**<br>（`docs/specs/` 初期正本4冊の策定・合意）          | 人間と対話しながら**直接コミット**でスピーディに合意形成（合意後 `Approved` 化）                           |
+| **Phase 3**   | **PoC（Walking Skeleton）**<br>（Vite+React+Capacitor+CI 構築、技術リスク4点の最小縦貫通） | **GitHub Issue ＋ PR ＋ 独立AIレビュー（`pr-reviewer`）＋ Task Completion Gate（7条件）** を実地検証       |
+| **Phase 4〜** | **本開発（イテレーティブ開発）**<br>（PoC基盤を進化継承し、要望単位で機能開発）            | 要望（親Issue）単位の **Issue駆動マイクロ・ウォーターフォール** ＋ **ミニリリース Milestone 横断レビュー** |
 
 ---
 
@@ -69,14 +69,15 @@ flowchart LR
 
 `docs/specs/` 配下の設計ドキュメントの状態は、各ファイル先頭の YAML フロントマター内の `status` フィールドで管理します（詳細は [docs/index.md](../index.md#4-okfopen-knowledge-formatyaml-フロントマター規約) 参照）。
 
-| 状態 | `status` 表記例 | 意味・遷移条件 |
-| :--- | :--- | :--- |
-| **`Draft`** | `Draft` | 初期作成中・対話検討中（Phase 2 の初期ドラフト等） |
-| **`Review`** | `Review (#12)` | PR 提出済み・レビュー待ち。個別作業 PR では必ず `Review` 状態とし、AI が勝手に `Approved` に書き換えてはならない |
-| **`Approved`** | `Approved (Phase 2)` / `Approved (#12)` | 人間レビュアーによる合意・承認完了 |
-| **`Completed`** | `Completed (Archived)` | 親 Issue の全工程が完了し、`docs/specs/changes/archive/` へアーカイブされた差分仕様 |
+| 状態            | `status` 表記例                         | 意味・遷移条件                                                                                                   |
+| :-------------- | :-------------------------------------- | :--------------------------------------------------------------------------------------------------------------- |
+| **`Draft`**     | `Draft`                                 | 初期作成中・対話検討中（Phase 2 の初期ドラフト等）                                                               |
+| **`Review`**    | `Review (#12)`                          | PR 提出済み・レビュー待ち。個別作業 PR では必ず `Review` 状態とし、AI が勝手に `Approved` に書き換えてはならない |
+| **`Approved`**  | `Approved (Phase 2)` / `Approved (#12)` | 人間レビュアーによる合意・承認完了                                                                               |
+| **`Completed`** | `Completed (Archived)`                  | 親 Issue の全工程が完了し、`docs/specs/changes/archive/` へアーカイブされた差分仕様                              |
 
 ### 局所的再承認（Local Re-approval）ルール
+
 - 設計更新 PR（または実装中に原因 `D` で設計書を同期修正した PR）を人間がレビューしてマージした時点で、当該設計書は承認（`Approved`）されたものとみなします。
 - 節目（Phase 2 完了時やミニリリース Milestone 完了時）の全体横断レビュー完了時に、対象ドキュメントの YAML フロントマター `status` を一括で `Approved` に揃えます。
 

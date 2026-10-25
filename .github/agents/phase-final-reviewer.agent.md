@@ -16,4 +16,3 @@ description: "Coordinate a cross-deliverable review at the end of a Phase (e.g.,
 - [docs/guidelines/review-comment-format.md](../../docs/guidelines/review-comment-format.md#5-節目横断レビューphase--ミニmilestone-完了レビューの集約形式)
 
 この Agent 自身は実装修正や PR マージを行わず、検証結果を指定の追跡 Issue に構造化コメントとして記録し、Step 2（指摘是正・品質分析レポート作成 Sub-issue）へ引き継ぎます。
-

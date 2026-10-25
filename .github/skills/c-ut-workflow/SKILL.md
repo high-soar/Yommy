@@ -50,6 +50,7 @@ MK 作業はファイル編集数やテスト・VRT 実行ログが多く、メ�
 ワーカー（または小規模変更を直接行うエージェント）は、[docs/guidelines/testing.md](../../../docs/guidelines/testing.md) の各規律を以下の手順で実行します。
 
 ### Step 1: Red（テスト・Story 先行作成と失敗確認）
+
 - **Parser Layer**: `__fixtures__/*.html` にテスト用 HTML を用意し、`*.test.ts` で抽出期待値（タイトル、目次、`<ruby>`・傍点保持、サニタイズ、異常系）を日本語の `it("... (AC-xx)")` で記述する。
 - **Storage Layer**: `resetTestDb()` で初期化するインメモリ DB を用い、Repository の CRUD・境界値テストを `*.test.ts` に記述する。
 - **Viewer & Bridge Layer**:
@@ -58,14 +59,17 @@ MK 作業はファイル編集数やテスト・VRT 実行ログが多く、メ�
 - **失敗確認とコミット**: `npx vitest run <対象テスト>` を実行し、未実装により期待通り失敗することを確認して `test(<scope>): ...（Red）` をコミットする。
 
 ### Step 2: Green（最小実装）
+
 - テストをパスさせる最小限の実装コードを作成する（YAGNI 原則、[ponytail スキル](../ponytail/SKILL.md) 参照）。
 - 対象テストを実行して全件 PASS を確認し、`feat(<scope>): ...（Green）`（または `fix`）をコミットする。
 
 ### Step 3: Refactor（構造・型安全性の改善）
+
 - テストが Green の状態を維持したまま、重複排除・型定義の厳密化・可読性向上を行い、再度テスト PASS を確認して `refactor(<scope>): ...（Refactor）` をコミットする。
 - ※Green / Refactor 中にテストケース漏れや期待値誤りに気づいた場合は、プロダクションコードとテストを同時に書き換えず、一度テストを追加・修正して Red を確認してから実装を直すこと。
 
 ### Step 4: 局所検証・カバレッジ・VRT・不備記録
+
 1. `npm run test:coverage` を実行し、変更・追加した全ファイルの **C0 / C1 / Functions カバレッジが 100%** であることを確認する（不正な `v8 ignore` は使用禁止）。
 2. `npm run typecheck`, `npm run lint`, `npm run format:check` を実行し PASS を確認する。
 3. Story を追加・変更した場合は `npm run test:vrt:update` → `npm run test:vrt` を実行し、1280px / 375px のスナップショットが正しく生成・検証されることを確認する。
@@ -75,14 +79,13 @@ MK 作業はファイル編集数やテスト・VRT 実行ログが多く、メ�
 
 ## 3. 標準コマンド一覧（Phase 3 で `package.json` 整備後に有効化）
 
-| コマンド | 用途 |
-| :--- | :--- |
-| `npm run typecheck` | TypeScript 型検査 |
-| `npm run lint` | ESLint 静的解析 |
-| `npm run format:check` / `npm run format` | Prettier 書式検査 / 自動整形 |
-| `npm run test:unit` | Vitest 単体テスト実行 |
-| `npm run test:coverage` | Vitest カバレッジ計測（C0/C1/Functions 100% 検証） |
+| コマンド                                       | 用途                                                        |
+| :--------------------------------------------- | :---------------------------------------------------------- |
+| `npm run typecheck`                            | TypeScript 型検査                                           |
+| `npm run lint`                                 | ESLint 静的解析                                             |
+| `npm run format:check` / `npm run format`      | Prettier 書式検査 / 自動整形                                |
+| `npm run test:unit`                            | Vitest 単体テスト実行                                       |
+| `npm run test:coverage`                        | Vitest カバレッジ計測（C0/C1/Functions 100% 検証）          |
 | `npm run test:vrt` / `npm run test:vrt:update` | Storybook VRT 実行 / スナップショット更新（1280px / 375px） |
-| `npm run test:it` | Playwright 実ブラウザ結合テスト（`SCN-01`〜）実行 |
-| `npm run build && npx cap sync android` | Web 本番ビルド ＆ Capacitor Android プロジェクトへの同期 |
-
+| `npm run test:it`                              | Playwright 実ブラウザ結合テスト（`SCN-01`〜）実行           |
+| `npm run build && npx cap sync android`        | Web 本番ビルド ＆ Capacitor Android プロジェクトへの同期    |

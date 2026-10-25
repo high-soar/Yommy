@@ -151,32 +151,32 @@ export type NovelSiteType = "kakuyomu" | "narou" | "generic";
 
 /** 目次内の1エピソード情報 */
 export interface ParsedTocItem {
-  chapterIndex: number;        // 1始まりの連番
-  remoteChapterId: string;     // サイト固有のエピソード識別子（カクヨムepisodeId、なろう話数等）
-  partTitle: string | null;    // 章・部見出し（存在しない場合は null）
-  title: string;               // サブタイトル（各話タイトル）
-  url: string;                 // エピソード本文ページの正規化URL
-  publishedAt: string | null;  // 公開・更新日時文字列（取得可能な場合）
+  chapterIndex: number; // 1始まりの連番
+  remoteChapterId: string; // サイト固有のエピソード識別子（カクヨムepisodeId、なろう話数等）
+  partTitle: string | null; // 章・部見出し（存在しない場合は null）
+  title: string; // サブタイトル（各話タイトル）
+  url: string; // エピソード本文ページの正規化URL
+  publishedAt: string | null; // 公開・更新日時文字列（取得可能な場合）
 }
 
 /** 作品トップ（目次）ページから抽出される作品メタデータと目次リスト */
 export interface ParsedNovelIndex {
   siteType: NovelSiteType;
-  remoteWorkId: string;        // サイト固有の作品識別子（例: カクヨム workId, なろう ncode）
-  canonicalUrl: string;        // 正規化された作品トップURL
-  title: string;               // 作品タイトル
-  author: string;              // 著者名
-  synopsis: string;            // あらすじテキスト
-  chapters: ParsedTocItem[];   // エピソード目次一覧
+  remoteWorkId: string; // サイト固有の作品識別子（例: カクヨム workId, なろう ncode）
+  canonicalUrl: string; // 正規化された作品トップURL
+  title: string; // 作品タイトル
+  author: string; // 著者名
+  synopsis: string; // あらすじテキスト
+  chapters: ParsedTocItem[]; // エピソード目次一覧
   nextTocPageUrl: string | null; // 目次が複数ページに分かれる場合の次ページURL（なろう等）
 }
 
 /** 各話ページから抽出される本文データ */
 export interface ParsedChapterContent {
   remoteChapterId: string;
-  title: string;               // サブタイトル
-  bodyHtml: string;            // サニタイズ済み本文HTML（<p>, <br>, <ruby>, <rb>, <rt>, <rp>, <em> のみ許容）
-  byteSize: number;            // UTF-8 バイトサイズ
+  title: string; // サブタイトル
+  bodyHtml: string; // サニタイズ済み本文HTML（<p>, <br>, <ruby>, <rb>, <rt>, <rp>, <em> のみ許容）
+  byteSize: number; // UTF-8 バイトサイズ
   prevChapterUrl: string | null;
   nextChapterUrl: string | null;
 }
@@ -200,6 +200,7 @@ export interface NovelParser {
 ```
 
 #### 本文 HTML サニタイズ＆正規化規約（`src/parsers/sanitizer.ts`）
+
 - **XSS 防止（ホワイトリスト方式）**:
   `<script>`, `<iframe>`, `<style>`, `<object>`, `<embed>`、およびすべての `on*` イベント属性・`javascript:` スキーム属性を完全に除去する。
 - **許可する HTML 要素**:
@@ -213,22 +214,39 @@ DB テーブル構造の詳細は [docs/specs/db-schema.md](db-schema.md) を正
 export interface NovelRepository {
   listNovels(): Promise<NovelSummary[]>;
   getNovelById(novelId: string): Promise<NovelRecord | null>;
-  upsertNovelWithToc(index: ParsedNovelIndex, fetchedAt: string): Promise<NovelRecord>;
-  updateBookmark(novelId: string, chapterIndex: number, scrollProgress: number): Promise<void>;
+  upsertNovelWithToc(
+    index: ParsedNovelIndex,
+    fetchedAt: string,
+  ): Promise<NovelRecord>;
+  updateBookmark(
+    novelId: string,
+    chapterIndex: number,
+    scrollProgress: number,
+  ): Promise<void>;
   deleteNovel(novelId: string): Promise<void>;
 }
 
 export interface ChapterRepository {
   listChaptersByNovelId(novelId: string): Promise<ChapterSummary[]>;
-  getChapter(novelId: string, chapterIndex: number): Promise<ChapterRecord | null>;
+  getChapter(
+    novelId: string,
+    chapterIndex: number,
+  ): Promise<ChapterRecord | null>;
   saveChapterBody(
     novelId: string,
     chapterIndex: number,
     content: ParsedChapterContent,
     downloadedAt: string,
   ): Promise<void>;
-  markChapterRead(novelId: string, chapterIndex: number, isRead: boolean): Promise<void>;
-  deleteCachedBodies(novelId: string, options?: { onlyRead?: boolean }): Promise<number>;
+  markChapterRead(
+    novelId: string,
+    chapterIndex: number,
+    isRead: boolean,
+  ): Promise<void>;
+  deleteCachedBodies(
+    novelId: string,
+    options?: { onlyRead?: boolean },
+  ): Promise<number>;
 }
 
 export interface SettingsRepository {
@@ -244,4 +262,3 @@ export interface SettingsRepository {
 - `src/app/ServiceProvider.tsx` を介して `HttpClientBridge` と各 `Repository`（および基底の `DatabaseAdapter`）を React Context 経由で提供する。
 - **Android 実機実行時**: `CapacitorHttpClient` ＋ `CapacitorSqliteAdapter` を注入する。
 - **UT（Vitest）/ Storybook / Playwright IT 実行時**: `MockHttpClient`（`__fixtures__/*.html` を返却）＋ `InMemoryDatabaseAdapter` を注入し、各テストの開始前に `resetTestDb()` を呼び出して 100% 決定論的な状態で検証する。
-

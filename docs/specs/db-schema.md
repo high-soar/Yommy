@@ -190,4 +190,3 @@ CREATE TABLE IF NOT EXISTS reader_settings (
   updated_at TEXT NOT NULL
 );
 ```
-

@@ -132,7 +132,10 @@ function validateMarkdownLinks(filePath, content) {
     if (!targetFilePart) continue;
     const resolved = path.resolve(path.dirname(filePath), targetFilePart);
     if (!fs.existsSync(resolved)) {
-      reportError(filePath, `Broken relative link '${rawTarget}' (resolved to ${path.relative(ROOT_DIR, resolved)})`);
+      reportError(
+        filePath,
+        `Broken relative link '${rawTarget}' (resolved to ${path.relative(ROOT_DIR, resolved)})`,
+      );
     }
   }
 }
@@ -141,10 +144,16 @@ function validateMarkdownLinks(filePath, content) {
 const indexMdPath = path.join(DOCS_DIR, "index.md");
 const legacyReadmePath = path.join(DOCS_DIR, "README.md");
 if (!fs.existsSync(indexMdPath)) {
-  reportError(indexMdPath, "Missing OKF bundle root index file 'docs/index.md'");
+  reportError(
+    indexMdPath,
+    "Missing OKF bundle root index file 'docs/index.md'",
+  );
 }
 if (fs.existsSync(legacyReadmePath)) {
-  reportError(legacyReadmePath, "Legacy 'docs/README.md' found; use OKF reserved 'docs/index.md' instead");
+  reportError(
+    legacyReadmePath,
+    "Legacy 'docs/README.md' found; use OKF reserved 'docs/index.md' instead",
+  );
 }
 
 // 2. Validate all docs/**/*.md files
@@ -172,7 +181,10 @@ for (const filePath of docsFiles) {
 
   // Check for legacy markdown metadata table
   if (/^\|\s*\*\*状態\*\*\s*\|/m.test(body)) {
-    reportError(filePath, "Legacy Markdown metadata table found in body; use YAML frontmatter only");
+    reportError(
+      filePath,
+      "Legacy Markdown metadata table found in body; use YAML frontmatter only",
+    );
   }
 
   // Required fields
@@ -195,24 +207,48 @@ for (const filePath of docsFiles) {
   // Validate `type`
   const typeVal = typeof fm.type === "string" ? fm.type : "";
   if (typeVal && !ALLOWED_TYPES.has(typeVal)) {
-    reportError(filePath, `Invalid type '${typeVal}'. Must be one of: ${Array.from(ALLOWED_TYPES).join(", ")}`);
+    reportError(
+      filePath,
+      `Invalid type '${typeVal}'. Must be one of: ${Array.from(ALLOWED_TYPES).join(", ")}`,
+    );
   }
 
   // Directory-specific `type` check
   if (relPath.startsWith("docs/guidelines/") && typeVal !== "guideline") {
-    reportError(filePath, `Files in docs/guidelines/ must have type 'guideline' (got '${typeVal}')`);
+    reportError(
+      filePath,
+      `Files in docs/guidelines/ must have type 'guideline' (got '${typeVal}')`,
+    );
   }
-  if (relPath.startsWith("docs/specs/features/") && typeVal !== "spec-feature") {
-    reportError(filePath, `Files in docs/specs/features/ must have type 'spec-feature' (got '${typeVal}')`);
+  if (
+    relPath.startsWith("docs/specs/features/") &&
+    typeVal !== "spec-feature"
+  ) {
+    reportError(
+      filePath,
+      `Files in docs/specs/features/ must have type 'spec-feature' (got '${typeVal}')`,
+    );
   }
   if (relPath.startsWith("docs/specs/parsers/") && typeVal !== "spec-parser") {
-    reportError(filePath, `Files in docs/specs/parsers/ must have type 'spec-parser' (got '${typeVal}')`);
+    reportError(
+      filePath,
+      `Files in docs/specs/parsers/ must have type 'spec-parser' (got '${typeVal}')`,
+    );
   }
   if (relPath.startsWith("docs/specs/changes/") && typeVal !== "spec-delta") {
-    reportError(filePath, `Files in docs/specs/changes/ must have type 'spec-delta' (got '${typeVal}')`);
+    reportError(
+      filePath,
+      `Files in docs/specs/changes/ must have type 'spec-delta' (got '${typeVal}')`,
+    );
   }
-  if (relPath.startsWith("docs/quality/reports/") && typeVal !== "quality-report") {
-    reportError(filePath, `Files in docs/quality/reports/ must have type 'quality-report' (got '${typeVal}')`);
+  if (
+    relPath.startsWith("docs/quality/reports/") &&
+    typeVal !== "quality-report"
+  ) {
+    reportError(
+      filePath,
+      `Files in docs/quality/reports/ must have type 'quality-report' (got '${typeVal}')`,
+    );
   }
 
   // Validate `status`
@@ -227,7 +263,10 @@ for (const filePath of docsFiles) {
   // Validate `spec-delta` lifecycle
   if (typeVal === "spec-delta") {
     if (!fm.issue || typeof fm.issue !== "string" || !/^#\d+$/.test(fm.issue)) {
-      reportError(filePath, "spec-delta files must include 'issue: \"#N\"' in frontmatter");
+      reportError(
+        filePath,
+        "spec-delta files must include 'issue: \"#N\"' in frontmatter",
+      );
     }
     const isArchived = relPath.startsWith("docs/specs/changes/archive/");
     if (!isArchived && statusVal === "Completed (Archived)") {
@@ -247,7 +286,10 @@ for (const filePath of docsFiles) {
   // Validate `updated` date format
   const updatedVal = typeof fm.updated === "string" ? fm.updated : "";
   if (updatedVal && !/^\d{4}-\d{2}-\d{2}$/.test(updatedVal)) {
-    reportError(filePath, `Invalid 'updated' date '${updatedVal}'. Expected YYYY-MM-DD`);
+    reportError(
+      filePath,
+      `Invalid 'updated' date '${updatedVal}'. Expected YYYY-MM-DD`,
+    );
   }
 
   // Validate `tags` is non-empty array
@@ -261,7 +303,10 @@ for (const filePath of docsFiles) {
       const target = specPath.split("#")[0];
       const resolved = path.resolve(ROOT_DIR, target);
       if (!fs.existsSync(resolved)) {
-        reportError(filePath, `related_specs path '${specPath}' does not exist`);
+        reportError(
+          filePath,
+          `related_specs path '${specPath}' does not exist`,
+        );
       }
     }
   } else {
@@ -297,4 +342,3 @@ if (errors.length > 0) {
     `✅ OKF Validation passed! (${docsFiles.length} docs files and ${extraMdFiles.length} agent/skill files verified)`,
   );
 }
-

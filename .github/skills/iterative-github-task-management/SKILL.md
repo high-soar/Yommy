@@ -16,11 +16,13 @@ description: "Use when breaking down a Feature Request Issue into an iterative m
 人間が起票した親 Issue（または Phase 3 PoC の検証 Issue）に着手する際、メインエージェント（Orchestrator）はいきなり実装コードを書かず、以下の順序で進行します。
 
 ### Step 1: 既存仕様・コード調査と未確定事項（Open Questions）の確認
+
 1. 軽量な読み取り専用サブエージェント（`research`）を起動し、関連する `docs/specs/`（`requirements.md`, `architecture.md`, `db-schema.md`, `screen-transitions.md`, `features/*.md`, `parsers/*.md`）および既存コード・テストを調査させる。
 2. 要望に曖昧な点（異常系エラー表示、境界値、レートリミット挙動、キャッシュ削除時のしおり扱い等）があれば、推測で決め打ちせず、選択肢を添えて人間に質問する。
 3. 親 Issue 本文のチェックリスト `Step 1: 要望分析・未確定事項（Open Questions）の確認完了` を更新する。
 
 ### Step 2: 設計更新 PR（「差分仕様の作成」＋「App 全体正本への反映」）と Sub-issue 分割
+
 1. [docs/index.md](../../../docs/index.md#3-docsspecs-の-2-層管理ルールapp-全体正本--差分仕様) に従い、以下の **2種類の仕様書（OKF YAML フロントマター形式）を同一設計 PR 内でセットで作成・更新** する（いずれもフロントマター `status: Review (#親Issue番号)`）：
    - **① 差分仕様ファイルの新規作成（`docs/specs/changes/issue-XX-<slug>.md`）**:
      - 今回の要望の背景・目的、変更対象の App 全体正本ファイル一覧、追加・変更・削除する仕様（`AC-xx`, `TR-xx`, 契約, コンポーネント構成）の差分、UT/VRT/IT のテスト計画、実装 Sub-issue 分割リスト、および申し送り事項（`HO-xx`）を記載する。
@@ -38,11 +40,13 @@ description: "Use when breaking down a Feature Request Issue into an iterative m
 4. 合意された Sub-issue を `gh issue create` で起票し、親 Issue のチェックリストにリンクする。
 
 ### Step 3: MK Sub-issue の直列委託と PR 統合
+
 1. 各 MK Sub-issue について、汎用サブエージェント（`self`）に [c-ut-workflow スキル](../c-ut-workflow/SKILL.md) を指定して **直列（逐次）委託** する。
 2. サブエージェント完了後、メインエージェントが PR（`Closes #Sub-issue番号`）を作成し、[git-workflow スキル](../git-workflow/SKILL.md) に従い **Task Completion Gate（7条件）** を完遂して人間のマージを待つ。
 3. 実装中に原因分類 `D`（設計不備）が見つかった場合は、同一 PR 内で **差分仕様（`docs/specs/changes/issue-XX-*.md`）と App 全体正本の両方を同時修正（局所的再承認）** し、[docs/quality/bug-and-handover-log.md](../../../docs/quality/bug-and-handover-log.md) にコード修正と設計同期の双方のコミットを記録する。
 
 ### Step 4: IT（全体回帰テスト）・申し送り精算・差分仕様アーカイブ・親 Issue 完了
+
 1. Playwright 実ブラウザ結合テスト（`test/it/` の `SCN-01`〜）を最新仕様に合わせて進化・追加し、過去機能を含め全シナリオ 100% PASS を確認する。
 2. 親 Issue に関連する申し送り事項（`HO-xx`）がすべて解決（`Resolved`）されていることを確認する。
 3. 最後の Sub-issue PR（または IT PR）において、完了した差分仕様ファイルの状態を `Completed (Archived)` に更新し、**`git mv docs/specs/changes/issue-XX-<slug>.md docs/specs/changes/archive/issue-XX-<slug>.md` でアーカイブディレクトリへ移動** する。
@@ -56,11 +60,13 @@ AI が Sub-issue を起票する際は以下の形式を使用します。
 
 ```markdown
 ## 目的・範囲
+
 - 親 Issue: #親Issue番号
 - 対象設計正本: `docs/specs/...`
 - 作業範囲: （例: `NarouParser` の実装とフィクスチャ単体テスト）
 
 ## 完了条件（Task Completion Gate）
+
 - [ ] `docs/guidelines/testing.md` に準拠した TDD（Red → Green → Refactor コミット）で実装されていること
 - [ ] 全対象ファイルの単体テストおよび C0/C1/Functions 100% カバレッジを達成していること（UI 変更時は 1対1 Story/UT・親子分離・VRT 1280px/375px PASS）
 - [ ] 検出された不備や申し送り事項が `docs/quality/bug-and-handover-log.md` に記録されていること（原因 `D` は設計書同時修正）
@@ -76,4 +82,3 @@ AI が Sub-issue を起票する際は以下の形式を使用します。
 1. **Step 1（全体横断レビュー）**: Milestone 内の全要望 Issue 完了後、`phase-final-review` スキルで横断レビューを実施し、Milestone 承認 Issue に Round 1 結果をコメント投稿する（PR は作らない）。
 2. **Step 2（指摘是正・品質分析レポート・Kaizen PR）**: Sub-issue を起票し、横断レビュー指摘の是正、`docs/quality/bug-and-handover-log.md` の集計、`docs/quality/reports/` への品質分析レポート（バグ密度・DRE・原因傾向）作成、および再発防止の `SKILL.md` / `docs/guidelines/` 改善を含む PR（`Closes #Sub-issue`）を作成・マージする。
 3. **Step 3（Milestone 承認・一括 Approved 更新）**: Round 2 指摘収束と人間の承認後、`docs/specs/` の状態を `Approved` に揃える PR（`Closes #Milestone承認Issue`）をマージして Milestone を完了する。
-

@@ -45,10 +45,12 @@ To prevent configuration drift and duplication between human documentation and A
 ## 2. Configuration Maintenance Procedures
 
 ### A. Modifying Development Workflow, Testing, or Review Rules
+
 1. **Target Files**: `docs/guidelines/workflow.md`, `docs/guidelines/testing.md`, or `docs/guidelines/review-comment-format.md`.
 2. **Action**: Update the canonical guideline in `docs/guidelines/` first. Only update `AGENTS.md` or `.github/skills/<name>/SKILL.md` if AI orchestration steps or high-level summaries also need adjustment.
 
 ### B. Adding or Updating a Skill
+
 1. **Target Directory**: `.github/skills/<skill-name>/SKILL.md`
 2. **Requirements**:
    - Include valid YAML frontmatter (`name` and `description`).
@@ -56,6 +58,7 @@ To prevent configuration drift and duplication between human documentation and A
    - Verify `.agents/skills.json` maps `{"path": ".github/skills"}`.
 
 ### C. Modifying DevContainer or Fonts
+
 1. **Target Files**: `.devcontainer/Dockerfile`, `.devcontainer/devcontainer.json`.
 2. **Requirements**:
    - Preserve Japanese font packages (`fonts-noto-cjk`, `fonts-ipaexfont`, `fonts-morisawa-bizud-mincho`, `fonts-morisawa-bizud-gothic`, `fonts-klee`, `fonts-dejavu-core`) required for Storybook VRT rendering parity with GitHub Actions.
@@ -63,6 +66,7 @@ To prevent configuration drift and duplication between human documentation and A
    - Update `AGENTS.md` §1 if runtime versions or system packages change.
 
 ### D. Adding or Modifying Git Hooks (Phase 3+)
+
 1. Consult the [hook-ci-guidance skill](../hook-ci-guidance/SKILL.md) to decide what runs in `.githooks/` vs. `.github/workflows/`.
 2. Keep shared hook scripts under `.githooks/` with executable permissions (`chmod +x`) and configure `core.hooksPath` idempotently via `npm run prepare`.
 
@@ -71,7 +75,7 @@ To prevent configuration drift and duplication between human documentation and A
 ## 3. Verification Checklist
 
 Whenever configuration changes are made:
+
 - [ ] **JSON Syntax**: Confirm `.devcontainer/devcontainer.json` and `.agents/skills.json` are valid JSON.
 - [ ] **OKF & Markdown Links**: Run `node .github/skills/sdd/scripts/validate-okf.mjs` and confirm all OKF frontmatter rules and relative links across `AGENTS.md`, `docs/`, and `.github/` pass.
 - [ ] **No Duplicate Skills**: Confirm no skill files are duplicated under `.agents/skills/`.
-
