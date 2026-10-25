@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { InMemoryDatabaseAdapter, initTestDb, resetTestDb } from "./inMemoryDb";
+import {
+  InMemoryDatabaseAdapter,
+  initTestDb,
+  resetTestDb,
+  closeTestDb,
+} from "./inMemoryDb";
 
 describe("InMemoryDatabaseAdapter", () => {
   beforeEach(async () => {
@@ -46,6 +51,18 @@ describe("InMemoryDatabaseAdapter", () => {
         enable_tap_paging: 1,
         enable_volume_key_paging: 0,
       });
+    });
+
+    it("initTestDb を連続して呼び出した場合は同一のキャッシュ済みアダプターインスタンスを返すこと", async () => {
+      const adapter1 = await initTestDb();
+      const adapter2 = await initTestDb();
+      expect(adapter1).toBe(adapter2);
+    });
+
+    it("closeTestDb でクローズした後に initTestDb を呼び出した場合は新規初期化が実行されること", async () => {
+      await closeTestDb();
+      const adapter = await initTestDb();
+      expect(adapter).toBeInstanceOf(InMemoryDatabaseAdapter);
     });
 
     it("resetTestDb でデータがクリアされ初期状態に決定論的にリセットされること", async () => {
@@ -118,6 +135,28 @@ describe("InMemoryDatabaseAdapter", () => {
         ["Charlie"],
       );
       expect(notFound).toHaveLength(0);
+
+      // boolean パラメータの正規化テスト（true -> 1, false -> 0）
+      await adapter.execute("CREATE TABLE bool_table (id INT, flag INTEGER);");
+      await adapter.execute("INSERT INTO bool_table VALUES (?, ?);", [1, true]);
+      await adapter.execute("INSERT INTO bool_table VALUES (?, ?);", [
+        2,
+        false,
+      ]);
+
+      const trueRows = await adapter.query<{ id: number; flag: number }>(
+        "SELECT * FROM bool_table WHERE flag = ?;",
+        [true],
+      );
+      expect(trueRows).toHaveLength(1);
+      expect(trueRows[0].id).toBe(1);
+
+      const falseRows = await adapter.query<{ id: number; flag: number }>(
+        "SELECT * FROM bool_table WHERE flag = ?;",
+        [false],
+      );
+      expect(falseRows).toHaveLength(1);
+      expect(falseRows[0].id).toBe(2);
     });
 
     it("不正な SQL 構文の場合に execute および query で例外がスローされること", async () => {

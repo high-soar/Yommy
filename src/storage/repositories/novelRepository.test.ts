@@ -172,16 +172,19 @@ describe("SqlNovelRepository", () => {
       const n1: ParsedNovelIndex = {
         ...sampleParsedIndex,
         remoteWorkId: "1",
+        canonicalUrl: "https://kakuyomu.jp/works/1",
         title: "小説1（閲覧なし）",
       };
       const n2: ParsedNovelIndex = {
         ...sampleParsedIndex,
         remoteWorkId: "2",
+        canonicalUrl: "https://kakuyomu.jp/works/2",
         title: "小説2（古い閲覧）",
       };
       const n3: ParsedNovelIndex = {
         ...sampleParsedIndex,
         remoteWorkId: "3",
+        canonicalUrl: "https://kakuyomu.jp/works/3",
         title: "小説3（新しい閲覧）",
       };
 
