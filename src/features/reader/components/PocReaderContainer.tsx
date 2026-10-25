@@ -6,10 +6,20 @@ import type { NovelRecord, ChapterRecord } from "../../../storage/types";
 
 const DEFAULT_KAKUYOMU_URL = "https://kakuyomu.jp/works/1177354054881162325";
 
+/**
+ * PoC リーダーコンテナの Props
+ */
 export interface PocReaderContainerProps {
+  /** 取得対象の作品 URL（デフォルト: カクヨムの検証用URL） */
   initialWorkUrl?: string;
 }
 
+/**
+ * PoC リーダーコンテナコンポーネント
+ *
+ * ServiceProvider から DI されたリポジトリと HTTP クライアントを使用し、
+ * 作品取得、SQLite DB 永続化、縦書き/横書きリーダー表示およびテーマ切り替えを統合管理する。
+ */
 export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
   initialWorkUrl = DEFAULT_KAKUYOMU_URL,
 }) => {
