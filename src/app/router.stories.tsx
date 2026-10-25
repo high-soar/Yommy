@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import React from "react";
 import { RouterProvider, useRouter } from "./router";
 
-export const RouterStateInspector: React.FC = () => {
+const RouterStateInspector: React.FC = () => {
   const router = useRouter();
 
   return (
