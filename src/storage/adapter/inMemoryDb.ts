@@ -88,6 +88,8 @@ INSERT INTO reader_settings (
  * テスト・ブラウザ環境向けのインメモリ SQLite アダプター
  */
 export class InMemoryDatabaseAdapter implements DatabaseAdapter {
+  private inTransaction = false;
+
   constructor(
     private db: Database,
     private onUpdate?: () => void,
@@ -108,7 +110,9 @@ export class InMemoryDatabaseAdapter implements DatabaseAdapter {
     } else {
       this.db.run(sql);
     }
-    this.onUpdate?.();
+    if (!this.inTransaction) {
+      this.onUpdate?.();
+    }
   }
 
   async query<T = unknown>(sql: string, params: unknown[] = []): Promise<T[]> {
@@ -125,13 +129,16 @@ export class InMemoryDatabaseAdapter implements DatabaseAdapter {
   }
 
   async runTransaction<T>(action: () => Promise<T>): Promise<T> {
+    this.inTransaction = true;
     this.db.run("BEGIN TRANSACTION;");
     try {
       const result = await action();
       this.db.run("COMMIT;");
+      this.inTransaction = false;
       this.onUpdate?.();
       return result;
     } catch (err) {
+      this.inTransaction = false;
       this.db.run("ROLLBACK;");
       throw err;
     }
