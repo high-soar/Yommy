@@ -10,6 +10,7 @@ related_specs:
   - docs/specs/architecture.md
   - docs/specs/db-schema.md
   - docs/specs/screen-transitions.md
+  - docs/specs/features/novel-detail.md
   - docs/specs/features/reader-view.md
   - docs/specs/parsers/kakuyomu.md
 related_tests:

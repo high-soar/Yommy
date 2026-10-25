@@ -22,6 +22,7 @@ docs/
 │   ├── screen-transitions.md          # [App全体正本] 主要画面一覧（SCR-xx）と画面遷移（TR-xx）の全体マップ
 │   ├── features/                      # [App全体正本] 画面・機能別の現在仕様書（AC一覧・コンポーネント構成・テスト責務）
 │   │   ├── bookshelf.md               # 本棚画面仕様書（SCR-01: BookshelfPage / NovelCard / AddNovelDialog / useBookshelf）
+│   │   ├── novel-detail.md            # 作品詳細・目次画面仕様書（SCR-02: NovelDetailPage / EpisodeList / useNovelDetail）
 │   │   └── reader-view.md             # 小説リーダー機能仕様書（ReaderView / ReaderToolbar / PocReaderContainer）
 │   ├── parsers/                       # [App全体正本] 小説サイト別の現在スクレイピング・DOM解析仕様書
 │   │   └── kakuyomu.md                # カクヨム パーサー・スクレイピング仕様書（kakuyomu.jp）
