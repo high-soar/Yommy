@@ -58,19 +58,19 @@ DOM 要素の抽出は文書順ではなく、以下の優先順位リストに�
 
 ### 3.1 抽出対象と DOM セレクタ一覧
 
-| フィールド名     | 型               | 抽出元 DOM セレクタ（優先順位リスト）                                                      | フォールバック / 備考                                          | 対応 AC / 要件 |
-| :--------------- | :--------------- | :----------------------------------------------------------------------------------------- | :------------------------------------------------------------- | :------------- |
-| `siteType`       | `'kakuyomu'`     | 固定値 `'kakuyomu'`                                                                        | -                                                              | `SYS-REQ-01`   |
-| `remoteWorkId`   | `string`         | URL パス `/works/([0-9]+)` から抽出                                                        | URLから取得不可の場合 `link[rel="canonical"]` の href より抽出 | `AC-02`        |
-| `canonicalUrl`   | `string`         | `https://kakuyomu.jp/works/{remoteWorkId}`                                                 | 正規化 URL                                                     | `SYS-REQ-01`   |
-| `title`          | `string`         | 1. `#workTitle a`<br>2. `#workTitle`<br>3. `#catchphrase-and-title h1`                     | 前後空白トリム、空の場合は空文字                               | `AC-02`        |
-| `author`         | `string`         | 1. `#workAuthor-activityName a`<br>2. `#workAuthor-activityName`<br>3. `[href^="/users/"]` | 前後空白トリム、空の場合は空文字                               | `AC-02`        |
-| `synopsis`       | `string`         | 1. `#introduction`<br>2. `.widget-work-introduction`<br>3. `#description`                  | 前後空白トリム、空の場合は空文字                               | `AC-02`        |
-| `nextTocPageUrl` | `string \| null` | 常に `null`（カクヨムは全目次が 1 ページに展開される）                                     | -                                                              | `AC-02`        |
+| フィールド名     | 型               | 抽出元 DOM セレクタ（優先順位リスト）                                                                                                                          | フォールバック / 備考                                          | 対応 AC / 要件 |
+| :--------------- | :--------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------- | :------------- |
+| `siteType`       | `'kakuyomu'`     | 固定値 `'kakuyomu'`                                                                                                                                            | -                                                              | `SYS-REQ-01`   |
+| `remoteWorkId`   | `string`         | URL パス `/works/([0-9]+)` から抽出                                                                                                                            | URLから取得不可の場合 `link[rel="canonical"]` の href より抽出 | `AC-02`        |
+| `canonicalUrl`   | `string`         | `https://kakuyomu.jp/works/{remoteWorkId}`                                                                                                                     | 正規化 URL                                                     | `SYS-REQ-01`   |
+| `title`          | `string`         | 1. `#workTitle a`<br>2. `#workTitle`<br>3. `#catchphrase-and-title h1`<br>4. `header h1`<br>5. `h1`                                                            | 前後空白トリム、空の場合は空文字                               | `AC-02`        |
+| `author`         | `string`         | 1. `#workAuthor-activityName a`<br>2. `#workAuthor-activityName`<br>3. `.partialGiftWidgetActivityName a`<br>4. `[href^="/users/"]`<br>5. `a[href*="/users/"]` | 前後空白トリム、空の場合は空文字                               | `AC-02`        |
+| `synopsis`       | `string`         | 1. `#introduction`<br>2. `.widget-work-introduction`<br>3. `#description`<br>4. `[class*="IntroductionBox"]`<br>5. `[class*="introduction"]`                   | 前後空白トリム、空の場合は空文字                               | `AC-02`        |
+| `nextTocPageUrl` | `string \| null` | 常に `null`（カクヨムは全目次が 1 ページに展開される）                                                                                                         | -                                                              | `AC-02`        |
 
 ### 3.2 目次エピソードリスト（`chapters: ParsedTocItem[]`）
 
-目次コンテナ（`.widget-toc-items`, `.widget-toc-main`, または全目次要素群）内の要素を出現順に走査し、以下の規則で各エピソード情報を構築します。
+目次コンテナ（`.widget-toc-items`, `.widget-toc-main`, または全目次要素群）内の要素を出現順に走査し、以下の規則で各エピソード情報を構築します。旧クラス構成が存在しない現行 Next.js レイアウトの場合は、`[class*="WorkToc"] a[href*="/episodes/"]` へ自動フォールバックして抽出します。
 
 1. **部・章見出し（`partTitle`）の伝播**:
    - セレクタ `[class*="widget-toc-chapter"], [class*="widget-toc-section"]` に合致する要素が出現した場合、そのテキストを現在のアクティブな `currentPartTitle` として記憶する。

@@ -4,7 +4,7 @@ import { ReaderView, type WritingMode, type ReaderTheme } from "./ReaderView";
 import { ReaderToolbar } from "./ReaderToolbar";
 import type { NovelRecord, ChapterRecord } from "../../../storage/types";
 
-const DEFAULT_KAKUYOMU_URL = "https://kakuyomu.jp/works/1177354054881162325";
+const DEFAULT_KAKUYOMU_URL = "https://kakuyomu.jp/works/16817330658027210412";
 
 /**
  * PoC リーダーコンテナの Props

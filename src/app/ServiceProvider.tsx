@@ -109,6 +109,21 @@ export function persistDatabaseBinary(
 
 export function createDefaultMockHttpClient(): MockHttpClient {
   const client = new MockHttpClient();
+  client.setResponse("https://kakuyomu.jp/works/16817330658027210412", {
+    status: 200,
+    url: "https://kakuyomu.jp/works/16817330658027210412",
+    headers: {},
+    html: workIndexHtml,
+  });
+  client.setResponse(
+    /^https:\/\/kakuyomu\.jp\/works\/16817330658027210412\/episodes\/\d+/,
+    (options) => ({
+      status: 200,
+      url: options.url,
+      headers: {},
+      html: episodeContentHtml,
+    }),
+  );
   client.setResponse("https://kakuyomu.jp/works/1177354054881162325", {
     status: 200,
     url: "https://kakuyomu.jp/works/1177354054881162325",

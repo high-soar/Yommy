@@ -76,6 +76,12 @@ CREATE TABLE IF NOT EXISTS reader_settings (
   enable_volume_key_paging INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL
 );
+
+INSERT OR IGNORE INTO reader_settings (
+  id, writing_mode, theme, font_family, font_size_px, line_height, page_margin_px, enable_tap_paging, enable_volume_key_paging, updated_at
+) VALUES (
+  1, 'vertical-rl', 'light', 'biz-ud-mincho', 18, 1.8, 20, 1, 0, '2026-01-01T00:00:00.000Z'
+);
 `;
 
 /**

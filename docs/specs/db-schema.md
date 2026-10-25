@@ -180,7 +180,7 @@ CREATE INDEX IF NOT EXISTS idx_download_queue_status ON download_queue(status, i
 
 ### 3.4 `reader_settings` テーブル（リーダー表示・操作設定）
 
-アプリ全体のリーダー組版・テーマ設定を保持する単一行（`id = 1`）テーブルです。
+アプリ全体のリーダー組版・テーマ設定を保持する単一行（`id = 1`）テーブルです。スキーマ初期化（`initializeDatabaseSchema`）時に自動的に初期行（`id = 1`）が挿入され、常に安全に読み出し・更新が可能です。
 
 ```sql
 CREATE TABLE IF NOT EXISTS reader_settings (
@@ -194,5 +194,11 @@ CREATE TABLE IF NOT EXISTS reader_settings (
   enable_tap_paging INTEGER NOT NULL DEFAULT 1,     -- 0 or 1
   enable_volume_key_paging INTEGER NOT NULL DEFAULT 0, -- 0 or 1
   updated_at TEXT NOT NULL
+);
+
+INSERT OR IGNORE INTO reader_settings (
+  id, writing_mode, theme, font_family, font_size_px, line_height, page_margin_px, enable_tap_paging, enable_volume_key_paging, updated_at
+) VALUES (
+  1, 'vertical-rl', 'light', 'biz-ud-mincho', 18, 1.8, 20, 1, 0, '2026-01-01T00:00:00.000Z'
 );
 ```
