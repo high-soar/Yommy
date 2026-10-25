@@ -8,6 +8,29 @@ import type {
 import { sanitizeChapterHtml } from "../sanitizer";
 
 /**
+ * カクヨム DOM セレクタ定数（docs/specs/parsers/kakuyomu.md に準拠）
+ */
+const SELECTORS = {
+  workTitle: "#workTitle a, #workTitle, #catchphrase-and-title h1",
+  workAuthor:
+    '#workAuthor-activityName a, #workAuthor-activityName, [href^="/users/"]',
+  workSynopsis: "#introduction, .widget-work-introduction, #description",
+  canonicalLink: 'link[rel="canonical"]',
+  tocElements:
+    '[class*="widget-toc-chapter"], [class*="widget-toc-section"], [class*="widget-toc-episode"]',
+  episodeTitle: ".widget-episodeTitle, header h1, .episode-title",
+  episodeBody: ".widget-episodeBody, .js-episode-body",
+  prevEpisode: "a#contentMain-previousEpisode, a[rel='prev']",
+  nextEpisode: "a#contentMain-nextEpisode, a[rel='next']",
+} as const;
+
+/**
+ * URL 抽出用正規表現
+ */
+const WORK_ID_REGEX = /\/works\/([0-9]+)/;
+const EPISODE_ID_REGEX = /\/episodes\/([0-9]+)/;
+
+/**
  * カクヨム（kakuyomu.jp）向け小説パーサー
  * DOMParser を用いた決定論的 DOM トラバーサル処理（外部ネットワーク通信なし）
  */
@@ -41,7 +64,7 @@ export class KakuyomuParser implements NovelParser {
   normalizeWorkUrl(url: string): string {
     try {
       const parsed = new URL(url);
-      const match = parsed.pathname.match(/\/works\/([0-9]+)/);
+      const match = parsed.pathname.match(WORK_ID_REGEX);
       if (!match) {
         throw new Error("Invalid Kakuyomu work URL");
       }
@@ -61,14 +84,14 @@ export class KakuyomuParser implements NovelParser {
   parseNovelIndex(html: string, pageUrl: string): ParsedNovelIndex {
     const doc = new DOMParser().parseFromString(html, "text/html");
 
-    const urlMatch = pageUrl.match(/\/works\/([0-9]+)/);
+    const urlMatch = pageUrl.match(WORK_ID_REGEX);
     let remoteWorkId = urlMatch ? urlMatch[1] : "";
 
     if (!remoteWorkId) {
       const canonical = doc
-        .querySelector<HTMLLinkElement>('link[rel="canonical"]')
+        .querySelector<HTMLLinkElement>(SELECTORS.canonicalLink)
         ?.getAttribute("href");
-      const canonicalMatch = canonical?.match(/\/works\/([0-9]+)/);
+      const canonicalMatch = canonical?.match(WORK_ID_REGEX);
       if (canonicalMatch) {
         remoteWorkId = canonicalMatch[1];
       }
@@ -80,24 +103,16 @@ export class KakuyomuParser implements NovelParser {
 
     const canonicalUrl = `https://kakuyomu.jp/works/${remoteWorkId}`;
 
-    const titleEl = doc.querySelector(
-      "#workTitle a, #workTitle, #catchphrase-and-title h1",
-    );
+    const titleEl = doc.querySelector(SELECTORS.workTitle);
     const title = titleEl?.textContent?.trim() || "";
 
-    const authorEl = doc.querySelector(
-      '#workAuthor-activityName a, #workAuthor-activityName, [href^="/users/"]',
-    );
+    const authorEl = doc.querySelector(SELECTORS.workAuthor);
     const author = authorEl?.textContent?.trim() || "";
 
-    const synopsisEl = doc.querySelector(
-      "#introduction, .widget-work-introduction, #description",
-    );
+    const synopsisEl = doc.querySelector(SELECTORS.workSynopsis);
     const synopsis = synopsisEl?.textContent?.trim() || "";
 
-    const elements = doc.querySelectorAll(
-      '[class*="widget-toc-chapter"], [class*="widget-toc-section"], [class*="widget-toc-episode"]',
-    );
+    const elements = doc.querySelectorAll(SELECTORS.tocElements);
 
     let currentPartTitle: string | null = null;
     const chapters: ParsedTocItem[] = [];
@@ -119,7 +134,7 @@ export class KakuyomuParser implements NovelParser {
         if (!href) {
           continue;
         }
-        const match = href.match(/\/episodes\/([0-9]+)/);
+        const match = href.match(EPISODE_ID_REGEX);
         if (!match) {
           continue;
         }
@@ -165,27 +180,21 @@ export class KakuyomuParser implements NovelParser {
   parseChapterContent(html: string, pageUrl: string): ParsedChapterContent {
     const doc = new DOMParser().parseFromString(html, "text/html");
 
-    const chapterIdMatch = pageUrl.match(/\/episodes\/([0-9]+)/);
+    const chapterIdMatch = pageUrl.match(EPISODE_ID_REGEX);
     const remoteChapterId = chapterIdMatch ? chapterIdMatch[1] : "";
 
-    const titleEl = doc.querySelector(
-      ".widget-episodeTitle, header h1, .episode-title",
-    );
+    const titleEl = doc.querySelector(SELECTORS.episodeTitle);
     const title = titleEl?.textContent?.trim() || "";
 
-    const bodyEl = doc.querySelector(".widget-episodeBody, .js-episode-body");
+    const bodyEl = doc.querySelector(SELECTORS.episodeBody);
     const bodyHtml = bodyEl ? sanitizeChapterHtml(bodyEl.innerHTML) : "";
     const byteSize = new TextEncoder().encode(bodyHtml).length;
 
-    const prevEl = doc.querySelector<HTMLAnchorElement>(
-      "a#contentMain-previousEpisode, a[rel='prev']",
-    );
+    const prevEl = doc.querySelector<HTMLAnchorElement>(SELECTORS.prevEpisode);
     const prevHref = prevEl?.getAttribute("href");
     const prevChapterUrl = prevHref ? new URL(prevHref, pageUrl).href : null;
 
-    const nextEl = doc.querySelector<HTMLAnchorElement>(
-      "a#contentMain-nextEpisode, a[rel='next']",
-    );
+    const nextEl = doc.querySelector<HTMLAnchorElement>(SELECTORS.nextEpisode);
     const nextHref = nextEl?.getAttribute("href");
     const nextChapterUrl = nextHref ? new URL(nextHref, pageUrl).href : null;
 
