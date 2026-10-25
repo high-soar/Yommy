@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import React from "react";
 import { PocReaderContainer } from "./PocReaderContainer";
 import { ServiceProvider } from "../../../app/ServiceProvider";
 import { createDefaultParserRegistry } from "../../../parsers/parserRegistry";

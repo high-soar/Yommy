@@ -101,6 +101,7 @@ export function createDefaultMockHttpClient(): MockHttpClient {
   client.setResponse("https://kakuyomu.jp/works/1177354054881162325", {
     status: 200,
     url: "https://kakuyomu.jp/works/1177354054881162325",
+    headers: {},
     html: workIndexHtml,
   });
   client.setResponse(
@@ -108,6 +109,7 @@ export function createDefaultMockHttpClient(): MockHttpClient {
     (options) => ({
       status: 200,
       url: options.url,
+      headers: {},
       html: episodeContentHtml,
     }),
   );
