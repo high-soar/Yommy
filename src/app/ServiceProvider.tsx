@@ -22,6 +22,9 @@ import episodeContentHtml from "../parsers/kakuyomu/__fixtures__/episode_content
 
 const STORAGE_KEY = "yommy_sqlite_db_backup";
 
+/**
+ * アプリケーション共通のサービス（HTTP Bridge, Parser, Storage Repositories）の提供コンテキスト値
+ */
 export interface ServiceContextValue {
   httpClient: HttpClientBridge;
   parserRegistry: ParserRegistry;
@@ -34,6 +37,11 @@ export interface ServiceContextValue {
 
 export const ServiceContext = createContext<ServiceContextValue | null>(null);
 
+/**
+ * ServiceContext から初期化済みの共通サービス群を取得するカスタムフック
+ *
+ * @throws ServiceProvider の配下外で呼び出された場合のエラー
+ */
 export function useServices(): ServiceContextValue {
   const context = useContext(ServiceContext);
   if (!context) {
