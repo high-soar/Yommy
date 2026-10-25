@@ -6,6 +6,7 @@ import { useBookshelf } from "./useBookshelf";
 import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
 import { SqlNovelRepository } from "../../../storage/repositories/novelRepository";
 import { MockHttpClient } from "../../../bridges/http/mockHttpClient";
+import type { HttpResponse } from "../../../bridges/http/types";
 import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 
 describe("useBookshelf", () => {
@@ -239,6 +240,141 @@ describe("useBookshelf", () => {
     expect(success).toBe(true);
     expect(result.current.isDialogOpen).toBe(false);
     expect(result.current.dialogError).toBeNull();
+  });
+
+  it("非Errorオブジェクト例外またはメッセージが空のErrorが発生した場合にデフォルトのエラーメッセージがセットされること", async () => {
+    const mockHttp = new MockHttpClient();
+    mockHttp.setResponse(/^https:\/\/kakuyomu\.jp\/works\/\d+$/, () => {
+      throw "非Error例外文字列";
+    });
+
+    const { result } = renderHook(() => useBookshelf(), {
+      wrapper: createWrapper({ httpClient: mockHttp }),
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    act(() => {
+      result.current.openDialog();
+    });
+
+    let success = true;
+    await act(async () => {
+      success = await result.current.addNovelByUrl(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+    });
+
+    expect(success).toBe(false);
+    expect(result.current.dialogError).toBe("作品情報の取得に失敗しました");
+
+    // 空文字メッセージの Error インスタンス
+    mockHttp.setResponse(/^https:\/\/kakuyomu\.jp\/works\/\d+$/, () => {
+      throw new Error("");
+    });
+
+    await act(async () => {
+      success = await result.current.addNovelByUrl(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+    });
+    expect(success).toBe(false);
+    expect(result.current.dialogError).toBe("作品情報の取得に失敗しました");
+  });
+
+  it("処理中（isSubmitting === true）の二重送信およびダイアログクローズが無効化されること", async () => {
+    let resolveHttp: ((value: HttpResponse) => void) | null = null;
+    const mockHttp = new MockHttpClient();
+    mockHttp.setResponse(
+      /^https:\/\/kakuyomu\.jp\/works\/\d+$/,
+      () =>
+        new Promise((resolve) => {
+          resolveHttp = resolve;
+        }),
+    );
+
+    const { result } = renderHook(() => useBookshelf(), {
+      wrapper: createWrapper({ httpClient: mockHttp }),
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    act(() => {
+      result.current.openDialog();
+    });
+
+    // 1回目のリクエスト開始（未完了のまま待機）
+    let firstCallPromise: Promise<boolean>;
+    act(() => {
+      firstCallPromise = result.current.addNovelByUrl(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+    });
+
+    expect(result.current.isSubmitting).toBe(true);
+
+    // 処理中のダイアログクローズ試行（無視されること）
+    act(() => {
+      result.current.closeDialog();
+    });
+    expect(result.current.isDialogOpen).toBe(true);
+
+    // 処理中の二重送信試行（false が即時返却されること）
+    let secondResult = true;
+    await act(async () => {
+      secondResult = await result.current.addNovelByUrl(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+    });
+    expect(secondResult).toBe(false);
+
+    // 1回目のリクエストを完了させる
+    await act(async () => {
+      resolveHttp?.({
+        status: 200,
+        url: "https://kakuyomu.jp/works/16817330658027210412",
+        headers: {},
+        html: workIndexHtml,
+      });
+      await firstCallPromise;
+    });
+
+    expect(result.current.isSubmitting).toBe(false);
+    expect(result.current.isDialogOpen).toBe(false);
+  });
+
+  it("アンマウント後に初期一覧取得が完了してもステート更新エラーが発生しないこと", async () => {
+    let resolveList: ((value: unknown) => void) | null = null;
+    const customRepo = {
+      listNovels: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveList = resolve;
+          }),
+      ),
+      upsertNovelWithToc: vi.fn(),
+    } as unknown as SqlNovelRepository;
+
+    const { unmount } = renderHook(() => useBookshelf(), {
+      wrapper: createWrapper({ novelRepository: customRepo }),
+    });
+
+    await waitFor(() => {
+      expect(customRepo.listNovels).toHaveBeenCalled();
+    });
+
+    // 初期取得が完了する前にアンマウント
+    unmount();
+
+    await act(async () => {
+      resolveList?.([]);
+    });
+
+    expect(customRepo.listNovels).toHaveBeenCalled();
   });
 
   it("reloadNovels を呼び出すと最新の作品一覧が再取得されること", async () => {
