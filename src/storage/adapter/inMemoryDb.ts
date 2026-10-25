@@ -85,7 +85,10 @@ INSERT INTO reader_settings (
 `;
 
 export class InMemoryDatabaseAdapter implements DatabaseAdapter {
-  constructor(private db: Database) {}
+  constructor(
+    private db: Database,
+    private onUpdate?: () => void,
+  ) {}
 
   private normalizeParams(params: unknown[]): SqlValue[] {
     return params.map((p) => {
@@ -102,6 +105,7 @@ export class InMemoryDatabaseAdapter implements DatabaseAdapter {
     } else {
       this.db.run(sql);
     }
+    this.onUpdate?.();
   }
 
   async query<T = unknown>(sql: string, params: unknown[] = []): Promise<T[]> {
@@ -122,6 +126,7 @@ export class InMemoryDatabaseAdapter implements DatabaseAdapter {
     try {
       const result = await action();
       this.db.run("COMMIT;");
+      this.onUpdate?.();
       return result;
     } catch (err) {
       this.db.run("ROLLBACK;");
@@ -132,15 +137,25 @@ export class InMemoryDatabaseAdapter implements DatabaseAdapter {
   async close(): Promise<void> {
     this.db.close();
   }
+
+  /**
+   * 現在の SQLite データベースのバイナリ（Uint8Array）をエクスポートする
+   */
+  exportBinary(): Uint8Array {
+    return this.db.export();
+  }
 }
 
 let currentAdapter: InMemoryDatabaseAdapter | null = null;
 
-export async function initTestDb(): Promise<InMemoryDatabaseAdapter> {
+export async function initTestDb(
+  initialData?: Uint8Array,
+  onUpdate?: () => void,
+): Promise<InMemoryDatabaseAdapter> {
   if (currentAdapter) {
     return currentAdapter;
   }
-  return await resetTestDb();
+  return await resetTestDb(initialData, onUpdate);
 }
 
 export async function closeTestDb(): Promise<void> {
@@ -150,13 +165,18 @@ export async function closeTestDb(): Promise<void> {
   }
 }
 
-export async function resetTestDb(): Promise<InMemoryDatabaseAdapter> {
+export async function resetTestDb(
+  initialData?: Uint8Array,
+  onUpdate?: () => void,
+): Promise<InMemoryDatabaseAdapter> {
   await closeTestDb();
   const SQL = await initSqlJs();
-  const db = new SQL.Database();
+  const db = initialData ? new SQL.Database(initialData) : new SQL.Database();
   db.run("PRAGMA foreign_keys = ON;");
-  db.exec(DDL_STATEMENTS);
-  db.exec(INITIAL_READER_SETTINGS_SQL);
-  currentAdapter = new InMemoryDatabaseAdapter(db);
+  if (!initialData) {
+    db.exec(DDL_STATEMENTS);
+    db.exec(INITIAL_READER_SETTINGS_SQL);
+  }
+  currentAdapter = new InMemoryDatabaseAdapter(db, onUpdate);
   return currentAdapter;
 }
