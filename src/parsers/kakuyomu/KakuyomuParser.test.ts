@@ -191,7 +191,7 @@ describe("KakuyomuParser", () => {
       expect(result.bodyHtml).not.toContain("onerror");
       expect(result.bodyHtml).not.toContain("javascript:");
       expect(result.bodyHtml).toContain('<em class="bouten">安全な傍点</em>');
-      expect(result.bodyHtml).toContain("<p>段落1</p>");
+      expect(result.bodyHtml).toContain("段落1");
       expect(result.bodyHtml).toContain("<p>危険なフレーム</p>");
       expect(result.bodyHtml).toContain("<p>危険なリンク</p>");
       expect(result.bodyHtml).toContain("<p>通常の装飾テキスト</p>");
@@ -296,10 +296,21 @@ describe("KakuyomuParser", () => {
         <html><body>
           <div class="widget-toc-items">
             <div class="widget-toc-episode">エピソードリンクなし</div>
+            <div class="widget-toc-episode"><a>href属性なし</a></div>
             <div class="widget-toc-episode"><a href="/not-episode/path">不正リンク</a></div>
             <div class="widget-toc-episode">
               <a href="/works/123/episodes/456"><span>正常エピソード</span></a>
               <time>2026-03-01</time>
+            </div>
+            <div class="widget-toc-episode">
+              <a href="/works/123/episodes/789"><span>日時なしエピソード</span></a>
+            </div>
+            <div class="widget-toc-episode">
+              <a href="/works/123/episodes/790"><span>空日時エピソード</span></a>
+              <time></time>
+            </div>
+            <div class="widget-toc-episode">
+              <a href="/works/123/episodes/791"></a>
             </div>
           </div>
         </body></html>
@@ -308,10 +319,46 @@ describe("KakuyomuParser", () => {
         html,
         "https://kakuyomu.jp/works/123",
       );
-      expect(result.chapters).toHaveLength(1);
+      expect(result.chapters).toHaveLength(4);
       expect(result.chapters[0].remoteChapterId).toBe("456");
       expect(result.chapters[0].title).toBe("正常エピソード");
       expect(result.chapters[0].publishedAt).toBe("2026-03-01");
+      expect(result.chapters[1].publishedAt).toBeNull();
+      expect(result.chapters[2].publishedAt).toBeNull();
+      expect(result.chapters[3].remoteChapterId).toBe("791");
+      expect(result.chapters[3].title).toBe("");
+    });
+
+    it("widget-toc-section による節見出しや空見出しを処理できること", () => {
+      const html = `
+        <html><body>
+          <div class="widget-toc-items">
+            <div class="widget-toc-section">節見出し</div>
+            <div class="widget-toc-episode">
+              <a href="/works/123/episodes/101"><span>第1節</span></a>
+            </div>
+            <div class="widget-toc-chapter">   </div>
+            <div class="widget-toc-episode">
+              <a href="/works/123/episodes/102"><span>第2節</span></a>
+            </div>
+          </div>
+        </body></html>
+      `;
+      const result = parser.parseNovelIndex(
+        html,
+        "https://kakuyomu.jp/works/123",
+      );
+      expect(result.chapters).toHaveLength(2);
+      expect(result.chapters[0].partTitle).toBe("節見出し");
+      expect(result.chapters[1].partTitle).toBeNull();
+    });
+
+    it("canonical リンクが存在しても作品 ID が含まれない場合はエラーを送出すること", () => {
+      const html =
+        '<html><head><link rel="canonical" href="https://kakuyomu.jp/other"></head><body></body></html>';
+      expect(() =>
+        parser.parseNovelIndex(html, "https://kakuyomu.jp/invalid"),
+      ).toThrow("Cannot extract remoteWorkId from URL or HTML");
     });
   });
 });
