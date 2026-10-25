@@ -17,6 +17,10 @@ const themeOptions: { value: ReaderTheme; label: string; testId: string }[] = [
   { value: "black", label: "黒", testId: "theme-black" },
 ];
 
+/**
+ * リーダー画面の上部・下部で操作可能なツールバーコンポーネント
+ * 縦書き/横書き切り替え、4カラーテーマ選択、および作品取得/更新トリガーを提供
+ */
 export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
   writingMode,
   theme,
