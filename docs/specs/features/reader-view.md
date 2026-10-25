@@ -2,7 +2,7 @@
 type: spec-feature
 title: 小説リーダー機能仕様書（ReaderView / ReaderToolbar / PocReaderContainer）
 description: 小説本文の縦書き・横書き組版表示、ルビ・傍点描画、4カラーテーマ切り替え、読書設定永続化、未キャッシュ話のオンデマンド取得、およびSCN-01統合シナリオの正本仕様。
-status: "Review (#12)"
+status: "Review (#13)"
 updated: "2026-10-26"
 tags: [reader, vertical-writing, ruby, bouten, theme, localstorage, scn01]
 related_specs:
@@ -11,6 +11,7 @@ related_specs:
   - docs/specs/screen-transitions.md
   - docs/specs/db-schema.md
   - docs/specs/features/bookshelf.md
+  - docs/specs/features/novel-detail.md
 related_tests:
   - src/features/reader/components/ReaderView.test.tsx
   - src/features/reader/components/ReaderToolbar.test.tsx
@@ -131,15 +132,17 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
 ## 6. SCN-01 結合シナリオ仕様（Playwright IT）
 
 - **シナリオ ID**: `SCN-01`
-- **目的**: 本棚画面（`SCR-01`）での URL 作品登録から、「続きから読む」（`TR-03`）によるリーダー画面（`SCR-03`）への遷移・未キャッシュ話オンデマンド取得、縦書き・ルビ・傍点描画、設定変更、リロード復元までの一連のユーザー体験を一気通貫で検証する。
+- **目的**: 本棚画面（`SCR-01`）での URL 作品登録から、作品詳細・目次画面（`SCR-02`）での目次確認・更新・エピソード選択（`TR-02`, `TR-04`）および「続きから読む」（`TR-03`）によるリーダー画面（`SCR-03`）への遷移・未キャッシュ話オンデマンド取得、縦書き・ルビ・傍点描画、設定変更、リロード復元、および作品削除（`TR-07`）までの一連のユーザー体験を一気通貫で検証する。
 - **検証ステップ**:
   1. 初期表示（`/`）で本棚の空状態（`bookshelf-empty`）が表示されることを確認。
   2. 「URLから作品を追加」ダイアログを開き、カクヨム作品 URL を入力して登録を実行し、本棚一覧に作品カード（`novel-card`）が追加されることを確認。
-  3. 作品カードの「続きから読む」ボタン（`novel-card-resume`）をクリックし、`/novels/:novelId/chapters/1`（`SCR-03`）へ遷移することを確認。
-  4. 第1話本文がオンデマンド取得され、`reader-title`（作品名）、`reader-chapter-title`（サブタイトル）、および `reader-view` が表示されることを確認。
-  5. 初期表示が `writing-vertical-rl`（縦書き）であることを確認。
-  6. 本文内の `<ruby>`（ルビ）および `<em class="bouten">`（傍点）が可視状態で正しくレンダリングされていることを確認。
-  7. テーマを「セピア」に変更し、背景スタイルが反映されることを確認。
-  8. 組み方向を「横書き」に変更し、`writing-horizontal-tb` が反映されることを確認。
-  9. ブラウザをリロード（F5）し、再取得操作を行うことなく、即座に作品・本文および変更後の設定（横書き・セピア）が復元表示されることを確認。
-  10. 「本棚へ戻る」（`reader-back-to-bookshelf`）をクリックして本棚画面（`/`）へ戻り、作品カードの取得済み話数が `1` に更新されていることを確認。
+  3. 作品カード本体（`novel-card-select`）をクリックして `/novels/:novelId`（`SCR-02` 作品詳細・目次画面）へ遷移（`TR-02`）し、作品ヘッダー情報・章見出し・エピソード一覧（`未取得` バッジ）が表示されること、および「目次を更新」ボタン押下で最新状態が通知されることを確認。
+  4. 目次一覧（または読書開始ボタン / 本棚の「続きから読む」）からエピソードを選択して `/novels/:novelId/chapters/1`（`SCR-03`）へ遷移（`TR-03` / `TR-04`）することを確認。
+  5. 第1話本文がオンデマンド取得され、`reader-title`（作品名）、`reader-chapter-title`（サブタイトル）、および `reader-view` が表示されることを確認。
+  6. 初期表示が `writing-vertical-rl`（縦書き）であることを確認。
+  7. 本文内の `<ruby>`（ルビ）および `<em class="bouten">`（傍点）が可視状態で正しくレンダリングされていることを確認。
+  8. テーマを「セピア」に変更し、背景スタイルが反映されることを確認。
+  9. 組み方向を「横書き」に変更し、`writing-horizontal-tb` が反映されることを確認。
+  10. ブラウザをリロード（F5）し、再取得操作を行うことなく、即座に作品・本文および変更後の設定（横書き・セピア）が復元表示されることを確認。
+  11. 「作品詳細へ」（`reader-back-to-detail`）をクリックして `SCR-02` へ戻り（`TR-06`）、第1話が `取得済み`（`episode-cached-badge`）に、ヘッダーの取得済み話数が `1` に更新されていることを確認。
+  12. 「本棚へ戻る」（`back-to-bookshelf-button`）で本棚画面（`/`）へ戻り作品カードの取得済み話数が `1` に更新されていることを確認した上で、再度 `SCR-02` から「作品を削除」→ 確認ダイアログの「削除する」を実行し、本棚（`/`）へ戻って空状態（`bookshelf-empty`）となることを確認（`TR-07`）。
