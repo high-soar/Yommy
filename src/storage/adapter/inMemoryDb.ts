@@ -1,7 +1,5 @@
-import initSqlJs, {
-  type Database,
-  type SqlValue,
-} from "sql.js/dist/sql-wasm-inline.js";
+import type { Database, SqlValue } from "sql.js";
+import initSqlJs from "sql.js/dist/sql-wasm-inline.js";
 import type { DatabaseAdapter } from "./types";
 
 const DDL_STATEMENTS = `
