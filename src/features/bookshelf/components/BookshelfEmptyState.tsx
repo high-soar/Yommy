@@ -15,7 +15,10 @@ export const BookshelfEmptyState: React.FC<BookshelfEmptyStateProps> = ({
       data-testid="bookshelf-empty"
       className="flex flex-col items-center justify-center p-8 text-center bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 shadow-xs max-w-md mx-auto my-12"
     >
-      <div className="w-16 h-16 mb-4 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-400 dark:text-slate-300 text-2xl select-none">
+      <div
+        aria-hidden="true"
+        className="w-16 h-16 mb-4 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-400 dark:text-slate-300 text-2xl select-none"
+      >
         📖
       </div>
       <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">
