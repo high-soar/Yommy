@@ -1,15 +1,16 @@
 ---
 type: spec-feature
 title: 小説リーダー機能仕様書（ReaderView / ReaderToolbar / PocReaderContainer）
-description: 小説本文の縦書き・横書き組版表示、ルビ・傍点描画、4カラーテーマ切り替え、読書設定永続化、およびSCN-01統合シナリオの正本仕様。
-status: Approved (Phase 3)
-updated: "2026-10-25"
+description: 小説本文の縦書き・横書き組版表示、ルビ・傍点描画、4カラーテーマ切り替え、読書設定永続化、未キャッシュ話のオンデマンド取得、およびSCN-01統合シナリオの正本仕様。
+status: "Review (#12)"
+updated: "2026-10-26"
 tags: [reader, vertical-writing, ruby, bouten, theme, localstorage, scn01]
 related_specs:
   - docs/specs/architecture.md
   - docs/specs/requirements.md
   - docs/specs/screen-transitions.md
   - docs/specs/db-schema.md
+  - docs/specs/features/bookshelf.md
 related_tests:
   - src/features/reader/components/ReaderView.test.tsx
   - src/features/reader/components/ReaderToolbar.test.tsx
@@ -78,18 +79,31 @@ related_tests:
 
 ## 4. PocReaderContainer 仕様（統合コンテナ）
 
-### 4.1 状態管理とパイプライン
+### 4.1 プロパティとルートパラメータ連携 (`PocReaderContainerProps`)
 
-1. **初期状態（空状態）**:
-   - 作品未取得時は `data-testid="reader-empty"` を表示し、未登録メッセージを表示する。
-2. **パーサー解決と URL 正規化**:
-   - 作品取得ボタン押下時、**HTTP 通信前に** `parserRegistry.requireParser(initialWorkUrl)` を呼び出し、未対応サイトの場合は通信を行わずに即座に `data-testid="reader-error"` を表示する。
-   - 対応サイトの場合は `parser.normalizeWorkUrl(initialWorkUrl)` により作品トップ URL へ正規化する。
+| プロパティ名        | 型                          | 必須 | 説明                                                                                                                            |
+| :------------------ | :-------------------------- | :--- | :------------------------------------------------------------------------------------------------------------------------------ |
+| `initialWorkUrl`    | `string`                    | 任意 | 単体起動・更新時の対象作品 URL（既定値: 検証用カクヨム作品 URL）                                                                |
+| `novelId`           | `string`                    | 任意 | ルート `/novels/:novelId/chapters/:chapterIndex` から渡される対象作品 ID                                                        |
+| `chapterIndex`      | `number`                    | 任意 | ルートから渡される対象エピソード連番（1始まり、省略時は `1`）                                                                   |
+| `onBackToBookshelf` | `() => void`                | 任意 | 「本棚へ戻る」（`/`）ナビゲーションコールバック（指定時のみ `data-testid="reader-back-to-bookshelf"` ボタンを表示）             |
+| `onBackToDetail`    | `(novelId: string) => void` | 任意 | 「作品詳細へ」（`/novels/:novelId`）ナビゲーションコールバック（指定時のみ `data-testid="reader-back-to-detail"` ボタンを表示） |
+
+### 4.2 状態管理とパイプライン
+
+1. **初期状態（空状態）とルート指定ロード**:
+   - `novelId` が指定されている場合は `novelRepository.getNovelById(novelId)` および `chapterRepository.getChapter(novelId, chapterIndex ?? 1)` を取得する。
+   - **未キャッシュ話のオンデマンド本文取得（`TR-03` 対応）**:
+     - 対象エピソード（`ChapterRecord`）が存在し、かつ `chapter.bodyHtml === null`（本棚での目次のみ登録直後など本文未キャッシュ状態）の場合、自動的に `parserRegistry.requireParser(chapter.url)` → `httpClient.getHtml({ url: chapter.url })` → `parser.parseChapterContent(...)` → `chapterRepository.saveChapterBody(...)` を実行して本文を保存・表示する。
+   - `novelId` が未指定の場合は `novelRepository.listNovels()` の先頭作品（第1話）を読み込み、作品未登録時は `data-testid="reader-empty"` を表示する。
+2. **パーサー解決と URL 正規化（手動取得・更新トリガー時）**:
+   - 作品取得ボタン押下時、**HTTP 通信前に** `parserRegistry.requireParser(targetUrl)` を呼び出し、未対応サイトの場合は通信を行わずに即座に `data-testid="reader-error"` を表示する。
+   - 対応サイトの場合は `parser.normalizeWorkUrl(targetUrl)` により作品トップ URL へ正規化する。
 3. **データ取得・保存パイプライン**:
    - `httpClient.getHtml({ url: normalizedWorkUrl })` で目次 HTML を取得。
    - `parser.parseNovelIndex(...)` で目次情報を解析。
    - `novelRepository.upsertNovelWithToc(...)` で作品および目次（`chapters`）を DB 保存。
-   - 第1話が存在する場合、第1話エピソード本文を取得・サニタイズ解析し、`chapterRepository.saveChapterBody(...)` で保存。
+   - 対象話（`chapterIndex ?? 1`）が存在する場合、エピソード本文を取得・サニタイズ解析し、`chapterRepository.saveChapterBody(...)` で保存。
    - `ReaderView` に取得した作品・本文を表示。
 4. **設定の読み出しと永続化**:
    - マウント時に `settingsRepository.getReaderSettings()` を呼び出し、保存済み設定（組み方向・テーマ等）を復元。
@@ -117,13 +131,14 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
 ## 6. SCN-01 結合シナリオ仕様（Playwright IT）
 
 - **シナリオ ID**: `SCN-01`
-- **目的**: 作品取得から縦書き・ルビ・傍点描画、設定変更、リロード復元までの一連のユーザー体験を一気通貫で検証する。
+- **目的**: 本棚画面（`SCR-01`）での URL 作品登録から、「続きから読む」（`TR-03`）によるリーダー画面（`SCR-03`）への遷移・未キャッシュ話オンデマンド取得、縦書き・ルビ・傍点描画、設定変更、リロード復元までの一連のユーザー体験を一気通貫で検証する。
 - **検証ステップ**:
-  1. 初期表示で `reader-empty` が表示されることを確認。
-  2. `fetch-novel-button` をクリック。
-  3. `reader-title`（作品名）、`reader-chapter-title`（サブタイトル）、および `reader-view` が表示されることを確認。
-  4. 初期表示が `writing-vertical-rl`（縦書き）であることを確認。
-  5. 本文内の `<ruby>`（ルビ）および `<em class="bouten">`（傍点）が可視状態で正しくレンダリングされていることを確認。
-  6. テーマを「セピア」に変更し、背景スタイルが反映されることを確認。
-  7. 組み方向を「横書き」に変更し、`writing-horizontal-tb` が反映されることを確認。
-  8. ブラウザをリロード（F5）し、再取得ボタンを押すことなく、即座に作品と本文が復元表示されることを確認。
+  1. 初期表示（`/`）で本棚の空状態（`bookshelf-empty`）が表示されることを確認。
+  2. 「URLから作品を追加」ダイアログを開き、カクヨム作品 URL を入力して登録を実行し、本棚一覧に作品カード（`novel-card`）が追加されることを確認。
+  3. 作品カードの「続きから読む」ボタン（`novel-card-resume`）をクリックし、`/novels/:novelId/chapters/1`（`SCR-03`）へ遷移することを確認。
+  4. 第1話本文がオンデマンド取得され、`reader-title`（作品名）、`reader-chapter-title`（サブタイトル）、および `reader-view` が表示されることを確認。
+  5. 初期表示が `writing-vertical-rl`（縦書き）であることを確認。
+  6. 本文内の `<ruby>`（ルビ）および `<em class="bouten">`（傍点）が可視状態で正しくレンダリングされていることを確認。
+  7. テーマを「セピア」に変更し、背景スタイルが反映されることを確認。
+  8. 組み方向を「横書き」に変更し、`writing-horizontal-tb` が反映されることを確認。
+  9. ブラウザをリロード（F5）し、再取得操作を行うことなく、即座に作品・本文および変更後の設定（横書き・セピア）が復元表示されることを確認。
