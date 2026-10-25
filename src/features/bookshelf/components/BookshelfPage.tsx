@@ -55,7 +55,7 @@ export const BookshelfPage: React.FC<BookshelfPageProps> = ({
             onClick={onOpenDialog}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs md:text-sm font-medium rounded-lg shadow-xs transition-colors focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           >
-            <span>＋</span>
+            <span aria-hidden="true">＋</span>
             <span>URLから作品を追加</span>
           </button>
         </header>
