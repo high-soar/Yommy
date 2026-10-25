@@ -1,0 +1,1807 @@
+openapi: 3.0.3
+x-design-metadata:
+  status: "Approved (Step 3)"
+  updated: "2026-10-17"
+  related:
+    - docs/rd/step3.md#2-nextjs-移行およびコンテナ提供方針
+    - docs/rd/step3.md#22-api-モックとコンテナ提供構成
+    - docs/rd/step3.md#3-ut--it--pt-の切り分けとテスト規約の詳細
+    - docs/ed/01-system-overview.md#3-対象範囲
+    - docs/ed/01-system-overview.md#5-システム全体の受け入れ条件
+    - docs/ed/01-system-overview.md#52-要件設計api-トレーサビリティマトリクス
+    - docs/ed/screens/login.md#6-認証フローセッション確立および遷移制御仕様
+    - docs/ed/screens/dashboard.md#8-画面受け入れ条件
+    - docs/ed/screens/ticket-list.md#3-表示項目詳細
+    - docs/ed/screens/ticket-detail.md#3-表示項目詳細
+    - docs/ed/screens/ticket-create.md#9-画面受け入れ条件
+    - docs/ed/screens/admin-management.md#9-画面受け入れ条件
+info:
+  title: 社内問い合わせ・チケット管理 API (Ticket Management API)
+  description: |
+    社内問い合わせ・チケット管理システムのフロントエンドと、MSW（Mock Service Worker）モックおよび別コンテナ Mock API サーバー間で合意・利用する REST API 仕様です。
+    実バックエンドは作成せず、本ドキュメント（`docs/ed/api/openapi.yaml`）を本リポジトリにおける API 契約の唯一の正本（SSOT: Single Source of Truth）とします。
+
+    ### 1. モック提供アーキテクチャ（2層構成）と SSOT 原則
+    本システムでは、開発・テスト工程の特性に応じて 2 つのモック実行環境を採用しますが、提供される API パス、パラメータ、リクエスト/レスポンススキーマ、認証・認可仕様はすべて本契約（`/api` ベースパス）に完全に準拠します。
+    - **開発・単体テスト（UT）・結合テスト（IT）**:
+      - ブラウザおよび Node.js 環境上で MSW（`src/mocks/`）が `/api/*` への HTTP 通信をインターセプトし、本契約に準拠してモックデータを返却します。
+      - IT では実ブラウザ（Playwright）から MSW へ通信し、全ケースでトレース（`trace: "on"`）を常時記録して通信内容を監査します。
+    - **リリース相当の接続確認・総合テスト（PT・コンテナ検証）**:
+      - 画面を Next.js コンテナイメージとして提供し、同一の OpenAPI 契約と初期シードデータ（`src/mocks/db/`）を活用する**別コンテナの Mock API サーバー**を独立して稼働させます。
+      - 画面コンテナから Mock API コンテナへは、本番想定の `/api` 経路（Next.js Rewrites またはリバースプロキシ等）を通じて透過的にプロキシ接続します。
+
+    ### 2. 別コンテナ Mock API サーバーにおけるステートフル操作とデータ整合性
+    別コンテナ Mock API サーバーにおいても、以下のステートフルな操作・検証が一貫して成立することを保証します。
+    - **認証・セッション管理**:
+      - `POST /auth/login` で発行された認証トークン（Bearer トークン）に基づき、サーバーインメモリストアでセッションが維持され、`GET /auth/me` でユーザープロファイルが復元されること。
+      - `POST /auth/logout` によりトークンが無効化されること。
+    - **マスタデータとチケットの参照整合性**:
+      - `POST /projects` で作成されたプロジェクトは即座に `GET /projects` および新規起票のプロジェクト選択肢へ反映されること。
+      - 問い合わせチケットが紐づくプロジェクト（`ticket_count > 0`）、または唯一の所属先としている一般ユーザーが存在するプロジェクトの削除（`DELETE /projects/{id}`）は 400 エラーとして安全に拒否されること。
+      - チケットが存在しないプロジェクトの削除時は、所属ユーザーの所属プロジェクト一覧から対象プロジェクト ID がカスケード除外されること。
+    - **ユーザーおよび所属紐づけ管理**:
+      - `POST /users` による新規ユーザー作成、`DELETE /users/{id}` による削除（自身のアカウント自己削除は 400 エラー）、`PUT /users/{id}/projects` による所属プロジェクト更新が、`GET /users`、`GET /assignees`、およびチケット起票・詳細画面へ即時反映されること。
+    - **チケットのライフサイクルとダッシュボード集計**:
+      - `POST /tickets` で起票されたチケット（起票者はログインセッションから自動設定）は、`GET /tickets`（一覧）、`GET /tickets/{id}`（詳細）、および `GET /dashboard/summary`（ステータス別件数・未割り当てアラート・滞留アラート・プロジェクト稼働）へ即時反映されること。
+      - `PATCH /tickets/{id}` によるステータス・担当者更新、および `POST /tickets/{id}/comments` によるコメント追加（投稿者はログインセッションから自動設定）が時系列で正しく記録・返却されること。
+
+    ### 3. 認証・認可および職務分掌（SoD）
+    - すべての保護 API（`/auth/login` を除く全エンドポイント）は `Authorization: Bearer <token>` ヘッダーによる認証を必須とします。未認証アクセスは 401 Unauthorized を返却します。
+    - 一般ユーザー（`role: general`）と管理者ユーザー（`role: admin`）の職務分掌に基づき、権限外の操作（例: 一般ユーザーによる管理 API 操作、管理者ユーザーによる起票・更新・コメント操作）はすべて 403 Forbidden（`ErrorResponse`）を返却します。
+
+    ### 4. 統一エラーレスポンス
+    - すべてのエラー応答（400, 401, 403, 404, 500）は統一スキーマ `#/components/schemas/ErrorResponse` に準拠し、構造化されたエラーコード（`code`）、メッセージ（`message`）、およびフィールド詳細（`details`）を返却します。
+  version: 3.0.0
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+servers:
+  - url: /api
+    description: 共通モック API ベースパス（開発・UT・IT では MSW が同一パスをインターセプト、PT・コンテナ環境では画面コンテナから別コンテナ Mock API サーバーへ /api 経路でプロキシ接続）
+security:
+  - bearerAuth: []
+tags:
+  - name: auth
+    description: 認証・セッション管理 API
+  - name: projects
+    description: プロジェクト管理 API
+  - name: users
+    description: ユーザー管理 API
+  - name: tickets
+    description: 問い合わせ・チケット管理 API
+  - name: assignees
+    description: 担当者候補マスター API
+  - name: dashboard
+    description: ダッシュボード集計サマリー API
+
+paths:
+  /auth/login:
+    post:
+      tags:
+        - auth
+      summary: ログイン（認証・セッション確立）
+      security: []
+      description: |
+        ユーザー名とパスワードを検証し、認証トークンおよびユーザープロファイル（ID、氏名、ロール、所属プロジェクト）を返却します。
+        MSW モックおよび別コンテナ Mock API サーバーのインメモリストアにおいて認証セッションをステートフルに確立します。
+        モック環境では `user1`, `user2`, `user3`（一般ロール）、`admin`（管理者ロール）等のアカウントが利用可能です。
+      operationId: login
+      requestBody:
+        required: true
+        description: ログイン認証情報
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: 認証成功（セッション確立・ユーザー情報返却）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          description: リクエスト不正（ユーザー名またはパスワードの未入力・文字数超過など）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: 認証失敗（ユーザー名またはパスワードが正しくありません）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      tags:
+        - auth
+      summary: ログイン中ユーザー情報の取得
+      description: |
+        現在確立されているセッションのログイン中ユーザープロファイル（ID、ユーザー名、氏名、ロール、所属プロジェクト）を取得します。
+        ブラウザリロード時のセッション復元や認証状態確認で利用します。
+        MSW および別コンテナ Mock API サーバーの双方が Bearer トークンに基づいてセッションをステートフルに復元します。
+      operationId: getCurrentUser
+      responses:
+        "200":
+          description: ログイン中ユーザー情報取得成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+        "401":
+          description: 未認証またはセッション失効
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      tags:
+        - auth
+      summary: ログアウト（セッション破棄）
+      description: |
+        現在のセッションを破棄（無効化）します。
+        MSW および別コンテナ Mock API サーバーのインメモリストアから認証トークンを無効化します。
+      operationId: logout
+      responses:
+        "200":
+          description: ログアウト成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogoutResponse"
+        "401":
+          description: 未認証またはセッション失効
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /projects:
+    get:
+      tags:
+        - projects
+      summary: プロジェクト一覧の取得
+      description: |
+        登録されている全プロジェクトの一覧（プロジェクト ID、名称、説明、作成日時、紐づくチケット件数）を取得します。
+        チケットの所属プロジェクト選択、一覧の絞り込み、および管理者によるプロジェクト管理で利用します。
+        MSW モックおよび別コンテナ Mock API サーバーのインメモリストアにおけるステートフルな追加・削除操作とも即時連動します。
+      operationId: getProjects
+      responses:
+        "200":
+          description: プロジェクト一覧取得成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectListResponse"
+        "401":
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      tags:
+        - projects
+      summary: 新規プロジェクトの作成
+      description: |
+        管理者ユーザーが新しいプロジェクトを登録します。
+        MSW モックおよび別コンテナ Mock API サーバーのインメモリストアに即座に反映され、一覧取得や新規起票画面での選択が可能となります。
+        一般ユーザーからのリクエストは 403 Forbidden となります。
+      operationId: createProject
+      requestBody:
+        required: true
+        description: 新規プロジェクト情報
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectRequest"
+      responses:
+        "201":
+          description: プロジェクト作成成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          description: バリデーションエラー（プロジェクト名未入力、文字数制約違反、同名プロジェクトの重複など）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: 権限エラー（管理者ユーザーのみ実行可能）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /projects/{id}:
+    delete:
+      tags:
+        - projects
+      summary: プロジェクトの削除
+      description: |
+        管理者ユーザーが指定されたプロジェクトを削除します。
+        該当プロジェクトに紐づく問い合わせチケットが存在する場合は削除できず 400 エラーとなります。
+        また、該当プロジェクトを唯一の所属プロジェクトとしている一般ユーザーが存在する場合も削除できず 400 エラーとなります。
+        削除成功時は、当該プロジェクトに所属していたユーザー（複数所属の一般ユーザーまたは管理者）の所属リストから対象プロジェクトが安全に除外されます。
+        MSW および別コンテナ Mock API サーバーの双方でこの参照整合性保護がステートフルに保証されます。
+        一般ユーザーからのリクエストは 403 Forbidden となります。
+      operationId: deleteProject
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: "削除対象のプロジェクト識別子 (例: PRJ-01)"
+          schema:
+            type: string
+          example: PRJ-01
+      responses:
+        "204":
+          description: プロジェクト削除成功（レスポンスボディなし）。所属ユーザーの所属リストから対象プロジェクトが除外されます。
+        "400":
+          description: |
+            削除不可エラー（以下の場合に発生）:
+            - 該当プロジェクトに紐づく問い合わせチケットが存在する場合 (code: PROJECT_HAS_TICKETS)
+            - 該当プロジェクトを唯一の所属とする一般ユーザーが存在する場合 (code: PROJECT_HAS_EXCLUSIVE_MEMBERS)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: 権限エラー（管理者ユーザーのみ実行可能）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: 指定されたプロジェクトが存在しない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users:
+    get:
+      tags:
+        - users
+      summary: ユーザー一覧の取得
+      description: |
+        登録されている全ユーザーアカウントの一覧（所属プロジェクト情報含む）を取得します。管理者ユーザー専用の機能です。
+        MSW モックおよび別コンテナ Mock API サーバーのインメモリストアにおけるステートフルな最新状態を返却します。
+        一般ユーザーからのリクエストは 403 Forbidden となります。
+      operationId: getUsers
+      responses:
+        "200":
+          description: ユーザー一覧取得成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserListResponse"
+        "401":
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: 権限エラー（管理者ユーザーのみ実行可能）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      tags:
+        - users
+      summary: 新規ユーザーの作成
+      description: |
+        管理者ユーザーが新しいユーザーアカウントを作成します。
+        MSW モックおよび別コンテナ Mock API サーバーのインメモリストアに即座に反映され、一覧取得や担当者候補マスター（/assignees）へ反映されます。
+        一般ユーザーからのリクエストは 403 Forbidden となります。
+      operationId: createUser
+      requestBody:
+        required: true
+        description: 新規ユーザー登録情報
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: ユーザー作成成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: バリデーションエラー（ユーザー名の重複、必須項目未入力、一般ユーザー時の所属プロジェクト未指定または0件指定、文字数制約違反など）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: 権限エラー（管理者ユーザーのみ実行可能）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/{id}:
+    delete:
+      tags:
+        - users
+      summary: ユーザーの削除
+      description: |
+        管理者ユーザーが指定されたユーザーアカウントを削除します。
+        現在ログイン中の自身のアカウント削除は 400 エラーとなります。
+        MSW および別コンテナ Mock API サーバーの双方でステートフルに一覧および担当者候補から除外されます。
+        一般ユーザーからのリクエストは 403 Forbidden となります。
+      operationId: deleteUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: "削除対象のユーザー識別子 (例: user-3)"
+          schema:
+            type: string
+          example: user-3
+      responses:
+        "204":
+          description: ユーザー削除成功（レスポンスボディなし）
+        "400":
+          description: 削除不可エラー（現在ログイン中の自身のアカウントは削除不可など）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: 権限エラー（管理者ユーザーのみ実行可能）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: 指定されたユーザーが存在しない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/{id}/projects:
+    put:
+      tags:
+        - users
+      summary: ユーザー所属プロジェクトの更新
+      description: |
+        管理者ユーザーが指定されたユーザーの所属プロジェクト割り当てを更新します。
+        MSW および別コンテナ Mock API サーバーの双方でステートフルに更新され、ユーザー一覧、担当者候補、および該当ユーザーのセッションへ反映されます。
+        一般ユーザーからのリクエストは 403 Forbidden となります。
+      operationId: updateUserProjects
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: "更新対象のユーザー識別子 (例: user-1)"
+          schema:
+            type: string
+          example: user-1
+      requestBody:
+        required: true
+        description: 更新後の所属プロジェクト ID リスト
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserProjectsRequest"
+      responses:
+        "200":
+          description: 所属プロジェクト更新成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: バリデーションエラー（所属プロジェクトの空配列指定（一般ユーザーは1つ以上必須）、存在しないプロジェクト ID の指定など）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: 権限エラー（管理者ユーザーのみ実行可能）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: 指定されたユーザーが存在しない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /tickets:
+    get:
+      tags:
+        - tickets
+      summary: 問い合わせ一覧の取得
+      description: |
+        登録されている問い合わせの一覧を取得します。
+        プロジェクト、ステータス、担当者、タイトルキーワード、起票日による絞り込み、およびソートとページネーションに対応します。
+        一般ユーザーの検索対象は自所属プロジェクトに限り、指定された projectId との積集合で絞り込みます。自所属外の projectId を指定した場合も HTTP 200 で空一覧を返し、プロジェクトの存在有無は応答から区別できません。
+        管理者ユーザー時は全社横断（未指定時）またはプロジェクト絞り込み（指定時）で取得します。
+        MSW モックおよび別コンテナ Mock API サーバーの双方が同一のフィルタリング・ページネーション契約に従い、ステートフルな最新一覧を返却します。
+      operationId: getTickets
+      parameters:
+        - name: projectId
+          in: query
+          required: false
+          description: |
+            プロジェクト ID による絞り込み。
+            管理者ユーザー時は任意指定（未指定時は全プロジェクト横断）。
+            一般ユーザー時は、自所属プロジェクトとの積集合で絞り込みます。未指定時は自所属全プロジェクト横断、所属プロジェクト ID の指定時は該当プロジェクトの一覧を取得します。自所属外の ID を指定した場合は HTTP 200 で空一覧を返します。
+          schema:
+            type: string
+          example: PRJ-01
+        - name: status
+          in: query
+          required: false
+          description: ステータスによる絞り込み。未指定時は全ステータスを対象とします。
+          schema:
+            $ref: "#/components/schemas/TicketStatus"
+        - name: assignee
+          in: query
+          required: false
+          description: |
+            担当者による絞り込み。担当者名（例: 田中）を指定した場合は該当する担当者の問い合わせを抽出します。
+            特殊値 `unassigned` を指定した場合は担当者が未割り当て（null）の問い合わせを抽出します。
+            未指定時は全担当者を対象とします。
+            ※初期スコープでは担当者名が一意である前提で文字列指定としていますが、将来的な ID ベース（Assignee.id）による指定への移行を検討事項としています。
+          schema:
+            type: string
+          example: 田中
+        - name: q
+          in: query
+          required: false
+          description: タイトルに対するキーワード部分一致検索（大文字・小文字を区別しない）。最大 100 文字。
+          schema:
+            type: string
+            maxLength: 100
+          example: ログイン
+        - name: from
+          in: query
+          required: false
+          description: 起票日の開始日（指定日 00:00:00 以降を抽出）。形式は YYYY-MM-DD。
+          schema:
+            type: string
+            format: date
+          example: "2026-09-01"
+        - name: to
+          in: query
+          required: false
+          description: 起票日の終了日（指定日 23:59:59 以前を抽出）。形式は YYYY-MM-DD。
+          schema:
+            type: string
+            format: date
+          example: "2026-09-30"
+        - name: stale
+          in: query
+          required: false
+          description: |
+            長期滞留案件（最終更新日時または起票日から7日以上経過した未完了チケット）による絞り込み。
+            true 指定時は滞留している未完了（open または in_progress）チケットのみを抽出します。
+          schema:
+            type: boolean
+          example: true
+        - name: sort
+          in: query
+          required: false
+          description: ソート対象列。既定値は created_at。Step 2 で projectName を追加。
+          schema:
+            type: string
+            enum:
+              - id
+              - projectName
+              - title
+              - status
+              - assignee
+              - created_at
+            default: created_at
+          example: created_at
+        - name: order
+          in: query
+          required: false
+          description: ソート順（昇順 asc、降順 desc）。既定値は desc。
+          schema:
+            type: string
+            enum:
+              - asc
+              - desc
+            default: desc
+          example: desc
+        - name: page
+          in: query
+          required: false
+          description: 取得ページ番号（1始まり）。既定値は 1。
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          example: 1
+        - name: limit
+          in: query
+          required: false
+          description: 1ページあたりの取得件数上限。既定値は 10。
+          schema:
+            type: integer
+            enum:
+              - 10
+              - 20
+              - 50
+            default: 10
+          example: 10
+      responses:
+        "200":
+          description: |
+            問い合わせ一覧取得成功。
+            一般ユーザーが自所属外の projectId を指定した場合は、空の TicketListResponse（`items: []`, `total: 0`, `total_pages: 0`）を返却します。
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketListResponse"
+        "400":
+          description: リクエストパラメータ不正（開始日 > 終了日、不正なソート値など）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      tags:
+        - tickets
+      summary: 問い合わせの新規起票
+      description: |
+        一般ユーザーが自プロジェクトに紐づく新しい問い合わせチケットを登録します。
+        起票者（`created_by`）は認証セッションから自動設定されます。
+        登録されたチケットは、MSW モックおよび別コンテナ Mock API サーバーの双方でステートフルに保持され、チケット一覧、詳細、ダッシュボード集計、およびプロジェクトのチケット件数に即時反映されます。
+        管理者ユーザーからのリクエストは職務分掌（SoD）に基づき 403 Forbidden となります。
+      operationId: createTicket
+      requestBody:
+        required: true
+        description: 新規問い合わせ起票情報
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTicketRequest"
+      responses:
+        "201":
+          description: チケット起票成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketDetail"
+        "400":
+          description: バリデーションエラー（タイトル未入力・文字数超過、本文未入力・文字数超過、存在しない projectId など）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: 権限エラー（一般ユーザーのみ起票可能、管理者ユーザーは起票不可）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /tickets/{id}:
+    get:
+      tags:
+        - tickets
+      summary: 問い合わせ詳細の取得
+      description: |
+        指定されたチケット ID の問い合わせ詳細情報（所属プロジェクト、本文および時系列コメント履歴を含む）を取得します。
+        一般ユーザーの場合は自所属プロジェクトのチケットに限り取得可能であり、自所属外のチケット ID を指定した場合は HTTP 404（NOT_FOUND）を返却します（存在有無の区別を隠蔽）。
+        管理者ユーザーの場合は全社横断で任意のチケットを取得可能です。
+        MSW および別コンテナ Mock API サーバーの双方で、ステートフルに保持されたチケット情報およびコメント履歴を返却します。
+      operationId: getTicketById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 取得対象のチケット識別番号
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "200":
+          description: 問い合わせ詳細取得成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketDetail"
+        "401":
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: 指定された問い合わせが存在しない、または一般ユーザーの所属外プロジェクトである
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    patch:
+      tags:
+        - tickets
+      summary: 問い合わせの更新（ステータス・担当者）
+      description: |
+        問い合わせのステータスおよび/または担当者を更新します。一般ユーザー専用の機能です。
+        未指定のフィールドは更新されず現状を維持します。
+        MSW モックおよび別コンテナ Mock API サーバーの双方でステートフルに更新され、詳細画面、一覧画面、およびダッシュボード集計に即時反映されます。
+        管理者ユーザーからのリクエストは職務分掌（SoD: 閲覧専用）に基づき 403 Forbidden となります。
+      operationId: updateTicket
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 更新対象のチケット識別番号
+          schema:
+            type: integer
+          example: 1
+      requestBody:
+        required: true
+        description: 更新するステータスまたは担当者
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTicketRequest"
+      responses:
+        "200":
+          description: 問い合わせ更新成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketDetail"
+        "400":
+          description: バリデーションエラー（不正なステータス値、対象チケットの所属プロジェクト外の担当者指定、更新対象プロパティが1つも指定されていない空オブジェクト `{}`、リクエスト不正など）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: 権限エラー（一般ユーザーのみ更新可能、管理者ユーザーは閲覧専用のため更新不可）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: 指定された問い合わせが存在しない、または一般ユーザーの所属外プロジェクトである
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /tickets/{id}/comments:
+    post:
+      tags:
+        - tickets
+      summary: コメントの追加
+      description: |
+        指定された問い合わせに新規コメントを追加します。一般ユーザー専用の機能です。
+        投稿者名はリクエストボディには含めず、認証セッション情報（ログイン中ユーザー）から自動決定されます。
+        MSW モックおよび別コンテナ Mock API サーバーの双方でステートフルにコメント配列末尾へ記録され、詳細取得時に時系列昇順で返却されます。
+        管理者ユーザーからのリクエストは職務分掌（SoD: 閲覧専用）に基づき 403 Forbidden となります。
+      operationId: addComment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: コメントを追加するチケット識別番号
+          schema:
+            type: integer
+          example: 1
+      requestBody:
+        required: true
+        description: 追加するコメント内容（本文のみ。投稿者は認証セッションから自動決定）
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCommentRequest"
+      responses:
+        "201":
+          description: コメント追加成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+        "400":
+          description: バリデーションエラー（本文未入力または文字数超過）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: 権限エラー（一般ユーザーのみコメント追加可能、管理者ユーザーは閲覧専用のため投稿不可）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: 指定された問い合わせが存在しない、または一般ユーザーの所属外プロジェクトである
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /assignees:
+    get:
+      tags:
+        - assignees
+      summary: 担当者候補一覧の取得
+      description: |
+        一覧画面の担当者フィルター、詳細画面の担当者割り当てセレクター、および新規起票時の担当者候補で選択可能な担当者候補マスター一覧を取得します。
+        `projectId` を指定した場合は、そのプロジェクトに所属するメンバーのみを返却します。未指定時は全担当者候補を返却します。
+        ユーザー管理や所属紐づけのステートフルな更新とも連動します。
+      operationId: getAssignees
+      parameters:
+        - name: projectId
+          in: query
+          required: false
+          description: |
+            プロジェクト ID による絞り込み。
+            指定時は該当プロジェクトに所属する担当者候補のみを返却します。
+            未指定時は全プロジェクトの担当者候補を返却します（一覧画面の全体担当者フィルターや管理者用）。
+          schema:
+            type: string
+          example: PRJ-01
+      responses:
+        "200":
+          description: 担当者候補一覧取得成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssigneeListResponse"
+        "400":
+          description: 不正なリクエスト（予期せぬクエリパラメータ等）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /dashboard/summary:
+    get:
+      tags:
+        - dashboard
+      summary: ダッシュボード集計サマリーの取得
+      description: |
+        ログイン中ユーザーのロール（一般ユーザー / 管理者ユーザー）に応じたダッシュボード集計データを返却します。
+        一般ユーザーの場合は自所属プロジェクトのチケット集計および担当チケット一覧（最大5件）を返却します。
+        管理者ユーザーの場合は全社横断の集計サマリー、プロジェクト別稼働状況一覧、未割り当て案件アラート、長期滞留案件アラートを返却します。
+        MSW モックおよび別コンテナ Mock API サーバーの双方が、ステートフルなチケット・プロジェクトの最新登録・更新状態を動的に集計して返却します。
+      operationId: getDashboardSummary
+      responses:
+        "200":
+          description: ダッシュボード集計データ取得成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummaryResponse"
+        "401":
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: token
+      description: |
+        ログイン成功時（POST /auth/login）に返却されるトークン（`token`）を `Authorization: Bearer <token>` ヘッダーに設定して認証を行います。
+        ログインエンドポイント以外のすべての保護 API で認証が必要です。
+  schemas:
+    UserRole:
+      type: string
+      description: |
+        ユーザーの権限ロール:
+        - `general`: 一般ユーザー（自プロジェクトのチケット起票・更新・対応を担当）
+        - `admin`: 管理者ユーザー（全社横断モニタリング・監査、ユーザー/プロジェクト管理を担当）
+      enum:
+        - general
+        - admin
+      example: general
+
+    LoginRequest:
+      type: object
+      description: ログイン認証リクエスト情報
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: ログインユーザー名（必須、最大50文字、半角英数字記号）
+          example: user1
+        password:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: パスワード（必須、最大100文字）
+          example: password123
+
+    CurrentUser:
+      type: object
+      description: ログイン中ユーザープロファイル情報
+      required:
+        - id
+        - username
+        - name
+        - role
+        - projects
+      properties:
+        id:
+          type: string
+          description: ユーザー識別子
+          example: user-1
+        username:
+          type: string
+          description: ログインユーザー名（一意）
+          example: user1
+        name:
+          type: string
+          description: ユーザー氏名（表示名）
+          example: 山田 太郎
+        role:
+          $ref: "#/components/schemas/UserRole"
+        projects:
+          type: array
+          description: 所属プロジェクト一覧（一般ユーザーは1つ以上、管理者は空配列）
+          items:
+            $ref: "#/components/schemas/ProjectSummary"
+
+    LoginResponse:
+      type: object
+      description: ログイン認証成功レスポンス
+      required:
+        - token
+        - user
+      properties:
+        token:
+          type: string
+          description: 認証セッショントークン
+          example: mock-token-user1
+        user:
+          $ref: "#/components/schemas/CurrentUser"
+
+    LogoutResponse:
+      type: object
+      description: ログアウト成功レスポンス
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: ログアウト完了メッセージ
+          example: ログアウトしました。
+
+    Project:
+      type: object
+      description: プロジェクト情報
+      required:
+        - id
+        - name
+        - created_at
+        - ticket_count
+      properties:
+        id:
+          type: string
+          description: プロジェクト識別子
+          example: PRJ-01
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: プロジェクト名称（必須、1〜50文字、一意）
+          example: プロジェクトA
+        description:
+          type: string
+          maxLength: 200
+          nullable: true
+          description: プロジェクトの概要説明（最大200文字）
+          example: 社内基盤システムの刷新プロジェクト
+        created_at:
+          type: string
+          format: date-time
+          description: プロジェクト作成日時（ISO 8601 形式）
+          example: "2026-09-01T00:00:00Z"
+        ticket_count:
+          type: integer
+          minimum: 0
+          description: 該当プロジェクトに紐づく問い合わせチケットの総件数
+          example: 15
+
+    ProjectSummary:
+      type: object
+      description: プロジェクトの簡易サマリー情報
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: プロジェクト識別子
+          example: PRJ-01
+        name:
+          type: string
+          description: プロジェクト名称
+          example: プロジェクトA
+
+    ProjectListResponse:
+      type: object
+      description: プロジェクト一覧レスポンス
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          description: プロジェクト一覧
+          items:
+            $ref: "#/components/schemas/Project"
+
+    CreateProjectRequest:
+      type: object
+      description: 新規プロジェクト作成リクエスト
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: プロジェクト名称（必須、1〜50文字、一意）
+          example: プロジェクトD
+        description:
+          type: string
+          maxLength: 200
+          description: プロジェクトの概要説明（任意、最大200文字）
+          example: 新規サービス開発プロジェクト
+
+    User:
+      type: object
+      description: ユーザーアカウント情報
+      required:
+        - id
+        - username
+        - name
+        - role
+        - projects
+        - created_at
+      properties:
+        id:
+          type: string
+          description: ユーザー識別子
+          example: user-1
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          pattern: "^[a-zA-Z0-9_-]+$"
+          description: ログインユーザー名（一意、3〜50文字、半角英数字・ハイフン・アンダースコア）
+          example: user1
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: ユーザー氏名（表示名）
+          example: 山田 太郎
+        role:
+          $ref: "#/components/schemas/UserRole"
+        projects:
+          type: array
+          description: 所属プロジェクト一覧（一般ユーザーは1つ以上、管理者は空配列）
+          items:
+            $ref: "#/components/schemas/ProjectSummary"
+        created_at:
+          type: string
+          format: date-time
+          description: アカウント作成日時（ISO 8601 形式）
+          example: "2026-09-01T00:00:00Z"
+
+    UserListResponse:
+      type: object
+      description: ユーザー一覧レスポンス
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          description: 登録済みユーザー一覧
+          items:
+            $ref: "#/components/schemas/User"
+
+    CreateUserRequest:
+      type: object
+      description: |
+        新規ユーザー作成リクエスト。
+        一般ユーザー（role: general）を作成する場合は、1つ以上の所属プロジェクト（`project_ids`）の指定が必須です（未指定または空配列の場合は 400 Bad Request）。
+        管理者ユーザー（role: admin）は全社管理のためプロジェクトに所属せず、`project_ids` は空配列または省略可能です。
+      required:
+        - username
+        - name
+        - role
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          pattern: "^[a-zA-Z0-9_-]+$"
+          description: ユーザー名（必須、3〜50文字、半角英数字・ハイフン・アンダースコア、一意）
+          example: user3
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: ユーザー氏名（必須、1〜50文字）
+          example: 高橋 次郎
+        role:
+          $ref: "#/components/schemas/UserRole"
+        password:
+          type: string
+          minLength: 4
+          maxLength: 100
+          pattern: '^[\x21-\x7E]+$'
+          description: 初期パスワード（必須、4〜100文字、半角英数字記号）
+          example: password123
+        project_ids:
+          type: array
+          description: |
+            所属させるプロジェクトの ID 配列。
+            一般ユーザー（role: general）時は1つ以上必須（空配列または未指定は 400 エラー）。
+            管理者ユーザー（role: admin）時はプロジェクトに所属しないため空配列または省略可能。
+          items:
+            type: string
+          example:
+            - PRJ-01
+
+    UpdateUserProjectsRequest:
+      type: object
+      description: |
+        ユーザー所属プロジェクト更新リクエスト。
+        一般ユーザーは 1 つ以上のプロジェクトに所属しなければならないため、空配列での更新は 400 Bad Request となります。
+      required:
+        - project_ids
+      properties:
+        project_ids:
+          type: array
+          minItems: 1
+          description: ユーザーに割り当てるプロジェクト ID の配列（一般ユーザーは 1 つ以上の所属が必須。空配列は 400 Bad Request）
+          items:
+            type: string
+          example:
+            - PRJ-01
+            - PRJ-02
+
+    TicketStatus:
+      type: string
+      description: |
+        問い合わせの対応状況:
+        - `open`: 未対応
+        - `in_progress`: 対応中
+        - `closed`: 完了
+      enum:
+        - open
+        - in_progress
+        - closed
+      example: open
+
+    Assignee:
+      type: object
+      description: |
+        担当者候補情報。
+        初期スコープでは担当者名（name）が一意である前提でチケット一覧・詳細・更新と連携しますが、将来的な ID（id）ベース識別への統一を検討事項としています。
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: 担当者識別子
+          example: user-1
+        name:
+          type: string
+          description: 担当者氏名（一意）
+          example: 田中
+        email:
+          type: string
+          format: email
+          description: 担当者メールアドレス（任意）
+          example: tanaka@example.com
+
+    AssigneeListResponse:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          description: 担当者候補一覧
+          items:
+            $ref: "#/components/schemas/Assignee"
+
+    TicketListItem:
+      type: object
+      description: 問い合わせ一覧アイテム
+      required:
+        - id
+        - projectId
+        - projectName
+        - title
+        - status
+        - assignee
+        - created_by
+        - created_at
+      properties:
+        id:
+          type: integer
+          description: チケット識別番号
+          example: 1
+        projectId:
+          type: string
+          description: 所属プロジェクト識別子 (Step 2 で追加)
+          example: PRJ-01
+        projectName:
+          type: string
+          description: 所属プロジェクト名称 (Step 2 で追加)
+          example: プロジェクトA
+        title:
+          type: string
+          description: 問い合わせの件名
+          example: ログインができない
+        status:
+          $ref: "#/components/schemas/TicketStatus"
+        assignee:
+          type: string
+          nullable: true
+          description: |
+            現在の担当者名。未割り当ての場合は null。
+            初期スコープでは担当者名が一意である前提で文字列として保持します（将来的な Assignee.id 連携を検討）。
+          example: 田中
+        created_by:
+          type: string
+          description: 起票した社員名
+          example: 佐藤
+        created_at:
+          type: string
+          format: date-time
+          description: 起票日時（ISO 8601 形式）
+          example: "2026-09-26T14:10:00Z"
+
+    TicketListResponse:
+      type: object
+      required:
+        - items
+        - total
+        - page
+        - limit
+        - total_pages
+      properties:
+        items:
+          type: array
+          description: 該当ページの問い合わせリスト
+          items:
+            $ref: "#/components/schemas/TicketListItem"
+        total:
+          type: integer
+          minimum: 0
+          description: 絞り込み条件に一致する総件数
+          example: 25
+        page:
+          type: integer
+          minimum: 1
+          description: 現在のページ番号
+          example: 1
+        limit:
+          type: integer
+          enum:
+            - 10
+            - 20
+            - 50
+          description: 1ページあたりの上限件数
+          example: 10
+        total_pages:
+          type: integer
+          minimum: 0
+          description: 総ページ数（ceil(total / limit)）
+          example: 3
+
+    Comment:
+      type: object
+      required:
+        - id
+        - author
+        - body
+        - created_at
+      properties:
+        id:
+          type: integer
+          description: コメント識別番号
+          example: 1
+        author:
+          type: string
+          description: 投稿者名
+          example: 田中
+        body:
+          type: string
+          description: コメント本文
+          example: アカウントの状態を確認します。少々お待ちください。
+        created_at:
+          type: string
+          format: date-time
+          description: 投稿日時（ISO 8601 形式）
+          example: "2026-09-26T14:30:00Z"
+
+    TicketDetail:
+      type: object
+      description: 問い合わせ詳細情報
+      required:
+        - id
+        - projectId
+        - projectName
+        - title
+        - status
+        - assignee
+        - created_by
+        - created_at
+        - description
+        - comments
+      properties:
+        id:
+          type: integer
+          description: チケット識別番号
+          example: 1
+        projectId:
+          type: string
+          description: 所属プロジェクト識別子 (Step 2 で追加)
+          example: PRJ-01
+        projectName:
+          type: string
+          description: 所属プロジェクト名称 (Step 2 で追加)
+          example: プロジェクトA
+        title:
+          type: string
+          description: 問い合わせの件名
+          example: ログインができない
+        status:
+          $ref: "#/components/schemas/TicketStatus"
+        assignee:
+          type: string
+          nullable: true
+          description: |
+            現在の担当者名。未割り当ての場合は null。
+            初期スコープでは担当者名が一意である前提で文字列として保持します（将来的な Assignee.id 連携を検討）。
+          example: 田中
+        created_by:
+          type: string
+          description: 起票した社員名
+          example: 佐藤
+        created_at:
+          type: string
+          format: date-time
+          description: 起票日時（ISO 8601 形式）
+          example: "2026-09-26T14:10:00Z"
+        description:
+          type: string
+          description: 問い合わせの詳細本文
+          example: |
+            社内ポータルへのログイン時に「認証エラー」が表示され、アクセスできません。
+            アカウントのロック状態を確認いただけますでしょうか。
+        comments:
+          type: array
+          description: コメント履歴一覧（時系列・投稿日時昇順）
+          items:
+            $ref: "#/components/schemas/Comment"
+
+    CreateTicketRequest:
+      type: object
+      description: 新規問い合わせ起票リクエスト
+      required:
+        - title
+        - description
+        - projectId
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: 問い合わせの件名（必須、1〜100文字）
+          example: ログインができない
+        description:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: 問い合わせの詳細本文（必須、1〜2000文字）
+          example: |
+            社内ポータルへのログイン時に「認証エラー」が表示され、アクセスできません。
+            アカウントのロック状態を確認いただけますでしょうか。
+        projectId:
+          type: string
+          description: 所属プロジェクト識別子（必須）
+          example: PRJ-01
+        assignee:
+          type: string
+          nullable: true
+          description: |
+            初期担当者名（任意。未指定または null の場合は未設定）。
+            指定する場合、起票先プロジェクト（`projectId`）に所属する有効なメンバーでなければなりません。プロジェクト外のメンバーを指定した場合は 400 Bad Request となります。
+          example: 田中
+
+    UpdateTicketRequest:
+      type: object
+      description: |
+        問い合わせのステータスまたは担当者更新リクエスト。
+        `status` または `assignee` のうち少なくともいずれか 1 つを指定する必要があります（空オブジェクト `{}` は 400 エラー）。
+        初期スコープでは担当者名が一意である前提で名前文字列（`assignee`）を指定しますが、将来の ID ベース識別への移行を検討事項としています。
+      minProperties: 1
+      properties:
+        status:
+          $ref: "#/components/schemas/TicketStatus"
+        assignee:
+          type: string
+          nullable: true
+          description: |
+            変更後の担当者名。null を指定した場合は未割り当て（未設定）にする。
+            指定する場合、対象チケットの所属プロジェクトに所属する有効なメンバーでなければなりません。対象プロジェクト外の担当者が指定された場合、サーバーは 400 Bad Request（`ErrorResponse`）を返却します。
+          example: 田中
+
+    CreateCommentRequest:
+      type: object
+      description: |
+        新規コメント投稿リクエスト。
+        投稿者名はリクエストボディには含めず、認証セッション情報（ログイン中ユーザー）から自動決定されます。
+      required:
+        - body
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          description: コメント本文（必須、1〜1000文字）
+          example: アカウントの状態を確認します。少々お待ちください。
+
+    ErrorDetail:
+      type: object
+      required:
+        - message
+      properties:
+        field:
+          type: string
+          description: エラーが発生したリクエストフィールド名（該当する場合）
+          example: body
+        message:
+          type: string
+          description: 詳細エラーメッセージ
+          example: コメント本文を入力してください
+
+    ErrorResponse:
+      type: object
+      description: API 共通エラーレスポンス
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: |
+            エラー種別コード:
+            - `VALIDATION_ERROR`: 入力パラメータやリクエストボディの検証エラー
+            - `UNAUTHORIZED`: 未認証または認証失敗（セッション無効・失効）
+            - `FORBIDDEN`: 操作権限不足（管理者不可・一般不可などのロール違反）
+            - `NOT_FOUND`: 指定リソースが存在しない
+            - `CONFLICT`: リソースの競合（重複登録など）
+            - `INTERNAL_SERVER_ERROR`: サーバー内部エラー
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          description: 画面表示やログ等で利用可能なエラーメッセージ
+          example: 入力内容に不備があります。
+        details:
+          type: array
+          description: フィールド単位の詳細エラー配列（バリデーション時など）
+          items:
+            $ref: "#/components/schemas/ErrorDetail"
+
+    GeneralDashboardSummary:
+      type: object
+      description: 一般ユーザー向けダッシュボードサマリー
+      required:
+        - projectId
+        - projectName
+        - totalCount
+        - openCount
+        - inProgressCount
+        - closedCount
+        - myAssignedTickets
+        - myAssignedCount
+      properties:
+        projectId:
+          type: string
+          example: PRJ-01
+        projectName:
+          type: string
+          example: プラットフォーム開発
+        totalCount:
+          type: integer
+          minimum: 0
+          example: 12
+        openCount:
+          type: integer
+          minimum: 0
+          example: 5
+        inProgressCount:
+          type: integer
+          minimum: 0
+          example: 3
+        closedCount:
+          type: integer
+          minimum: 0
+          example: 4
+        myAssignedTickets:
+          type: array
+          description: 自分宛ての直近未完了チケット（最大5件）
+          items:
+            $ref: "#/components/schemas/TicketListItem"
+        myAssignedCount:
+          type: integer
+          minimum: 0
+          description: 自分宛ての未完了総件数
+          example: 2
+
+    ProjectWorkloadSummary:
+      type: object
+      description: プロジェクト別稼働状況サマリー
+      required:
+        - projectId
+        - projectName
+        - totalCount
+        - openCount
+        - inProgressCount
+        - closedCount
+      properties:
+        projectId:
+          type: string
+          example: PRJ-01
+        projectName:
+          type: string
+          example: プラットフォーム開発
+        totalCount:
+          type: integer
+          minimum: 0
+          example: 20
+        openCount:
+          type: integer
+          minimum: 0
+          example: 8
+        inProgressCount:
+          type: integer
+          minimum: 0
+          example: 5
+        closedCount:
+          type: integer
+          minimum: 0
+          example: 7
+
+    UnassignedTicketAlert:
+      type: object
+      description: 担当者未割り当て案件アラート項目
+      required:
+        - id
+        - title
+        - projectId
+        - projectName
+        - created_at
+        - status
+      properties:
+        id:
+          type: integer
+          example: 101
+        title:
+          type: string
+          example: 認証トークン更新不備
+        projectId:
+          type: string
+          example: PRJ-01
+        projectName:
+          type: string
+          example: プラットフォーム開発
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-09-10T10:00:00Z"
+        status:
+          $ref: "#/components/schemas/TicketStatus"
+
+    StaleTicketAlert:
+      type: object
+      description: 長期滞留案件アラート項目（7日以上未完了）
+      required:
+        - id
+        - title
+        - projectId
+        - projectName
+        - status
+        - assignee
+        - staleDays
+        - lastUpdatedOrCreatedAt
+      properties:
+        id:
+          type: integer
+          example: 102
+        title:
+          type: string
+          example: パスワードリセットメール未達の調査
+        projectId:
+          type: string
+          example: PRJ-02
+        projectName:
+          type: string
+          example: 決済基盤刷新
+        status:
+          $ref: "#/components/schemas/TicketStatus"
+        assignee:
+          type: string
+          nullable: true
+          example: 佐藤
+        staleDays:
+          type: integer
+          minimum: 7
+          description: 経過日数
+          example: 9
+        lastUpdatedOrCreatedAt:
+          type: string
+          format: date-time
+          description: 最終更新日時または起票日時
+          example: "2026-09-01T15:30:00Z"
+
+    AdminDashboardSummary:
+      type: object
+      description: 管理者ユーザー向け全社モニタリングサマリー
+      required:
+        - totalCount
+        - openCount
+        - inProgressCount
+        - closedCount
+        - projectSummaries
+        - unassignedAlerts
+        - staleAlerts
+      properties:
+        totalCount:
+          type: integer
+          minimum: 0
+          example: 45
+        openCount:
+          type: integer
+          minimum: 0
+          example: 15
+        inProgressCount:
+          type: integer
+          minimum: 0
+          example: 10
+        closedCount:
+          type: integer
+          minimum: 0
+          example: 20
+        projectSummaries:
+          type: array
+          description: プロジェクト別稼働一覧
+          items:
+            $ref: "#/components/schemas/ProjectWorkloadSummary"
+        unassignedAlerts:
+          type: array
+          description: 未割り当て案件アラート一覧
+          items:
+            $ref: "#/components/schemas/UnassignedTicketAlert"
+        staleAlerts:
+          type: array
+          description: 長期滞留案件アラート一覧
+          items:
+            $ref: "#/components/schemas/StaleTicketAlert"
+
+    DashboardSummaryResponse:
+      description: ダッシュボード集計 API レスポンス（ロール別分岐）
+      oneOf:
+        - type: object
+          required:
+            - role
+            - data
+          properties:
+            role:
+              type: string
+              enum:
+                - general
+            data:
+              $ref: "#/components/schemas/GeneralDashboardSummary"
+        - type: object
+          required:
+            - role
+            - data
+          properties:
+            role:
+              type: string
+              enum:
+                - admin
+            data:
+              $ref: "#/components/schemas/AdminDashboardSummary"

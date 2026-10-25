@@ -1,0 +1,38 @@
+{
+  "name": "Yommy Development",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "24"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {
+      "version": "latest"
+    }
+  },
+  "containerEnv": {
+    "TZ": "Asia/Tokyo"
+  },
+  "postCreateCommand": "npm install --global @github/copilot && if [ -f package.json ]; then npm ci && npx playwright install --with-deps chromium; fi",
+  "remoteUser": "vscode",
+  "mounts": [
+    "source=copilot-cli-history-${devcontainerId},target=/home/vscode/.copilot,type=volume",
+    "source=antigravity-history-${devcontainerId},target=/home/vscode/.gemini,type=volume",
+    "source=copilot-chat-history-${devcontainerId},target=/home/vscode/.vscode-server/data/User/globalStorage/github.copilot-chat,type=volume"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "bierner.markdown-mermaid",
+        "google.google-antigravity",
+        "vitest.explorer",
+        "ms-playwright.playwright",
+        "qwtel.sqlite-viewer",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss"
+      ]
+    }
+  }
+}
