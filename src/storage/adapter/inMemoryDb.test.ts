@@ -4,6 +4,7 @@ import {
   initTestDb,
   resetTestDb,
   closeTestDb,
+  createInMemoryDb,
 } from "./inMemoryDb";
 
 describe("InMemoryDatabaseAdapter", () => {
@@ -255,6 +256,14 @@ describe("InMemoryDatabaseAdapter", () => {
       });
       // runTransaction 完了時に発火
       expect(callCount).toBeGreaterThanOrEqual(2);
+    });
+
+    it("createInMemoryDb で独立したインメモリ DB アダプターを生成できること", async () => {
+      const adapter = await createInMemoryDb();
+      expect(adapter).toBeInstanceOf(InMemoryDatabaseAdapter);
+      const rows = await adapter.query("SELECT * FROM reader_settings;");
+      expect(rows).toHaveLength(1);
+      await adapter.close();
     });
   });
 });

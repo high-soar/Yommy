@@ -3,7 +3,12 @@ import React from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./ServiceProvider.stories";
-import { ServiceProvider, useServices } from "./ServiceProvider";
+import {
+  ServiceProvider,
+  useServices,
+  getStoredDatabaseBinary,
+  persistDatabaseBinary,
+} from "./ServiceProvider";
 import { resetTestDb } from "../storage/adapter/inMemoryDb";
 
 const { Default, CustomMockServices } = composeStories(stories);
@@ -124,6 +129,139 @@ describe("ServiceProvider", () => {
       await waitFor(() => {
         expect(restoredTitle).toBe("復元テスト作品");
       });
+    });
+
+    it("localStorage のデータが破損している場合は初期化エラーにならず新規初期化されること", async () => {
+      localStorage.setItem("yommy_sqlite_db_backup", "invalid-base64!!!");
+      render(
+        <ServiceProvider>
+          <div>破損データ復旧テスト</div>
+        </ServiceProvider>,
+      );
+      await waitFor(() => {
+        expect(screen.getByText("破損データ復旧テスト")).toBeInTheDocument();
+      });
+    });
+
+    it("localStorage 保存時に例外が発生してもクラッシュせず無視されること", async () => {
+      const setItemSpy = vi
+        .spyOn(Storage.prototype, "setItem")
+        .mockImplementation(() => {
+          throw new Error("QuotaExceededError");
+        });
+
+      const TestConsumer: React.FC = () => {
+        const services = useServices();
+        return (
+          <button
+            onClick={async () => {
+              await services.databaseAdapter.execute(
+                "CREATE TABLE IF NOT EXISTS test_quota (id INT);",
+              );
+            }}
+          >
+            更新
+          </button>
+        );
+      };
+
+      render(
+        <ServiceProvider>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("更新")).toBeInTheDocument();
+      });
+      screen.getByText("更新").click();
+
+      setItemSpy.mockRestore();
+    });
+
+    it("createDefaultMockHttpClient の正規表現ルートで各話エピソードが取得できること", async () => {
+      let content = "";
+      const TestConsumer: React.FC = () => {
+        const services = useServices();
+        React.useEffect(() => {
+          if (services.isReady) {
+            services.httpClient
+              .getHtml({
+                url: "https://kakuyomu.jp/works/1177354054881162325/episodes/999999",
+              })
+              .then((res) => {
+                content = res.html;
+              });
+          }
+        }, [services]);
+        return <div>モックHTTPテスト</div>;
+      };
+
+      render(
+        <ServiceProvider>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(content).toContain("第1話 見知らぬ空");
+      });
+    });
+
+    it("カスタム databaseAdapter および 各 Repository が渡された場合にそのまま利用されること", async () => {
+      const customDb = {
+        execute: vi.fn(),
+        query: vi.fn().mockResolvedValue([]),
+        runTransaction: vi.fn((cb) => cb()),
+        close: vi.fn(),
+      } as unknown as import("../storage/adapter/types").DatabaseAdapter;
+      const customNovelRepo = {
+        listNovels: vi.fn().mockResolvedValue([]),
+      } as unknown as import("../storage/types").NovelRepository;
+      const customChapterRepo = {
+        getChapter: vi.fn().mockResolvedValue(null),
+      } as unknown as import("../storage/types").ChapterRepository;
+      const customSettingsRepo = {
+        getReaderSettings: vi.fn().mockResolvedValue({}),
+      } as unknown as import("../storage/types").SettingsRepository;
+
+      render(
+        <ServiceProvider
+          services={{
+            databaseAdapter: customDb,
+            novelRepository: customNovelRepo,
+            chapterRepository: customChapterRepo,
+            settingsRepository: customSettingsRepo,
+          }}
+        >
+          <div>カスタムサービス注入</div>
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("カスタムサービス注入")).toBeInTheDocument();
+      });
+    });
+
+    it("fallback なしで初期化中の場合は未完了時の children がレンダリングされること", async () => {
+      render(
+        <ServiceProvider>
+          <div>初期化中子コンポーネント</div>
+        </ServiceProvider>,
+      );
+      expect(screen.getByText("初期化中子コンポーネント")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(
+          screen.getByText("初期化中子コンポーネント"),
+        ).toBeInTheDocument();
+      });
+    });
+
+    it("storage が利用できない環境（null）での getStoredDatabaseBinary と persistDatabaseBinary の安全なフォールバック", () => {
+      expect(getStoredDatabaseBinary(null)).toBeUndefined();
+      expect(() =>
+        persistDatabaseBinary(new Uint8Array([1, 2, 3]), null),
+      ).not.toThrow();
     });
   });
 });
