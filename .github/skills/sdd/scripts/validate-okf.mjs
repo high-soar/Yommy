@@ -66,6 +66,26 @@ function walkMarkdownFiles(dir) {
 }
 
 /**
+ * Strip YAML comments while preserving '#' inside single or double quotes.
+ * @param {string} rawLine
+ */
+function stripYamlComment(rawLine) {
+  let inSingle = false;
+  let inDouble = false;
+  for (let i = 0; i < rawLine.length; i++) {
+    const ch = rawLine[i];
+    if (ch === "'" && !inDouble) {
+      inSingle = !inSingle;
+    } else if (ch === '"' && !inSingle) {
+      inDouble = !inDouble;
+    } else if (ch === "#" && !inSingle && !inDouble) {
+      return rawLine.slice(0, i).trimEnd();
+    }
+  }
+  return rawLine.trimEnd();
+}
+
+/**
  * Minimal YAML frontmatter parser for flat scalars and string arrays.
  * @param {string} yamlText
  */
@@ -76,7 +96,7 @@ function parseFrontmatter(yamlText) {
   let currentListKey = null;
 
   for (const rawLine of lines) {
-    const line = rawLine.replace(/#.*$/, "").trimEnd();
+    const line = stripYamlComment(rawLine);
     if (!line.trim()) continue;
 
     const listMatch = line.match(/^\s*-\s+(.+)$/);

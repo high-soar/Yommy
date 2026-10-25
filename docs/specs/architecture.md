@@ -9,6 +9,7 @@ related_specs:
   - docs/specs/requirements.md
   - docs/specs/db-schema.md
   - docs/specs/screen-transitions.md
+  - docs/specs/parsers/kakuyomu.md
   - docs/guidelines/testing.md
 related_tests: []
 ---
