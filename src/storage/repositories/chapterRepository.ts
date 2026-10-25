@@ -77,6 +77,21 @@ export class SqlChapterRepository implements ChapterRepository {
     return this.mapRowToRecord(rows[0]);
   }
 
+  private async recalculateNovelStats(
+    novelId: string,
+    updatedAt: string,
+  ): Promise<void> {
+    await this.db.execute(
+      `UPDATE novels
+       SET
+         cached_chapters = (SELECT COUNT(*) FROM chapters WHERE novel_id = ? AND body_html IS NOT NULL),
+         total_byte_size = (SELECT COALESCE(SUM(byte_size), 0) FROM chapters WHERE novel_id = ? AND body_html IS NOT NULL),
+         updated_at = ?
+       WHERE id = ?;`,
+      [novelId, novelId, updatedAt, novelId],
+    );
+  }
+
   async saveChapterBody(
     novelId: string,
     chapterIndex: number,
@@ -97,15 +112,7 @@ export class SqlChapterRepository implements ChapterRepository {
         ],
       );
 
-      await this.db.execute(
-        `UPDATE novels
-         SET
-           cached_chapters = (SELECT COUNT(*) FROM chapters WHERE novel_id = ? AND body_html IS NOT NULL),
-           total_byte_size = (SELECT COALESCE(SUM(byte_size), 0) FROM chapters WHERE novel_id = ? AND body_html IS NOT NULL),
-           updated_at = ?
-         WHERE id = ?;`,
-        [novelId, novelId, downloadedAt, novelId],
-      );
+      await this.recalculateNovelStats(novelId, downloadedAt);
     });
   }
 
@@ -143,15 +150,7 @@ export class SqlChapterRepository implements ChapterRepository {
       );
 
       const now = new Date().toISOString();
-      await this.db.execute(
-        `UPDATE novels
-         SET
-           cached_chapters = (SELECT COUNT(*) FROM chapters WHERE novel_id = ? AND body_html IS NOT NULL),
-           total_byte_size = (SELECT COALESCE(SUM(byte_size), 0) FROM chapters WHERE novel_id = ? AND body_html IS NOT NULL),
-           updated_at = ?
-         WHERE id = ?;`,
-        [novelId, novelId, now, novelId],
-      );
+      await this.recalculateNovelStats(novelId, now);
 
       return count;
     });
