@@ -44,6 +44,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   return (
     <div
       data-testid="reader-view"
+      data-writing-mode={writingMode}
+      data-theme={theme}
       className={`rounded-lg p-6 shadow-sm border font-serif transition-colors duration-200 ${
         themeStyles[theme]
       } ${

@@ -159,6 +159,78 @@ describe("SqlNovelRepository", () => {
       expect(ch3[0].byte_size).toBe(0);
       expect(ch3[0].is_read).toBe(0);
     });
+
+    it("話が途中に挿入されて chapter_index がずれた場合でも remote_chapter_id により本文キャッシュが正しく維持されること", async () => {
+      const adapter = await initTestDb();
+      await repository.upsertNovelWithToc(
+        sampleParsedIndex,
+        "2026-01-10T00:00:00Z",
+      );
+
+      // ep2（初期は chapter_index = 2）に本文キャッシュを保存
+      await adapter.execute(
+        "UPDATE chapters SET body_html = '<p>ep2の本文</p>', byte_size = 200, downloaded_at = ? WHERE novel_id = ? AND remote_chapter_id = ?;",
+        ["2026-01-11T00:00:00Z", "kakuyomu:1177354054881162325", "ep2"],
+      );
+
+      // ep1 と ep2 の間に新規話 ep_new を挿入した目次で更新
+      const insertedIndex: ParsedNovelIndex = {
+        ...sampleParsedIndex,
+        chapters: [
+          {
+            chapterIndex: 1,
+            remoteChapterId: "ep1",
+            partTitle: "第1章",
+            title: "第1話 はじまり",
+            url: "https://kakuyomu.jp/works/1177354054881162325/episodes/ep1",
+            publishedAt: "2026-01-01T10:00:00Z",
+          },
+          {
+            chapterIndex: 2,
+            remoteChapterId: "ep_new",
+            partTitle: "第1章",
+            title: "第1.5話 幕間",
+            url: "https://kakuyomu.jp/works/1177354054881162325/episodes/ep_new",
+            publishedAt: "2026-01-01T15:00:00Z",
+          },
+          {
+            chapterIndex: 3,
+            remoteChapterId: "ep2",
+            partTitle: "第1章",
+            title: "第2話 旅立ち",
+            url: "https://kakuyomu.jp/works/1177354054881162325/episodes/ep2",
+            publishedAt: "2026-01-02T10:00:00Z",
+          },
+        ],
+      };
+
+      await repository.upsertNovelWithToc(
+        insertedIndex,
+        "2026-01-12T00:00:00Z",
+      );
+
+      // 新規挿入された ep_new（chapter_index = 2）は本文未取得であること
+      const newEp = await adapter.query<{
+        body_html: string | null;
+        chapter_index: number;
+      }>(
+        "SELECT body_html, chapter_index FROM chapters WHERE novel_id = ? AND remote_chapter_id = ?;",
+        ["kakuyomu:1177354054881162325", "ep_new"],
+      );
+      expect(newEp[0].chapter_index).toBe(2);
+      expect(newEp[0].body_html).toBeNull();
+
+      // ep2 は chapter_index が 3 に更新されつつ、本文キャッシュが維持されていること
+      const ep2 = await adapter.query<{
+        body_html: string | null;
+        chapter_index: number;
+      }>(
+        "SELECT body_html, chapter_index FROM chapters WHERE novel_id = ? AND remote_chapter_id = ?;",
+        ["kakuyomu:1177354054881162325", "ep2"],
+      );
+      expect(ep2[0].chapter_index).toBe(3);
+      expect(ep2[0].body_html).toBe("<p>ep2の本文</p>");
+    });
   });
 
   describe("listNovels", () => {

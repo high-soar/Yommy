@@ -95,7 +95,7 @@ Phase 3 以降のすべての PR 作業において、**PR を作成しただけ
    - PR 本文に目的・変更内容・検証結果・バグ記録＆申し送りミニテーブルを記載し、原則として `Closes #N` を設定すること（複数 PR に分割する途中段階のみ `Refs #N` を使用）。
    - **AI による Issue の直接クローズ（`gh issue close` 等）や PR の自己承認・マージは厳禁**。人間が PR をマージすることで Issue が同期クローズされる仕組みを厳守する。
 4. **GitHub Actions PASS**:
-   - リモート上の必須ワークフロー（CI / VRT / IT）がすべて PASS していること。
+   - リモート上の必須 CI ワークフロー（静的検査・UT・VRT・IT・Build を包含する `quality-gate`）が PASS していること。
 5. **独立 AI レビューの実施**:
    - 実装担当とは独立したレビュアー（`.github/agents/pr-reviewer.agent.md`）によるコード・設計照合レビューを実施し、[docs/guidelines/review-comment-format.md](review-comment-format.md) 準拠のコメントが PR に記録されていること。
 6. **全指摘スレッドの是正・再検証・Resolve 収束**:

@@ -6,9 +6,9 @@ export class CapacitorSqliteAdapter implements DatabaseAdapter {
 
   async execute(sql: string, params: unknown[] = []): Promise<void> {
     if (params.length > 0) {
-      await this.connection.run(sql, params);
+      await this.connection.run(sql, params, false);
     } else {
-      await this.connection.execute(sql);
+      await this.connection.execute(sql, false);
     }
   }
 

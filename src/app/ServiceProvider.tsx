@@ -1,7 +1,10 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { Capacitor } from "@capacitor/core";
+import { CapacitorSQLite, SQLiteConnection } from "@capacitor-community/sqlite";
 import type { HttpClientBridge } from "../bridges/http/types";
 import { MockHttpClient } from "../bridges/http/mockHttpClient";
+import { CapacitorHttpClient } from "../bridges/http/capacitorHttpClient";
 import type { ParserRegistry } from "../parsers/parserRegistry";
 import { createDefaultParserRegistry } from "../parsers/parserRegistry";
 import type { DatabaseAdapter } from "../storage/adapter/types";
@@ -9,6 +12,8 @@ import {
   createInMemoryDb,
   InMemoryDatabaseAdapter,
 } from "../storage/adapter/inMemoryDb";
+import { CapacitorSqliteAdapter } from "../storage/adapter/capacitorSqlite";
+import { initializeDatabaseSchema } from "../storage/schema";
 import type {
   NovelRepository,
   ChapterRepository,
@@ -33,6 +38,7 @@ export interface ServiceContextValue {
   chapterRepository: ChapterRepository;
   settingsRepository: SettingsRepository;
   isReady: boolean;
+  error: Error | null;
 }
 
 export const ServiceContext = createContext<ServiceContextValue | null>(null);
@@ -52,8 +58,8 @@ export function useServices(): ServiceContextValue {
 
 export interface ServiceProviderProps {
   children?: React.ReactNode;
-  services?: Partial<Omit<ServiceContextValue, "isReady">>;
-  fallback?: React.ReactNode;
+  services?: Partial<Omit<ServiceContextValue, "isReady" | "error">>;
+  fallback?: React.ReactNode | ((error: Error | null) => React.ReactNode);
 }
 
 export function getStoredDatabaseBinary(
@@ -80,10 +86,10 @@ export function getStoredDatabaseBinary(
 export function persistDatabaseBinary(
   binary: Uint8Array,
   storage?: Storage | null,
-): void {
+): boolean {
   const targetStorage = storage !== undefined ? storage : window?.localStorage;
   if (!targetStorage) {
-    return;
+    return false;
   }
   try {
     let binaryStr = "";
@@ -91,8 +97,13 @@ export function persistDatabaseBinary(
       binaryStr += String.fromCharCode(binary[i]);
     }
     targetStorage.setItem(STORAGE_KEY, btoa(binaryStr));
-  } catch {
-    // ignore quota errors
+    return true;
+  } catch (err) {
+    console.warn(
+      "Failed to persist database binary to localStorage (possible QuotaExceededError):",
+      err,
+    );
+    return false;
   }
 }
 
@@ -116,6 +127,24 @@ export function createDefaultMockHttpClient(): MockHttpClient {
   return client;
 }
 
+/**
+ * Android/iOS ネイティブ実行時の Capacitor SQLite アダプターを生成・初期化する
+ */
+export async function createDefaultNativeSqliteAdapter(): Promise<CapacitorSqliteAdapter> {
+  const sqliteConnection = new SQLiteConnection(CapacitorSQLite);
+  const conn = await sqliteConnection.createConnection(
+    "yommy_poc.db",
+    false,
+    "no-encryption",
+    1,
+    false,
+  );
+  await conn.open();
+  const adapter = new CapacitorSqliteAdapter(conn);
+  await initializeDatabaseSchema(adapter);
+  return adapter;
+}
+
 export const ServiceProvider: React.FC<ServiceProviderProps> = ({
   children,
   services,
@@ -129,42 +158,69 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
     let isMounted = true;
 
     async function init() {
-      const httpClient = services?.httpClient ?? createDefaultMockHttpClient();
-      const parserRegistry =
-        services?.parserRegistry ?? createDefaultParserRegistry();
+      try {
+        const isNative = Capacitor.isNativePlatform();
 
-      let databaseAdapter = services?.databaseAdapter;
-      if (!databaseAdapter) {
-        const storedBinary = getStoredDatabaseBinary();
-        const onUpdate = () => {
-          if (databaseAdapter instanceof InMemoryDatabaseAdapter) {
-            persistDatabaseBinary(databaseAdapter.exportBinary());
+        const httpClient =
+          services?.httpClient ??
+          (isNative
+            ? new CapacitorHttpClient()
+            : createDefaultMockHttpClient());
+
+        const parserRegistry =
+          services?.parserRegistry ?? createDefaultParserRegistry();
+
+        let databaseAdapter = services?.databaseAdapter;
+        if (!databaseAdapter) {
+          if (isNative) {
+            databaseAdapter = await createDefaultNativeSqliteAdapter();
+          } else {
+            const storedBinary = getStoredDatabaseBinary();
+            const onUpdate = () => {
+              if (databaseAdapter instanceof InMemoryDatabaseAdapter) {
+                persistDatabaseBinary(databaseAdapter.exportBinary());
+              }
+            };
+            databaseAdapter = await createInMemoryDb(storedBinary, onUpdate);
           }
-        };
+        }
 
-        databaseAdapter = await createInMemoryDb(storedBinary, onUpdate);
-      }
+        const novelRepository =
+          services?.novelRepository ??
+          new SqlNovelRepository(databaseAdapter as DatabaseAdapter);
+        const chapterRepository =
+          services?.chapterRepository ??
+          new SqlChapterRepository(databaseAdapter as DatabaseAdapter);
+        const settingsRepository =
+          services?.settingsRepository ??
+          new SqlSettingsRepository(databaseAdapter as DatabaseAdapter);
 
-      const novelRepository =
-        services?.novelRepository ??
-        new SqlNovelRepository(databaseAdapter as DatabaseAdapter);
-      const chapterRepository =
-        services?.chapterRepository ??
-        new SqlChapterRepository(databaseAdapter as DatabaseAdapter);
-      const settingsRepository =
-        services?.settingsRepository ??
-        new SqlSettingsRepository(databaseAdapter as DatabaseAdapter);
-
-      if (isMounted) {
-        setContextValue({
-          httpClient,
-          parserRegistry,
-          databaseAdapter,
-          novelRepository,
-          chapterRepository,
-          settingsRepository,
-          isReady: true,
-        });
+        if (isMounted) {
+          setContextValue({
+            httpClient,
+            parserRegistry,
+            databaseAdapter,
+            novelRepository,
+            chapterRepository,
+            settingsRepository,
+            isReady: true,
+            error: null,
+          });
+        }
+      } catch (err) {
+        if (isMounted) {
+          const error = err instanceof Error ? err : new Error(String(err));
+          setContextValue({
+            httpClient: createDefaultMockHttpClient(),
+            parserRegistry: createDefaultParserRegistry(),
+            databaseAdapter: null as unknown as DatabaseAdapter,
+            novelRepository: null as unknown as NovelRepository,
+            chapterRepository: null as unknown as ChapterRepository,
+            settingsRepository: null as unknown as SettingsRepository,
+            isReady: false,
+            error,
+          });
+        }
       }
     }
 
@@ -177,6 +233,9 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
 
   if (!contextValue || !contextValue.isReady) {
     if (fallback) {
+      if (typeof fallback === "function") {
+        return <>{fallback(contextValue?.error ?? null)}</>;
+      }
       return <>{fallback}</>;
     }
   }
@@ -194,6 +253,7 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           settingsRepository:
             services?.settingsRepository as SettingsRepository,
           isReady: false,
+          error: null,
         }
       }
     >

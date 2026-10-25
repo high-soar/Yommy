@@ -56,11 +56,11 @@ jobs:
       - name: Storybook VRT (1280px / 375px)
         run: npm run test:vrt
 
-      - name: Playwright integration tests (IT)
-        run: npm run test:it
-
       - name: Production build
         run: npm run build
+
+      - name: Playwright integration tests (IT)
+        run: npx playwright test -c playwright.it.config.ts
 
       - name: Upload Playwright test results on failure
         if: failure()

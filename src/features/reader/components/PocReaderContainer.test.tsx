@@ -93,25 +93,31 @@ describe("PocReaderContainer", () => {
       });
 
       // 初期は縦書き
-      expect(screen.getByTestId("reader-view")).toHaveClass(
-        "writing-vertical-rl",
+      expect(screen.getByTestId("reader-view")).toHaveAttribute(
+        "data-writing-mode",
+        "vertical-rl",
       );
 
       // 横書きに切替
       await user.click(screen.getByTestId("toggle-orientation"));
-      expect(screen.getByTestId("reader-view")).toHaveClass(
-        "writing-horizontal-tb",
+      expect(screen.getByTestId("reader-view")).toHaveAttribute(
+        "data-writing-mode",
+        "horizontal-tb",
       );
 
       // 再度クリックして縦書きに戻す
       await user.click(screen.getByTestId("toggle-orientation"));
-      expect(screen.getByTestId("reader-view")).toHaveClass(
-        "writing-vertical-rl",
+      expect(screen.getByTestId("reader-view")).toHaveAttribute(
+        "data-writing-mode",
+        "vertical-rl",
       );
 
       // セピアテーマに切替
       await user.click(screen.getByTestId("theme-sepia"));
-      expect(screen.getByTestId("reader-view")).toHaveClass("bg-[#fbf0d9]");
+      expect(screen.getByTestId("reader-view")).toHaveAttribute(
+        "data-theme",
+        "sepia",
+      );
     });
 
     it("作品取得時に非Error例外がスローされた場合も文字列としてエラー表示されること", async () => {
@@ -276,6 +282,59 @@ describe("PocReaderContainer", () => {
         "aria-pressed",
         "true",
       );
+    });
+
+    it("未対応サイトのURLを指定した場合はHTTP取得前に即座にエラーが表示されること (AC-01)", async () => {
+      const user = userEvent.setup();
+      const mockHttp = {
+        getHtml: vi.fn(),
+      };
+
+      render(
+        <ServiceProvider services={{ httpClient: mockHttp }}>
+          <PocReaderContainer initialWorkUrl="https://example.com/novel/999" />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("fetch-novel-button")).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId("fetch-novel-button"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-error")).toHaveTextContent(
+          "No parser registered for URL",
+        );
+      });
+      expect(mockHttp.getHtml).not.toHaveBeenCalled();
+    });
+
+    it("エピソードURLを指定した場合は作品トップURLに正規化されて取得されること", async () => {
+      const user = userEvent.setup();
+      const mockHttp = {
+        getHtml: vi
+          .fn()
+          .mockResolvedValue({ html: "<html><body></body></html>" }),
+      };
+
+      render(
+        <ServiceProvider services={{ httpClient: mockHttp }}>
+          <PocReaderContainer initialWorkUrl="https://kakuyomu.jp/works/1177354054881162325/episodes/1177354054881162326?ref=top" />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("fetch-novel-button")).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId("fetch-novel-button"));
+
+      await waitFor(() => {
+        expect(mockHttp.getHtml).toHaveBeenCalledWith({
+          url: "https://kakuyomu.jp/works/1177354054881162325",
+        });
+      });
     });
   });
 });

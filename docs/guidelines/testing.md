@@ -145,13 +145,15 @@ TDD の実践を Git 履歴から客観的に監査できるよう、各ステ�
 - **C1（Branches）**: **100%**
 - **Functions**: **100%**
 
-### 5.2 除外が許容される唯一のケース
+### 5.2 除外が許容されるケース
 
-安易な `/* v8 ignore next */` の使用は禁止します。カバレッジ集計から除外してよいのは以下の3点のみです：
+安易な `/* v8 ignore next */` の使用は禁止します。カバレッジ集計（`vite.config.ts` の `coverage.exclude`）から除外してよいのは以下の5点のみです：
 
 1. 実行可能な JS コードを含まない純粋な型定義ファイル（`types.ts`, `*.d.ts`）
 2. Storybook のストーリー定義ファイル自体（`*.stories.tsx`。実行検証は `.test.tsx` 側で行うため）
-3. TypeScript の網羅性チェック用の到達不能分岐（`default: const _exhaustiveCheck: never = value;` 等、理由コメントを明記した場合のみ）
+3. テスト環境セットアップ支援ファイル（`src/test/**`）
+4. ブラウザ DOM ルートへの React 初期マウントエントリーポイント（`src/main.tsx`。結合テスト `smoke.spec.ts` で起動検証）
+5. TypeScript の網羅性チェック用の到達不能分岐（`default: const _exhaustiveCheck: never = value;` 等、理由コメントを明記した場合のみ）
 
 ---
 

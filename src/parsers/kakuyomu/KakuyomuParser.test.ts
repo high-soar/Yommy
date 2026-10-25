@@ -360,5 +360,50 @@ describe("KakuyomuParser", () => {
         parser.parseNovelIndex(html, "https://kakuyomu.jp/invalid"),
       ).toThrow("Cannot extract remoteWorkId from URL or HTML");
     });
+
+    it("文書内での出現順序に関わらず、優先順位の高いセレクタの要素が優先抽出されること", () => {
+      const indexHtml = `
+        <html><body>
+          <div id="catchphrase-and-title"><h1>低優先タイトル</h1></div>
+          <div id="workTitle"><a href="/works/123">高優先タイトル</a></div>
+          <a href="/users/abc">低優先著者</a>
+          <span id="workAuthor-activityName"><a href="/users/def">高優先著者</a></span>
+          <p id="description">低優先あらすじ</p>
+          <p id="introduction">高優先あらすじ</p>
+        </body></html>
+      `;
+      const indexResult = parser.parseNovelIndex(
+        indexHtml,
+        "https://kakuyomu.jp/works/123",
+      );
+      expect(indexResult.title).toBe("高優先タイトル");
+      expect(indexResult.author).toBe("高優先著者");
+      expect(indexResult.synopsis).toBe("高優先あらすじ");
+
+      const chapterHtml = `
+        <html><body>
+          <header><h1>低優先サブタイトル</h1></header>
+          <h2 class="widget-episodeTitle">高優先サブタイトル</h2>
+          <div class="js-episode-body">低優先本文</div>
+          <div class="widget-episodeBody"><p>高優先本文</p></div>
+          <a rel="prev" href="/works/123/episodes/1">低優先前話</a>
+          <a id="contentMain-previousEpisode" href="/works/123/episodes/2">高優先前話</a>
+          <a rel="next" href="/works/123/episodes/8">低優先次話</a>
+          <a id="contentMain-nextEpisode" href="/works/123/episodes/9">高優先次話</a>
+        </body></html>
+      `;
+      const chapterResult = parser.parseChapterContent(
+        chapterHtml,
+        "https://kakuyomu.jp/works/123/episodes/5",
+      );
+      expect(chapterResult.title).toBe("高優先サブタイトル");
+      expect(chapterResult.bodyHtml).toBe("<p>高優先本文</p>");
+      expect(chapterResult.prevChapterUrl).toBe(
+        "https://kakuyomu.jp/works/123/episodes/2",
+      );
+      expect(chapterResult.nextChapterUrl).toBe(
+        "https://kakuyomu.jp/works/123/episodes/9",
+      );
+    });
   });
 });

@@ -29,8 +29,8 @@ INSERT INTO chapters (
 ) VALUES (
   ?, ?, ?, ?, ?, ?, ?, NULL, 0, 0, ?, NULL
 )
-ON CONFLICT(novel_id, chapter_index) DO UPDATE SET
-  remote_chapter_id = excluded.remote_chapter_id,
+ON CONFLICT(novel_id, remote_chapter_id) DO UPDATE SET
+  chapter_index = excluded.chapter_index,
   part_title = excluded.part_title,
   title = excluded.title,
   url = excluded.url,
@@ -148,7 +148,7 @@ export class SqlNovelRepository implements NovelRepository {
       }
 
       for (const chapter of index.chapters) {
-        const chapterId = `${id}:${chapter.chapterIndex}`;
+        const chapterId = `${id}:${chapter.remoteChapterId}`;
         await this.db.execute(UPSERT_CHAPTER_SQL, [
           chapterId,
           id,

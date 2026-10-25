@@ -19,23 +19,25 @@ describe("CapacitorSqliteAdapter", () => {
   };
 
   describe("execute", () => {
-    it("params が空または未指定の場合に connection.execute を呼び出すこと", async () => {
+    it("params が空または未指定の場合に connection.execute を transaction: false で呼び出すこと", async () => {
       const mockConn = createMockConnection();
       const adapter = new CapacitorSqliteAdapter(mockConn);
 
       await adapter.execute("CREATE TABLE foo (id INT);");
       expect(mockConn.execute).toHaveBeenCalledWith(
         "CREATE TABLE foo (id INT);",
+        false,
       );
       expect(mockConn.run).not.toHaveBeenCalled();
 
       await adapter.execute("CREATE TABLE bar (id INT);", []);
       expect(mockConn.execute).toHaveBeenCalledWith(
         "CREATE TABLE bar (id INT);",
+        false,
       );
     });
 
-    it("params が指定された場合に connection.run を呼び出すこと", async () => {
+    it("params が指定された場合に connection.run を transaction: false で呼び出すこと", async () => {
       const mockConn = createMockConnection();
       const adapter = new CapacitorSqliteAdapter(mockConn);
 
@@ -43,6 +45,7 @@ describe("CapacitorSqliteAdapter", () => {
       expect(mockConn.run).toHaveBeenCalledWith(
         "INSERT INTO foo (id) VALUES (?);",
         [42],
+        false,
       );
       expect(mockConn.execute).not.toHaveBeenCalled();
     });
