@@ -62,7 +62,7 @@ related_tests:
 ### 2.3 `SCR-02`（`/novels/:novelId`）最小プレースホルダ画面と `TR-02` の整理
 
 - [docs/specs/screen-transitions.md](../screen-transitions.md) の `TR-02` 定義を更新し、「URLから作品を追加」完了時は本棚画面（`SCR-01`）の一覧に即時反映して留まり、本棚の作品カード本体をタップしたときに `SCR-02`（`/novels/:novelId`）へ遷移する仕様に統一する。
-- Issue #13 で `SCR-02` を本格実装するまでの受け皿として、`/novels/:novelId` ルートには以下の要素を持つ最小プレースホルダ画面（`data-testid="novel-detail-placeholder"`）を配置する：
+- Issue #13 で `SCR-02` を本格実装するまでの受け皿として、`src/features/novel-detail/components/NovelDetailPlaceholder.tsx`（および 1対1 の `NovelDetailPlaceholder.stories.tsx`, `NovelDetailPlaceholder.test.tsx`）を作成し、`/novels/:novelId` ルートに以下の要素を持つ最小プレースホルダ画面（`data-testid="novel-detail-placeholder"`）を配置する：
   - `novelRepository.getNovelById(novelId)` から取得した作品タイトル・著者・あらすじの表示
   - 「第1話 / 続きから読む」ボタン（`data-testid="detail-read-button"` → `/novels/:novelId/chapters/:chapterIndex` へ遷移）
   - 「本棚へ戻る」ボタン（`data-testid="back-to-bookshelf-button"` → `/` へ遷移）
@@ -86,8 +86,8 @@ related_tests:
 
 ### 3.1 単体テスト（Vitest UT: C0/C1/Functions 100%）
 
-- **ルーティング基盤（`src/app/router.test.tsx`）**:
-  - `/`, `/novels/:novelId`, `/novels/:novelId/chapters/:chapterIndex`, および未知パスのルート解決
+- **ルーティング基盤（`src/app/router.stories.tsx`, `src/app/router.test.tsx`）**:
+  - `composeStories` を用いた `/`, `/novels/:novelId`, `/novels/:novelId/chapters/:chapterIndex`, および未知パスのルート解決検証
   - コロンを含む `novelId`（`"kakuyomu:16817330658027210412"`）の URL エンコード・デコード
   - `navigate` 呼び出し時の画面遷移とブラウザ `popstate`（戻る/進む）イベントの同期
 - **本棚ロジックフック（`src/features/bookshelf/hooks/useBookshelf.test.ts`）**:
@@ -98,11 +98,11 @@ related_tests:
   - `BookshelfEmptyState.test.tsx`: 空状態表示と追加ダイアログ起動コールバック発火
   - `NovelCard.test.tsx`: タイトル・著者・全話数/取得済み話数・しおり位置（設定あり/未読）の表示、カード選択（`onSelect`）と「続きから読む」（`onResume`）の独立発火（イベント伝播分離）
   - `AddNovelDialog.test.tsx`: 開閉状態、URL入力、サンプルURL自動入力、送信・キャンセル、ローディング中 disabled、エラー表示
-  - `BookshelfPage.test.tsx` / `BookshelfContainer.test.tsx`: 親子分離原則に基づく本棚画面の統合動作
+  - `BookshelfPage.test.tsx` / `BookshelfContainer.test.tsx` / `NovelDetailPlaceholder.test.tsx`: 親子分離原則に基づく本棚画面およびプレースホルダ画面の統合動作
 
 ### 3.2 視覚的回帰テスト（Storybook VRT: 1280px / 375px）
 
-- `BookshelfEmptyState`, `NovelCard`（未読 / しおりあり）, `AddNovelDialog`（通常 / エラー表示 / 送信中）, `BookshelfPage`（空状態 / 作品一覧表示）の各 Story について、Desktop（1280×800）および Mobile（375×667）の VRT スナップショットを追加・検証する。
+- `router.stories.tsx`, `BookshelfEmptyState`, `NovelCard`（未読 / しおりあり）, `AddNovelDialog`（通常 / エラー表示 / 送信中）, `BookshelfPage`（ローディング / 空状態 / 作品一覧表示）, `BookshelfContainer`, `NovelDetailPlaceholder` の各 Story について、Desktop（1280×800）および Mobile（375×667）の VRT スナップショットを追加・検証する。
 
 ### 3.3 実ブラウザ結合テスト（Playwright IT: `SCN-01` 進化）
 
@@ -118,11 +118,11 @@ related_tests:
 
 1 PR あたり 200〜400 行目安の規律に従い、以下の 3 つの Sub-issue に分割して直列（逐次）実装する。
 
-| Sub-issue                        | タイトル                                                                                      | 主な作業範囲・成果物                                                                                                                                                                                                                                                                                                                   |
-| :------------------------------- | :-------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Sub-issue ① (#21: MK-1)**      | `[v0.1] 画面ルーティング基盤（router.tsx）と本棚状態管理フック（useBookshelf）の実装 (#12-1)` | ・`src/app/router.tsx` ＆ `src/app/router.test.tsx`<br>・`src/app/ServiceProvider.tsx`（`createDefaultMockHttpClient` 正規表現拡張）＆ UT更新<br>・`src/features/bookshelf/hooks/useBookshelf.ts` ＆ `useBookshelf.test.ts`                                                                                                            |
-| **Sub-issue ② (#22: MK-2)**      | `[v0.1] 本棚画面（SCR-01）UIコンポーネント群とStorybook・VRTの実装 (#12-2)`                   | ・`BookshelfEmptyState` / `NovelCard` / `AddNovelDialog` / `BookshelfPage` の実装<br>・1対1 の `*.stories.tsx` および Portable Stories `*.test.tsx`<br>・VRT スナップショット（1280px / 375px）更新・検証                                                                                                                              |
-| **Sub-issue ③ (#23: MK-3 & IT)** | `[v0.1] Appルーター統合・リーダーオンデマンド取得連携・Playwright IT更新 (#12-3)`             | ・`BookshelfContainer` および `SCR-02` 最小プレースホルダ実装<br>・`PocReaderContainer` のルートパラメータ＆未キャッシュ話オンデマンド取得対応<br>・`src/App.tsx` のルーター統合<br>・Playwright IT（`smoke.spec.ts`, `scn01-poc-vertical-reader.spec.ts`）更新<br>・差分仕様の `docs/specs/changes/archive/` への移動（`Closes #12`） |
+| Sub-issue                        | タイトル                                                                                      | 主な作業範囲・成果物                                                                                                                                                                                                                                                                                                                                                                                                                |
+| :------------------------------- | :-------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Sub-issue ① (#21: MK-1)**      | `[v0.1] 画面ルーティング基盤（router.tsx）と本棚状態管理フック（useBookshelf）の実装 (#12-1)` | ・`src/app/router.tsx` ＆ `router.stories.tsx` ＆ `router.test.tsx`（＋VRT更新）<br>・`src/app/ServiceProvider.tsx`（`createDefaultMockHttpClient` 正規表現拡張）＆ UT更新<br>・`src/features/bookshelf/hooks/useBookshelf.ts` ＆ `useBookshelf.test.ts`                                                                                                                                                                            |
+| **Sub-issue ② (#22: MK-2)**      | `[v0.1] 本棚画面（SCR-01）UIコンポーネント群とStorybook・VRTの実装 (#12-2)`                   | ・`BookshelfEmptyState` / `NovelCard` / `AddNovelDialog` / `BookshelfPage` の実装<br>・1対1 の `*.stories.tsx` および Portable Stories `*.test.tsx`<br>・VRT スナップショット（1280px / 375px）更新・検証                                                                                                                                                                                                                           |
+| **Sub-issue ③ (#23: MK-3 & IT)** | `[v0.1] Appルーター統合・リーダーオンデマンド取得連携・Playwright IT更新 (#12-3)`             | ・`BookshelfContainer`（`*.tsx`, `*.stories.tsx`, `*.test.tsx`）および `NovelDetailPlaceholder`（`*.tsx`, `*.stories.tsx`, `*.test.tsx`）実装<br>・`PocReaderContainer` のルートパラメータ＆未キャッシュ話オンデマンド取得対応<br>・`src/App.tsx` のルーター統合（＋VRT更新）<br>・Playwright IT（`smoke.spec.ts`, `scn01-poc-vertical-reader.spec.ts`）更新<br>・差分仕様の `docs/specs/changes/archive/` への移動（`Closes #12`） |
 
 ---
 

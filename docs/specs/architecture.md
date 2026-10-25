@@ -78,7 +78,11 @@ src/
 ├── App.test.tsx
 ├── app/                           # アプリケーション共通設定・DI Provider
 │   ├── router.tsx                 # 画面ルーティング定義（SCR-01〜SCR-05）
-│   └── ServiceProvider.tsx        # Storage / HttpBridge / ParserRegistry の Context DI（実機・テスト差し替え点）
+│   ├── router.stories.tsx
+│   ├── router.test.tsx
+│   ├── ServiceProvider.tsx        # Storage / HttpBridge / ParserRegistry の Context DI（実機・テスト差し替え点）
+│   ├── ServiceProvider.stories.tsx
+│   └── ServiceProvider.test.tsx
 ├── bridges/                       # 【Capacitor Bridge 抽象層】
 │   ├── http/
 │   │   ├── types.ts               # HttpClientBridge インターフェース定義

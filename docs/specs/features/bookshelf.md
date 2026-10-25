@@ -18,6 +18,7 @@ related_tests:
   - src/features/bookshelf/components/NovelCard.test.tsx
   - src/features/bookshelf/components/AddNovelDialog.test.tsx
   - src/features/bookshelf/components/BookshelfPage.test.tsx
+  - src/features/bookshelf/components/BookshelfContainer.test.tsx
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
 ---
 
@@ -32,6 +33,7 @@ related_tests:
 - **対象画面**: 本棚画面（`SCR-01`、ルートパス `/`）
 - **対応要件**:
   - `SYS-REQ-01`（作品登録・目次取得）
+  - `SYS-REQ-02`（本文取得・オフライン閲覧：未キャッシュ話に対する「続きから読む」遷移時のオンデマンド本文取得導線）
   - `SYS-REQ-12`（しおり・スクロール位置自動保存に基づく読書再開導線）
 - **関連画面遷移**:
   - `TR-02`（作品カード本体タップによる作品詳細・目次画面 `SCR-02` `/novels/:novelId` への遷移）
@@ -171,40 +173,74 @@ src/features/bookshelf/
 | `onSelectNovel` | `(novelId: string) => void`                       | 必須 | 作品カード本体タップ時（`TR-02`）         |
 | `onResumeNovel` | `(novelId: string, chapterIndex: number) => void` | 必須 | 「続きから読む」ボタンタップ時（`TR-03`） |
 
-#### セマンティック属性
+#### セマンティック属性と状態別描画ルール
 
 - **画面ルート**: `data-testid="bookshelf-page"`
 - **ヘッダー追加ボタン**: `data-testid="open-add-novel-button"`（ラベル: `URLから作品を追加`）
-- **作品一覧グリッド/リスト**: `data-testid="novel-list"`（`novels.length > 0` の場合に表示）
+- **メイン領域の排他描画ルール**:
+  1. `isLoading === true` の場合: ローディング表示要素 `data-testid="bookshelf-loading"` を描画し、`bookshelf-empty` および `novel-list` は描画しない。
+  2. `isLoading === false` かつ `novels.length === 0` の場合: `BookshelfEmptyState`（`data-testid="bookshelf-empty"`）を描画する。
+  3. `isLoading === false` かつ `novels.length > 0` の場合: 作品一覧コンテナ `data-testid="novel-list"` を描画し、その配下に各作品の `NovelCard` を描画する。
+
+---
+
+### 3.5 `BookshelfContainer`（本棚画面 Container コンポーネント）
+
+`useBookshelf` フックおよびルーター遷移コールバック（または Props で注入された遷移コールバック）を接続し、`BookshelfPage` を描画する Container コンポーネントです。
+
+#### プロパティ契約（`BookshelfContainerProps`）
+
+| プロパティ名    | 型                                                | 必須 | 説明                                                                                            |
+| :-------------- | :------------------------------------------------ | :--- | :---------------------------------------------------------------------------------------------- |
+| `onSelectNovel` | `(novelId: string) => void`                       | 任意 | 作品カード本体タップ時の遷移コールバック（省略時は `useRouter().navigateToNovelDetail` を使用） |
+| `onResumeNovel` | `(novelId: string, chapterIndex: number) => void` | 任意 | 「続きから読む」タップ時の遷移コールバック（省略時は `useRouter().navigateToReader` を使用）    |
 
 ---
 
 ## 4. URL 作品登録パイプラインとエラーハンドリング（`useBookshelf`）
 
+### 4.1 `useBookshelf` フック契約（`UseBookshelfResult`）
+
+```ts
+export interface UseBookshelfResult {
+  novels: NovelSummary[];
+  isLoading: boolean;
+  isDialogOpen: boolean;
+  isSubmitting: boolean;
+  dialogError: string | null;
+  openDialog: () => void;
+  closeDialog: () => void;
+  addNovelByUrl: (url: string) => Promise<boolean>;
+  reloadNovels: () => Promise<void>;
+}
+```
+
+### 4.2 パイプライン仕様
+
 1. **初回ロード**:
-   - `ServiceProvider` の `isReady === true` 後、`novelRepository.listNovels()` を呼び出して本棚一覧を取得する（`last_read_at DESC, created_at DESC` 順）。
+   - `ServiceProvider` の `isReady === true` 後、`novelRepository.listNovels()` を呼び出して本棚一覧を取得する（`last_read_at DESC, created_at DESC` 順）。読み込み中は `isLoading = true` とし、完了後に `isLoading = false` とする。
 2. **URL バリデーションと正規化（通信前チェック）**:
-   - 入力された URL 文字列（前後空白トリム済み）に対し、**HTTP 通信を行う前に** `parserRegistry.requireParser(url)` および `parser.normalizeWorkUrl(url)` を実行する。
-   - 未対応サイトの URL や不正な URL 形式の場合は、通信を行わずに直ちに日本語エラーメッセージ（例: `対応していないURLです。カクヨムの作品URLを入力してください。`）を `dialogError` にセットする。
+   - `addNovelByUrl(url)` 実行時、入力された URL 文字列（前後空白トリム済み）に対し、**HTTP 通信を行う前に** `parserRegistry.requireParser(trimmedUrl)` および `parser.normalizeWorkUrl(trimmedUrl)` を実行する。
+   - 未対応サイトの URL や不正な URL 形式の場合は、通信を行わずに直ちに日本語エラーメッセージ（例: `対応していないURLです。カクヨムの作品URLを入力してください。`）を `dialogError` にセットし、`false` を返す。
 3. **作品トップ（目次）取得と DB 保存**:
    - 正規化された作品トップ URL（`https://kakuyomu.jp/works/{workId}`）に対して `httpClient.getHtml({ url: normalizedWorkUrl })` を実行する。
    - `parser.parseNovelIndex(response.html, normalizedWorkUrl)` で作品メタデータ（タイトル・著者・あらすじ）と全エピソード目次（`chapters`）を抽出する。
    - `novelRepository.upsertNovelWithToc(novelIndex, new Date().toISOString())` を呼び出し、`novels` テーブルおよび `chapters` テーブルへ一括保存する。
    - ※登録処理を高速に完了させるため、本棚での URL 登録時点ではエピソード本文の通信取得は行わず、リーダー画面遷移時（`TR-03` 等）に未キャッシュ話をオンデマンド取得する。
 4. **登録完了後の振る舞い**:
-   - 保存成功後、`novelRepository.listNovels()` を再取得して本棚の `novels` ステートを最新化し、ダイアログを閉じる（`isDialogOpen = false`, `dialogError = null`）とともに本棚画面（`SCR-01`）上に追加された作品カードを即時表示する。
+   - 保存成功後、`novelRepository.listNovels()` を再取得して本棚の `novels` ステートを最新化し、ダイアログを閉じる（`isDialogOpen = false`, `dialogError = null`）とともに `true` を返し、本棚画面（`SCR-01`）上に追加された作品カードを即時表示する。
 5. **通信・パース失敗時のエラーハンドリング**:
-   - `httpClient.getHtml` または `parseNovelIndex` が例外を送出した場合、ダイアログを閉じずにエラーメッセージを `dialogError` に表示し、`isSubmitting = false` に戻して再試行可能とする。
+   - `httpClient.getHtml` または `parseNovelIndex` が例外を送出した場合、ダイアログを閉じずにエラーメッセージを `dialogError` に表示し、`isSubmitting = false` に戻して `false` を返し再試行可能とする。
 
 ---
 
 ## 5. 受入条件一覧（Acceptance Criteria: `AC-BS-xx`）
 
-| AC ID          | 対象機能                   | 検証条件                                                                                                                                                                                                                                                       | 関連要件 / 遷移            |
-| :------------- | :------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------- |
-| **`AC-BS-01`** | 空状態表示                 | 登録作品が 0 件のとき、`bookshelf-empty` が表示され、「URLから作品を追加」ボタンから登録ダイアログを開けること。                                                                                                                                               | `SYS-REQ-01`               |
-| **`AC-BS-02`** | URL 正規化と作品・目次登録 | カクヨムの作品トップ URL またはエピソード URL を入力して登録を実行すると、`normalizeWorkUrl` で正規化された上で作品情報と全話目次が DB に保存され、ダイアログが閉じて本棚一覧に作品カードが追加されること。                                                    | `SYS-REQ-01`               |
-| **`AC-BS-03`** | 未対応 URL・通信エラー表示 | カクヨム以外の URL や不正文字列を入力した場合は HTTP 通信を行わずにエラーメッセージを表示し、通信エラー発生時もダイアログ内にエラーを表示して入力値を保持したまま再試行できること。                                                                            | `SYS-REQ-01`               |
-| **`AC-BS-04`** | 作品カード情報表示         | 登録済み作品カードにタイトル、著者名、全話数・取得済み話数（`totalChapters` / `cachedChapters`）、およびしおり位置（`bookmarkChapterIndex` または `未読`）が正確に表示されること。                                                                             | `SYS-REQ-01`, `SYS-REQ-12` |
-| **`AC-BS-05`** | 作品詳細画面への遷移       | 作品カード本体（`novel-card-select`）をタップすると、対象作品の詳細・目次画面（`/novels/:novelId`）へ遷移（`TR-02`）すること。                                                                                                                                 | `SYS-REQ-01` / `TR-02`     |
-| **`AC-BS-06`** | 続きから読むワンタップ起動 | 作品カードの「続きから読む」ボタン（`novel-card-resume`）をタップすると、`bookmarkChapterIndex`（未設定時は第1話）のリーダー画面（`/novels/:novelId/chapters/:chapterIndex`）へ直接遷移（`TR-03`）し、未キャッシュ時は本文をオンデマンド取得して表示すること。 | `SYS-REQ-12` / `TR-03`     |
+| AC ID          | 対象機能                   | 検証条件                                                                                                                                                                                                                                                       | 関連要件 / 遷移                      |
+| :------------- | :------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------- |
+| **`AC-BS-01`** | 空状態表示                 | 登録作品が 0 件のとき、`bookshelf-empty` が表示され、「URLから作品を追加」ボタンから登録ダイアログを開けること。                                                                                                                                               | `SYS-REQ-01`                         |
+| **`AC-BS-02`** | URL 正規化と作品・目次登録 | カクヨムの作品トップ URL またはエピソード URL を入力して登録を実行すると、`normalizeWorkUrl` で正規化された上で作品情報と全話目次が DB に保存され、ダイアログが閉じて本棚一覧に作品カードが追加されること。                                                    | `SYS-REQ-01`                         |
+| **`AC-BS-03`** | 未対応 URL・通信エラー表示 | カクヨム以外の URL や不正文字列を入力した場合は HTTP 通信を行わずにエラーメッセージを表示し、通信エラー発生時もダイアログ内にエラーを表示して入力値を保持したまま再試行できること。                                                                            | `SYS-REQ-01`                         |
+| **`AC-BS-04`** | 作品カード情報表示         | 登録済み作品カードにタイトル、著者名、全話数・取得済み話数（`totalChapters` / `cachedChapters`）、およびしおり位置（`bookmarkChapterIndex` または `未読`）が正確に表示されること。                                                                             | `SYS-REQ-01`, `SYS-REQ-12`           |
+| **`AC-BS-05`** | 作品詳細画面への遷移       | 作品カード本体（`novel-card-select`）をタップすると、対象作品の詳細・目次画面（`/novels/:novelId`）へ遷移（`TR-02`）すること。                                                                                                                                 | `SYS-REQ-01` / `TR-02`               |
+| **`AC-BS-06`** | 続きから読むワンタップ起動 | 作品カードの「続きから読む」ボタン（`novel-card-resume`）をタップすると、`bookmarkChapterIndex`（未設定時は第1話）のリーダー画面（`/novels/:novelId/chapters/:chapterIndex`）へ直接遷移（`TR-03`）し、未キャッシュ時は本文をオンデマンド取得して表示すること。 | `SYS-REQ-02`, `SYS-REQ-12` / `TR-03` |

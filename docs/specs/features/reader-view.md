@@ -28,7 +28,7 @@ related_tests:
 ## 1. 概要・スコープ
 
 - **対象画面**: 小説リーダー画面（`SCR-03`）
-- **対応要件**: `SYS-REQ-07`（縦書き・横書き切替）、`SYS-REQ-08`（ルビ・傍点・組版表示）、`SYS-REQ-11`（表示設定変更）
+- **対応要件**: `SYS-REQ-02`（本文取得・オフライン閲覧・未キャッシュ話オンデマンド取得）、`SYS-REQ-07`（ルビ・傍点の正確な描画）、`SYS-REQ-08`（縦書き / 横書き切り替え）、`SYS-REQ-09`（フォント・サイズ・余白設定）、`SYS-REQ-10`（カラーテーマ切り替え）、`SYS-REQ-11`（スクロール＆1画面送り操作）、`SYS-REQ-12`（しおり・スクロール位置自動保存）
 - **対象コンポーネント**:
   - `ReaderView`: 本文の組版、ルビ・傍点、カラーテーマを担う Presentational コンポーネント
   - `ReaderToolbar`: 縦横切替、カラーテーマ選択、作品更新トリガーを提供する操作ツールバー
@@ -97,7 +97,7 @@ related_tests:
      - 対象エピソード（`ChapterRecord`）が存在し、かつ `chapter.bodyHtml === null`（本棚での目次のみ登録直後など本文未キャッシュ状態）の場合、自動的に `parserRegistry.requireParser(chapter.url)` → `httpClient.getHtml({ url: chapter.url })` → `parser.parseChapterContent(...)` → `chapterRepository.saveChapterBody(...)` を実行して本文を保存・表示する。
    - `novelId` が未指定の場合は `novelRepository.listNovels()` の先頭作品（第1話）を読み込み、作品未登録時は `data-testid="reader-empty"` を表示する。
 2. **パーサー解決と URL 正規化（手動取得・更新トリガー時）**:
-   - 作品取得ボタン押下時、**HTTP 通信前に** `parserRegistry.requireParser(targetUrl)` を呼び出し、未対応サイトの場合は通信を行わずに即座に `data-testid="reader-error"` を表示する。
+   - 作品取得ボタン押下時、対象 URL を `const targetUrl = novel?.canonicalUrl ?? initialWorkUrl` として解決した上で、**HTTP 通信前に** `parserRegistry.requireParser(targetUrl)` を呼び出し、未対応サイトの場合は通信を行わずに即座に `data-testid="reader-error"` を表示する。
    - 対応サイトの場合は `parser.normalizeWorkUrl(targetUrl)` により作品トップ URL へ正規化する。
 3. **データ取得・保存パイプライン**:
    - `httpClient.getHtml({ url: normalizedWorkUrl })` で目次 HTML を取得。
@@ -142,3 +142,4 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
   7. テーマを「セピア」に変更し、背景スタイルが反映されることを確認。
   8. 組み方向を「横書き」に変更し、`writing-horizontal-tb` が反映されることを確認。
   9. ブラウザをリロード（F5）し、再取得操作を行うことなく、即座に作品・本文および変更後の設定（横書き・セピア）が復元表示されることを確認。
+  10. 「本棚へ戻る」（`reader-back-to-bookshelf`）をクリックして本棚画面（`/`）へ戻り、作品カードの取得済み話数が `1` に更新されていることを確認。
