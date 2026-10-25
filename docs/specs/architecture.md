@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Review (#15)"
+status: "Review (#12)"
 updated: "2026-10-26"
 tags: [architecture, parser, storage, bridge, sanitizer, assets]
 related_specs:
@@ -10,6 +10,7 @@ related_specs:
   - docs/specs/db-schema.md
   - docs/specs/screen-transitions.md
   - docs/specs/parsers/kakuyomu.md
+  - docs/specs/features/bookshelf.md
   - docs/specs/features/reader-view.md
   - docs/specs/changes/issue-15-app-icon-setup.md
   - docs/guidelines/testing.md
@@ -86,7 +87,11 @@ Yommy/
     ├── App.test.tsx
     ├── app/                           # アプリケーション共通設定・DI Provider
     │   ├── router.tsx                 # 画面ルーティング定義（SCR-01〜SCR-05）
-    │   └── ServiceProvider.tsx        # Storage / HttpBridge / ParserRegistry の Context DI（実機・テスト差し替え点）
+    │   ├── router.stories.tsx
+    │   ├── router.test.tsx
+    │   ├── ServiceProvider.tsx        # Storage / HttpBridge / ParserRegistry の Context DI（実機・テスト差し替え点）
+    │   ├── ServiceProvider.stories.tsx
+    │   └── ServiceProvider.test.tsx
     ├── bridges/                       # 【Capacitor Bridge 抽象層】
     │   ├── http/
     │   │   ├── types.ts               # HttpClientBridge インターフェース定義
@@ -283,11 +288,34 @@ export interface SettingsRepository {
 }
 ```
 
+### 3.4 Application Router 契約（`src/app/router.tsx`）
+
+外部ルーティングライブラリへの依存を持たず、History API（`window.history.pushState` / `popstate`）と React Context による軽量ルーターで画面遷移（[docs/specs/screen-transitions.md](screen-transitions.md)）を管理します。
+
+```ts
+export type AppRoute =
+  | { name: "bookshelf"; path: "/" }
+  | { name: "novel-detail"; path: string; novelId: string }
+  | { name: "reader"; path: string; novelId: string; chapterIndex: number };
+
+export interface RouterContextValue {
+  currentPath: string;
+  route: AppRoute;
+  navigate: (path: string) => void;
+  navigateToBookshelf: () => void;
+  navigateToNovelDetail: (novelId: string) => void;
+  navigateToReader: (novelId: string, chapterIndex: number) => void;
+}
+```
+
+- `novelId`（例: `"kakuyomu:16817330658027210412"`）を URL パスに含める際は `encodeURIComponent` でエンコードし、ルート解決（`matchRoute`）時に `decodeURIComponent` でデコードする。
+- `RouterProvider` は `initialPath?: string` プロパティを受け取り、Vitest 単体テストや Storybook において任意のルート状態を決定論的に再現できる。
+
 ---
 
 ## 4. テスト環境での DI（依存性注入）と決定論的初期化
 
 - `src/app/ServiceProvider.tsx` を介して `HttpClientBridge` と各 `Repository`（および基底の `DatabaseAdapter`）を React Context 経由で提供する。
 - **Android / iOS ネイティブ実行時**: `Capacitor.isNativePlatform()` によりネイティブ環境を自動検知し、`CapacitorHttpClient` および `createDefaultNativeSqliteAdapter`（`CapacitorSqliteAdapter` ＋ `src/storage/schema.ts` の DDL 初期化）を注入する。
-- **Web ブラウザ / Dev 実行時**: `createInMemoryDb`（`sql.js`）および `localStorage` への Base64 バイナリバックアップ（`yommy_sqlite_db_backup`）によるハイブリッド永続化を提供し、`createDefaultMockHttpClient` を使用する。
+- **Web ブラウザ / Dev 実行時**: `createInMemoryDb`（`sql.js`）および `localStorage` への Base64 バイナリバックアップ（`yommy_sqlite_db_backup`）によるハイブリッド永続化を提供し、`createDefaultMockHttpClient` を使用する。なお `createDefaultMockHttpClient` は任意のカクヨム作品 URL（`/^https:\/\/kakuyomu\.jp\/works\/\d+$/`）およびエピソード URL（`/^https:\/\/kakuyomu\.jp\/works\/\d+\/episodes\/\d+$/`）に対してローカルフィクスチャ HTML を返却する。
 - **UT（Vitest）/ Storybook / Playwright IT 実行時**: `MockHttpClient`（`__fixtures__/*.html` を返却）＋ `InMemoryDatabaseAdapter` を注入し、各テストの開始前に `resetTestDb()` を呼び出して 100% 決定論的な状態で検証する。
