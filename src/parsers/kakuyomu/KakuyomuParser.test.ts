@@ -257,6 +257,66 @@ describe("KakuyomuParser", () => {
       expect(result.chapters).toEqual([]);
     });
 
+    it("新デザインの目次HTML（WorkTocSection_link）および著者要素から正しく抽出できること", () => {
+      const modernHtml = `
+        <!doctype html>
+        <html>
+          <head><link rel="canonical" href="https://kakuyomu.jp/works/16817330658027210412" /></head>
+          <body>
+            <header><h1>お嬢様系底辺ダンジョン配信者</h1></header>
+            <div class="partialGiftWidgetActivityName">
+              <a href="/users/doragontanishi">ドラゴンタニシ</a>
+            </div>
+            <div class="WorkIntroductionBox_catch">エセお嬢様のダンジョン無双</div>
+            <div class="WorkToc_container">
+              <a class="WorkTocSection_link" href="/works/16817330658027210412/episodes/16817330658029426899">
+                <div class="WorkTocSection_title"><div>第1話 底辺配信お嬢様</div></div>
+                <time datetime="2023-06-02T08:30:16.000Z">2023年6月2日</time>
+              </a>
+            </div>
+          </body>
+        </html>
+      `;
+      const result = parser.parseNovelIndex(
+        modernHtml,
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      expect(result.title).toBe("お嬢様系底辺ダンジョン配信者");
+      expect(result.author).toBe("ドラゴンタニシ");
+      expect(result.synopsis).toBe("エセお嬢様のダンジョン無双");
+      expect(result.chapters).toHaveLength(1);
+      expect(result.chapters[0].title).toBe("第1話 底辺配信お嬢様");
+      expect(result.chapters[0].remoteChapterId).toBe("16817330658029426899");
+      expect(result.chapters[0].publishedAt).toBe("2023-06-02T08:30:16.000Z");
+    });
+
+    it("新デザインの目次HTMLで不正なリンク（hrefなし、IDなし、timeなし）が含まれていても安全にスキップ・処理すること", () => {
+      const modernHtml = `
+        <!doctype html>
+        <html>
+          <head><link rel="canonical" href="https://kakuyomu.jp/works/16817330658027210412" /></head>
+          <body>
+            <h1>作品</h1>
+            <div class="WorkToc_container">
+              <a class="WorkTocSection_link" href="/works/16817330658027210412/episodes/">IDなし</a>
+              <a class="WorkTocSection_link" href="/works/16817330658027210412/episodes/111">タイトルクラスなし</a>
+              <a class="WorkTocSection_link" href="/works/16817330658027210412/episodes/222">2023年6月2日公開</a>
+            </div>
+          </body>
+        </html>
+      `;
+      const result = parser.parseNovelIndex(
+        modernHtml,
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      expect(result.chapters).toHaveLength(2);
+      expect(result.chapters[0].remoteChapterId).toBe("111");
+      expect(result.chapters[0].title).toBe("タイトルクラスなし");
+      expect(result.chapters[0].publishedAt).toBeNull();
+      expect(result.chapters[1].remoteChapterId).toBe("222");
+      expect(result.chapters[1].title).toBe("2023年6月2日公開");
+    });
+
     it("pageUrl にも HTML にも作品 ID が見つからない場合はエラーを送出すること", () => {
       const html = "<html><body><h1>タイトルのみ</h1></body></html>";
       expect(() =>

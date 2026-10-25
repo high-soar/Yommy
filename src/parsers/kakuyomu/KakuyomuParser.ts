@@ -11,17 +11,31 @@ import { sanitizeChapterHtml } from "../sanitizer";
  * カクヨム DOM セレクタ定数（優先順位リスト）
  */
 const SELECTORS = {
-  workTitle: ["#workTitle a", "#workTitle", "#catchphrase-and-title h1"],
+  workTitle: [
+    "#workTitle a",
+    "#workTitle",
+    "#catchphrase-and-title h1",
+    "header h1",
+    "h1",
+  ],
   workAuthor: [
     "#workAuthor-activityName a",
     "#workAuthor-activityName",
+    ".partialGiftWidgetActivityName a",
     '[href^="/users/"]',
+    'a[href*="/users/"]',
   ],
-  workSynopsis: ["#introduction", ".widget-work-introduction", "#description"],
+  workSynopsis: [
+    "#introduction",
+    ".widget-work-introduction",
+    "#description",
+    '[class*="IntroductionBox"]',
+    '[class*="introduction"]',
+  ],
   canonicalLink: 'link[rel="canonical"]',
   tocElements:
     '[class*="widget-toc-chapter"], [class*="widget-toc-section"], [class*="widget-toc-episode"]',
-  episodeTitle: [".widget-episodeTitle", "header h1", ".episode-title"],
+  episodeTitle: [".widget-episodeTitle", ".episode-title", "header h1"],
   episodeBody: [".widget-episodeBody", ".js-episode-body"],
   prevEpisode: ["a#contentMain-previousEpisode", 'a[rel="prev"]'],
   nextEpisode: ["a#contentMain-nextEpisode", 'a[rel="next"]'],
@@ -174,6 +188,38 @@ export class KakuyomuParser implements NovelParser {
           url: chapterUrl,
           publishedAt,
         });
+      }
+    }
+
+    if (chapters.length === 0) {
+      // カクヨム現行レイアウト（WorkToc コンテナ内のエピソードリンク）へのフォールバック
+      const modernLinks = doc.querySelectorAll<HTMLAnchorElement>(
+        '[class*="WorkToc"] a[href*="/episodes/"]',
+      );
+      for (const link of Array.from(modernLinks)) {
+        const href = link.getAttribute("href")!;
+        const match = href.match(EPISODE_ID_REGEX);
+        if (match) {
+          const remoteChapterId = match[1];
+          const titleEl = link.querySelector('[class*="title"]');
+          const rawTitle = (titleEl ?? link).textContent!;
+          const trimmed = rawTitle.trim();
+          const chapterTitle =
+            trimmed.replace(/\d{4}年\d{1,2}月\d{1,2}日.*$/, "").trim() ||
+            trimmed;
+          const chapterUrl = `https://kakuyomu.jp/works/${remoteWorkId}/episodes/${remoteChapterId}`;
+          const timeEl = link.querySelector("time");
+          const publishedAt = timeEl ? timeEl.getAttribute("datetime") : null;
+
+          chapters.push({
+            chapterIndex: chapterIndex++,
+            remoteChapterId,
+            partTitle: null,
+            title: chapterTitle,
+            url: chapterUrl,
+            publishedAt,
+          });
+        }
       }
     }
 

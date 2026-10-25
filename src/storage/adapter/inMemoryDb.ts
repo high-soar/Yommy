@@ -3,14 +3,6 @@ import initSqlJs from "sql.js/dist/sql-wasm-inline.js";
 import type { DatabaseAdapter } from "./types";
 import { DDL_STATEMENTS } from "../schema";
 
-const INITIAL_READER_SETTINGS_SQL = `
-INSERT INTO reader_settings (
-  id, writing_mode, theme, font_family, font_size_px, line_height, page_margin_px, enable_tap_paging, enable_volume_key_paging, updated_at
-) VALUES (
-  1, 'vertical-rl', 'light', 'biz-ud-mincho', 18, 1.8, 20, 1, 0, '2026-01-01T00:00:00.000Z'
-);
-`;
-
 /**
  * テスト・ブラウザ環境向けのインメモリ SQLite アダプター
  */
@@ -98,7 +90,6 @@ export async function createInMemoryDb(
   db.run("PRAGMA foreign_keys = ON;");
   if (!initialData) {
     db.exec(DDL_STATEMENTS);
-    db.exec(INITIAL_READER_SETTINGS_SQL);
   }
   return new InMemoryDatabaseAdapter(db, onUpdate);
 }
