@@ -22,6 +22,21 @@ interface NovelRow {
   updated_at: string;
 }
 
+const UPSERT_CHAPTER_SQL = `
+INSERT INTO chapters (
+  id, novel_id, chapter_index, remote_chapter_id, part_title, title, url,
+  body_html, byte_size, is_read, published_at, downloaded_at
+) VALUES (
+  ?, ?, ?, ?, ?, ?, ?, NULL, 0, 0, ?, NULL
+)
+ON CONFLICT(novel_id, chapter_index) DO UPDATE SET
+  remote_chapter_id = excluded.remote_chapter_id,
+  part_title = excluded.part_title,
+  title = excluded.title,
+  url = excluded.url,
+  published_at = excluded.published_at;
+`;
+
 export class SqlNovelRepository implements NovelRepository {
   constructor(private db: DatabaseAdapter) {}
 
@@ -134,30 +149,16 @@ export class SqlNovelRepository implements NovelRepository {
 
       for (const chapter of index.chapters) {
         const chapterId = `${id}:${chapter.chapterIndex}`;
-        await this.db.execute(
-          `INSERT INTO chapters (
-            id, novel_id, chapter_index, remote_chapter_id, part_title, title, url,
-            body_html, byte_size, is_read, published_at, downloaded_at
-          ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, NULL, 0, 0, ?, NULL
-          )
-          ON CONFLICT(novel_id, chapter_index) DO UPDATE SET
-            remote_chapter_id = excluded.remote_chapter_id,
-            part_title = excluded.part_title,
-            title = excluded.title,
-            url = excluded.url,
-            published_at = excluded.published_at;`,
-          [
-            chapterId,
-            id,
-            chapter.chapterIndex,
-            chapter.remoteChapterId,
-            chapter.partTitle,
-            chapter.title,
-            chapter.url,
-            chapter.publishedAt,
-          ],
-        );
+        await this.db.execute(UPSERT_CHAPTER_SQL, [
+          chapterId,
+          id,
+          chapter.chapterIndex,
+          chapter.remoteChapterId,
+          chapter.partTitle,
+          chapter.title,
+          chapter.url,
+          chapter.publishedAt,
+        ]);
       }
 
       const result = await this.getNovelById(id);
