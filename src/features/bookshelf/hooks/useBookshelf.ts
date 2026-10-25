@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useServices } from "../../../app/ServiceProvider";
 import type { NovelSummary } from "../../../storage/types";
 import type { NovelParser } from "../../../parsers/types";
+import type { ParserRegistry } from "../../../parsers/parserRegistry";
 
 export interface UseBookshelfResult {
   novels: NovelSummary[];
@@ -18,6 +19,37 @@ export interface UseBookshelfResult {
 export const INVALID_URL_ERROR_MESSAGE =
   "対応していないURLです。カクヨムの作品URLを入力してください。";
 export const DEFAULT_FETCH_ERROR_MESSAGE = "作品情報の取得に失敗しました";
+
+/**
+ * URL文字列を検証し、パーサーおよび正規化された作品トップURLを解決する。
+ * 未対応または不正なURLの場合は null を返す。
+ */
+function resolveParserAndUrl(
+  parserRegistry: ParserRegistry,
+  rawUrl: string,
+): { parser: NovelParser; normalizedUrl: string } | null {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) {
+    return null;
+  }
+  try {
+    const parser = parserRegistry.requireParser(trimmed);
+    const normalizedUrl = parser.normalizeWorkUrl(trimmed);
+    return { parser, normalizedUrl };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 例外オブジェクトからユーザー向けエラーメッセージを安全に抽出する
+ */
+function extractErrorMessage(err: unknown): string {
+  if (err instanceof Error && err.message) {
+    return err.message;
+  }
+  return DEFAULT_FETCH_ERROR_MESSAGE;
+}
 
 /**
  * 本棚画面（SCR-01）の登録済み作品一覧・URL作品登録モーダル状態を管理するカスタムフック
@@ -83,18 +115,13 @@ export function useBookshelf(): UseBookshelfResult {
         return false;
       }
 
-      const trimmedUrl = url.trim();
-      let parser: NovelParser;
-      let normalizedUrl: string;
-
-      try {
-        parser = parserRegistry.requireParser(trimmedUrl);
-        normalizedUrl = parser.normalizeWorkUrl(trimmedUrl);
-      } catch {
+      const resolved = resolveParserAndUrl(parserRegistry, url);
+      if (!resolved) {
         setDialogError(INVALID_URL_ERROR_MESSAGE);
         return false;
       }
 
+      const { parser, normalizedUrl } = resolved;
       setIsSubmitting(true);
       setDialogError(null);
 
@@ -115,11 +142,7 @@ export function useBookshelf(): UseBookshelfResult {
         setDialogError(null);
         isSuccess = true;
       } catch (err: unknown) {
-        const message =
-          err instanceof Error && err.message
-            ? err.message
-            : DEFAULT_FETCH_ERROR_MESSAGE;
-        setDialogError(message);
+        setDialogError(extractErrorMessage(err));
         isSuccess = false;
       } finally {
         setIsSubmitting(false);
