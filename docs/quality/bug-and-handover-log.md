@@ -3,7 +3,7 @@ type: quality-log
 title: 品質記録・バグ記録票 ＆ 申し送り管理シート（Bug & Handover Log）
 description: 製品コードと支援成果物を分離したバグ記録（原因5分類 L/S/D/B/A）および後続タスクへの申し送り事項（HO-xx）を追跡する正本シート。
 status: Approved
-updated: "2026-10-25"
+updated: "2026-10-26"
 tags: [quality, bug-log, handover, dre, kaizen]
 related_specs:
   - docs/index.md
@@ -89,6 +89,7 @@ related_tests: []
 | `HO-03` |      #1 (R1)      | Android 実機 / エミュレータ環境における技術リスク 4 点（CORS 回避通信、ネイティブ SQLite 保存、縦書き・ルビ組版表示、VRT/IT 整合性）の動作確認と APK ビルド検証                                                                 | #1 Step 3（人間確認スコープ）       | Phase 3 承認・完了  |           `Open`           |
 | `HO-04` |      #1 (R1)      | `src/app/router.tsx` による画面ルーティング導入、および `SCR-01` 本棚画面（#12）・`SCR-02` 作品詳細/目次画面（#13）の実装                                                                                                       | Phase 4 Milestone `v0.1` (#12, #13) | Milestone `v0.1`    |           `Open`           |
 | `HO-05` |      #1 (R1)      | 小説リーダー画面（`SCR-03`）の文字サイズ・行間・余白カスタマイズ、しおり自動保存、および目次ナビゲーションの実装（`SYS-REQ-09, 11, 12`）                                                                                        | Phase 4 Milestone `v0.1` (#14)      | Milestone `v0.1`    |           `Open`           |
+| `HO-06` |        #15        | Android 実機 / エミュレータ環境におけるホーム画面アプリアイコン表示（Adaptive Icon 各種マスク形状、解像度視認性）および Web ブラウザでの Favicon 表示の確認                                                                     | Issue #15 Sub-issue ② (IT PR)       | Issue #15 PR マージ |           `Open`           |
 | `HO-07` |        #12        | 本棚画面（`SCR-01`）での URL 作品登録 → 「続きから読む」（`TR-03`）によるリーダー画面（`SCR-03`）での未キャッシュ第1話オンデマンド取得 → 縦書き・ルビ表示・リロード復元の実ブラウザ結合テスト（`SCN-01`）検証                   | Issue #12 Sub-issue ③ (#23 IT PR)   | Issue #12 PR マージ |           `Open`           |
 
 ---

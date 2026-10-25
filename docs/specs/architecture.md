@@ -4,7 +4,7 @@ title: 3層アーキテクチャと共通インターフェース契約（App �
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
 status: "Review (#12)"
 updated: "2026-10-26"
-tags: [architecture, parser, storage, bridge, sanitizer]
+tags: [architecture, parser, storage, bridge, sanitizer, assets]
 related_specs:
   - docs/specs/requirements.md
   - docs/specs/db-schema.md
@@ -12,6 +12,7 @@ related_specs:
   - docs/specs/parsers/kakuyomu.md
   - docs/specs/features/bookshelf.md
   - docs/specs/features/reader-view.md
+  - docs/specs/changes/issue-15-app-icon-setup.md
   - docs/guidelines/testing.md
 related_tests:
   - src/app/ServiceProvider.test.tsx
@@ -69,61 +70,81 @@ flowchart TB
 
 ---
 
-## 2. 標準ディレクトリ構成
+## 2. 標準ディレクトリ構成とアセット管理規約
+
+### 2.1 リポジトリ全体ツリー
 
 ```text
-src/
-├── App.tsx                        # ルートコンポーネント（テーマ適用・ルーター配置）
-├── App.stories.tsx
-├── App.test.tsx
-├── app/                           # アプリケーション共通設定・DI Provider
-│   ├── router.tsx                 # 画面ルーティング定義（SCR-01〜SCR-05）
-│   ├── router.stories.tsx
-│   ├── router.test.tsx
-│   ├── ServiceProvider.tsx        # Storage / HttpBridge / ParserRegistry の Context DI（実機・テスト差し替え点）
-│   ├── ServiceProvider.stories.tsx
-│   └── ServiceProvider.test.tsx
-├── bridges/                       # 【Capacitor Bridge 抽象層】
-│   ├── http/
-│   │   ├── types.ts               # HttpClientBridge インターフェース定義
-│   │   ├── capacitorHttpClient.ts # CapacitorHttp 実装（CORS回避・User-Agent・タイムアウト制御）
-│   │   └── mockHttpClient.ts      # UT / Storybook / IT 用フィクスチャ応答クライアント
-│   └── webview/
-│       ├── types.ts               # WebViewDomBridge インターフェース定義（v0.3〜）
-│       └── webviewDomBridge.ts    # 内蔵WebView DOMキャプチャ実装
-├── parsers/                       # 【1. Parser Layer（スクレイピング・DOM解析層）】
-│   ├── types.ts                   # NovelParser, ParsedNovelMetadata, ParsedChapterContent 等の型契約
-│   ├── parserRegistry.ts          # URL から対応サイト（kakuyomu / narou 等）を判定・ディスパッチ
-│   ├── sanitizer.ts               # 小説本文 HTML サニタイズ＆正規化（XSS防止・ルビ/傍点保持）
-│   ├── kakuyomu/                  # カクヨム用パーサーとローカル HTML フィクスチャ
-│   │   ├── KakuyomuParser.ts
-│   │   ├── KakuyomuParser.test.ts
-│   │   └── __fixtures__/
-│   └── narou/                     # 小説家になろう用パーサーとローカル HTML フィクスチャ（v0.2〜）
-│       ├── NarouParser.ts
-│       ├── NarouParser.test.ts
-│       └── __fixtures__/
-├── storage/                       # 【2. Storage Layer（ローカルDB・キャッシュ管理層）】
-│   ├── types.ts                   # エンティティ型および各 Repository インターフェース契約
-│   ├── adapter/
-│   │   ├── types.ts               # DatabaseAdapter インターフェース
-│   │   ├── capacitorSqlite.ts     # @capacitor-community/sqlite アダプター実装
-│   │   └── inMemoryDb.ts          # テスト・Web開発用インメモリDB実装（resetTestDb() 提供）
-│   └── repositories/
-│       ├── novelRepository.ts     # novels テーブル操作
-│       ├── chapterRepository.ts   # chapters テーブル操作（本文キャッシュ保存・削除・容量集計）
-│       ├── queueRepository.ts     # download_queue テーブル操作（v0.2〜）
-│       └── settingsRepository.ts  # reader_settings 操作
-├── features/                      # 【3. Viewer & UI Layer（画面・機能別モジュール）】
-│   ├── bookshelf/                 # SCR-01: 本棚一覧・作品URL追加
-│   ├── novel-detail/              # SCR-02: 作品詳細・目次一覧・取得操作
-│   ├── reader/                    # SCR-03: 小説リーダー（縦書き/横書き・ルビ・テーマ・しおり保存）
-│   ├── webview-import/            # SCR-04: 内蔵ブラウザ表示・DOMインポート（v0.3〜）
-│   └── queue-settings/            # SCR-05: DLキュー・キャッシュ管理・全体設定（v0.2〜）
-└── shared/                        # 複数機能で共有する汎用 UI コンポーネント・ユーティリティ
-    ├── ui/                        # Header, BottomNav, Button, Modal, Toast, Badge 等
-    └── lib/                       # URL正規化、バイトサイズ整形、日時フォーマット等
+Yommy/
+├── assets/                            # 【マスターアセット】高解像度マスター画像（assets/icon.png 1024×1024）
+├── public/                            # 【Web 静的アセット】favicon.ico, icon-192.png, apple-touch-icon.png
+├── android/                           # 【Android プロジェクト】Capacitor ネイティブコード＆リソース
+│   └── app/src/main/res/              # mipmap-* (ic_launcher*), values/ic_launcher_background.xml
+├── scripts/                           # 【ビルド・補助スクリプト】generate-icons.mjs 等
+└── src/                               # 【アプリケーションソースコード】
+    ├── App.tsx                        # ルートコンポーネント（テーマ適用・ルーター配置）
+    ├── App.stories.tsx
+    ├── App.test.tsx
+    ├── app/                           # アプリケーション共通設定・DI Provider
+    │   ├── router.tsx                 # 画面ルーティング定義（SCR-01〜SCR-05）
+    │   ├── router.stories.tsx
+    │   ├── router.test.tsx
+    │   ├── ServiceProvider.tsx        # Storage / HttpBridge / ParserRegistry の Context DI（実機・テスト差し替え点）
+    │   ├── ServiceProvider.stories.tsx
+    │   └── ServiceProvider.test.tsx
+    ├── bridges/                       # 【Capacitor Bridge 抽象層】
+    │   ├── http/
+    │   │   ├── types.ts               # HttpClientBridge インターフェース定義
+    │   │   ├── capacitorHttpClient.ts # CapacitorHttp 実装（CORS回避・User-Agent・タイムアウト制御）
+    │   │   └── mockHttpClient.ts      # UT / Storybook / IT 用フィクスチャ応答クライアント
+    │   └── webview/
+    │       ├── types.ts               # WebViewDomBridge インターフェース定義（v0.3〜）
+    │       └── webviewDomBridge.ts    # 内蔵WebView DOMキャプチャ実装
+    ├── parsers/                       # 【1. Parser Layer（スクレイピング・DOM解析層）】
+    │   ├── types.ts                   # NovelParser, ParsedNovelMetadata, ParsedChapterContent 等の型契約
+    │   ├── parserRegistry.ts          # URL から対応サイト（kakuyomu / narou 等）を判定・ディスパッチ
+    │   ├── sanitizer.ts               # 小説本文 HTML サニタイズ＆正規化（XSS防止・ルビ/傍点保持）
+    │   ├── kakuyomu/                  # カクヨム用パーサーとローカル HTML フィクスチャ
+    │   │   ├── KakuyomuParser.ts
+    │   │   ├── KakuyomuParser.test.ts
+    │   │   └── __fixtures__/
+    │   └── narou/                     # 小説家になろう用パーサーとローカル HTML フィクスチャ（v0.2〜）
+    │       ├── NarouParser.ts
+    │       ├── NarouParser.test.ts
+    │       └── __fixtures__/
+    ├── storage/                       # 【2. Storage Layer（ローカルDB・キャッシュ管理層）】
+    │   ├── types.ts                   # エンティティ型および各 Repository インターフェース契約
+    │   ├── adapter/
+    │   │   ├── types.ts               # DatabaseAdapter インターフェース
+    │   │   ├── capacitorSqlite.ts     # @capacitor-community/sqlite アダプター実装
+    │   │   └── inMemoryDb.ts          # テスト・Web開発用インメモリDB実装（resetTestDb() 提供）
+    │   └── repositories/
+    │       ├── novelRepository.ts     # novels テーブル操作
+    │       ├── chapterRepository.ts   # chapters テーブル操作（本文キャッシュ保存・削除・容量集計）
+    │       ├── queueRepository.ts     # download_queue テーブル操作（v0.2〜）
+    │       └── settingsRepository.ts  # reader_settings 操作
+    ├── features/                      # 【3. Viewer & UI Layer（画面・機能別モジュール）】
+    │   ├── bookshelf/                 # SCR-01: 本棚一覧・作品URL追加
+    │   ├── novel-detail/              # SCR-02: 作品詳細・目次一覧・取得操作
+    │   ├── reader/                    # SCR-03: 小説リーダー（縦書き/横書き・ルビ・テーマ・しおり保存）
+    │   ├── webview-import/            # SCR-04: 内蔵ブラウザ表示・DOMインポート（v0.3〜）
+    │   └── queue-settings/            # SCR-05: DLキュー・キャッシュ管理・全体設定（v0.2〜）
+    └── shared/                        # 複数機能で共有する汎用 UI コンポーネント・ユーティリティ
+        ├── ui/                        # Header, BottomNav, Button, Modal, Toast, Badge 等
+        └── lib/                       # URL正規化、バイトサイズ整形、日時フォーマット等
 ```
+
+### 2.2 アセット管理とアプリアイコン設計
+
+- **マスターアセット（`assets/`）**:
+  - `assets/icon.png`: 1024×1024 px のブランド正本マスター。将来の一時資料（`reference/`）削除後も恒久保持し、全プラットフォーム向けアイコンの生成元となる。
+- **Android ネイティブアセット（`android/app/src/main/res/`）**:
+  - Android 8.0+ Adaptive Icon: 背景 `#0D0E26`（`values/ic_launcher_background.xml`）＋ セーフゾーン（72dp / 108dp）前景イラスト（`mipmap-*/ic_launcher_foreground.png`）。
+  - レガシー用: 角丸正方形（`ic_launcher.png`）および円形（`ic_launcher_round.png`）。
+- **Web 静的アセット（`public/`）**:
+  - `favicon.ico`（16/32/48px マルチアイコン）、`icon-192.png`、`icon-512.png`、`apple-touch-icon.png`（180px）。Vite ビルド時に `dist/` 直下へ完全展開される。
+- **生成自動化（`scripts/generate-icons.mjs`）**:
+  - DevContainer の Playwright Chromium を用いて決定論的かつオフラインで全アセットを再生成する。
 
 ---
 
