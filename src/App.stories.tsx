@@ -3,7 +3,7 @@ import { App } from "./App";
 
 /**
  * Yommy ルートアプリケーションコンポーネント。
- * 横書き・縦書き（組版・ルビ表示）の切り替えに対応します。
+ * ServiceProvider と PocReaderContainer を統合したリーダー画面を提供します。
  */
 const meta: Meta<typeof App> = {
   title: "App",
@@ -17,17 +17,15 @@ export default meta;
 type Story = StoryObj<typeof App>;
 
 export const Default: Story = {
-  name: "デフォルト（横書き表示）",
+  name: "デフォルト（初期表示・未取得状態）",
   args: {
     title: "Yommy",
-    initialOrientation: "horizontal",
   },
 };
 
-export const Vertical: Story = {
-  name: "縦書きモード",
+export const CustomTitle: Story = {
+  name: "カスタムタイトル指定",
   args: {
-    title: "Yommy - 縦書き",
-    initialOrientation: "vertical",
+    title: "Yommy Web Novel Reader",
   },
 };
