@@ -104,26 +104,29 @@ export const Empty: Story = {
 export const WithLoadedNovel: Story = {
   name: "DB保存済み作品の閲覧状態",
   render: () => {
+    const loadedNovel = {
+      id: "kakuyomu:1177354054881162325",
+      siteType: "kakuyomu" as const,
+      remoteWorkId: "1177354054881162325",
+      canonicalUrl: "https://kakuyomu.jp/works/1177354054881162325",
+      title: "境界迷宮と異界の魔術師",
+      author: "小野崎",
+      synopsis: "あらすじ",
+      totalChapters: 3,
+      cachedChapters: 1,
+      totalByteSize: 1024,
+      bookmarkChapterIndex: 1,
+      bookmarkScrollProgress: 0,
+      isFavorite: false,
+      lastCheckedAt: null,
+      lastReadAt: null,
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+    };
+
     const novelRepo: NovelRepository = {
-      listNovels: async () => [
-        {
-          id: "kakuyomu:1177354054881162325",
-          siteType: "kakuyomu",
-          remoteWorkId: "1177354054881162325",
-          canonicalUrl: "https://kakuyomu.jp/works/1177354054881162325",
-          title: "境界迷宮と異界の魔術師",
-          author: "小野崎",
-          totalChapters: 3,
-          cachedChapters: 1,
-          totalByteSize: 1024,
-          bookmarkChapterIndex: 1,
-          bookmarkScrollProgress: 0,
-          isFavorite: false,
-          lastReadAt: null,
-          updatedAt: "2026-01-01T00:00:00Z",
-        },
-      ],
-      getNovelById: async () => null,
+      listNovels: async () => [loadedNovel],
+      getNovelById: async () => loadedNovel,
       upsertNovelWithToc: async () =>
         ({}) as unknown as import("../../../storage/types").NovelRecord,
       updateBookmark: async () => {},
