@@ -120,12 +120,9 @@ describe("ParserRegistry", () => {
       expect(all.length).toBeGreaterThanOrEqual(1);
       expect(all.some((p) => p.siteType === "kakuyomu")).toBe(true);
       expect(
-        defaultRegistry.canParse?.(
+        defaultRegistry.getParser(
           "https://kakuyomu.jp/works/1177354054881162325",
-        ) ??
-          defaultRegistry.getParser(
-            "https://kakuyomu.jp/works/1177354054881162325",
-          ),
+        ),
       ).toBeDefined();
     });
   });
