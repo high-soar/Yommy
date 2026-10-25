@@ -37,38 +37,53 @@ function serializeData(data: unknown): string {
   return String(data);
 }
 
+function buildHttpOptions(options: HttpRequestOptions): HttpOptions {
+  const httpOptions: HttpOptions = {
+    url: options.url,
+    responseType: "text",
+  };
+
+  if (options.headers) {
+    httpOptions.headers = options.headers;
+  }
+
+  if (typeof options.timeoutMs === "number") {
+    httpOptions.connectTimeout = options.timeoutMs;
+    httpOptions.readTimeout = options.timeoutMs;
+  }
+
+  return httpOptions;
+}
+
+function createAbortSignalPromise(signal?: AbortSignal): {
+  abortPromise: Promise<never>;
+  cleanup: () => void;
+} {
+  let cleanup = () => {};
+
+  const abortPromise = new Promise<never>((_, reject) => {
+    if (signal) {
+      const onAbort = () => {
+        reject(signal.reason);
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+      cleanup = () => {
+        signal.removeEventListener("abort", onAbort);
+      };
+    }
+  });
+
+  return { abortPromise, cleanup };
+}
+
 export class CapacitorHttpClient implements HttpClientBridge {
   async getHtml(options: HttpRequestOptions): Promise<HttpResponse> {
     if (options.signal?.aborted) {
       throw options.signal.reason;
     }
 
-    const httpOptions: HttpOptions = {
-      url: options.url,
-      responseType: "text",
-    };
-
-    if (options.headers) {
-      httpOptions.headers = options.headers;
-    }
-
-    if (typeof options.timeoutMs === "number") {
-      httpOptions.connectTimeout = options.timeoutMs;
-      httpOptions.readTimeout = options.timeoutMs;
-    }
-
-    let removeAbortListener: (() => void) | undefined;
-    const abortPromise = new Promise<never>((_, reject) => {
-      if (options.signal) {
-        const onAbort = () => {
-          reject(options.signal?.reason);
-        };
-        options.signal.addEventListener("abort", onAbort, { once: true });
-        removeAbortListener = () => {
-          options.signal?.removeEventListener("abort", onAbort);
-        };
-      }
-    });
+    const httpOptions = buildHttpOptions(options);
+    const { abortPromise, cleanup } = createAbortSignalPromise(options.signal);
 
     let response;
     try {
@@ -77,14 +92,14 @@ export class CapacitorHttpClient implements HttpClientBridge {
         abortPromise,
       ]);
     } catch (err) {
-      removeAbortListener?.();
+      cleanup();
       if (err instanceof Error) {
         throw err;
       }
       throw new Error(String(err));
     }
 
-    removeAbortListener?.();
+    cleanup();
 
     const status = response.status;
     const finalUrl = response.url || options.url;
