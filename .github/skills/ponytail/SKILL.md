@@ -56,4 +56,3 @@ The ladder is a decision aid, not a reason to research endlessly or skip underst
 - If the user requests a full explanation, report, or walkthrough, provide it. Concision is not a reason to withhold requested information.
 
 The shortest path to completion is the simplest solution that remains correct, safe, testable, and complete.
-

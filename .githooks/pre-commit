@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -e
+
+echo "=== [pre-commit hook] Running fast quality checks ==="
+
+echo "1. Checking OKF format..."
+npm run lint:okf
+
+echo "2. Checking Prettier formatting..."
+npm run format:check
+
+echo "3. Running ESLint..."
+npm run lint
+
+echo "4. Running TypeScript typecheck..."
+npm run typecheck
+
+echo "=== [pre-commit hook] All checks passed! ==="
+

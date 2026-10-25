@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality-gate:
+    name: Lint, Test & Quality Gates
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install Japanese Fonts & System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            fonts-dejavu-core \
+            fonts-noto-cjk \
+            fonts-ipaexfont \
+            fonts-morisawa-bizud-mincho \
+            fonts-morisawa-bizud-gothic \
+            fonts-klee
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium with system dependencies
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify OKF documentation format
+        run: npm run lint:okf
+
+      - name: Prettier format check
+        run: npm run format:check
+
+      - name: ESLint static analysis
+        run: npm run lint
+
+      - name: TypeScript type check
+        run: npm run typecheck
+
+      - name: Vitest unit tests & coverage (100% threshold)
+        run: npm run test:coverage
+
+      - name: Storybook VRT (1280px / 375px)
+        run: npm run test:vrt
+
+      - name: Playwright integration tests (IT)
+        run: npm run test:it
+
+      - name: Production build
+        run: npm run build
+
+      - name: Upload Playwright test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: |
+            test-results/
+            playwright-report/

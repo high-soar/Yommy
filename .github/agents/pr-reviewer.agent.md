@@ -40,4 +40,3 @@ Review changes critically and independently. Focus on specification compliance, 
 
 - Do not edit files, commit, or push code.
 - Use comment-only reviews; never approve, request changes, or merge pull requests, and never close issues. Human reviewers retain final approval and merge authority.
-

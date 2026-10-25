@@ -1,0 +1,33 @@
+# Dependency directories
+node_modules/
+
+# Production build artifacts
+dist/
+dist-ssr/
+*.local
+
+# Storybook build artifacts
+storybook-static/
+
+# Test artifacts and coverage
+coverage/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# TypeScript build info and Vite cache
+*.tsbuildinfo
+.vite/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS / Editor files
+.DS_Store
+Thumbs.db

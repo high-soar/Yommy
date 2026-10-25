@@ -68,7 +68,7 @@ Phase 3 以降の PR 作業では、[.github/pull_request_template.md](../../pul
 ## 4. Worktree の安全な利用ルール
 
 並行調査や一時検証で `git worktree` を使用する場合：
+
 - 既存の作業ツリーと同一ブランチを重複チェックアウトしない。
 - Worktree 内でテストや品質チェックを実行する際は、`node_modules` の解決を確認する。
 - 作業完了後は `git status` で未コミット変更がないことを確認してから `git worktree remove <path>` で削除する（`--force` は使用しない）。
-

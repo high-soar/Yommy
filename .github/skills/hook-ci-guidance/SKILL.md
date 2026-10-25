@@ -21,4 +21,3 @@ Use this skill (primarily from Phase 3 onward) to make a project-specific decisi
 - Follow the repository's quality gates in [docs/guidelines/workflow.md](../../../docs/guidelines/workflow.md#4-task-completion-gate7つの完了条件).
 - Keep CI coverage for all checks required by the Task Completion Gate; local hooks are early feedback, not a substitute for CI verification.
 - Document the chosen hooks and CI workflows clearly when introducing or updating them in Phase 3.
-

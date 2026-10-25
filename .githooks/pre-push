@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -e
+
+echo "=== [pre-push hook] Running unit tests and coverage verification ==="
+npm run test:coverage
+
+echo "=== [pre-push hook] Coverage checks passed! ==="
+

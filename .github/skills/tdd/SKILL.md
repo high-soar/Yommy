@@ -16,4 +16,3 @@ Use this workflow as the foundational Red-Green-Refactor discipline. In the Yomm
 5. **Refactor**: Improve structure, readability, and type safety while preserving the passing behavior. Rerun the test and commit (`refactor(<scope>): ...（Refactor）`).
 6. **Verify**: Run the full required suite (`typecheck`, `lint`, `format:check`, `test:coverage` for 100% C0/C1/Functions, and `test:vrt` when UI changes).
 7. **Report & Record**: State which checks passed and record any defects discovered after initial Red in [docs/quality/bug-and-handover-log.md](../../../docs/quality/bug-and-handover-log.md). Never claim Red or Green was verified if the corresponding run did not complete.
-
