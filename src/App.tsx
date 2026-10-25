@@ -2,10 +2,13 @@ import React from "react";
 import { ServiceProvider } from "./app/ServiceProvider";
 import { PocReaderContainer } from "./features/reader/components/PocReaderContainer";
 
+/**
+ * App コンポーネントの Props
+ */
 export interface AppProps {
   /** アプリケーションのヘッダータイトル（デフォルト: "Yommy"） */
   title?: string;
-  /** 初期取得対象の作品 URL（省略時はデフォルトのカクヨム作品URL） */
+  /** 初期取得対象の作品 URL（省略時はデフォルトのカクヨム検証用作品URL） */
   initialWorkUrl?: string;
 }
 
@@ -13,6 +16,7 @@ export interface AppProps {
  * Yommy ルートアプリケーションコンポーネント
  *
  * ServiceProvider による依存性注入（DI）と、PocReaderContainer によるリーダー画面を表示する。
+ * ブラウザリロード時のローカル永続化（localStorage バックアップ・リストア）にも対応する。
  */
 export const App: React.FC<AppProps> = ({
   title = "Yommy",
