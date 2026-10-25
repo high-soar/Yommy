@@ -261,7 +261,7 @@ describe("ServiceProvider", () => {
       );
 
       await waitFor(() => {
-        expect(novelHtml).toContain("異世界転生したエンジニア");
+        expect(novelHtml).toContain("境界迷宮と異界の魔術師");
         expect(episodeHtml).toContain("第1話 見知らぬ空");
       });
     });
