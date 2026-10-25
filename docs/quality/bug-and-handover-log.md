@@ -55,7 +55,7 @@ related_tests: []
 
 |   ID    | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                                                                                                              | 解決先（対象 Issue / 成果物） | 完了ゲート         | 状態 (`Open` / `Resolved`) |
 | :-----: | :---------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :---------------------------- | :----------------- | :------------------------: |
-| `HO-01` |        #2         | カクヨム用のサイト別スクレイピング仕様書（`docs/specs/parsers/kakuyomu.md`）の策定、および HttpClientBridge・HtmlSanitizer・KakuyomuParser・Storage Layer（DatabaseAdapter/Repositories）のローカルフィクスチャ Vitest TDD 実装 | #3 (`[Phase 3-2a]`)           | Issue #3 PR マージ |           `Open`           |
+| `HO-01` |        #2         | カクヨム用のサイト別スクレイピング仕様書（`docs/specs/parsers/kakuyomu.md`）の策定、および HttpClientBridge・HtmlSanitizer・KakuyomuParser・Storage Layer（DatabaseAdapter/Repositories）のローカルフィクスチャ Vitest TDD 実装 | #3 (`[Phase 3-2a]`)           | Issue #3 PR マージ |         `Resolved`         |
 | `HO-02` |        #2         | ServiceProvider 経由での Http/Storage/Parser 注入、縦書き・ルビ対応ミニマムリーダー UI、Storybook VRT、および Playwright IT（`SCN-01` 縦貫通シナリオ）の結合実装                                                                | #4 (`[Phase 3-2b]`)           | Issue #4 PR マージ |         `Resolved`         |
 
 ---
