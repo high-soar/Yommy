@@ -26,6 +26,16 @@ describe("SqlSettingsRepository", () => {
         updatedAt: expect.any(String),
       });
     });
+
+    it("初期行が存在しない場合に例外がスローされること", async () => {
+      const adapter = await resetTestDb();
+      await adapter.execute("DELETE FROM reader_settings WHERE id = 1;");
+      const emptyRepo = new SqlSettingsRepository(adapter);
+
+      await expect(emptyRepo.getReaderSettings()).rejects.toThrow(
+        "reader_settings の初期行が見つかりません。",
+      );
+    });
   });
 
   describe("updateReaderSettings", () => {
@@ -85,6 +95,36 @@ describe("SqlSettingsRepository", () => {
       expect(updated.theme).toBe(before.theme);
       expect(updated.fontFamily).toBe(before.fontFamily);
       expect(updated.fontSizePx).toBe(before.fontSizePx);
+    });
+
+    it("各設定項目を個別に更新できること", async () => {
+      let res = await repository.updateReaderSettings({ theme: "sepia" });
+      expect(res.theme).toBe("sepia");
+
+      res = await repository.updateReaderSettings({ fontFamily: "gothic" });
+      expect(res.fontFamily).toBe("gothic");
+
+      res = await repository.updateReaderSettings({ lineHeight: 2.0 });
+      expect(res.lineHeight).toBe(2.0);
+
+      res = await repository.updateReaderSettings({ pageMarginPx: 28 });
+      expect(res.pageMarginPx).toBe(28);
+
+      res = await repository.updateReaderSettings({ enableTapPaging: false });
+      expect(res.enableTapPaging).toBe(false);
+
+      res = await repository.updateReaderSettings({ enableTapPaging: true });
+      expect(res.enableTapPaging).toBe(true);
+
+      res = await repository.updateReaderSettings({
+        enableVolumeKeyPaging: true,
+      });
+      expect(res.enableVolumeKeyPaging).toBe(true);
+
+      res = await repository.updateReaderSettings({
+        enableVolumeKeyPaging: false,
+      });
+      expect(res.enableVolumeKeyPaging).toBe(false);
     });
   });
 });
