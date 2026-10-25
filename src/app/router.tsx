@@ -39,21 +39,34 @@ export function safeDecodeURIComponent(str: string): string {
 }
 
 /**
+ * ルートパターン照合用正規表現
+ */
+const READER_ROUTE_REGEX = /^\/novels\/([^/]+)\/chapters\/(\d+)$/;
+const NOVEL_DETAIL_ROUTE_REGEX = /^\/novels\/([^/]+)$/;
+
+/**
+ * パス文字列の前後の空白をトリムし、余分な末尾スラッシュを除去して正規化する
+ */
+function normalizePath(path: string): string {
+  const trimmed = path.trim();
+  if (trimmed.length > 1 && trimmed.endsWith("/")) {
+    return trimmed.slice(0, -1);
+  }
+  return trimmed;
+}
+
+/**
  * 指定されたパス文字列から AppRoute を解決する（未知のパスは本棚ルートへフォールバック）
  */
 export function matchRoute(path: string): AppRoute {
-  const trimmed = path.trim();
-  const normalized =
-    trimmed.length > 1 && trimmed.endsWith("/")
-      ? trimmed.slice(0, -1)
-      : trimmed;
+  const normalized = normalizePath(path);
 
   if (normalized === "" || normalized === "/") {
     return { name: "bookshelf", path: "/" };
   }
 
   // SCR-03: リーダー画面 (/novels/:novelId/chapters/:chapterIndex)
-  const readerMatch = normalized.match(/^\/novels\/([^/]+)\/chapters\/(\d+)$/);
+  const readerMatch = normalized.match(READER_ROUTE_REGEX);
   if (readerMatch) {
     const chapterIndex = parseInt(readerMatch[2], 10);
     const novelId = safeDecodeURIComponent(readerMatch[1]).trim();
@@ -68,7 +81,7 @@ export function matchRoute(path: string): AppRoute {
   }
 
   // SCR-02: 作品詳細画面 (/novels/:novelId)
-  const detailMatch = normalized.match(/^\/novels\/([^/]+)$/);
+  const detailMatch = normalized.match(NOVEL_DETAIL_ROUTE_REGEX);
   if (detailMatch) {
     const novelId = safeDecodeURIComponent(detailMatch[1]).trim();
     if (novelId.length > 0) {
