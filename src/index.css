@@ -11,4 +11,8 @@
     writing-mode: horizontal-tb;
     -webkit-writing-mode: horizontal-tb;
   }
+  .bouten {
+    -webkit-text-emphasis: filled sesame;
+    text-emphasis: filled sesame;
+  }
 }
