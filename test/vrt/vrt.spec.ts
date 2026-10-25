@@ -31,6 +31,10 @@ const viewports = [
 ];
 
 test.describe("Storybook VRT (1280px / 375px)", () => {
+  test("Storybook index にストーリーが存在すること（0件空振り防止）", () => {
+    expect(stories.length).toBeGreaterThan(0);
+  });
+
   for (const story of stories) {
     for (const viewport of viewports) {
       test(`${story.id} [${viewport.name}]`, async ({ page }) => {
@@ -48,7 +52,7 @@ test.describe("Storybook VRT (1280px / 375px)", () => {
         await expect(root).toBeVisible();
 
         await page.evaluate(() => document.fonts.ready);
-        await page.waitForTimeout(100);
+        await root.locator(":scope > *").first().waitFor({ state: "visible" });
 
         await expect(page).toHaveScreenshot(
           `${story.id}-${viewport.name}.png`,

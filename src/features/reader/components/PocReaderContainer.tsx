@@ -93,18 +93,24 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
     setError(null);
 
     try {
-      // 1. 作品トップHTML取得
-      const indexRes = await httpClient.getHtml({ url: initialWorkUrl });
+      // 1. パーサー解決と作品URL正規化（未対応URLは通信前に拒絶）
       const parser = parserRegistry.requireParser(initialWorkUrl);
-      const novelIndex = parser.parseNovelIndex(indexRes.html, initialWorkUrl);
+      const normalizedWorkUrl = parser.normalizeWorkUrl(initialWorkUrl);
 
-      // 2. DBへ作品と目次を保存
+      // 2. 作品トップHTML取得
+      const indexRes = await httpClient.getHtml({ url: normalizedWorkUrl });
+      const novelIndex = parser.parseNovelIndex(
+        indexRes.html,
+        normalizedWorkUrl,
+      );
+
+      // 3. DBへ作品と目次を保存
       const savedNovel = await novelRepository.upsertNovelWithToc(
         novelIndex,
         new Date().toISOString(),
       );
 
-      // 3. 第1話エピソード本文取得
+      // 4. 第1話エピソード本文取得
       if (novelIndex.chapters.length > 0) {
         const firstEpisodeToc = novelIndex.chapters[0];
         const chapterRes = await httpClient.getHtml({

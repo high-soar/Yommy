@@ -8,21 +8,40 @@ import type {
 import { sanitizeChapterHtml } from "../sanitizer";
 
 /**
- * カクヨム DOM セレクタ定数（docs/specs/parsers/kakuyomu.md に準拠）
+ * カクヨム DOM セレクタ定数（優先順位リスト）
  */
 const SELECTORS = {
-  workTitle: "#workTitle a, #workTitle, #catchphrase-and-title h1",
-  workAuthor:
-    '#workAuthor-activityName a, #workAuthor-activityName, [href^="/users/"]',
-  workSynopsis: "#introduction, .widget-work-introduction, #description",
+  workTitle: ["#workTitle a", "#workTitle", "#catchphrase-and-title h1"],
+  workAuthor: [
+    "#workAuthor-activityName a",
+    "#workAuthor-activityName",
+    '[href^="/users/"]',
+  ],
+  workSynopsis: ["#introduction", ".widget-work-introduction", "#description"],
   canonicalLink: 'link[rel="canonical"]',
   tocElements:
     '[class*="widget-toc-chapter"], [class*="widget-toc-section"], [class*="widget-toc-episode"]',
-  episodeTitle: ".widget-episodeTitle, header h1, .episode-title",
-  episodeBody: ".widget-episodeBody, .js-episode-body",
-  prevEpisode: "a#contentMain-previousEpisode, a[rel='prev']",
-  nextEpisode: "a#contentMain-nextEpisode, a[rel='next']",
+  episodeTitle: [".widget-episodeTitle", "header h1", ".episode-title"],
+  episodeBody: [".widget-episodeBody", ".js-episode-body"],
+  prevEpisode: ["a#contentMain-previousEpisode", 'a[rel="prev"]'],
+  nextEpisode: ["a#contentMain-nextEpisode", 'a[rel="next"]'],
 } as const;
+
+/**
+ * 優先順位リスト順に DOM を探索し、最初に見つかった要素を返却する
+ */
+function queryFirst<T extends Element = Element>(
+  root: ParentNode,
+  selectors: readonly string[],
+): T | null {
+  for (const selector of selectors) {
+    const el = root.querySelector<T>(selector);
+    if (el) {
+      return el;
+    }
+  }
+  return null;
+}
 
 /**
  * URL 抽出用正規表現
@@ -103,13 +122,13 @@ export class KakuyomuParser implements NovelParser {
 
     const canonicalUrl = `https://kakuyomu.jp/works/${remoteWorkId}`;
 
-    const titleEl = doc.querySelector(SELECTORS.workTitle);
+    const titleEl = queryFirst(doc, SELECTORS.workTitle);
     const title = titleEl?.textContent?.trim() || "";
 
-    const authorEl = doc.querySelector(SELECTORS.workAuthor);
+    const authorEl = queryFirst(doc, SELECTORS.workAuthor);
     const author = authorEl?.textContent?.trim() || "";
 
-    const synopsisEl = doc.querySelector(SELECTORS.workSynopsis);
+    const synopsisEl = queryFirst(doc, SELECTORS.workSynopsis);
     const synopsis = synopsisEl?.textContent?.trim() || "";
 
     const elements = doc.querySelectorAll(SELECTORS.tocElements);
@@ -183,18 +202,18 @@ export class KakuyomuParser implements NovelParser {
     const chapterIdMatch = pageUrl.match(EPISODE_ID_REGEX);
     const remoteChapterId = chapterIdMatch ? chapterIdMatch[1] : "";
 
-    const titleEl = doc.querySelector(SELECTORS.episodeTitle);
+    const titleEl = queryFirst(doc, SELECTORS.episodeTitle);
     const title = titleEl?.textContent?.trim() || "";
 
-    const bodyEl = doc.querySelector(SELECTORS.episodeBody);
+    const bodyEl = queryFirst(doc, SELECTORS.episodeBody);
     const bodyHtml = bodyEl ? sanitizeChapterHtml(bodyEl.innerHTML) : "";
     const byteSize = new TextEncoder().encode(bodyHtml).length;
 
-    const prevEl = doc.querySelector<HTMLAnchorElement>(SELECTORS.prevEpisode);
+    const prevEl = queryFirst<HTMLAnchorElement>(doc, SELECTORS.prevEpisode);
     const prevHref = prevEl?.getAttribute("href");
     const prevChapterUrl = prevHref ? new URL(prevHref, pageUrl).href : null;
 
-    const nextEl = doc.querySelector<HTMLAnchorElement>(SELECTORS.nextEpisode);
+    const nextEl = queryFirst<HTMLAnchorElement>(doc, SELECTORS.nextEpisode);
     const nextHref = nextEl?.getAttribute("href");
     const nextChapterUrl = nextHref ? new URL(nextHref, pageUrl).href : null;
 

@@ -2,13 +2,19 @@
 type: spec-db-schema
 title: ローカル DB スキーマ定義（App 全体正本）
 description: SQLite（novels, chapters, download_queue, reader_settings）のER図、テーブル構造、およびDDL定義の正本。
-status: Approved (Phase 2)
+status: Approved (Phase 3)
 updated: "2026-10-25"
 tags: [database, sqlite, schema, storage]
 related_specs:
   - docs/specs/requirements.md
   - docs/specs/architecture.md
-related_tests: []
+  - docs/specs/parsers/kakuyomu.md
+  - docs/specs/features/reader-view.md
+related_tests:
+  - src/storage/schema.test.ts
+  - src/storage/repositories/novelRepository.test.ts
+  - src/storage/repositories/chapterRepository.test.ts
+  - src/storage/repositories/settingsRepository.test.ts
 ---
 
 # ローカル DB スキーマ定義（App 全体正本）
@@ -127,11 +133,11 @@ CREATE INDEX IF NOT EXISTS idx_novels_last_read_at ON novels(last_read_at DESC);
 
 ### 3.2 `chapters` テーブル（各話目次・本文 HTML キャッシュ）
 
-目次取得時は `body_html = NULL`, `byte_size = 0` でレコードを作成し、本文ダウンロード完了時にサニタイズ済み HTML と `byte_size`, `downloaded_at` を保存します。キャッシュ削除時は目次情報を残したまま `body_html = NULL`, `byte_size = 0`, `downloaded_at = NULL` に更新します（既読フラグ `is_read` は維持）。
+目次取得時は `body_html = NULL`, `byte_size = 0` でレコードを作成し、本文ダウンロード完了時にサニタイズ済み HTML と `byte_size`, `downloaded_at` を保存します。各話の一意性は `(novel_id, remote_chapter_id)` で保証されるため、連載途中でエピソードが挿入・削除されて `chapter_index` がずれた場合でも、本文キャッシュが別話へ誤って引き継がれることなく安全に維持されます。キャッシュ削除時は目次情報を残したまま `body_html = NULL`, `byte_size = 0`, `downloaded_at = NULL` に更新します（既読フラグ `is_read` は維持）。
 
 ```sql
 CREATE TABLE IF NOT EXISTS chapters (
-  id TEXT PRIMARY KEY,                              -- "{novel_id}:{chapter_index}"
+  id TEXT PRIMARY KEY,                              -- "{novel_id}:{remote_chapter_id}"
   novel_id TEXT NOT NULL,                           -- novels.id
   chapter_index INTEGER NOT NULL,                   -- 1始まりの話数連番
   remote_chapter_id TEXT NOT NULL,                  -- サイト固有のエピソードID
@@ -144,7 +150,7 @@ CREATE TABLE IF NOT EXISTS chapters (
   published_at TEXT,                                -- 公開・更新日時
   downloaded_at TEXT,                               -- 本文キャッシュ取得日時（未取得時は NULL）
   FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE,
-  UNIQUE (novel_id, chapter_index)
+  UNIQUE (novel_id, remote_chapter_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_chapters_novel_index ON chapters(novel_id, chapter_index ASC);

@@ -87,9 +87,10 @@ describe("SqlChapterRepository", () => {
     it("指定した作品・話数の ChapterRecord が取得できること", async () => {
       const chapter = await chapterRepo.getChapter(novelId, 2);
       expect(chapter).not.toBeNull();
-      expect(chapter?.id).toBe("kakuyomu:1177354054881162325:2");
+      expect(chapter?.id).toBe("kakuyomu:1177354054881162325:ep2");
       expect(chapter?.novelId).toBe(novelId);
       expect(chapter?.chapterIndex).toBe(2);
+      expect(chapter?.remoteChapterId).toBe("ep2");
       expect(chapter?.title).toBe("第2話 仲間");
       expect(chapter?.bodyHtml).toBeNull();
     });

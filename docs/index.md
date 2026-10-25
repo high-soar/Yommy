@@ -21,9 +21,9 @@ docs/
 │   ├── db-schema.md                   # [App全体正本] SQLite 主要テーブル定義の正本
 │   ├── screen-transitions.md          # [App全体正本] 主要画面一覧（SCR-xx）と画面遷移（TR-xx）の全体マップ
 │   ├── features/                      # [App全体正本] 画面・機能別の現在仕様書（AC一覧・コンポーネント構成・テスト責務）
-│   │   └── .gitkeep
+│   │   └── reader-view.md             # 小説リーダー機能仕様書（ReaderView / ReaderToolbar / PocReaderContainer）
 │   ├── parsers/                       # [App全体正本] 小説サイト別の現在スクレイピング・DOM解析仕様書
-│   │   └── .gitkeep
+│   │   └── kakuyomu.md                # カクヨム パーサー・スクレイピング仕様書（kakuyomu.jp）
 │   └── changes/                       # [差分仕様 (Delta Specs)] 要望（親Issue）ごとの設計差分・テスト計画・Sub-issue分割
 │       ├── issue-XX-<slug>.md         # 現在進行中の要望Issueの差分仕様（Active）
 │       └── archive/                   # 完了済みの差分仕様アーカイブ（親Issueクローズ時に git mv で移動）
@@ -31,7 +31,7 @@ docs/
 └── quality/                           # 【柱3：品質分析・バグ記録・申し送り管理】
     ├── bug-and-handover-log.md        # バグ記録票（製品/支援分離、原因5分類 L/S/D/B/A）＆ 申し送り事項（HO-xx）追跡シート
     └── reports/                       # ミニリリース Milestone ごとの品質分析・改善（Kaizen）レポート格納先
-        └── .gitkeep
+        └── phase3-poc.md              # Phase 3 PoC 品質分析・改善レポート
 ```
 
 > [!NOTE]

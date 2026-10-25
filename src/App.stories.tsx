@@ -16,6 +16,10 @@ const meta: Meta<typeof App> = {
 export default meta;
 type Story = StoryObj<typeof App>;
 
+/**
+ * デフォルト表示ストーリー。
+ * 初期状態（作品未取得・空表示）のリーダー画面を描画します。
+ */
 export const Default: Story = {
   name: "デフォルト（初期表示・未取得状態）",
   args: {
@@ -23,6 +27,10 @@ export const Default: Story = {
   },
 };
 
+/**
+ * カスタムタイトル指定ストーリー。
+ * ヘッダーに任意のアプリケーション名を設定した状態を描画します。
+ */
 export const CustomTitle: Story = {
   name: "カスタムタイトル指定",
   args: {

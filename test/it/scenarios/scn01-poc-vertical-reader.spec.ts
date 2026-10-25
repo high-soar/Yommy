@@ -35,9 +35,13 @@ test.describe("SCN-01: 縦書きリーダー実証とローカル永続化シナ
     // 初期表示は縦書き（writing-vertical-rl）
     await expect(readerView).toHaveClass(/writing-vertical-rl/);
 
-    // ルビ（<ruby>要素）が存在することを確認
+    // ルビ（<ruby>要素）および傍点（<em class="bouten">要素）が存在することを確認
     const rubyElement = readerView.locator("ruby").first();
     await expect(rubyElement).toBeVisible();
+
+    const boutenElement = readerView.locator("em.bouten").first();
+    await expect(boutenElement).toBeVisible();
+    await expect(boutenElement).toHaveText("信じがたい光景");
 
     // 4. カラーテーマを「セピア」に変更
     const sepiaButton = page.getByTestId("theme-sepia");

@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: Approved (Phase 2)
+status: Approved (Phase 3)
 updated: "2026-10-25"
 tags: [architecture, parser, storage, bridge, sanitizer]
 related_specs:
@@ -10,8 +10,12 @@ related_specs:
   - docs/specs/db-schema.md
   - docs/specs/screen-transitions.md
   - docs/specs/parsers/kakuyomu.md
+  - docs/specs/features/reader-view.md
   - docs/guidelines/testing.md
-related_tests: []
+related_tests:
+  - src/app/ServiceProvider.test.tsx
+  - src/App.test.tsx
+  - src/storage/schema.test.ts
 ---
 
 # 3層アーキテクチャと共通インターフェース契約（App 全体正本）
@@ -68,10 +72,12 @@ flowchart TB
 
 ```text
 src/
-├── app/                           # アプリケーションエントリ・ルーティング・DI Provider
-│   ├── App.tsx                    # ルートコンポーネント（テーマ適用・ルーター配置）
+├── App.tsx                        # ルートコンポーネント（テーマ適用・ルーター配置）
+├── App.stories.tsx
+├── App.test.tsx
+├── app/                           # アプリケーション共通設定・DI Provider
 │   ├── router.tsx                 # 画面ルーティング定義（SCR-01〜SCR-05）
-│   └── ServiceProvider.tsx        # Storage / HttpBridge / ParserRegistry の Context DI（テスト時差し替え点）
+│   └── ServiceProvider.tsx        # Storage / HttpBridge / ParserRegistry の Context DI（実機・テスト差し替え点）
 ├── bridges/                       # 【Capacitor Bridge 抽象層】
 │   ├── http/
 │   │   ├── types.ts               # HttpClientBridge インターフェース定義
@@ -261,5 +267,6 @@ export interface SettingsRepository {
 ## 4. テスト環境での DI（依存性注入）と決定論的初期化
 
 - `src/app/ServiceProvider.tsx` を介して `HttpClientBridge` と各 `Repository`（および基底の `DatabaseAdapter`）を React Context 経由で提供する。
-- **Android 実機実行時**: `CapacitorHttpClient` ＋ `CapacitorSqliteAdapter` を注入する。
+- **Android / iOS ネイティブ実行時**: `Capacitor.isNativePlatform()` によりネイティブ環境を自動検知し、`CapacitorHttpClient` および `createDefaultNativeSqliteAdapter`（`CapacitorSqliteAdapter` ＋ `src/storage/schema.ts` の DDL 初期化）を注入する。
+- **Web ブラウザ / Dev 実行時**: `createInMemoryDb`（`sql.js`）および `localStorage` への Base64 バイナリバックアップ（`yommy_sqlite_db_backup`）によるハイブリッド永続化を提供し、`createDefaultMockHttpClient` を使用する。
 - **UT（Vitest）/ Storybook / Playwright IT 実行時**: `MockHttpClient`（`__fixtures__/*.html` を返却）＋ `InMemoryDatabaseAdapter` を注入し、各テストの開始前に `resetTestDb()` を呼び出して 100% 決定論的な状態で検証する。

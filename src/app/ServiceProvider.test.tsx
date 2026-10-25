@@ -8,7 +8,13 @@ import {
   useServices,
   getStoredDatabaseBinary,
   persistDatabaseBinary,
+  createDefaultNativeSqliteAdapter,
+  type ServiceContextValue,
 } from "./ServiceProvider";
+import type { DatabaseAdapter } from "../storage/adapter/types";
+import type { SQLiteDBConnection } from "@capacitor-community/sqlite";
+import { Capacitor } from "@capacitor/core";
+import { SQLiteConnection } from "@capacitor-community/sqlite";
 import { resetTestDb } from "../storage/adapter/inMemoryDb";
 
 const { Default, CustomMockServices } = composeStories(stories);
@@ -133,22 +139,35 @@ describe("ServiceProvider", () => {
 
     it("localStorage のデータが破損している場合は初期化エラーにならず新規初期化されること", async () => {
       localStorage.setItem("yommy_sqlite_db_backup", "invalid-base64!!!");
+      let readyState = false;
+      const TestConsumer: React.FC = () => {
+        const services = useServices();
+        readyState = services.isReady;
+        return <div>破損データ復旧テスト</div>;
+      };
+
       render(
         <ServiceProvider>
-          <div>破損データ復旧テスト</div>
+          <TestConsumer />
         </ServiceProvider>,
       );
+      expect(screen.getByText("破損データ復旧テスト")).toBeInTheDocument();
       await waitFor(() => {
-        expect(screen.getByText("破損データ復旧テスト")).toBeInTheDocument();
+        expect(readyState).toBe(true);
       });
     });
 
-    it("localStorage 保存時に例外が発生してもクラッシュせず無視されること", async () => {
+    it("localStorage 保存時に例外が発生してもクラッシュせず false を返し警告ログを出力すること", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       const setItemSpy = vi
         .spyOn(Storage.prototype, "setItem")
         .mockImplementation(() => {
           throw new Error("QuotaExceededError");
         });
+
+      const result = persistDatabaseBinary(new Uint8Array([1, 2, 3]));
+      expect(result).toBe(false);
+      expect(warnSpy).toHaveBeenCalled();
 
       const TestConsumer: React.FC = () => {
         const services = useServices();
@@ -177,6 +196,7 @@ describe("ServiceProvider", () => {
       screen.getByText("更新").click();
 
       setItemSpy.mockRestore();
+      warnSpy.mockRestore();
     });
 
     it("createDefaultMockHttpClient の正規表現ルートで各話エピソードが取得できること", async () => {
@@ -243,17 +263,100 @@ describe("ServiceProvider", () => {
       });
     });
 
-    it("fallback なしで初期化中の場合は未完了時の children がレンダリングされること", async () => {
+    it("fallback なしで初期化中の場合は未完了時の children がレンダリングされ、完了後に ready: true となること", async () => {
+      const TestConsumer: React.FC = () => {
+        const services = useServices();
+        return (
+          <div data-testid="status">
+            {services.isReady ? "初期化完了" : "初期化中"}
+          </div>
+        );
+      };
+
       render(
         <ServiceProvider>
-          <div>初期化中子コンポーネント</div>
+          <TestConsumer />
         </ServiceProvider>,
       );
-      expect(screen.getByText("初期化中子コンポーネント")).toBeInTheDocument();
+
+      // 初回レンダリング時は初期化中
+      expect(screen.getByTestId("status")).toHaveTextContent("初期化中");
+
+      // 非同期初期化完了後に ready: true となること
       await waitFor(() => {
-        expect(
-          screen.getByText("初期化中子コンポーネント"),
-        ).toBeInTheDocument();
+        expect(screen.getByTestId("status")).toHaveTextContent("初期化完了");
+      });
+    });
+
+    it("初期化処理で例外が発生した場合に error がセットされ関数型 fallback が呼び出されること", async () => {
+      const failingServices = {
+        get databaseAdapter(): DatabaseAdapter {
+          throw new Error("DB接続取得エラー");
+        },
+      };
+
+      let capturedError: Error | null = null;
+      render(
+        <ServiceProvider
+          services={failingServices}
+          fallback={(err) => {
+            capturedError = err;
+            return <div data-testid="error-fallback">{err?.message}</div>;
+          }}
+        >
+          <div>子コンテンツ</div>
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("error-fallback")).toBeInTheDocument();
+      });
+      expect((capturedError as Error | null)?.message).toBe("DB接続取得エラー");
+    });
+
+    it("初期化処理で非Error例外がスローされた場合もErrorインスタンスとして正規化されること", async () => {
+      const failingServices = {
+        get databaseAdapter(): DatabaseAdapter {
+          throw "非Error文字列例外";
+        },
+      };
+
+      let capturedError: Error | null = null;
+      render(
+        <ServiceProvider
+          services={failingServices}
+          fallback={(err) => {
+            capturedError = err;
+            return <div data-testid="error-fallback-str">{err?.message}</div>;
+          }}
+        >
+          <div>子コンテンツ</div>
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("error-fallback-str")).toBeInTheDocument();
+      });
+      expect((capturedError as Error | null)?.message).toBe(
+        "非Error文字列例外",
+      );
+    });
+
+    it("fallback が ReactNode の場合に初期化中またはエラー時に表示されること", async () => {
+      render(
+        <ServiceProvider
+          fallback={<div data-testid="static-fallback">読み込み中...</div>}
+        >
+          <div>子コンテンツ</div>
+        </ServiceProvider>,
+      );
+
+      // 初期状態
+      expect(screen.getByTestId("static-fallback")).toBeInTheDocument();
+
+      // 初期化完了後は子コンテンツが表示される
+      await waitFor(() => {
+        expect(screen.getByText("子コンテンツ")).toBeInTheDocument();
       });
     });
 
@@ -262,6 +365,78 @@ describe("ServiceProvider", () => {
       expect(() =>
         persistDatabaseBinary(new Uint8Array([1, 2, 3]), null),
       ).not.toThrow();
+    });
+
+    it("createDefaultNativeSqliteAdapter がネイティブ接続を作成しスキーマ初期化を実行すること", async () => {
+      const mockConn = {
+        open: vi.fn().mockResolvedValue(undefined),
+        execute: vi.fn().mockResolvedValue({ changes: {} }),
+        run: vi.fn().mockResolvedValue({ changes: {} }),
+        query: vi.fn().mockResolvedValue({ values: [] }),
+        close: vi.fn().mockResolvedValue(undefined),
+      } as unknown as SQLiteDBConnection;
+      const createConnectionSpy = vi
+        .spyOn(SQLiteConnection.prototype, "createConnection")
+        .mockResolvedValue(mockConn);
+
+      const adapter = await createDefaultNativeSqliteAdapter();
+      expect(createConnectionSpy).toHaveBeenCalledWith(
+        "yommy_poc.db",
+        false,
+        "no-encryption",
+        1,
+        false,
+      );
+      expect(mockConn.open).toHaveBeenCalled();
+      expect(mockConn.execute).toHaveBeenCalled();
+      expect(adapter).toBeDefined();
+
+      createConnectionSpy.mockRestore();
+    });
+
+    it("Capacitor.isNativePlatform が true の場合にネイティブサービスが初期化されること", async () => {
+      const isNativeSpy = vi
+        .spyOn(Capacitor, "isNativePlatform")
+        .mockReturnValue(true);
+
+      const mockConn = {
+        open: vi.fn().mockResolvedValue(undefined),
+        execute: vi.fn().mockResolvedValue({ changes: {} }),
+        run: vi.fn().mockResolvedValue({ changes: {} }),
+        query: vi.fn().mockResolvedValue({ values: [] }),
+        close: vi.fn().mockResolvedValue(undefined),
+      } as unknown as SQLiteDBConnection;
+      const createConnectionSpy = vi
+        .spyOn(SQLiteConnection.prototype, "createConnection")
+        .mockResolvedValue(mockConn);
+
+      let serviceValue: ServiceContextValue | null = null;
+      const TestConsumer: React.FC = () => {
+        const services = useServices();
+        serviceValue = services;
+        return <div>ネイティブ実行テスト</div>;
+      };
+
+      render(
+        <ServiceProvider>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect((serviceValue as ServiceContextValue | null)?.isReady).toBe(
+          true,
+        );
+      });
+      expect(
+        (serviceValue as ServiceContextValue | null)?.httpClient,
+      ).toBeDefined();
+      expect(
+        (serviceValue as ServiceContextValue | null)?.databaseAdapter,
+      ).toBeDefined();
+
+      createConnectionSpy.mockRestore();
+      isNativeSpy.mockRestore();
     });
   });
 });

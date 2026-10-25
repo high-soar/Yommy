@@ -74,7 +74,7 @@ In Phase 3 and beyond, **never report a task or PR as complete merely upon creat
 1. **Static Checks & Automated Tests PASS**: `npm run typecheck`, `npm run lint`, `npm run format:check`, and required tests (`npm run test:unit`, `npm run test:coverage` with 100% C0/C1/Functions) PASS.
 2. **VRT Parity PASS**: If UI/Storybook stories changed, VRT snapshots (1280px / 375px) are updated (`npm run test:vrt:update`) and verified (`npm run test:vrt`) PASS.
 3. **PR Created with Issue Link**: PR includes the defect/handover mini-tables and `Closes #N` (`Refs #N` only for intermediate split PRs). **AI agents must never close issues directly or approve/merge PRs.**
-4. **GitHub Actions PASS**: Required remote workflows (CI, VRT, IT) PASS.
+4. **GitHub Actions PASS**: Required remote CI workflow (`quality-gate` covering static checks, UT, VRT, IT, and Build) PASS.
 5. **Independent AI Review**: Conducted by the [PR reviewer agent](.github/agents/pr-reviewer.agent.md) adhering to [docs/guidelines/review-comment-format.md](docs/guidelines/review-comment-format.md).
 6. **Review Thread Convergence**: All actionable review findings are fixed (including `docs/specs/` sync for cause `D`), re-verified, and resolved on the PR.
 7. **Human Approval & Merge Awaited**: Report gate completion and wait for the human to review and merge.
