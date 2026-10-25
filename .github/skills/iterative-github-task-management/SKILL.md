@@ -21,7 +21,7 @@ description: "Use when breaking down a Feature Request Issue into an iterative m
 3. 親 Issue 本文のチェックリスト `Step 1: 要望分析・未確定事項（Open Questions）の確認完了` を更新する。
 
 ### Step 2: 設計更新 PR（「差分仕様の作成」＋「App 全体正本への反映」）と Sub-issue 分割
-1. [docs/README.md](../../../docs/README.md#3-docsspecs-の-2-層管理ルールapp-全体正本--差分仕様) に従い、以下の **2種類の仕様書を同一設計 PR 内でセットで作成・更新** する（いずれも状態 `Review (#親Issue番号)`）：
+1. [docs/index.md](../../../docs/index.md#3-docsspecs-の-2-層管理ルールapp-全体正本--差分仕様) に従い、以下の **2種類の仕様書（OKF YAML フロントマター形式）を同一設計 PR 内でセットで作成・更新** する（いずれもフロントマター `status: Review (#親Issue番号)`）：
    - **① 差分仕様ファイルの新規作成（`docs/specs/changes/issue-XX-<slug>.md`）**:
      - 今回の要望の背景・目的、変更対象の App 全体正本ファイル一覧、追加・変更・削除する仕様（`AC-xx`, `TR-xx`, 契約, コンポーネント構成）の差分、UT/VRT/IT のテスト計画、実装 Sub-issue 分割リスト、および申し送り事項（`HO-xx`）を記載する。
    - **② App 全体正本の同時更新（`docs/specs/*.md`, `features/*.md`, `parsers/*.md`）**:

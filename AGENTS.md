@@ -24,7 +24,7 @@ To prevent duplication between human rules and AI skills, and across AI assistan
 | Component | Source of Truth (SSOT) | Purpose & Integration |
 | :--- | :--- | :--- |
 | **Human & AI Shared Guidelines** | `docs/guidelines/*.md` | Canonical rules for workflow ([workflow.md](docs/guidelines/workflow.md)), 3-layer testing & TDD ([testing.md](docs/guidelines/testing.md)), and review formatting ([review-comment-format.md](docs/guidelines/review-comment-format.md)). |
-| **Product Specifications** | `docs/specs/*.md` | 2-Layer Living Documentation: **Canonical App Specs** (`requirements.md`, `architecture.md`, `db-schema.md`, `screen-transitions.md`, `features/*.md`, `parsers/*.md`) + **Per-Issue Delta Specs** (`changes/issue-XX-*.md`, archived to `changes/archive/` upon completion). |
+| **Product Specifications (OKF)** | `docs/specs/*.md` | 2-Layer Living Documentation with OKF YAML frontmatter ([docs/index.md](docs/index.md)): **Canonical App Specs** (`requirements.md`, `architecture.md`, `db-schema.md`, `screen-transitions.md`, `features/*.md`, `parsers/*.md`) + **Per-Issue Delta Specs** (`changes/issue-XX-*.md`, archived to `changes/archive/` upon completion). |
 | **Quality & Handover Log** | `docs/quality/bug-and-handover-log.md` | Defect tracking (Production vs. Support, root causes `L`/`S`/`D`/`B`/`A`) and Handover items (`HO-xx`). |
 | **AI Root Constitution** | `AGENTS.md` (this file) | Loaded natively by Antigravity; bridged to GitHub Copilot via `.github/copilot-instructions.md`. |
 | **AI Workflow Skills** | `.github/skills/<name>/SKILL.md` | AI execution & subagent orchestration procedures referencing `docs/guidelines/`. Mapped for Antigravity via `.agents/skills.json`. |
@@ -34,7 +34,7 @@ To prevent duplication between human rules and AI skills, and across AI assistan
 
 ## 3. Core Development Rules & Issue-Driven Micro-Waterfall
 
-Always read [docs/README.md](docs/README.md) and follow [docs/guidelines/workflow.md](docs/guidelines/workflow.md) and [docs/guidelines/testing.md](docs/guidelines/testing.md).
+Always read [docs/index.md](docs/index.md) and follow [docs/guidelines/workflow.md](docs/guidelines/workflow.md) and [docs/guidelines/testing.md](docs/guidelines/testing.md).
 
 1. **Hybrid Phase Progression**:
    - **Phase 1 (AI Foundation) & Phase 2 (Core Specs)**: Collaborate with the user and commit directly to build the foundation and initial `docs/specs/` rapidly.

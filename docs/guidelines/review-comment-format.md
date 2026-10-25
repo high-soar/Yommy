@@ -1,3 +1,16 @@
+---
+type: guideline
+title: レビューコメント記述仕様（SSOT）
+description: PRレビューおよびMilestone横断レビューにおける重要度（P0〜P3）、4要素フォーマット、および指摘ID採番規則の正本。
+status: Approved
+updated: "2026-10-25"
+tags: [review, pr-reviewer, phase-final-reviewer, severity]
+related_specs:
+  - docs/index.md
+  - docs/guidelines/workflow.md
+related_tests: []
+---
+
 # レビューコメント記述仕様（SSOT）
 
 本ドキュメントは、Yommy リポジトリにおける Pull Request（PR）レビューおよび節目（Phase 完了・ミニリリース Milestone 完了）の全体横断レビューにおいて、人間レビュアーおよび AI エージェントが使用するコメントフォーマットの正本（Single Source of Truth）です。
@@ -22,7 +35,7 @@
 | :--- | :--- | :--- |
 | **`[P0]`** | **致命的（Critical）** | アプリのクラッシュ、ローカル DB データの破損・消失、重大なセキュリティ脆弱性（XSS 等）、CI/開発環境の完全破損など、即座に対処が必要な致命的欠陥。 |
 | **`[P1]`** | **重大（High）** | `docs/specs/` の受け入れ条件（`AC-xx`）やインターフェース/DB 契約の未達、主要機能の不全、Task Completion Gate 違反（カバレッジ未達・1対1 Story/UT 欠落・原因 `D` の設計未同期等）。 |
-| **`[P2]`** | **通常・改善（Medium）** | 基本機能は動くが設計整合性・保守性・型安全性を損なう問題、境界値・異常系の考慮漏れ、ドキュメント間の記述不整合やリンク切れ。 |
+| **`[P2]`** | **通常・改善（Medium）** | 基本機能は動くが設計整合性・保守性・型安全性を損なう問題、境界値・異常系の考慮漏れ、ドキュメント間の記述不整合やリンク切れ、OKF フロントマター不備。 |
 | **`[P3]`** | **軽微（Low）** | 将来の改善提案、軽微なタイポ・表記揺れ、可読性向上など、即座に修正しなくても動作や後続作業に影響を与えない事項。 |
 
 ---
@@ -94,7 +107,7 @@ PR のインラインレビューコメント、PR レベルの個別指摘、�
 
 | ID | 重要度 | 対象成果物 / ファイル | 要約 | 状態 |
 | :--- | :--- | :--- | :--- | :--- |
-| R1-01 | P1 | `src/parsers/narou.ts:45` | 傍点抽出仕様（`docs/specs/parsers/narou.md`）との不一致 | Open |
+| R1-01 | P1 | `src/parsers/kakuyomu/KakuyomuParser.ts:45` | 傍点抽出仕様（`docs/specs/parsers/kakuyomu.md`）との不一致 | Open |
 | R1-02 | P2 | `docs/specs/screen-transitions.md:30` | `TR-04` の遷移条件記述の揺れ | Open |
 
 ---
@@ -103,9 +116,8 @@ PR のインラインレビューコメント、PR レベルの個別指摘、�
 
 #### [P1] R1-01: 傍点抽出仕様との不一致
 
-- **Location**: `src/parsers/narou.ts:45`
+- **Location**: `src/parsers/kakuyomu/KakuyomuParser.ts:45`
 - **Problem**: ...
 - **Impact**: ...
 - **Recommendation**: ...
 ```
-

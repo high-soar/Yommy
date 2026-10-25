@@ -72,6 +72,6 @@ To prevent configuration drift and duplication between human documentation and A
 
 Whenever configuration changes are made:
 - [ ] **JSON Syntax**: Confirm `.devcontainer/devcontainer.json` and `.agents/skills.json` are valid JSON.
-- [ ] **Markdown Relative Links**: Confirm all links between `AGENTS.md`, `docs/README.md`, `docs/guidelines/*.md`, `.github/agents/*.md`, and `.github/skills/*/SKILL.md` resolve accurately.
+- [ ] **OKF & Markdown Links**: Run `node .github/skills/sdd/scripts/validate-okf.mjs` and confirm all OKF frontmatter rules and relative links across `AGENTS.md`, `docs/`, and `.github/` pass.
 - [ ] **No Duplicate Skills**: Confirm no skill files are duplicated under `.agents/skills/`.
 

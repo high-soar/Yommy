@@ -1,3 +1,17 @@
+---
+type: quality-log
+title: 品質記録・バグ記録票 ＆ 申し送り管理シート（Bug & Handover Log）
+description: 製品コードと支援成果物を分離したバグ記録（原因5分類 L/S/D/B/A）および後続タスクへの申し送り事項（HO-xx）を追跡する正本シート。
+status: Approved
+updated: "2026-10-25"
+tags: [quality, bug-log, handover, dre, kaizen]
+related_specs:
+  - docs/index.md
+  - docs/guidelines/workflow.md
+  - docs/guidelines/testing.md
+related_tests: []
+---
+
 # 品質記録・バグ記録票 ＆ 申し送り管理シート（Bug & Handover Log）
 
 本ドキュメントは、Yommy の開発プロセス（TDD 実装、単体テスト、VRT、結合テスト、独立 AI レビュー、節目横断レビュー）において検出された不備の記録、および後続タスクへの申し送り事項（Handover Items）を追跡管理する正本シートです。
@@ -19,7 +33,7 @@
    - **`B` (Boundary)**: 空文字、0件、長大テキスト、不正 HTML、特殊文字等の境界値・エッジケース考慮漏れ
    - **`A` (Async)**: 非同期競合（Race Condition）、レートリミット・キュー制御、AbortController 未連携、二重実行防止漏れ
 4. **【重要】原因分類 `D` の設計書即時同期義務**:
-   - 原因が **`D`** の場合、**コードのみを修正して設計書を放置することは厳禁**です。必ず対応する `docs/specs/` の設計書も同時修正し、下表の是正内容欄に **コード修正コミットと設計書同期コミットの双方** を記録してください。
+   - 原因が **`D`** の場合、**コードのみを修正して設計書を放置することは厳禁**です。必ず対応する `docs/specs/` の設計書（App 全体正本および進行中の差分仕様）も同時修正し、下表の是正内容欄に **コード修正コミットと設計書同期コミットの双方** を記録してください。
 
 ---
 
@@ -43,7 +57,7 @@
 
 ## 4. ミニリリース Milestone 品質振り返りサマリー（定期追記）
 
-各節目（Phase 3 完了時、および Phase 4 以降の各ミニリリース Milestone 完了時）に、上記バグ記録を集計して傾向分析とプロセス改善（Kaizen）アクションを記録します（詳細レポートは `docs/quality/reports/` 配下に格納）。
+各節目（Phase 3 完了時、および Phase 4 以降の各ミニリリース Milestone 完了時）に、上記バグ記録を集計して傾向分析とプロセス改善（Kaizen）アクションを記録します（詳細レポートは `docs/quality/reports/` 配下に `type: quality-report` として格納）。
 
 ### [テンプレート] Milestone `vX.Y`（対象 Issue: `#XX` 〜 `#YY`）
 - **製品コード不備件数**: 0 件（うち MK/UT/PRレビュー検出: 0 件、IT 流出: 0 件、実機流出: 0 件 → **UT段階 DRE: - %**）
@@ -51,4 +65,3 @@
 - **原因分類内訳**: `L`: 0件 / `S`: 0件 / `D`: 0件 / `B`: 0件 / `A`: 0件
 - **プロセス・スキル改善アクション（Kaizen）**:
   - （再発防止のために更新した `docs/guidelines/` や `.github/skills/*/SKILL.md` の変更内容を記載）
-

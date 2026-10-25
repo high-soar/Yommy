@@ -138,9 +138,9 @@ docs/
    - Vitest（カバレッジ C0/C1 100% 検証）、Storybook（Portable Stories）、Playwright（VRT / IT）の導入
    - `.githooks/` および `.github/workflows/`（CI / VRT / IT）の構築
 2. **Step 3-2: 技術リスク4点の最小縦貫通実装（AIワークフロー実証）**
-   - **実証する技術要素（1画面ミニマム構成）**:
+   - **実証する技術要素（カクヨム対象の1画面ミニマム構成）**:
      1. **CORS回避通信**: `CapacitorHttp` アダプターによる外部HTML（またはテスト時フィクスチャ）取得
-     2. **Parser抽出**: 取得HTMLからタイトル・ルビ/傍点付き本文HTMLを抽出（Vitest TDD）
+     2. **Parser抽出**: 取得したカクヨムHTMLからタイトル・ルビ/傍点付き本文HTMLを抽出（`KakuyomuParser` の Vitest TDD）
      3. **SQLite保存**: Storage アダプター経由でローカルDBへ保存・読み出し（インメモリDBテスト＆実機SQLite）
      4. **縦書き・ルビ表示**: 取得した本文を CSS `writing-mode: vertical-rl` ＋ `<ruby>` で描画し、Storybook VRT（1280px/375px・日本語フォント）でスナップショット検証
    - **実証するAI開発フロー**:

@@ -1,3 +1,18 @@
+---
+type: guideline
+title: テスト・実装規律の正本（SSOT）
+description: Yommyの3層テスト体系（Parser/Storage/Viewer）、TDDコミット規約、1対1 Story/UT、親子分離、C0/C1 100%、縦書きVRT、および原因D設計同期ルールの正本。
+status: Approved
+updated: "2026-10-25"
+tags: [testing, tdd, vrt, storybook, vitest, playwright, coverage]
+related_specs:
+  - docs/index.md
+  - docs/guidelines/workflow.md
+  - docs/specs/architecture.md
+  - docs/quality/bug-and-handover-log.md
+related_tests: []
+---
+
 # テスト・実装規律の正本（SSOT）
 
 本ドキュメントは、Yommy（React + TypeScript + Vite + Capacitor）における TDD（テスト駆動開発）、3層アーキテクチャのテスト責務境界、Storybook / Portable Stories / VRT 規約、カバレッジ基準、およびバグ記録・設計書同期ルールの正本（Single Source of Truth）です。
@@ -24,7 +39,7 @@
 8. **日本語組版・縦書き/ルビを含む VRT の UT（Storybook）一本化**:
    視覚的回帰テスト（VRT）は Storybook の全 Story を対象として **1280px（デスクトップ/タブレット幅）および 375px（モバイル幅）** の2系統で実施する。結合テスト（Playwright IT）では VRT を行わず、画面遷移とエンドツーエンドの振る舞い検証に専念する。
 9. **不備記録と原因分類 `D`（設計不備）の即時設計同期義務**:
-   実装・テスト・AIレビュー中に検出された不備は製品コードと支援成果物を分離して記録する。原因が `D`（設計・仕様の誤認や不備）である場合、**コードのみを修正して設計書を放置することは厳禁**とし、必ず同一 PR 内で `docs/specs/` の設計書も同時修正する。
+   実装・テスト・AIレビュー中に検出された不備は製品コードと支援成果物を分離して記録する。原因が `D`（設計・仕様の誤認や不備）である場合、**コードのみを修正して設計書を放置することは厳禁**とし、必ず同一 PR 内で `docs/specs/` の設計書（App 全体正本および進行中の差分仕様）も同時修正する。
 
 ---
 
@@ -102,8 +117,8 @@ TDD の実践を Git 履歴から客観的に監査できるよう、各ステ�
 
 | ステップ | コミットメッセージ例 | コミット時点の状態と検証内容 |
 | :--- | :--- | :--- |
-| **1. Red** | `test(parser): なろう小説本文のルビ抽出テストを追加（Red）` | テストコード（およびフィクスチャ/Story）のみ追加。対象 UT を実行し、**未実装により期待通りの理由で失敗する**ことを確認 |
-| **2. Green** | `feat(parser): なろう小説本文のルビ・傍点抽出処理を実装（Green）` | テストを通す最小限の実装を追加（YAGNI 原則）。対象 UT を実行し、**全件 PASS する**ことを確認 |
+| **1. Red** | `test(parser): カクヨム小説本文のルビ抽出テストを追加（Red）` | テストコード（およびフィクスチャ/Story）のみ追加。対象 UT を実行し、**未実装により期待通りの理由で失敗する**ことを確認 |
+| **2. Green** | `feat(parser): カクヨム小説本文のルビ・傍点抽出処理を実装（Green）` | テストを通す最小限の実装を追加（YAGNI 原則）。対象 UT を実行し、**全件 PASS する**ことを確認 |
 | **3. Refactor** | `refactor(parser): DOMサニタイズ処理を共通関数へ抽出（Refactor）` | 振る舞いを変えずに可読性・型安全性を改善。対象 UT が**引き続き PASS する**ことを確認 |
 
 ### 4.2 テスト名・Storybook の日本語記述規約
@@ -150,4 +165,3 @@ TDD の Green/Refactor 段階、自動テスト、または独立 AI レビュ�
 不備の原因が **`D`（設計・仕様不備）** に該当する場合、**コードやテストだけを修正して終わらせることは厳格に禁止**します。
 1. 必ず対応する `docs/specs/` 配下の設計書（**App 全体正本、および進行中の差分仕様 `docs/specs/changes/issue-XX-*.md` の双方**）も同一 PR 内で修正し、設計と実装の 1 対 1 整合を回復させる。
 2. バグ記録の是正内容欄には、**コード修正コミットと設計書修正コミットの双方** を明記する。
-

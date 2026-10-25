@@ -1,6 +1,20 @@
+---
+type: guideline
+title: 開発プロセス・ワークフロー標準（SSOT）
+description: ハイブリッド進行モデル、Issue駆動マイクロ・ウォーターフォール、OKFステータス管理、Task Completion Gate 7条件、およびミニMilestone運用の正本。
+status: Approved
+updated: "2026-10-25"
+tags: [workflow, micro-waterfall, gate, okf, kaizen]
+related_specs:
+  - docs/index.md
+  - docs/guidelines/testing.md
+  - docs/guidelines/review-comment-format.md
+related_tests: []
+---
+
 # 開発プロセス・ワークフロー標準（SSOT）
 
-本ドキュメントは、Yommy プロジェクトにおける開発フェーズ進行、Issue 駆動マイクロ・ウォーターフォール、成果物ステータス管理、および完了ゲート（Task Completion Gate）の正本（Single Source of Truth）です。
+本ドキュメントは、Yommy プロジェクトにおける開発フェーズ進行、Issue 駆動マイクロ・ウォーターフォール、OKF フロントマターによる成果物ステータス管理、および完了ゲート（Task Completion Gate）の正本（Single Source of Truth）です。
 
 ---
 
@@ -37,8 +51,8 @@ flowchart LR
    - 親 Issue の背景・目的を確認し、既存の App 全体正本（`docs/specs/*.md`, `features/*.md`, `parsers/*.md`）とコードベースを調査する。
    - エッジケース、エラー時の振る舞い、境界値、UI 状態などで未確定事項があれば、推測で決め打ちせず人間に質問して合意を得る。
 2. **Step 2: 設計更新 PR（「差分仕様の作成」＋「App 全体正本への反映」のセット実施）**:
-   - **① 差分仕様ファイルの作成**: `docs/specs/changes/issue-XX-<slug>.md` を状態 `Review (#親Issue番号)` で新規作成し、今回の変更目的、仕様・契約の差分、UT/VRT/IT テスト計画、実装 Sub-issue 分割リスト、および後続への申し送り事項（`HO-xx`）を明記する。
-   - **② App 全体正本の同時更新**: 同じ設計 PR 内で、影響を受ける App 全体正本（`requirements.md`, `architecture.md`, `db-schema.md`, `screen-transitions.md`, `features/*.md`, `parsers/*.md`）も最新仕様へ反映し、状態を `Review (#親Issue番号)` とする。
+   - **① 差分仕様ファイルの作成**: `docs/specs/changes/issue-XX-<slug>.md` を YAML フロントマター `type: spec-delta`, `status: Review (#親Issue番号)` で新規作成し、今回の変更目的、仕様・契約の差分、UT/VRT/IT テスト計画、実装 Sub-issue 分割リスト、および後続への申し送り事項（`HO-xx`）を明記する。
+   - **② App 全体正本の同時更新**: 同じ設計 PR 内で、影響を受ける App 全体正本（`requirements.md`, `architecture.md`, `db-schema.md`, `screen-transitions.md`, `features/*.md`, `parsers/*.md`）も最新仕様へ反映し、YAML フロントマターの `status` を `Review (#親Issue番号)` とする。
    - 人間が設計 PR をレビュー・マージした時点で、差分仕様および更新された App 全体正本は `Approved`（局所的再承認）とみなす。
 3. **Step 3: MK（TDD実装・単体テスト・VRT）**:
    - 分割された Sub-issue ごとに、[docs/guidelines/testing.md](testing.md) に従い TDD（Red → Green → Refactor）で実装する。
@@ -47,23 +61,24 @@ flowchart LR
 4. **Step 4: IT（結合テスト・全体回帰保証）・申し送り精算・差分仕様のアーカイブ**:
    - Playwright 実ブラウザ結合テスト（`SCN-01`〜）を最新仕様に合わせて更新・追加し、過去機能を含め全シナリオ 100% PASS を確認する（小規模改修では MK PR に同梱可）。
    - `docs/quality/bug-and-handover-log.md` のバグ記録および該当 Issue の申し送り事項（`HO-xx`）がすべて消化（または次 Issue へ明確に引き継ぎ）されていることを確認する。
-   - 親 Issue を完了させる最終 PR（`Closes #親Issue番号`）において、完了した差分仕様ファイルを **`docs/specs/changes/archive/issue-XX-<slug>.md` へ移動（`git mv`）** し、`changes/` 直下には進行中の差分仕様のみが存在する状態を保つ。
+   - 親 Issue を完了させる最終 PR（`Closes #親Issue番号`）において、完了した差分仕様ファイルの YAML フロントマター `status` を `Completed (Archived)` に更新した上で **`docs/specs/changes/archive/issue-XX-<slug>.md` へ移動（`git mv`）** し、`changes/` 直下には進行中の差分仕様のみが存在する状態を保つ。
 
 ---
 
-## 3. 成果物ステータス管理（Artifact Status Lifecycle）
+## 3. 成果物ステータス管理（OKF YAML フロントマター `status`）
 
-`docs/specs/` 配下の設計ドキュメントの状態は以下の3段階で管理します。
+`docs/specs/` 配下の設計ドキュメントの状態は、各ファイル先頭の YAML フロントマター内の `status` フィールドで管理します（詳細は [docs/index.md](../index.md#4-okfopen-knowledge-formatyaml-フロントマター規約) 参照）。
 
-| 状態 | 表記例 | 意味・遷移条件 |
+| 状態 | `status` 表記例 | 意味・遷移条件 |
 | :--- | :--- | :--- |
 | **`Draft`** | `Draft` | 初期作成中・対話検討中（Phase 2 の初期ドラフト等） |
 | **`Review`** | `Review (#12)` | PR 提出済み・レビュー待ち。個別作業 PR では必ず `Review` 状態とし、AI が勝手に `Approved` に書き換えてはならない |
-| **`Approved`** | `Approved (#12)` | 人間レビュアーによる合意・承認完了 |
+| **`Approved`** | `Approved (Phase 2)` / `Approved (#12)` | 人間レビュアーによる合意・承認完了 |
+| **`Completed`** | `Completed (Archived)` | 親 Issue の全工程が完了し、`docs/specs/changes/archive/` へアーカイブされた差分仕様 |
 
 ### 局所的再承認（Local Re-approval）ルール
 - 設計更新 PR（または実装中に原因 `D` で設計書を同期修正した PR）を人間がレビューしてマージした時点で、当該設計書は承認（`Approved`）されたものとみなします。
-- 節目（Phase 2 完了時やミニリリース Milestone 完了時）の全体横断レビュー完了時に、対象ドキュメントのメタデータを一括で `Approved` に揃えます。
+- 節目（Phase 2 完了時やミニリリース Milestone 完了時）の全体横断レビュー完了時に、対象ドキュメントの YAML フロントマター `status` を一括で `Approved` に揃えます。
 
 ---
 
@@ -97,8 +112,7 @@ Phase 4 以降は、直近の要望（親 Issue）を 3〜5 件程度束ねた *
    - 複数の読み取り専用サブエージェントを用いて、`docs/specs/`（正本）、プロダクションコード、単体テスト/VRT、結合テスト（`SCN-xx`）、および `docs/quality/bug-and-handover-log.md` の整合性をアンカリングなしで横断検証し、Milestone 承認 Issue に Round 1 レビュー結果をコメント記録する。
 2. **Step 2: 指摘是正・品質分析レポート作成（Kaizen PR）**:
    - 横断レビューの指摘事項を是正する。
-   - `docs/quality/bug-and-handover-log.md` のバグ記録を集計し、製品コードバグ密度、原因分類（`L`/`S`/`D`/`B`/`A`）の傾向、欠陥除去率（DRE: 単体テスト・レビュー段階での除去率）、および未消化の申し送り事項（`HO-xx`）を分析した品質レポートを `docs/quality/reports/` に作成する。
+   - `docs/quality/bug-and-handover-log.md` のバグ記録を集計し、製品コードバグ密度、原因分類（`L`/`S`/`D`/`B`/`A`）の傾向、欠陥除去率（DRE: 単体テスト・レビュー段階での除去率）、および未消化の申し送り事項（`HO-xx`）を分析した品質レポート（`type: quality-report`）を `docs/quality/reports/` に作成する。
    - 再発防止策として、`docs/guidelines/` や `.github/skills/*/SKILL.md` の規約・チェックリスト改善を同一 PR に含める。
 3. **Step 3: 人間による Milestone 承認と次 Milestone への移行**:
    - 指摘収束（Round 2）と全品質ゲート PASS を確認し、人間の承認・マージをもって Milestone を完了とする。
-
