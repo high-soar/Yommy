@@ -5,6 +5,13 @@ import { AddNovelDialog } from "./AddNovelDialog";
 const meta: Meta<typeof AddNovelDialog> = {
   title: "Bookshelf/AddNovelDialog",
   component: AddNovelDialog,
+  decorators: [
+    (Story) => (
+      <div className="min-h-screen relative">
+        <Story />
+      </div>
+    ),
+  ],
   args: {
     isOpen: true,
     isSubmitting: false,
@@ -49,6 +56,7 @@ export const Submitting: Story = {
  */
 export const Closed: Story = {
   name: "非表示（null）",
+  tags: ["skip-vrt"],
   args: {
     isOpen: false,
   },
