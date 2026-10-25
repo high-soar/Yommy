@@ -228,6 +228,44 @@ describe("ServiceProvider", () => {
       });
     });
 
+    it("createDefaultMockHttpClient が任意のカクヨム作品トップURLおよびエピソードURLにマッチすること", async () => {
+      let novelHtml = "";
+      let episodeHtml = "";
+      const TestConsumer: React.FC = () => {
+        const services = useServices();
+        React.useEffect(() => {
+          if (services.isReady) {
+            services.httpClient
+              .getHtml({
+                url: "https://kakuyomu.jp/works/9999999999999999999",
+              })
+              .then((res) => {
+                novelHtml = res.html;
+              });
+            services.httpClient
+              .getHtml({
+                url: "https://kakuyomu.jp/works/9999999999999999999/episodes/123456789",
+              })
+              .then((res) => {
+                episodeHtml = res.html;
+              });
+          }
+        }, [services]);
+        return <div>任意URLモックテスト</div>;
+      };
+
+      render(
+        <ServiceProvider>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(novelHtml).toContain("異世界転生したエンジニア");
+        expect(episodeHtml).toContain("第1話 見知らぬ空");
+      });
+    });
+
     it("カスタム databaseAdapter および 各 Repository が渡された場合にそのまま利用されること", async () => {
       const customDb = {
         execute: vi.fn(),
