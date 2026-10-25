@@ -214,4 +214,47 @@ describe("InMemoryDatabaseAdapter", () => {
       await expect(adapter.close()).resolves.toBeUndefined();
     });
   });
+
+  describe("エクスポート・リストア・更新コールバック (exportBinary / onUpdate)", () => {
+    it("exportBinary でバイナリを抽出し、初期データとしてリストアできること", async () => {
+      const adapter = await resetTestDb();
+      await adapter.execute(
+        `INSERT INTO novels (id, site_type, remote_work_id, canonical_url, title, created_at, updated_at)
+         VALUES ('backup:1', 'kakuyomu', 'b1', 'https://kakuyomu.jp/works/b1', 'バックアップ作品', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
+      );
+
+      const binary = adapter.exportBinary();
+      expect(binary).toBeInstanceOf(Uint8Array);
+      expect(binary.length).toBeGreaterThan(0);
+
+      // バイナリから復元
+      const restoredAdapter = await resetTestDb(binary);
+      const rows = await restoredAdapter.query<{ id: string; title: string }>(
+        "SELECT id, title FROM novels WHERE id = 'backup:1';",
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0].title).toBe("バックアップ作品");
+    });
+
+    it("execute および runTransaction の成功時に onUpdate コールバックが呼び出されること", async () => {
+      let callCount = 0;
+      const onUpdate = () => {
+        callCount++;
+      };
+
+      const adapter = await resetTestDb(undefined, onUpdate);
+      expect(callCount).toBe(0);
+
+      await adapter.execute(
+        "CREATE TABLE update_test (id INTEGER PRIMARY KEY);",
+      );
+      expect(callCount).toBe(1);
+
+      await adapter.runTransaction(async () => {
+        await adapter.execute("INSERT INTO update_test VALUES (1);");
+      });
+      // runTransaction 完了時に発火
+      expect(callCount).toBeGreaterThanOrEqual(2);
+    });
+  });
 });
