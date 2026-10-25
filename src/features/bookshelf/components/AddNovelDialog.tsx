@@ -107,6 +107,7 @@ export const AddNovelDialog: React.FC<AddNovelDialogProps> = ({
               id="novel-url-input"
               type="url"
               data-testid="add-novel-url-input"
+              autoFocus
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               disabled={isSubmitting}
