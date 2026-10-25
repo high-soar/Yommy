@@ -149,6 +149,23 @@ export class InMemoryDatabaseAdapter implements DatabaseAdapter {
   }
 }
 
+/**
+ * 新規のインメモリ SQLite アダプターを生成する
+ */
+export async function createInMemoryDb(
+  initialData?: Uint8Array,
+  onUpdate?: () => void,
+): Promise<InMemoryDatabaseAdapter> {
+  const SQL = await initSqlJs();
+  const db = initialData ? new SQL.Database(initialData) : new SQL.Database();
+  db.run("PRAGMA foreign_keys = ON;");
+  if (!initialData) {
+    db.exec(DDL_STATEMENTS);
+    db.exec(INITIAL_READER_SETTINGS_SQL);
+  }
+  return new InMemoryDatabaseAdapter(db, onUpdate);
+}
+
 let currentAdapter: InMemoryDatabaseAdapter | null = null;
 
 /**
@@ -183,13 +200,6 @@ export async function resetTestDb(
   onUpdate?: () => void,
 ): Promise<InMemoryDatabaseAdapter> {
   await closeTestDb();
-  const SQL = await initSqlJs();
-  const db = initialData ? new SQL.Database(initialData) : new SQL.Database();
-  db.run("PRAGMA foreign_keys = ON;");
-  if (!initialData) {
-    db.exec(DDL_STATEMENTS);
-    db.exec(INITIAL_READER_SETTINGS_SQL);
-  }
-  currentAdapter = new InMemoryDatabaseAdapter(db, onUpdate);
+  currentAdapter = await createInMemoryDb(initialData, onUpdate);
   return currentAdapter;
 }
