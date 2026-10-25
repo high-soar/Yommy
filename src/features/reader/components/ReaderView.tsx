@@ -1,6 +1,13 @@
 import React from "react";
 
+/**
+ * 小説リーダーの組版方向（縦書き/横書き）
+ */
 export type WritingMode = "vertical-rl" | "horizontal-tb";
+
+/**
+ * リーダーの背景・文字色テーマ
+ */
 export type ReaderTheme = "light" | "sepia" | "dark" | "black";
 
 export interface ReaderViewProps {
@@ -20,6 +27,9 @@ const themeStyles: Record<ReaderTheme, string> = {
   black: "bg-black text-slate-300 border-neutral-900",
 };
 
+/**
+ * 小説本文の縦書き/横書き組版表示、ルビ・傍点、カラーテーマ描画を担う Presentational コンポーネント
+ */
 export const ReaderView: React.FC<ReaderViewProps> = ({
   title,
   chapterTitle,
