@@ -8,6 +8,7 @@ import {
   useRouter,
   matchRoute,
   safeDecodeURIComponent,
+  resolveInitialPath,
 } from "./router";
 
 const { BookshelfRoute, NovelDetailRoute, ReaderRoute, UnknownFallbackRoute } =
@@ -130,6 +131,17 @@ describe("router", () => {
       });
     });
 
+    it("空文字の novelId の場合は bookshelf へフォールバックすること", () => {
+      expect(matchRoute("/novels/%20")).toEqual({
+        name: "bookshelf",
+        path: "/",
+      });
+      expect(matchRoute("/novels/%20/chapters/1")).toEqual({
+        name: "bookshelf",
+        path: "/",
+      });
+    });
+
     it("未知のパスの場合は bookshelf へフォールバックすること", () => {
       expect(matchRoute("/settings")).toEqual({
         name: "bookshelf",
@@ -150,6 +162,21 @@ describe("router", () => {
 
     it("不正なパーセントエンコード文字列で例外をスローせず生文字列を返すこと", () => {
       expect(safeDecodeURIComponent("%E0%A4%A")).toBe("%E0%A4%A");
+    });
+  });
+
+  describe("resolveInitialPath パス解決検証", () => {
+    it("initialPath が指定されている場合はそれを優先すること", () => {
+      expect(resolveInitialPath("/custom", "/fallback")).toBe("/custom");
+    });
+
+    it("initialPath が未指定で fallbackPath がある場合はそれを利用すること", () => {
+      expect(resolveInitialPath(undefined, "/fallback")).toBe("/fallback");
+    });
+
+    it("initialPath も fallbackPath もない場合は / を返すこと", () => {
+      expect(resolveInitialPath(undefined, undefined)).toBe("/");
+      expect(resolveInitialPath(undefined, "")).toBe("/");
     });
   });
 
