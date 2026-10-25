@@ -84,6 +84,9 @@ INSERT INTO reader_settings (
 );
 `;
 
+/**
+ * テスト・ブラウザ環境向けのインメモリ SQLite アダプター
+ */
 export class InMemoryDatabaseAdapter implements DatabaseAdapter {
   constructor(
     private db: Database,
@@ -148,6 +151,9 @@ export class InMemoryDatabaseAdapter implements DatabaseAdapter {
 
 let currentAdapter: InMemoryDatabaseAdapter | null = null;
 
+/**
+ * テスト用インメモリ DB アダプターを取得（初期化済みならキャッシュを返す）
+ */
 export async function initTestDb(
   initialData?: Uint8Array,
   onUpdate?: () => void,
@@ -158,6 +164,9 @@ export async function initTestDb(
   return await resetTestDb(initialData, onUpdate);
 }
 
+/**
+ * テスト用インメモリ DB アダプターをクローズし、キャッシュを破棄する
+ */
 export async function closeTestDb(): Promise<void> {
   if (currentAdapter) {
     await currentAdapter.close();
@@ -165,6 +174,10 @@ export async function closeTestDb(): Promise<void> {
   }
 }
 
+/**
+ * テスト用インメモリ DB を初期化・リセットする
+ * initialData が渡された場合はそのバイナリで復元し、渡されない場合は DDL と初期設定を流す
+ */
 export async function resetTestDb(
   initialData?: Uint8Array,
   onUpdate?: () => void,
