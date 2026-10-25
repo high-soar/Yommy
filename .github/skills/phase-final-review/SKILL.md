@@ -18,6 +18,8 @@ description: "Use when orchestrating a cross-deliverable review at the end of a 
 
 - **メインセッションが Coordinator**:
   メインセッションでレビュー範囲を重複しない 2〜3 の観点に分割し、複数の読み取り専用サブエージェント（Google Antigravity では `research`、GitHub Copilot では Read-only / Explore 等）を直接起動します（孫サブエージェントのネスト起動は行わない）。
+- **マルチモデル・複数オーケストレーターの並行運用**:
+  モデルごとの推論特性や深さ（網羅性・アーキテクチャ・潜在リスク等）の差異を活かすため、オーケストレーター自体を異なるモデル（例: Gemini Flash, Gemini Pro, Claude 等）で複数起動して横断レビューを並行実施することを推奨します。各オーケストレーターは独立した追記スレッドとしてレビュー結果を投稿し、モデル別の着眼点を可視化します。
 - **アンカリング防止（独立性の担保）**:
   各 reviewer サブエージェントには「対象 SHA」「参照すべき正本（`docs/specs/`, `docs/guidelines/`）」「担当観点と対象ファイル」のみを渡し、過去の指摘やメインエージェントが疑っている具体的な箇所は事前に共有しません。
 
@@ -48,8 +50,19 @@ description: "Use when orchestrating a cross-deliverable review at the end of a 
    - 全サブエージェントの応答完了後、サブエージェントを明示的に終了（`manage_subagents` の `kill` / `kill_all`）する。
    - 報告された候補をメインセッションで実際のコード・正本と照合し、誤検知を除外して重複を整理する。
    - メインセッションで一通りの検証コマンド（`npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run test:coverage`, `npm run test:vrt`, `npm run test:it`）を実行し、100% PASS することを確認する。
-4. **追跡 Issue への集約コメント記録（Round N）**:
-   - [docs/guidelines/review-comment-format.md](../../../docs/guidelines/review-comment-format.md#5-節目横断レビューphase--ミニmilestone-完了レビューの集約形式) のテンプレートに従い、ラウンドプレフィックス付き ID（初回は `R1-01`, `R1-02`...、2回目は新規のみ `R2-01`、未解消再掲は `R1-01` 維持）を採番して追跡 Issue にコメント投稿する。
+4. **追跡 Issue 既存コメントの確認と連番追記（Pre-post Conflict Check）**:
+   - コメント投稿前に、必ず追跡 Issue の既存コメントを確認する：
+     ```bash
+     gh issue view <issue-number> --comments
+     ```
+   - **既存コメントの存在有無に応じた採番規律**:
+     - **先行コメントが存在しない場合**: `R1-01` から採番して集約コメントを投稿する。
+     - **先行コメント（別モデル/別オーケストレーター）が既に存在する場合**:
+       1. 先行コメントの最終指摘 ID（例: `R1-16`）を確認する。
+       2. 自身が発見した指摘のうち、先行指摘と同一内容のものは「先行指摘 `R1-xx` を追認・補強」として言及する。
+       3. 自身が独自に発見した新規指摘については、**先行コメントの最終連番に続く連続した ID（例: `R1-17`, `R1-18`...）を付与する（ID の重複を厳禁）**。
+       4. 使用モデル名やレビュー観点を明記した **独立した追記コメント（スレッド）** として投稿し、モデル別の着眼点・レビュー差分が把握できるようにする。
+   - コメントフォーマットは [docs/guidelines/review-comment-format.md](../../../docs/guidelines/review-comment-format.md#5-節目横断レビューphase--ミニmilestone-完了レビューの集約形式) のテンプレートに従う。
 
 ---
 

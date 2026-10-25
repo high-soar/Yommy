@@ -84,5 +84,6 @@ In Phase 3 and beyond, **never report a task or PR as complete merely upon creat
 ## 6. Milestone Reviews & Continuous Improvement (Kaizen)
 
 - At the end of Phase 3 (PoC) and each Mini-Release Milestone (`v0.1`, `v0.2`, etc.), run a cross-deliverable review using the [phase final reviewer agent](.github/agents/phase-final-reviewer.agent.md) and [phase-final-review skill](.github/skills/phase-final-review/SKILL.md), followed by quality metrics analysis (DRE, defect cause trends) and skill/guideline updates.
+- **Multi-Model Orchestrator Reviews**: To leverage differing model perspectives (breadth, architectural depth, latent bug detection), running multiple orchestrators across different LLM models is supported. Each orchestrator verifies existing issue comments prior to posting, submits an independent follow-up comment thread identifying its model name, and maintains sequential, non-colliding finding IDs (`R1-01`, `R1-02`...).
 - When modifying repository/AI configurations (`.devcontainer/`, `.agents/`, `.github/`, `AGENTS.md`), always follow the [repo-config-management skill](.github/skills/repo-config-management/SKILL.md).
 - When a session experiences repeated rework or user corrections, use the [retrospective skill](.github/skills/retrospective/SKILL.md).
