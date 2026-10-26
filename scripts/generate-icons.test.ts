@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   parsePngDimensions,
   createIco,
@@ -144,7 +144,10 @@ describe("アプリアイコン生成スクリプト及びアセット配置検�
 
   describe("updateLauncherBackgroundXml (Adaptive Icon 背景色更新)", () => {
     it("指定パスに ic_launcher_background.xml を期待するカラーで作成・更新できること", () => {
-      const testXmlPath = path.join(rootDir, "test-output-bg.xml");
+      const tempDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "yommy-test-bg-xml-"),
+      );
+      const testXmlPath = path.join(tempDir, "test-output-bg.xml");
       try {
         updateLauncherBackgroundXml(testXmlPath, "#0D0E26");
         const content = fs.readFileSync(testXmlPath, "utf-8");
@@ -152,8 +155,8 @@ describe("アプリアイコン生成スクリプト及びアセット配置検�
           '<color name="ic_launcher_background">#0D0E26</color>',
         );
       } finally {
-        if (fs.existsSync(testXmlPath)) {
-          fs.unlinkSync(testXmlPath);
+        if (fs.existsSync(tempDir)) {
+          fs.rmSync(tempDir, { recursive: true, force: true });
         }
       }
     });
@@ -295,8 +298,43 @@ describe("アプリアイコン生成スクリプト及びアセット配置検�
   });
 
   describe("AC-ICON-04: generateIcons 自動生成実行およびオプション検証", () => {
-    it("generateIcons() の実行がエラーなく完了すること", async () => {
-      await expect(generateIcons()).resolves.not.toThrow();
+    it("generateIcons() のデフォルト引数実行が一時ワークスペース上で追跡ファイルを汚さずエラーなく完了すること", async () => {
+      const tempWorkspace = fs.mkdtempSync(
+        path.join(os.tmpdir(), "yommy-test-default-icons-"),
+      );
+      const tempAssetsDir = path.join(tempWorkspace, "assets");
+      fs.mkdirSync(tempAssetsDir, { recursive: true });
+      fs.copyFileSync(
+        path.join(rootDir, "assets", "icon.png"),
+        path.join(tempAssetsDir, "icon.png"),
+      );
+
+      const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(tempWorkspace);
+      try {
+        await expect(generateIcons()).resolves.not.toThrow();
+        expect(
+          fs.existsSync(path.join(tempWorkspace, "public", "favicon.ico")),
+        ).toBe(true);
+        expect(
+          fs.existsSync(
+            path.join(
+              tempWorkspace,
+              "android",
+              "app",
+              "src",
+              "main",
+              "res",
+              "mipmap-xxxhdpi",
+              "ic_launcher.png",
+            ),
+          ),
+        ).toBe(true);
+      } finally {
+        cwdSpy.mockRestore();
+        if (fs.existsSync(tempWorkspace)) {
+          fs.rmSync(tempWorkspace, { recursive: true, force: true });
+        }
+      }
     }, 30000);
 
     it("存在しない sourcePath が明示指定された場合はエラーをスローすること", async () => {
