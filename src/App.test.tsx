@@ -55,9 +55,8 @@ describe("App コンポーネント", () => {
       expect(screen.getByTestId("app-title")).toHaveTextContent("Yommy");
       await waitFor(
         () => {
-          expect(
-            screen.getByTestId("poc-reader-container"),
-          ).toBeInTheDocument();
+          expect(screen.getByTestId("reader-toolbar")).toBeInTheDocument();
+          expect(screen.getByTestId("reader-nav")).toBeInTheDocument();
         },
         { timeout: 3000 },
       );
@@ -152,9 +151,7 @@ describe("App コンポーネント", () => {
 
       await waitFor(
         () => {
-          expect(
-            screen.getByTestId("poc-reader-container"),
-          ).toBeInTheDocument();
+          expect(screen.getByTestId("reader-toolbar")).toBeInTheDocument();
         },
         { timeout: 3000 },
       );

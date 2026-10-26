@@ -42,7 +42,7 @@ test.describe("SCN-01: 縦書きリーダー実証とローカル永続化シナ
     );
     await expect(page.getByTestId("novel-card-author")).toHaveText("小野崎");
     await expect(page.getByTestId("novel-card-chapters")).toContainText(
-      "全 2 話（取得済み 0 話）",
+      "全 4 話（取得済み 0 話）",
     );
 
     // 3. 作品カードの「続きから読む」ボタン（novel-card-resume）をクリックし、リーダー画面へ遷移
@@ -109,6 +109,6 @@ test.describe("SCN-01: 縦書きリーダー実証とローカル永続化シナ
 
     await expect(page.getByTestId("bookshelf-page")).toBeVisible();
     const updatedChapters = page.getByTestId("novel-card-chapters");
-    await expect(updatedChapters).toContainText("全 2 話（取得済み 1 話）");
+    await expect(updatedChapters).toContainText("全 4 話（取得済み 1 話）");
   });
 });
