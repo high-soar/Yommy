@@ -569,7 +569,7 @@ describe("PocReaderContainer", () => {
         );
       });
       expect(screen.getByTestId("reader-chapter-title")).toHaveTextContent(
-        "第1話：二つの太陽",
+        "第1話 見知らぬ空",
       );
     });
 
@@ -808,10 +808,10 @@ describe("PocReaderContainer", () => {
     });
 
     it("初期設定で dark または black が保存されている場合にも正しく復元されること", async () => {
-      const settingsRepo = {
+      const darkSettingsRepo = {
         getReaderSettings: vi.fn().mockResolvedValue({
           writingMode: "vertical-rl",
-          theme: "black",
+          theme: "dark",
           fontFamily: "biz-ud-mincho",
           fontSizePx: 18,
           lineHeight: 1.8,
@@ -824,16 +824,94 @@ describe("PocReaderContainer", () => {
       };
 
       render(
-        <ServiceProvider services={{ settingsRepository: settingsRepo }}>
+        <ServiceProvider services={{ settingsRepository: darkSettingsRepo }}>
           <PocReaderContainer />
         </ServiceProvider>,
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("theme-black")).toHaveAttribute(
+        expect(screen.getByTestId("theme-dark")).toHaveAttribute(
           "aria-pressed",
           "true",
         );
+      });
+    });
+
+    it("DBに作品がロード済みの状態で作品取得ボタンを押した場合は novel.canonicalUrl が使用されること", async () => {
+      const user = userEvent.setup();
+      const existingNovel: NovelRecord = {
+        id: "kakuyomu:1177354054881162325",
+        siteType: "kakuyomu",
+        remoteWorkId: "1177354054881162325",
+        canonicalUrl: "https://kakuyomu.jp/works/1177354054881162325",
+        title: "境界迷宮と異界の魔術師",
+        author: "小野崎",
+        synopsis: "あらすじ",
+        totalChapters: 1,
+        cachedChapters: 1,
+        totalByteSize: 100,
+        bookmarkChapterIndex: 1,
+        bookmarkScrollProgress: 0,
+        isFavorite: false,
+        lastCheckedAt: null,
+        lastReadAt: null,
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-01T00:00:00Z",
+      };
+
+      const existingChapter: ChapterRecord = {
+        id: "kakuyomu:1177354054881162325:1",
+        novelId: "kakuyomu:1177354054881162325",
+        chapterIndex: 1,
+        remoteChapterId: "1177354054881162326",
+        partTitle: "第一部",
+        title: "第1話 見知らぬ空",
+        url: "https://kakuyomu.jp/works/1177354054881162325/episodes/1177354054881162326",
+        bodyHtml: "<p>既存本文</p>",
+        byteSize: 100,
+        isRead: true,
+        publishedAt: "2026-01-01T00:00:00Z",
+        downloadedAt: "2026-01-01T00:00:00Z",
+      };
+
+      const novelRepo: NovelRepository = {
+        listNovels: async () => [existingNovel],
+        getNovelById: async () => existingNovel,
+        upsertNovelWithToc: async () => existingNovel,
+        updateBookmark: async () => {},
+        deleteNovel: async () => {},
+      };
+
+      const chapterRepo: ChapterRepository = {
+        listChaptersByNovelId: async () => [],
+        getChapter: async () => existingChapter,
+        saveChapterBody: async () => {},
+        markChapterRead: async () => {},
+        deleteCachedBodies: async () => 0,
+      };
+
+      render(
+        <ServiceProvider
+          services={{
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+          }}
+        >
+          <PocReaderContainer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-title")).toHaveTextContent(
+          "境界迷宮と異界の魔術師",
+        );
+      });
+
+      const fetchBtn = screen.getByTestId("fetch-novel-button");
+      await user.click(fetchBtn);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
     });
 
