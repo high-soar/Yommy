@@ -2,7 +2,7 @@
 type: spec-feature
 title: 作品詳細・目次画面仕様書（SCR-02: Novel Detail & TOC）
 description: 登録済み作品のヘッダー情報・あらすじ表示、章見出し付きエピソード一覧（キャッシュ済み・既読・しおり状態）、目次更新（再取得）、作品削除、およびリーダー画面への閲覧遷移を提供する作品詳細・目次画面（SCR-02）の正本仕様。
-status: "Review (#13)"
+status: "Review (#14)"
 updated: "2026-10-26"
 tags: [novel-detail, scr-02, toc, routing, ui]
 related_specs:
@@ -13,6 +13,7 @@ related_specs:
   - docs/specs/features/bookshelf.md
   - docs/specs/features/reader-view.md
   - docs/specs/parsers/kakuyomu.md
+  - docs/specs/changes/issue-14-reader-navigation-bookmark-settings.md
 related_tests:
   - src/features/novel-detail/hooks/useNovelDetail.test.ts
   - src/features/novel-detail/components/NovelDetailHeader.test.tsx
@@ -305,8 +306,8 @@ export interface UseNovelDetailResult {
    - 削除失敗時はダイアログを閉じずに `error` をセットし、`isDeleting = false` に戻して `false` を返す。
 4. **エピソード選択と未キャッシュ話オンデマンド本文取得（`TR-04` → `SCR-03`）**:
    - 目次一覧のエピソード行タップ、またはヘッダーの「最初から読む（第1話）」「続きから読む（第N話）」ボタンタップ時は、即座にリーダー画面ルート `/novels/:novelId/chapters/:chapterIndex`（`SCR-03`）へ遷移する。
-   - 遷移先の `PocReaderContainer`（`SCR-03`）にて、対象話の `bodyHtml === null`（未キャッシュ）の場合は自動的に `httpClient.getHtml` → `parser.parseChapterContent` → `chapterRepository.saveChapterBody`（＋ `recalculateNovelStats` による `cached_chapters` 更新）が実行される。
-   - リーダー画面の「作品詳細へ」（`reader-back-to-detail`、`TR-06`）で `SCR-02` へ戻ると、`useNovelDetail` のマウント時ロードにより該当エピソードのバッジが `取得済み`（`episode-cached-badge`）に、ヘッダーの取得済み話数が最新値に反映される。
+   - 遷移先の `ReaderContainer`（`useReader`、`SCR-03`）にて、対象話の `bodyHtml === null`（未キャッシュ）の場合は自動的に `httpClient.getHtml` → `parser.parseChapterContent` → `chapterRepository.saveChapterBody`（＋ `recalculateNovelStats` による `cached_chapters` 更新）が実行され、併せて `markChapterRead` による既読化（`is_read = 1`）および `updateBookmark` によるしおり・スクロール進捗率更新が行われる。
+   - リーダー画面の「作品詳細へ」（`reader-back-to-detail`、`TR-06`）で `SCR-02` へ戻ると、`useNovelDetail` のマウント時ロードにより該当エピソードのバッジが `取得済み`（`episode-cached-badge`）・`既読`（`episode-read-badge`）・`しおり`（`episode-bookmark-badge`）に、ヘッダーの取得済み話数・読書再開ボタンが最新値に反映される。
 
 ---
 
