@@ -25,4 +25,45 @@ test.describe("アプリケーションスモーク結合テスト", () => {
     await expect(emptyState).toBeVisible();
     await expect(emptyState).toContainText("本棚に作品が登録されていません");
   });
+
+  test("Favicon および Web アイコンの link タグが存在し、各アセットが HTTP 200 で解決される", async ({
+    page,
+    request,
+  }) => {
+    await page.goto("/");
+
+    // Favicon / Web アイコンの link タグの存在と href 属性の確認
+    const faviconLink = page.locator('link[rel="icon"][href="/favicon.ico"]');
+    await expect(faviconLink).toHaveCount(1);
+    await expect(faviconLink).toHaveAttribute("type", "image/x-icon");
+
+    const icon192Link = page.locator(
+      'link[rel="icon"][type="image/png"][sizes="192x192"]',
+    );
+    await expect(icon192Link).toHaveCount(1);
+    await expect(icon192Link).toHaveAttribute("href", "/icon-192.png");
+
+    const appleTouchLink = page.locator('link[rel="apple-touch-icon"]');
+    await expect(appleTouchLink).toHaveCount(1);
+    await expect(appleTouchLink).toHaveAttribute(
+      "href",
+      "/apple-touch-icon.png",
+    );
+    await expect(appleTouchLink).toHaveAttribute("sizes", "180x180");
+
+    // 各アセットの HTTP 200 応答検証
+    const assetUrls = [
+      "/favicon.ico",
+      "/icon-192.png",
+      "/icon-512.png",
+      "/apple-touch-icon.png",
+    ];
+
+    for (const url of assetUrls) {
+      const response = await request.get(url);
+      expect(response.status()).toBe(200);
+      const body = await response.body();
+      expect(body.length).toBeGreaterThan(0);
+    }
+  });
 });
