@@ -39,8 +39,8 @@ export const CustomTitle: Story = {
 };
 
 /**
- * 作品詳細画面ルートストーリー。
- * /novels/kakuyomu:16817330658027210412 への直接アクセス時（プレースホルダ画面）を描画します。
+ * 作品詳細・目次画面ルートストーリー。
+ * /novels/kakuyomu:16817330658027210412 への直接アクセス時（未登録作品時は未検出表示）を描画します。
  */
 export const NovelDetailRoute: Story = {
   name: "作品詳細ルート表示",

@@ -38,14 +38,12 @@ describe("App コンポーネント", () => {
       });
     });
 
-    it("NovelDetailRoute ストーリー: 作品詳細プレースホルダ画面を描画する", async () => {
+    it("NovelDetailRoute ストーリー: 作品詳細・目次画面を描画する", async () => {
       render(<NovelDetailRoute />);
 
       expect(screen.getByTestId("app-title")).toHaveTextContent("Yommy");
       await waitFor(() => {
-        expect(
-          screen.getByTestId("novel-detail-placeholder"),
-        ).toBeInTheDocument();
+        expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
       });
     });
 
@@ -74,9 +72,7 @@ describe("App コンポーネント", () => {
       );
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("novel-detail-placeholder"),
-        ).toBeInTheDocument();
+        expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
       });
 
       await user.click(screen.getByTestId("app-title"));
@@ -135,9 +131,7 @@ describe("App コンポーネント", () => {
       await user.click(screen.getByTestId("reader-back-to-detail"));
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("novel-detail-placeholder"),
-        ).toBeInTheDocument();
+        expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
       });
     });
 
