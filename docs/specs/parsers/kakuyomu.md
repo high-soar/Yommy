@@ -8,6 +8,9 @@ tags: [parser, kakuyomu, scraping, ruby, bouten]
 related_specs:
   - docs/specs/architecture.md
   - docs/specs/requirements.md
+  - docs/specs/db-schema.md
+  - docs/specs/features/bookshelf.md
+  - docs/specs/features/novel-detail.md
   - docs/specs/features/reader-view.md
   - docs/guidelines/testing.md
 related_tests:

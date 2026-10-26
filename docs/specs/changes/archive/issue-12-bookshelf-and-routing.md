@@ -4,7 +4,7 @@ title: 画面ルーティング導入と本棚画面（SCR-01）・URL作品登�
 description: Issue #12 に対する差分仕様、画面ルーティング基盤（src/app/router.tsx）、本棚画面（SCR-01）、リーダー・作品詳細ルート連携、テスト計画、およびSub-issue分割計画。
 issue: "#12"
 status: "Completed (Archived)"
-updated: "2026-10-26"
+updated: "2026-10-27"
 tags: [delta, routing, bookshelf, scr-01, kakuyomu]
 related_specs:
   - docs/specs/features/bookshelf.md
@@ -15,7 +15,15 @@ related_specs:
   - docs/specs/db-schema.md
 related_tests:
   - src/App.test.tsx
+  - src/app/router.test.tsx
   - src/app/ServiceProvider.test.tsx
+  - src/features/bookshelf/hooks/useBookshelf.test.ts
+  - src/features/bookshelf/components/BookshelfEmptyState.test.tsx
+  - src/features/bookshelf/components/NovelCard.test.tsx
+  - src/features/bookshelf/components/AddNovelDialog.test.tsx
+  - src/features/bookshelf/components/BookshelfPage.test.tsx
+  - src/features/bookshelf/components/BookshelfContainer.test.tsx
+  - test/it/smoke.spec.ts
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
 ---
 

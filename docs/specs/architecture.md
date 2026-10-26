@@ -3,7 +3,7 @@ type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
 status: "Approved (#15)"
-updated: "2026-10-26"
+updated: "2026-10-27"
 tags: [architecture, parser, storage, bridge, sanitizer, assets]
 related_specs:
   - docs/specs/requirements.md
@@ -13,12 +13,14 @@ related_specs:
   - docs/specs/features/bookshelf.md
   - docs/specs/features/novel-detail.md
   - docs/specs/features/reader-view.md
-  - docs/specs/changes/archive/issue-15-app-icon-setup.md
+  - docs/specs/changes/archive/issue-12-bookshelf-and-routing.md
   - docs/specs/changes/archive/issue-13-novel-detail-and-toc.md
   - docs/specs/changes/archive/issue-14-reader-navigation-bookmark-settings.md
+  - docs/specs/changes/archive/issue-15-app-icon-setup.md
   - docs/guidelines/testing.md
 related_tests:
   - src/app/ServiceProvider.test.tsx
+  - src/app/router.test.tsx
   - src/App.test.tsx
   - src/storage/schema.test.ts
   - scripts/generate-icons.test.ts
@@ -81,7 +83,7 @@ flowchart TB
 ```text
 Yommy/
 ├── assets/                            # 【マスターアセット】高解像度マスター画像（assets/icon.png 1024×1024）
-├── public/                            # 【Web 静的アセット】favicon.ico, icon-192.png, apple-touch-icon.png
+├── public/                            # 【Web 静的アセット】favicon.ico, icon-192.png, icon-512.png, apple-touch-icon.png
 ├── android/                           # 【Android プロジェクト】Capacitor ネイティブコード＆リソース
 │   └── app/src/main/res/              # mipmap-* (ic_launcher*), values/ic_launcher_background.xml
 ├── scripts/                           # 【ビルド・補助スクリプト】generate-icons.mjs 等
@@ -118,6 +120,8 @@ Yommy/
     │       └── __fixtures__/
     ├── storage/                       # 【2. Storage Layer（ローカルDB・キャッシュ管理層）】
     │   ├── types.ts                   # エンティティ型および各 Repository インターフェース契約
+    │   ├── schema.ts                  # SQLite テーブル DDL および初期行定義（実機・インメモリ共有）
+    │   ├── schema.test.ts
     │   ├── adapter/
     │   │   ├── types.ts               # DatabaseAdapter インターフェース
     │   │   ├── capacitorSqlite.ts     # @capacitor-community/sqlite アダプター実装
@@ -141,14 +145,42 @@ Yommy/
 ### 2.2 アセット管理とアプリアイコン設計
 
 - **マスターアセット（`assets/`）**:
-  - `assets/icon.png`: 1024×1024 px のブランド正本マスター。将来の一時資料（`reference/`）削除後も恒久保持し、全プラットフォーム向けアイコンの生成元となる。
+  - `assets/icon.png`: 1024×1024 px（32bit RGBA PNG）のブランド正本マスター。将来の一時資料（`reference/`）削除後も恒久保持し、全プラットフォーム向けアイコンの生成元となる。
 - **Android ネイティブアセット（`android/app/src/main/res/`）**:
-  - Android 8.0+ Adaptive Icon: 背景 `#0D0E26`（`values/ic_launcher_background.xml`）＋ セーフゾーン（72dp / 108dp）前景イラスト（`mipmap-*/ic_launcher_foreground.png`）。
+  - Android 8.0+ Adaptive Icon: 背景 `#0D0E26`（`values/ic_launcher_background.xml`）＋ セーフゾーン（72dp / 108dp）前景イラスト（`mipmap-*/ic_launcher_foreground.png`、透過背景）。
   - レガシー用: 角丸正方形（`ic_launcher.png`）および円形（`ic_launcher_round.png`）。
-- **Web 静的アセット（`public/`）**:
-  - `favicon.ico`（16/32/48px マルチアイコン）、`icon-192.png`、`icon-512.png`、`apple-touch-icon.png`（180px）。Vite ビルド時に `dist/` 直下へ完全展開される。
+- **Web 静的アセット（`public/` ＆ `index.html`）**:
+  - `favicon.ico`（16/32/48px マルチアイコン）、`icon-192.png`、`icon-512.png`、`apple-touch-icon.png`（180px）。Vite ビルド時に `dist/` 直下へ完全展開され、`index.html` の `<link rel="icon">` / `<link rel="apple-touch-icon">` から参照される。
 - **生成自動化（`scripts/generate-icons.mjs`）**:
-  - DevContainer の Playwright Chromium を用いて決定論的かつオフラインで全アセットを再生成する。
+  - DevContainer の Playwright Chromium を用いて決定論的かつオフラインで全アセットを再生成する（`npm run generate:icons`）。
+
+#### Android アイコン解像度一覧表
+
+| 密度 (DPI)       | ディレクトリ                               | `ic_launcher.png` (正方形) | `ic_launcher_round.png` (円形) | `ic_launcher_foreground.png` (前景) |
+| :--------------- | :----------------------------------------- | :------------------------: | :----------------------------: | :---------------------------------: |
+| **mdpi** (1x)    | `android/app/src/main/res/mipmap-mdpi/`    |         48 × 48 px         |           48 × 48 px           |            108 × 108 px             |
+| **hdpi** (1.5x)  | `android/app/src/main/res/mipmap-hdpi/`    |         72 × 72 px         |           72 × 72 px           |            162 × 162 px             |
+| **xhdpi** (2x)   | `android/app/src/main/res/mipmap-xhdpi/`   |         96 × 96 px         |           96 × 96 px           |            216 × 216 px             |
+| **xxhdpi** (3x)  | `android/app/src/main/res/mipmap-xxhdpi/`  |        144 × 144 px        |          144 × 144 px          |            324 × 324 px             |
+| **xxxhdpi** (4x) | `android/app/src/main/res/mipmap-xxxhdpi/` |        192 × 192 px        |          192 × 192 px          |            432 × 432 px             |
+
+#### Web Favicon / Apple Touch Icon 仕様表
+
+| ファイルパス                  |       解像度        | 用途・形式                                                                       |
+| :---------------------------- | :-----------------: | :------------------------------------------------------------------------------- |
+| `public/favicon.ico`          | 16×16, 32×32, 48×48 | デスクトップブラウザのタブ・ブックマーク用マルチアイコン                         |
+| `public/icon-192.png`         |    192 × 192 px     | Web App / PWA マニフェスト用標準アイコン（濃紺背景＋角丸/全塗りイラスト）        |
+| `public/icon-512.png`         |    512 × 512 px     | 高解像度スプラッシュ・PWA 用アイコン                                             |
+| `public/apple-touch-icon.png` |    180 × 180 px     | iOS Safari「ホーム画面に追加」用（透過なし、濃紺背景 `#0D0E26` ＋ 中央イラスト） |
+
+#### アプリアイコン受入条件一覧（`AC-ICON-xx`）
+
+| 受入条件 ID      | 項目                       | 検証内容・合否判定基準                                                                                                                                               | 対応要件 ID  |
+| :--------------- | :------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------- |
+| **`AC-ICON-01`** | マスター正本配置           | `assets/icon.png`（1024×1024）が配置され、将来 `reference/` が削除されてもアセット再生成が可能であること。                                                           | `SYS-REQ-15` |
+| **`AC-ICON-02`** | Android アプリアイコン反映 | 各 DPI（mdpi〜xxxhdpi）の `ic_launcher.png`, `ic_launcher_round.png`, `ic_launcher_foreground.png` が生成され、Adaptive Icon 背景色 `#0D0E26` が設定されていること。 | `SYS-REQ-15` |
+| **`AC-ICON-03`** | Web Favicon 反映           | `public/favicon.ico`, `icon-192.png`, `apple-touch-icon.png` が配置され、`index.html` から正しくリンク参照されていること。                                           | `SYS-REQ-15` |
+| **`AC-ICON-04`** | 再現可能スクリプト         | `npm run generate:icons` を実行することで、全アイコンアセットがローカルで差分なく再生成できること。                                                                  | `SYS-REQ-15` |
 
 ---
 

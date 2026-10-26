@@ -4,7 +4,7 @@ title: 作品詳細・目次画面（SCR-02）とエピソード選択・オン�
 description: Issue #13 に対する差分仕様、作品詳細・目次画面（SCR-02: /novels/:novelId）のコンポーネント設計、目次更新・作品削除・オンデマンド本文取得連携、テスト計画、およびSub-issue分割計画。
 issue: "#13"
 status: "Completed (Archived)"
-updated: "2026-10-26"
+updated: "2026-10-27"
 tags: [delta, novel-detail, scr-02, toc, routing, kakuyomu]
 related_specs:
   - docs/specs/features/novel-detail.md
@@ -17,6 +17,13 @@ related_specs:
 related_tests:
   - src/App.test.tsx
   - src/app/ServiceProvider.test.tsx
+  - src/features/novel-detail/hooks/useNovelDetail.test.ts
+  - src/features/novel-detail/components/NovelDetailHeader.test.tsx
+  - src/features/novel-detail/components/EpisodeListItem.test.tsx
+  - src/features/novel-detail/components/EpisodeList.test.tsx
+  - src/features/novel-detail/components/DeleteConfirmDialog.test.tsx
+  - src/features/novel-detail/components/NovelDetailPage.test.tsx
+  - src/features/novel-detail/components/NovelDetailContainer.test.tsx
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
 ---
 
