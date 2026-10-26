@@ -12,6 +12,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint:okf": "node .github/skills/sdd/scripts/validate-okf.mjs",
+    "generate:icons": "node scripts/generate-icons.mjs",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage",
     "storybook": "storybook dev -p 6006",
