@@ -3,7 +3,7 @@ type: spec-feature
 title: 本棚画面仕様書（SCR-01: Bookshelf）
 description: 登録済み小説カード一覧の表示、URLからの新規作品登録ダイアログ、しおり位置からのワンタップ読書再開を提供する本棚画面（SCR-01）の正本仕様。
 status: Approved
-updated: "2026-10-26"
+updated: "2026-10-27"
 tags: [bookshelf, scr-01, routing, url-registration, ui]
 related_specs:
   - docs/specs/requirements.md
@@ -211,6 +211,7 @@ export interface UseBookshelfResult {
   isDialogOpen: boolean;
   isSubmitting: boolean;
   dialogError: string | null;
+  error: string | null;
   openDialog: () => void;
   closeDialog: () => void;
   addNovelByUrl: (url: string) => Promise<boolean>;
@@ -220,8 +221,9 @@ export interface UseBookshelfResult {
 
 ### 4.2 パイプライン仕様
 
-1. **初回ロード**:
-   - `ServiceProvider` の `isReady === true` 後、`novelRepository.listNovels()` を呼び出して本棚一覧を取得する（`last_read_at DESC, created_at DESC` 順）。読み込み中は `isLoading = true` とし、完了後に `isLoading = false` とする。
+1. **初回ロードおよび手動リロード（`reloadNovels`）**:
+   - `ServiceProvider` の `isReady === true` 後、`novelRepository.listNovels()` を呼び出して本棚一覧を取得する（`last_read_at DESC, created_at DESC` 順）。読み込み開始時に `isLoading = true`, `error = null` とし、完了後に `isLoading = false` とする。
+   - `novelRepository.listNovels()` が失敗（Promise rejection）した場合は、未処理拒否（Unhandled Rejection）を起こさず捕捉し、アンマウント済みでない限り `error` ステートにエラーメッセージ（`err instanceof Error ? err.message : String(err)`）を設定して `isLoading = false` へ遷移させる。`reloadNovels()` 手動呼び出し時も同様に `error` ステートへエラーメッセージを設定する。
 2. **URL バリデーションと正規化（通信前チェック）**:
    - `addNovelByUrl(url)` 実行時、入力された URL 文字列（前後空白トリム済み）に対し、**HTTP 通信を行う前に** `parserRegistry.requireParser(trimmedUrl)` および `parser.normalizeWorkUrl(trimmedUrl)` を実行する。
    - 未対応サイトの URL や不正な URL 形式の場合は、通信を行わずに直ちに日本語エラーメッセージ（例: `対応していないURLです。カクヨムの作品URLを入力してください。`）を `dialogError` にセットし、`false` を返す。

@@ -57,8 +57,7 @@ export class SqlChapterRepository implements ChapterRepository {
         ...row,
         body_html: null,
       });
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { bodyHtml, ...summary } = record;
+      const { bodyHtml: _bodyHtml, ...summary } = record;
       return summary;
     });
   }
