@@ -44,6 +44,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(page.getByTestId("novel-card-chapters")).toContainText(
       "全 4 話（取得済み 0 話）",
     );
+    await expect(page.getByTestId("novel-card-bookmark")).toHaveText("未読");
 
     // 3. 作品カード本体（novel-card-select）をクリックして /novels/:novelId（SCR-02 作品詳細・目次画面）へ遷移（TR-02）
     const novelCardSelect = page.getByTestId("novel-card-select");
@@ -114,13 +115,49 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(page.getByTestId("reader-prev-chapter")).toBeDisabled();
     await expect(page.getByTestId("reader-next-chapter")).toBeEnabled();
 
-    // 7. 本文内の <ruby>（ルビ）および <em class="bouten">（傍点）が可視状態で正しくレンダリングされていることを確認
+    // 7. 本文内の <ruby>（ルビ）および <em class="bouten">（傍点）が可視状態で正しくレンダリングされていること、および縦書き（writing-vertical-rl）での負の scrollLeft による水平スクロール進捗保存・復元（AC-RD-08）を確認
     const rubyElement = readerView.locator("ruby").first();
     await expect(rubyElement).toBeVisible();
 
     const boutenElement = readerView.locator("em.bouten").first();
     await expect(boutenElement).toBeVisible();
     await expect(boutenElement).toHaveText("信じがたい光景");
+
+    // 縦書き時に scrollWidth > clientWidth となっており、左方向（負の scrollLeft）へスクロールして進捗を保存できることを確認
+    const verticalMaxScroll = await page.evaluate(() => {
+      const el = document.querySelector('[data-testid="reader-view"]');
+      if (!el) return 0;
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (maxScroll > 0) {
+        el.scrollLeft = -maxScroll * 0.5;
+        el.dispatchEvent(new Event("scroll"));
+      }
+      return maxScroll;
+    });
+    expect(verticalMaxScroll).toBeGreaterThan(0);
+
+    // 一度作品詳細（SCR-02）へ戻り（TR-06）、「続きから読む（第1話）」で再開（TR-04）した際に縦書きの負の scrollLeft が復元されることを確認
+    await page.getByTestId("reader-back-to-detail").click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
+    );
+    const ch1ResumeButton = page.getByTestId("detail-resume-button");
+    await expect(ch1ResumeButton).toBeVisible();
+    await expect(ch1ResumeButton).toContainText("続きから読む（第1話）");
+    await ch1ResumeButton.click();
+
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1/,
+    );
+    await expect(readerView).toHaveClass(/writing-vertical-rl/);
+    await expect
+      .poll(async () => {
+        return page.evaluate(() => {
+          const el = document.querySelector('[data-testid="reader-view"]');
+          return el ? el.scrollLeft : 0;
+        });
+      })
+      .toBeLessThan(0);
 
     // 8. テーマを「セピア」、組み方向を「横書き」、文字サイズ拡大（18px → 20px）、行間拡大（1.8 → 2.0）に変更し、スタイル反映を確認
     const sepiaButton = page.getByTestId("theme-sepia");
@@ -163,7 +200,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(restoredReaderView).toHaveAttribute("data-font-size", "20");
     await expect(restoredReaderView).toHaveAttribute("data-line-height", "2");
 
-    // 10. 「次の話へ」（reader-next-chapter）をクリックして /novels/:novelId/chapters/2 へ遷移（TR-05）し、第2話本文がオンデマンド取得されて reader-chapter-indicator が「第 2 話 / 全 4 話」に更新されること、およびスクロール操作により進捗率が保存されることを確認
+    // 10. 「次の話へ」（reader-next-chapter）で第2話へ遷移（TR-05）した後、「前の話へ」（reader-prev-chapter）で第1話へ戻る遷移（TR-05）を検証し、再度第2話へ進んでスクロール進捗率を保存することを確認
     const nextChapterButton = page.getByTestId("reader-next-chapter");
     await expect(nextChapterButton).toBeEnabled();
     await nextChapterButton.click();
@@ -174,7 +211,37 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(page.getByTestId("reader-chapter-indicator")).toHaveText(
       "第 2 話 / 全 4 話",
     );
-    await expect(page.getByTestId("reader-prev-chapter")).toBeEnabled();
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "第1話 見知らぬ空",
+    );
+    const prevChapterButton = page.getByTestId("reader-prev-chapter");
+    await expect(prevChapterButton).toBeEnabled();
+
+    // 「前の話へ」（reader-prev-chapter）をクリックして第1話へ戻る経路（TR-05）を検証
+    await prevChapterButton.click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1/,
+    );
+    await expect(page.getByTestId("reader-chapter-indicator")).toHaveText(
+      "第 1 話 / 全 4 話",
+    );
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "プロローグ：目覚め",
+    );
+    await expect(prevChapterButton).toBeDisabled();
+    await expect(nextChapterButton).toBeEnabled();
+
+    // 再度「次の話へ」をクリックして第2話へ進む
+    await nextChapterButton.click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/2/,
+    );
+    await expect(page.getByTestId("reader-chapter-indicator")).toHaveText(
+      "第 2 話 / 全 4 話",
+    );
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "第1話 見知らぬ空",
+    );
 
     // スクロール操作により進捗率を更新
     await page.evaluate(() => {
@@ -185,7 +252,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       }
     });
 
-    // 11. 「作品詳細へ」（reader-back-to-detail）をクリックして SCR-02 へ戻り（TR-06）、第1話・第2話が 取得済み かつ 既読 に、第2話に しおり バッジが表示され、ヘッダーに「続きから読む（第2話）」が表示されて再開時にスクロール位置が復元されることを確認
+    // 11. 「作品詳細へ」（reader-back-to-detail）をクリックして SCR-02 へ戻り（TR-06）、第1話・第2話が 取得済み かつ 既読 に、第2話に しおり バッジが表示され、ヘッダーに「続きから読む（第2話）」と「最初から読む（第1話）」が併存表示（AC-ND-03）されて再開時にスクロール位置が復元されることを確認
     const backToDetailButton = page.getByTestId("reader-back-to-detail");
     await expect(backToDetailButton).toBeVisible();
     await backToDetailButton.click();
@@ -218,10 +285,11 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       updatedEpisodeItems.nth(1).getByTestId("episode-bookmark-badge"),
     ).toBeVisible();
 
-    // ヘッダーの「続きから読む（第2話）」表示確認
+    // ヘッダーの「続きから読む（第2話）」および「最初から読む（第1話）」の併存表示確認（AC-ND-03）
     const resumeButton = page.getByTestId("detail-resume-button");
     await expect(resumeButton).toBeVisible();
     await expect(resumeButton).toContainText("続きから読む（第2話）");
+    await expect(page.getByTestId("detail-read-first-button")).toBeVisible();
 
     // 「続きから読む（第2話）」をクリックしてリーダーへ再開遷移（TR-04）
     await resumeButton.click();
@@ -248,7 +316,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
     );
 
-    // 12. 「本棚へ戻る」（back-to-bookshelf-button）で本棚画面（/）へ戻り作品カードの取得済み話数（全 4 話（取得済み 2 話））としおり表示（しおり: 第2話）を確認した上で、再度 SCR-02 から「作品を削除」→ 確認ダイアログの「削除する」を実行し、本棚（/）へ戻って空状態（bookshelf-empty）となることを確認（TR-07）
+    // 12. 「本棚へ戻る」（back-to-bookshelf-button）で本棚画面（/）へ戻り作品カードの取得済み話数・しおり表示を確認した後、本棚の「続きから読む」（novel-card-resume）からリーダー直接遷移（TR-03 / AC-BS-06）と「本棚へ戻る」（reader-back-to-bookshelf）を検証し、最後に SCR-02 から作品を削除して空状態（bookshelf-empty）となることを確認（TR-07）
     const backToBookshelfButton = page.getByTestId("back-to-bookshelf-button");
     await expect(backToBookshelfButton).toBeVisible();
     await backToBookshelfButton.click();
@@ -262,6 +330,41 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     const bookshelfBookmark = page.getByTestId("novel-card-bookmark");
     await expect(bookshelfBookmark).toBeVisible();
     await expect(bookshelfBookmark).toContainText("しおり: 第2話");
+
+    // 本棚作品カードの「第2話から読む」（novel-card-resume）をクリックし、/novels/:novelId/chapters/2 へ直接遷移することを確認（TR-03 / AC-BS-06）
+    const novelCardResume = page.getByTestId("novel-card-resume");
+    await expect(novelCardResume).toBeVisible();
+    await expect(novelCardResume).toContainText("第2話から読む");
+    await novelCardResume.click();
+
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/2/,
+    );
+    await expect(page.getByTestId("reader-chapter-indicator")).toHaveText(
+      "第 2 話 / 全 4 話",
+    );
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "第1話 見知らぬ空",
+    );
+    await expect(page.getByTestId("reader-view")).toBeVisible();
+
+    // 第2話のしおりスクロール位置が復元されることを確認
+    await expect
+      .poll(async () => {
+        return page.evaluate(() => {
+          const el = document.querySelector('[data-testid="reader-view"]');
+          return el ? el.scrollTop : 0;
+        });
+      })
+      .toBeGreaterThan(0);
+
+    // リーダー上部ツールバーの「本棚へ戻る」（reader-back-to-bookshelf）をクリックして本棚画面（/）へ戻ることを確認
+    const readerBackToBookshelf = page.getByTestId("reader-back-to-bookshelf");
+    await expect(readerBackToBookshelf).toBeVisible();
+    await readerBackToBookshelf.click();
+
+    await expect(page).toHaveURL("/");
+    await expect(page.getByTestId("bookshelf-page")).toBeVisible();
 
     // 再度 SCR-02 へ遷移
     await page.getByTestId("novel-card-select").click();
