@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("アプリケーションスモーク結合テスト", () => {
-  test("トップページが正常に読み込まれ、ヘッダーとリーダーUIが表示される", async ({
+  test("トップページが正常に読み込まれ、ヘッダーと本棚UI（空状態）が表示される", async ({
     page,
   }) => {
     await page.goto("/");
@@ -11,17 +11,18 @@ test.describe("アプリケーションスモーク結合テスト", () => {
     await expect(title).toBeVisible();
     await expect(title).toHaveText("Yommy");
 
-    // ツールバーの主要操作要素が表示されていることの確認
-    const fetchButton = page.getByTestId("fetch-novel-button");
-    await expect(fetchButton).toBeVisible();
-    await expect(fetchButton).toHaveText("作品を取得/更新");
+    // 本棚ページが表示されていることの確認
+    const bookshelfPage = page.getByTestId("bookshelf-page");
+    await expect(bookshelfPage).toBeVisible();
 
-    const toggleButton = page.getByTestId("toggle-orientation");
-    await expect(toggleButton).toBeVisible();
+    // 「URLから作品を追加」ボタンが表示されていることの確認
+    const addNovelButton = page.getByTestId("open-add-novel-button");
+    await expect(addNovelButton).toBeVisible();
+    await expect(addNovelButton).toContainText("URLから作品を追加");
 
     // 初期状態（未登録状態）の案内メッセージ確認
-    const emptyState = page.getByTestId("reader-empty");
+    const emptyState = page.getByTestId("bookshelf-empty");
     await expect(emptyState).toBeVisible();
-    await expect(emptyState).toContainText("作品がまだ登録されていません。");
+    await expect(emptyState).toContainText("本棚に作品が登録されていません");
   });
 });

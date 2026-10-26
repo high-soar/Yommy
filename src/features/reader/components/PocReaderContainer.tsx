@@ -7,11 +7,26 @@ import type { NovelRecord, ChapterRecord } from "../../../storage/types";
 const DEFAULT_KAKUYOMU_URL = "https://kakuyomu.jp/works/16817330658027210412";
 
 /**
+ * 例外オブジェクトをユーザー表示用エラーメッセージ文字列へ変換する
+ */
+function toErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/**
  * PoC リーダーコンテナの Props
  */
 export interface PocReaderContainerProps {
   /** 取得対象の作品 URL（デフォルト: カクヨムの検証用URL） */
   initialWorkUrl?: string;
+  /** 表示対象の作品ID */
+  novelId?: string;
+  /** 表示対象のエピソード連番（1始まり、省略時は 1） */
+  chapterIndex?: number;
+  /** 「本棚へ戻る」タップ時のコールバック（指定時のみ reader-back-to-bookshelf ボタンを表示） */
+  onBackToBookshelf?: () => void;
+  /** 「作品詳細へ」タップ時のコールバック（指定時のみ reader-back-to-detail ボタンを表示） */
+  onBackToDetail?: (novelId: string) => void;
 }
 
 /**
@@ -22,6 +37,10 @@ export interface PocReaderContainerProps {
  */
 export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
   initialWorkUrl = DEFAULT_KAKUYOMU_URL,
+  novelId,
+  chapterIndex,
+  onBackToBookshelf,
+  onBackToDetail,
 }) => {
   const {
     httpClient,
@@ -39,7 +58,33 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 初回ロード / リロード復元
+  /**
+   * 指定エピソードの本文をオンデマンドで取得・パースして DB に保存する共通関数
+   */
+  const fetchAndSaveChapterBody = useCallback(
+    async (
+      targetNovelId: string,
+      targetChapterIndex: number,
+      episodeUrl: string,
+    ): Promise<ChapterRecord | null> => {
+      const parser = parserRegistry.requireParser(episodeUrl);
+      const chapterRes = await httpClient.getHtml({ url: episodeUrl });
+      const parsedChapter = parser.parseChapterContent(
+        chapterRes.html,
+        episodeUrl,
+      );
+      await chapterRepository.saveChapterBody(
+        targetNovelId,
+        targetChapterIndex,
+        parsedChapter,
+        new Date().toISOString(),
+      );
+      return chapterRepository.getChapter(targetNovelId, targetChapterIndex);
+    },
+    [chapterRepository, httpClient, parserRegistry],
+  );
+
+  // 初回ロード / リロード復元 / ルート指定ロード
   useEffect(() => {
     if (!isReady) return;
 
@@ -61,21 +106,63 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
           }
         }
 
-        const novels = await novelRepository.listNovels();
-        if (novels.length > 0) {
-          const firstNovel = await novelRepository.getNovelById(novels[0].id);
-          const firstChapter = await chapterRepository.getChapter(
-            novels[0].id,
-            1,
+        if (novelId) {
+          const targetIndex = chapterIndex ?? 1;
+          const targetNovel = await novelRepository.getNovelById(novelId);
+          let targetChapter = await chapterRepository.getChapter(
+            novelId,
+            targetIndex,
           );
+
+          // 未キャッシュ話のオンデマンド本文取得（TR-03 対応）
+          if (targetNovel && targetChapter && targetChapter.bodyHtml === null) {
+            if (isMounted) {
+              setIsLoading(true);
+            }
+            try {
+              targetChapter = await fetchAndSaveChapterBody(
+                novelId,
+                targetIndex,
+                targetChapter.url,
+              );
+            } catch (fetchErr: unknown) {
+              if (isMounted) {
+                setError(toErrorMessage(fetchErr));
+              }
+            } finally {
+              if (isMounted) {
+                setIsLoading(false);
+              }
+            }
+          }
+
           if (isMounted) {
-            setNovel(firstNovel);
-            setChapter(firstChapter);
+            setNovel(targetNovel);
+            setChapter(targetChapter);
+          }
+        } else {
+          // novelId 未指定: 従来互換動作（DB内の先頭作品・第1話）
+          const novels = await novelRepository.listNovels();
+          if (novels.length > 0) {
+            const firstNovel = await novelRepository.getNovelById(novels[0].id);
+            const firstChapter = await chapterRepository.getChapter(
+              novels[0].id,
+              1,
+            );
+            if (isMounted) {
+              setNovel(firstNovel);
+              setChapter(firstChapter);
+            }
+          } else {
+            if (isMounted) {
+              setNovel(null);
+              setChapter(null);
+            }
           }
         }
       } catch (err: unknown) {
         if (isMounted) {
-          setError(err instanceof Error ? err.message : String(err));
+          setError(toErrorMessage(err));
         }
       }
     }
@@ -85,7 +172,15 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [isReady, novelRepository, chapterRepository, settingsRepository]);
+  }, [
+    isReady,
+    novelId,
+    chapterIndex,
+    novelRepository,
+    chapterRepository,
+    settingsRepository,
+    fetchAndSaveChapterBody,
+  ]);
 
   // 作品取得操作
   const handleFetchNovel = useCallback(async () => {
@@ -93,9 +188,10 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
     setError(null);
 
     try {
+      const targetUrl = novel?.canonicalUrl ?? initialWorkUrl;
       // 1. パーサー解決と作品URL正規化（未対応URLは通信前に拒絶）
-      const parser = parserRegistry.requireParser(initialWorkUrl);
-      const normalizedWorkUrl = parser.normalizeWorkUrl(initialWorkUrl);
+      const parser = parserRegistry.requireParser(targetUrl);
+      const normalizedWorkUrl = parser.normalizeWorkUrl(targetUrl);
 
       // 2. 作品トップHTML取得
       const indexRes = await httpClient.getHtml({ url: normalizedWorkUrl });
@@ -110,28 +206,20 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
         new Date().toISOString(),
       );
 
-      // 4. 第1話エピソード本文取得
+      // 4. 対象話エピソード本文取得
       if (novelIndex.chapters.length > 0) {
-        const firstEpisodeToc = novelIndex.chapters[0];
-        const chapterRes = await httpClient.getHtml({
-          url: firstEpisodeToc.url,
-        });
-        const parsedChapter = parser.parseChapterContent(
-          chapterRes.html,
-          firstEpisodeToc.url,
+        const targetChapterIndex = chapterIndex ?? 1;
+        const targetEpisodeToc =
+          novelIndex.chapters.find(
+            (ch) => ch.chapterIndex === targetChapterIndex,
+          ) ?? novelIndex.chapters[0];
+
+        const savedChapter = await fetchAndSaveChapterBody(
+          savedNovel.id,
+          targetEpisodeToc.chapterIndex,
+          targetEpisodeToc.url,
         );
 
-        await chapterRepository.saveChapterBody(
-          savedNovel.id,
-          1,
-          parsedChapter,
-          new Date().toISOString(),
-        );
-
-        const savedChapter = await chapterRepository.getChapter(
-          savedNovel.id,
-          1,
-        );
         setNovel(savedNovel);
         setChapter(savedChapter);
       } else {
@@ -139,16 +227,18 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
         setChapter(null);
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(toErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
   }, [
+    novel,
     initialWorkUrl,
+    chapterIndex,
     httpClient,
     parserRegistry,
     novelRepository,
-    chapterRepository,
+    fetchAndSaveChapterBody,
   ]);
 
   // 縦横切替
@@ -168,8 +258,47 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
     [settingsRepository],
   );
 
+  const targetDetailId = novelId ?? novel?.id;
+
   return (
     <div className="flex flex-col gap-4 w-full">
+      {(onBackToBookshelf || onBackToDetail) && (
+        <nav
+          data-testid="reader-nav"
+          className="flex items-center justify-between gap-3 bg-white/80 dark:bg-slate-800/80 backdrop-blur border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 shadow-xs"
+        >
+          <div className="flex items-center gap-2">
+            {onBackToBookshelf && (
+              <button
+                type="button"
+                data-testid="reader-back-to-bookshelf"
+                onClick={onBackToBookshelf}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+              >
+                <span aria-hidden="true">←</span>
+                <span>本棚へ戻る</span>
+              </button>
+            )}
+            {onBackToDetail && (
+              <button
+                type="button"
+                data-testid="reader-back-to-detail"
+                onClick={() => {
+                  if (targetDetailId) {
+                    onBackToDetail(targetDetailId);
+                  }
+                }}
+                disabled={!targetDetailId}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+              >
+                <span>作品詳細へ</span>
+                <span aria-hidden="true">→</span>
+              </button>
+            )}
+          </div>
+        </nav>
+      )}
+
       <ReaderToolbar
         writingMode={writingMode}
         theme={theme}

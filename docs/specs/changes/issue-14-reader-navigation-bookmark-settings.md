@@ -15,6 +15,7 @@ related_specs:
   - docs/specs/requirements.md
   - docs/specs/db-schema.md
 related_tests:
+  - src/App.test.tsx
   - src/features/reader/hooks/useReader.test.ts
   - src/features/reader/components/ReaderToolbar.test.tsx
   - src/features/reader/components/ReaderChapterNav.test.tsx
@@ -22,6 +23,7 @@ related_tests:
   - src/features/reader/components/ReaderPage.test.tsx
   - src/features/reader/components/ReaderContainer.test.tsx
   - test/vrt/vrt.spec.ts
+  - test/it/smoke.spec.ts
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
 ---
 

@@ -2,7 +2,7 @@
 type: spec-feature
 title: 本棚画面仕様書（SCR-01: Bookshelf）
 description: 登録済み小説カード一覧の表示、URLからの新規作品登録ダイアログ、しおり位置からのワンタップ読書再開を提供する本棚画面（SCR-01）の正本仕様。
-status: "Review (#12)"
+status: Approved
 updated: "2026-10-26"
 tags: [bookshelf, scr-01, routing, url-registration, ui]
 related_specs:
@@ -14,12 +14,14 @@ related_specs:
   - docs/specs/features/reader-view.md
   - docs/specs/parsers/kakuyomu.md
 related_tests:
+  - src/App.test.tsx
   - src/features/bookshelf/hooks/useBookshelf.test.ts
   - src/features/bookshelf/components/BookshelfEmptyState.test.tsx
   - src/features/bookshelf/components/NovelCard.test.tsx
   - src/features/bookshelf/components/AddNovelDialog.test.tsx
   - src/features/bookshelf/components/BookshelfPage.test.tsx
   - src/features/bookshelf/components/BookshelfContainer.test.tsx
+  - test/it/smoke.spec.ts
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
 ---
 
