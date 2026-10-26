@@ -78,8 +78,7 @@ export class SqlNovelRepository implements NovelRepository {
 
     return rows.map((row) => {
       const record = this.mapRowToRecord(row);
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { synopsis, ...summary } = record;
+      const { synopsis: _synopsis, ...summary } = record;
       return summary;
     });
   }
