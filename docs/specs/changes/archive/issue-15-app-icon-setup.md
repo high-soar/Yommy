@@ -3,7 +3,7 @@ type: spec-delta
 title: アプリアイコン（Android Adaptive Icon / Web Favicon）設定の差分仕様
 description: Issue #15 に対するアプリアイコン・Favicon生成、配置先規約、Adaptive Icon仕様、テスト計画、およびSub-issue分割計画。
 issue: "#15"
-status: "Review (#15)"
+status: "Completed (Archived)"
 updated: "2026-10-26"
 tags: [delta, icon, android, favicon, branding]
 related_specs:
@@ -12,6 +12,7 @@ related_specs:
   - docs/quality/bug-and-handover-log.md
 related_tests:
   - scripts/generate-icons.test.ts
+  - test/it/smoke.spec.ts
 ---
 
 # 差分仕様書：アプリアイコン（Android / Web Favicon）の設定（Issue #15）

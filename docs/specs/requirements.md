@@ -2,7 +2,7 @@
 type: spec-requirements
 title: 全体要件定義・機能一覧・ロードマップ（App 全体正本）
 description: Yommyのターゲット環境、小説サイト対応優先順位（カクヨム最優先）、全機能要件（SYS-REQ-01〜15）、およびミニMilestoneロードマップの正本。
-status: "Review (#14)"
+status: "Approved (#15)"
 updated: "2026-10-26"
 tags: [requirements, roadmap, kakuyomu, narou, reader, branding]
 related_specs:
@@ -13,7 +13,7 @@ related_specs:
   - docs/specs/features/bookshelf.md
   - docs/specs/features/novel-detail.md
   - docs/specs/features/reader-view.md
-  - docs/specs/changes/issue-15-app-icon-setup.md
+  - docs/specs/changes/archive/issue-15-app-icon-setup.md
   - docs/specs/changes/issue-13-novel-detail-and-toc.md
   - docs/specs/changes/issue-14-reader-navigation-bookmark-settings.md
 related_tests:
@@ -22,6 +22,7 @@ related_tests:
   - src/features/reader/components/ReaderView.test.tsx
   - src/features/reader/components/ReaderContainer.test.tsx
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
+  - scripts/generate-icons.test.ts
 ---
 
 # 全体要件定義・機能一覧・ロードマップ（App 全体正本）
