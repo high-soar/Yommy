@@ -150,15 +150,11 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         // 設定読み出し
         try {
           const settings = await settingsRepository.getReaderSettings();
-          if (isMounted && settings) {
-            if (settings.writingMode) setWritingMode(settings.writingMode);
-            if (settings.theme) setTheme(settings.theme);
-            if (typeof settings.fontSizePx === "number") {
-              setFontSizePx(settings.fontSizePx);
-            }
-            if (typeof settings.lineHeight === "number") {
-              setLineHeight(settings.lineHeight);
-            }
+          if (settings) {
+            setWritingMode(settings.writingMode);
+            setTheme(settings.theme);
+            setFontSizePx(settings.fontSizePx);
+            setLineHeight(settings.lineHeight);
           }
         } catch {
           // 初期行取得に失敗した場合はデフォルト値維持
@@ -176,15 +172,14 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           }
         }
 
-        if (!isMounted) return;
-
         if (!targetNovel) {
-          setNovel(null);
-          setChapter(null);
-          setCurrentChapterIndex(targetIndex);
-          setInitialScrollProgress(0);
-          setScrollProgress(0);
-          setIsLoading(false);
+          if (isMounted) {
+            setNovel(null);
+            setChapter(null);
+            setCurrentChapterIndex(targetIndex);
+            setInitialScrollProgress(0);
+            setScrollProgress(0);
+          }
           return;
         }
 
@@ -208,8 +203,6 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           }
         }
 
-        if (!isMounted) return;
-
         // 既読自動更新
         if (
           targetChapter &&
@@ -225,12 +218,12 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         }
 
         // しおり・スクロール進捗率の復元・自動更新
+        let nextInitialProgress = 0;
+        let nextScrollProgress = 0;
         if (targetNovel.bookmarkChapterIndex === targetIndex) {
-          setInitialScrollProgress(targetNovel.bookmarkScrollProgress);
-          setScrollProgress(targetNovel.bookmarkScrollProgress);
+          nextInitialProgress = targetNovel.bookmarkScrollProgress;
+          nextScrollProgress = targetNovel.bookmarkScrollProgress;
         } else {
-          setInitialScrollProgress(0);
-          setScrollProgress(0);
           await novelRepository.updateBookmark(targetNovel.id, targetIndex, 0);
           targetNovel = {
             ...targetNovel,
@@ -241,6 +234,8 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
 
         if (!isMounted) return;
 
+        setInitialScrollProgress(nextInitialProgress);
+        setScrollProgress(nextScrollProgress);
         setNovel(targetNovel);
         setChapter(targetChapter);
         setCurrentChapterIndex(targetIndex);
@@ -340,15 +335,11 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             currentChapterIndexRef.current,
             clamped,
           );
-          setNovel((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  bookmarkChapterIndex: currentChapterIndexRef.current,
-                  bookmarkScrollProgress: clamped,
-                }
-              : null,
-          );
+          setNovel({
+            ...novelRef.current,
+            bookmarkChapterIndex: currentChapterIndexRef.current,
+            bookmarkScrollProgress: clamped,
+          });
         } catch (err: unknown) {
           setError(toErrorMessage(err));
         }
@@ -384,6 +375,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         return false;
       }
 
+      let isSuccess = false;
       setIsLoading(true);
       setError(null);
 
@@ -437,22 +429,17 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         // 6. State 更新
         setCurrentChapterIndex(targetChapterIndex);
         setChapter(targetChapter);
-        setNovel(
-          reloadedNovel ?? {
-            ...currentNovel,
-            bookmarkChapterIndex: targetChapterIndex,
-            bookmarkScrollProgress: 0,
-          },
-        );
+        setNovel(reloadedNovel);
         setInitialScrollProgress(0);
         setScrollProgress(0);
-        return true;
+        isSuccess = true;
       } catch (err: unknown) {
         setError(toErrorMessage(err));
-        return false;
+        isSuccess = false;
       } finally {
         setIsLoading(false);
       }
+      return isSuccess;
     },
     [chapterRepository, fetchAndSaveChapterBody, novelRepository],
   );
@@ -496,42 +483,28 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           novelIndex.chapters[0];
         const targetChapterIdx = targetEpisodeToc.chapterIndex;
 
-        const chapterRes = await httpClient.getHtml({
-          url: targetEpisodeToc.url,
-        });
-        const parsedChapter = parser.parseChapterContent(
-          chapterRes.html,
+        const savedChapter = await fetchAndSaveChapterBody(
+          savedNovel.id,
+          targetChapterIdx,
           targetEpisodeToc.url,
         );
-
-        await chapterRepository.saveChapterBody(
-          savedNovel.id,
-          targetChapterIdx,
-          parsedChapter,
-          new Date().toISOString(),
-        );
-        await chapterRepository.markChapterRead(
-          savedNovel.id,
-          targetChapterIdx,
-          true,
-        );
+        if (savedChapter) {
+          await chapterRepository.markChapterRead(
+            savedNovel.id,
+            targetChapterIdx,
+            true,
+          );
+        }
         await novelRepository.updateBookmark(
           savedNovel.id,
           targetChapterIdx,
           0,
         );
 
-        const reloadedNovel =
-          (await novelRepository.getNovelById(savedNovel.id)) ?? savedNovel;
-        const reloadedChapter = await chapterRepository.getChapter(
-          savedNovel.id,
-          targetChapterIdx,
-        );
+        const reloadedNovel = await novelRepository.getNovelById(savedNovel.id);
 
         setNovel(reloadedNovel);
-        setChapter(
-          reloadedChapter ? { ...reloadedChapter, isRead: true } : null,
-        );
+        setChapter(savedChapter ? { ...savedChapter, isRead: true } : null);
         setCurrentChapterIndex(targetChapterIdx);
         setInitialScrollProgress(0);
         setScrollProgress(0);
@@ -552,6 +525,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     httpClient,
     novelRepository,
     chapterRepository,
+    fetchAndSaveChapterBody,
   ]);
 
   const totalChapters = novel ? novel.totalChapters : 0;
