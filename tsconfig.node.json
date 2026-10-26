@@ -18,6 +18,7 @@
     "vite.config.ts",
     "capacitor.config.ts",
     "playwright.vrt.config.ts",
-    "playwright.it.config.ts"
+    "playwright.it.config.ts",
+    "scripts/**/*.ts"
   ]
 }
