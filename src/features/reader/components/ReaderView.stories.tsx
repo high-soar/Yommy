@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import { fn } from "@storybook/test";
 import { ReaderView } from "./ReaderView";
 
 const sampleBodyHtml = `
@@ -6,6 +7,8 @@ const sampleBodyHtml = `
 <p class="blank"><br /></p>
 <p>少年にとって、それは<em class="bouten">信じがたい光景</em>であった。</p>
 <p>「ここはどこなんだ……？」</p>
+<p>彼の手には、古びた魔導書が握られていた。見知らぬ世界の風が吹き抜け、青草の香りが鼻腔をくすぐる。</p>
+<p>「まずは歩き出さなければならない。自分の力で未来を切り拓くために。」</p>
 `;
 
 const meta: Meta<typeof ReaderView> = {
@@ -15,6 +18,10 @@ const meta: Meta<typeof ReaderView> = {
     title: "境界迷宮と異界の魔術師",
     chapterTitle: "第1話 見知らぬ空",
     bodyHtml: sampleBodyHtml,
+    fontSizePx: 18,
+    lineHeight: 1.8,
+    initialScrollProgress: 0,
+    onScrollProgressChange: fn(),
   },
 };
 
@@ -73,5 +80,30 @@ export const HorizontalLight: Story = {
   args: {
     writingMode: "horizontal-tb",
     theme: "light",
+  },
+};
+
+/**
+ * カスタム組版（大文字サイズ 24px / 広行間 2.2）
+ */
+export const CustomTypography: Story = {
+  name: "カスタム組版（24px / 2.2）",
+  args: {
+    writingMode: "vertical-rl",
+    theme: "light",
+    fontSizePx: 24,
+    lineHeight: 2.2,
+  },
+};
+
+/**
+ * 初期スクロール進捗率（50% 位置）指定
+ */
+export const WithInitialScrollProgress: Story = {
+  name: "初期スクロール位置（50%）",
+  args: {
+    writingMode: "horizontal-tb",
+    theme: "light",
+    initialScrollProgress: 0.5,
   },
 };

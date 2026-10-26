@@ -18,6 +18,8 @@ export interface ReaderViewProps {
   theme?: ReaderTheme;
   fontSizePx?: number;
   lineHeight?: number;
+  initialScrollProgress?: number;
+  onScrollProgressChange?: (progress: number) => void;
 }
 
 const themeStyles: Record<ReaderTheme, string> = {
