@@ -58,13 +58,250 @@ describe("KakuyomuParser", () => {
       ).toBe("https://kakuyomu.jp/works/1177354054881162325");
     });
 
-    it("作品 ID が含まれない不正な URL を渡した場合はエラーを送出すること", () => {
+    it("作品 ID が含まれない不正な URL や他サイトの URL を渡した場合はエラーを送出すること", () => {
       expect(() =>
         parser.normalizeWorkUrl("https://kakuyomu.jp/users/123"),
+      ).toThrow("Invalid Kakuyomu work URL");
+      expect(() =>
+        parser.normalizeWorkUrl("https://example.com/works/12345"),
       ).toThrow("Invalid Kakuyomu work URL");
       expect(() => parser.normalizeWorkUrl("invalid-string")).toThrow(
         "Invalid Kakuyomu work URL",
       );
+    });
+  });
+
+  describe("__NEXT_DATA__ (__APOLLO_STATE__) による全エピソード・全章目次抽出 (AC-02, AC-03)", () => {
+    it("静的 DOM に一部の話数しかなくても __NEXT_DATA__ から全 10 話および章見出しを漏れなく抽出すること", () => {
+      const html = loadFixture("work_index_next_data.html");
+      const pageUrl = "https://kakuyomu.jp/works/16817330658027210412";
+      const result = parser.parseNovelIndex(html, pageUrl);
+
+      expect(result.siteType).toBe("kakuyomu");
+      expect(result.remoteWorkId).toBe("16817330658027210412");
+      expect(result.title).toBe("お嬢様系底辺ダンジョン配信者");
+      expect(result.author).toBe("ドラゴンタニシ");
+      expect(result.synopsis).toBe("エセお嬢様のダンジョン無双");
+      expect(result.chapters).toHaveLength(10);
+
+      expect(result.chapters[0]).toEqual({
+        chapterIndex: 1,
+        remoteChapterId: "1001",
+        partTitle: null,
+        title: "プロローグ：配信開始",
+        url: "https://kakuyomu.jp/works/16817330658027210412/episodes/1001",
+        publishedAt: "2026-01-01T10:00:00Z",
+      });
+
+      expect(result.chapters[1].partTitle).toBe("第一章 迷宮の入り口");
+      expect(result.chapters[1].remoteChapterId).toBe("1002");
+      expect(result.chapters[5].partTitle).toBe("第一章 迷宮の入り口");
+      expect(result.chapters[5].remoteChapterId).toBe("1006");
+
+      expect(result.chapters[6].partTitle).toBe("第二章 深淵の配信者");
+      expect(result.chapters[6].remoteChapterId).toBe("1007");
+      expect(result.chapters[9]).toEqual({
+        chapterIndex: 10,
+        remoteChapterId: "1010",
+        partTitle: "第二章 深淵の配信者",
+        title: "第9話 伝説の始まり",
+        url: "https://kakuyomu.jp/works/16817330658027210412/episodes/1010",
+        publishedAt: "2026-01-10T10:00:00Z",
+      });
+    });
+
+    it("DOM 上のタイトル・著者・あらすじが空の場合に __APOLLO_STATE__ の Work / UserAccount から補完すること", () => {
+      const htmlWithAuthorActivity = `
+        <html><body>
+          <script id="__NEXT_DATA__" type="application/json">
+            ${JSON.stringify({
+              props: {
+                pageProps: {
+                  __APOLLO_STATE__: {
+                    "UserAccount:u1": {
+                      activityName: "活動名著者",
+                      name: "id_name",
+                    },
+                    "Work:123": {
+                      title: "Apolloタイトル",
+                      author: { __ref: "UserAccount:u1" },
+                      introduction: "Apolloあらすじ",
+                      tableOfContents: [{ __ref: "TableOfContentsChapter:t1" }],
+                    },
+                    "Chapter:c1": { title: "   " },
+                    "TableOfContentsChapter:t1": {
+                      chapter: { __ref: "Chapter:c1" },
+                      episodeUnions: [
+                        { __ref: "Episode:e1" },
+                        { __ref: "Episode:missing" },
+                        { __ref: "Episode:no_title" },
+                      ],
+                    },
+                    "Episode:e1": {
+                      id: "901",
+                      title: " 第1話 ",
+                      publishedAt: null,
+                    },
+                    "Episode:no_title": {
+                      id: "902",
+                    },
+                  },
+                },
+              },
+            })}
+          </script>
+        </body></html>
+      `;
+      const res1 = parser.parseNovelIndex(
+        htmlWithAuthorActivity,
+        "https://kakuyomu.jp/works/123",
+      );
+      expect(res1.title).toBe("Apolloタイトル");
+      expect(res1.author).toBe("活動名著者");
+      expect(res1.synopsis).toBe("Apolloあらすじ");
+      expect(res1.chapters).toHaveLength(1);
+      expect(res1.chapters[0].partTitle).toBeNull();
+      expect(res1.chapters[0].title).toBe("第1話");
+      expect(res1.chapters[0].publishedAt).toBeNull();
+
+      // alternateAuthorName および catchphrase へのフォールバック
+      const htmlWithAltAuthor = `
+        <html><body>
+          <script id="__NEXT_DATA__" type="application/json">
+            ${JSON.stringify({
+              props: {
+                pageProps: {
+                  __APOLLO_STATE__: {
+                    "UserAccount:u2": {
+                      name: "account_name_fallback",
+                    },
+                    "Work:456": {
+                      title: "別名義作品",
+                      alternateAuthorName: "別名義著者",
+                      author: { __ref: "UserAccount:u2" },
+                      catchphrase: "キャッチコピーあらすじ",
+                    },
+                  },
+                },
+              },
+            })}
+          </script>
+        </body></html>
+      `;
+      const res2 = parser.parseNovelIndex(
+        htmlWithAltAuthor,
+        "https://kakuyomu.jp/works/456",
+      );
+      expect(res2.author).toBe("別名義著者");
+      expect(res2.synopsis).toBe("キャッチコピーあらすじ");
+
+      // UserAccount.name へのフォールバックおよび欠損時
+      const htmlWithUserName = `
+        <html><body>
+          <script id="__NEXT_DATA__" type="application/json">
+            ${JSON.stringify({
+              props: {
+                pageProps: {
+                  __APOLLO_STATE__: {
+                    "UserAccount:u3": {
+                      name: "user_id_author",
+                    },
+                    "Work:789": {
+                      author: { __ref: "UserAccount:u3" },
+                    },
+                  },
+                },
+              },
+            })}
+          </script>
+        </body></html>
+      `;
+      const res3 = parser.parseNovelIndex(
+        htmlWithUserName,
+        "https://kakuyomu.jp/works/789",
+      );
+      expect(res3.title).toBe("");
+      expect(res3.author).toBe("user_id_author");
+      expect(res3.synopsis).toBe("");
+    });
+
+    it("__NEXT_DATA__ が不正な JSON や不完全な構造の場合に安全に DOM 抽出へフォールバックすること", () => {
+      const brokenJsonHtml = `
+        <html><body>
+          <h1 id="workTitle">DOMタイトル</h1>
+          <script id="__NEXT_DATA__" type="application/json">{ invalid json </script>
+          <div class="WorkToc_container">
+            <div class="WorkToc_ChapterTitle">第一章 DOM章</div>
+            <div class="WorkToc_chapterTitle">   </div>
+            <a href="/works/123/episodes/555">第1話 DOM話</a>
+          </div>
+        </body></html>
+      `;
+      const result = parser.parseNovelIndex(
+        brokenJsonHtml,
+        "https://kakuyomu.jp/works/123",
+      );
+      expect(result.title).toBe("DOMタイトル");
+      expect(result.chapters).toHaveLength(1);
+      expect(result.chapters[0].partTitle).toBeNull();
+      expect(result.chapters[0].remoteChapterId).toBe("555");
+
+      // Work オブジェクトが存在しない、または toc 要素が欠損している __APOLLO_STATE__
+      const incompleteApolloHtml = `
+        <html><body>
+          <script id="__NEXT_DATA__" type="application/json">
+            ${JSON.stringify({
+              props: {
+                pageProps: {
+                  __APOLLO_STATE__: {
+                    "Work:123": {
+                      tableOfContentsV2: [
+                        { __ref: "TableOfContentsChapter:missing" },
+                        { __ref: "TableOfContentsChapter:no_unions" },
+                      ],
+                    },
+                    "TableOfContentsChapter:no_unions": {
+                      chapter: { __ref: "Chapter:missing_ch" },
+                    },
+                  },
+                },
+              },
+            })}
+          </script>
+          <div class="WorkToc_container">
+            <div class="WorkToc_chapterTitle">現行DOM章タイトル</div>
+            <a href="/works/123/episodes/777">第1話</a>
+          </div>
+        </body></html>
+      `;
+      const res2 = parser.parseNovelIndex(
+        incompleteApolloHtml,
+        "https://kakuyomu.jp/works/123",
+      );
+      expect(res2.chapters).toHaveLength(1);
+      expect(res2.chapters[0].partTitle).toBe("現行DOM章タイトル");
+      expect(res2.chapters[0].remoteChapterId).toBe("777");
+
+      // __APOLLO_STATE__ 自体が存在しない JSON、および Work:id が存在しない JSON
+      const noApolloHtml = `
+        <html><body>
+          <script id="__NEXT_DATA__" type="application/json">{"props":{}}</script>
+        </body></html>
+      `;
+      expect(
+        parser.parseNovelIndex(noApolloHtml, "https://kakuyomu.jp/works/123")
+          .chapters,
+      ).toEqual([]);
+
+      const noWorkHtml = `
+        <html><body>
+          <script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"__APOLLO_STATE__":{}}}}</script>
+        </body></html>
+      `;
+      expect(
+        parser.parseNovelIndex(noWorkHtml, "https://kakuyomu.jp/works/123")
+          .chapters,
+      ).toEqual([]);
     });
   });
 

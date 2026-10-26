@@ -36,6 +36,70 @@ describe("useBookshelf", () => {
     expect(result.current.isDialogOpen).toBe(false);
     expect(result.current.isSubmitting).toBe(false);
     expect(result.current.dialogError).toBeNull();
+    expect(result.current.error).toBeNull();
+  });
+
+  it("初回一覧取得（novelRepository.listNovels）が失敗した場合に error ステートが設定されること", async () => {
+    const failingRepo = {
+      listNovels: vi.fn().mockRejectedValue(new Error("DB初期ロードエラー")),
+      upsertNovelWithToc: vi.fn(),
+    } as unknown as SqlNovelRepository;
+
+    const { result } = renderHook(() => useBookshelf(), {
+      wrapper: createWrapper({ novelRepository: failingRepo }),
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.error).toBe("DB初期ロードエラー");
+    expect(result.current.novels).toEqual([]);
+
+    // 非 Error 例外の場合
+    const nonErrorRepo = {
+      listNovels: vi.fn().mockRejectedValue("文字列DBエラー"),
+      upsertNovelWithToc: vi.fn(),
+    } as unknown as SqlNovelRepository;
+
+    const { result: result2 } = renderHook(() => useBookshelf(), {
+      wrapper: createWrapper({ novelRepository: nonErrorRepo }),
+    });
+
+    await waitFor(() => {
+      expect(result2.current.isLoading).toBe(false);
+    });
+
+    expect(result2.current.error).toBe("文字列DBエラー");
+  });
+
+  it("アンマウント後に初期一覧取得が失敗してもステート更新エラーが発生しないこと", async () => {
+    let rejectList: ((reason?: unknown) => void) | null = null;
+    const customRepo = {
+      listNovels: vi.fn(
+        () =>
+          new Promise((_, reject) => {
+            rejectList = reject;
+          }),
+      ),
+      upsertNovelWithToc: vi.fn(),
+    } as unknown as SqlNovelRepository;
+
+    const { unmount } = renderHook(() => useBookshelf(), {
+      wrapper: createWrapper({ novelRepository: customRepo }),
+    });
+
+    await waitFor(() => {
+      expect(customRepo.listNovels).toHaveBeenCalled();
+    });
+
+    unmount();
+
+    await act(async () => {
+      rejectList?.(new Error("アンマウント後エラー"));
+    });
+
+    expect(customRepo.listNovels).toHaveBeenCalled();
   });
 
   it("登録済み作品が存在する場合、初期ロードで作品サマリー一覧が設定されること (AC-BS-04)", async () => {
@@ -411,5 +475,45 @@ describe("useBookshelf", () => {
 
     expect(result.current.novels).toHaveLength(1);
     expect(result.current.novels[0].title).toBe("外部追加作品");
+  });
+
+  it("reloadNovels でエラーが発生した場合に error ステートが設定され、再実行時にクリアされること", async () => {
+    const db = await resetTestDb();
+    const repo = new SqlNovelRepository(db);
+
+    const { result } = renderHook(() => useBookshelf(), {
+      wrapper: createWrapper({ novelRepository: repo }),
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    vi.spyOn(repo, "listNovels").mockRejectedValueOnce(
+      new Error("リロード失敗"),
+    );
+
+    await act(async () => {
+      await result.current.reloadNovels();
+    });
+
+    expect(result.current.error).toBe("リロード失敗");
+    expect(result.current.isLoading).toBe(false);
+
+    // 非 Error 例外
+    vi.spyOn(repo, "listNovels").mockRejectedValueOnce("非Errorリロード失敗");
+
+    await act(async () => {
+      await result.current.reloadNovels();
+    });
+
+    expect(result.current.error).toBe("非Errorリロード失敗");
+
+    // 正常復帰時に error が null にクリアされること
+    await act(async () => {
+      await result.current.reloadNovels();
+    });
+
+    expect(result.current.error).toBeNull();
   });
 });
