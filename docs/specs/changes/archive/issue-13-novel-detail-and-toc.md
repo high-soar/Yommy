@@ -3,7 +3,7 @@ type: spec-delta
 title: 作品詳細・目次画面（SCR-02）とエピソード選択・オンデマンド本文取得の実装
 description: Issue #13 に対する差分仕様、作品詳細・目次画面（SCR-02: /novels/:novelId）のコンポーネント設計、目次更新・作品削除・オンデマンド本文取得連携、テスト計画、およびSub-issue分割計画。
 issue: "#13"
-status: "Review (#13)"
+status: "Completed (Archived)"
 updated: "2026-10-26"
 tags: [delta, novel-detail, scr-02, toc, routing, kakuyomu]
 related_specs:
@@ -33,7 +33,7 @@ related_tests:
 
 ### 2.1 作品詳細・目次画面（`SCR-02`）正本仕様書の新規策定
 
-- App 全体正本として [docs/specs/features/novel-detail.md](../features/novel-detail.md) を新規策定し、以下の機能と受入条件（`AC-ND-01`〜`AC-ND-07`）を定義する：
+- App 全体正本として [docs/specs/features/novel-detail.md](../../features/novel-detail.md) を新規策定し、以下の機能と受入条件（`AC-ND-01`〜`AC-ND-07`）を定義する：
   1. **作品詳細ヘッダー（`NovelDetailHeader`）**:
      - 作品タイトル（`novel-detail-title`）、著者名（`novel-detail-author`）、あらすじ（`novel-detail-synopsis`）、話数・キャッシュ統計（`全 N 話（取得済み M 話）`：`novel-detail-stats`）を表示する。
      - **読書開始ボタン（`TR-04`）**:
@@ -56,10 +56,10 @@ related_tests:
 
 ### 2.2 関連する App 全体正本の同期更新
 
-- [docs/index.md](../../index.md): ディレクトリ構成ツリーの `docs/specs/features/` 配下に `novel-detail.md` を追加。
-- [docs/specs/requirements.md](../requirements.md): `SYS-REQ-01`, `SYS-REQ-02`, `SYS-REQ-04`, `SYS-REQ-05`, `SYS-REQ-12` の受入条件 ID 列に `AC-ND-01`〜`AC-ND-07` を追記し、フロントマター `related_specs` に `docs/specs/features/novel-detail.md` を追加。
-- [docs/specs/screen-transitions.md](../screen-transitions.md): `SCR-02` の説明および `TR-04` の遷移時振る舞いを「エピソードタップまたは『最初から読む／続きから読む』ボタンタップ時にリーダー画面へ即時遷移し、未キャッシュ時はリーダー側で本文をオンデマンド取得して表示する」に統一。フロントマター `related_specs` に `docs/specs/features/novel-detail.md` を追加。
-- [docs/specs/architecture.md](../architecture.md), [docs/specs/features/bookshelf.md](../features/bookshelf.md), [docs/specs/features/reader-view.md](../features/reader-view.md): フロントマター `related_specs` に `docs/specs/features/novel-detail.md` を追加し、`reader-view.md` の `SCN-01` シナリオに作品詳細・目次画面（`SCR-02`）経由の検証フローを同期。
+- [docs/index.md](../../../index.md): ディレクトリ構成ツリーの `docs/specs/features/` 配下に `novel-detail.md` を追加。
+- [docs/specs/requirements.md](../../requirements.md): `SYS-REQ-01`, `SYS-REQ-02`, `SYS-REQ-04`, `SYS-REQ-05`, `SYS-REQ-12` の受入条件 ID 列に `AC-ND-01`〜`AC-ND-07` を追記し、フロントマター `related_specs` に `docs/specs/features/novel-detail.md` を追加。
+- [docs/specs/screen-transitions.md](../../screen-transitions.md): `SCR-02` の説明および `TR-04` の遷移時振る舞いを「エピソードタップまたは『最初から読む／続きから読む』ボタンタップ時にリーダー画面へ即時遷移し、未キャッシュ時はリーダー側で本文をオンデマンド取得して表示する」に統一。フロントマター `related_specs` に `docs/specs/features/novel-detail.md` を追加。
+- [docs/specs/architecture.md](../../architecture.md), [docs/specs/features/bookshelf.md](../../features/bookshelf.md), [docs/specs/features/reader-view.md](../../features/reader-view.md): フロントマター `related_specs` に `docs/specs/features/novel-detail.md` を追加し、`reader-view.md` の `SCN-01` シナリオに作品詳細・目次画面（`SCR-02`）経由の検証フローを同期。
 
 ---
 
@@ -107,7 +107,7 @@ related_tests:
 
 ## 5. 申し送り事項（Handover Items: `HO-xx`）
 
-|   ID    | 申し送り事項の内容                                                                                                                                                                                                                                                                         | 解決先（対象 Issue / 成果物）     | 完了ゲート          |  状態  |
-| :-----: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------- | :------------------ | :----: |
-| `HO-04` | `src/app/router.tsx` による画面ルーティング導入、および `SCR-01` 本棚画面（#12）・`SCR-02` 作品詳細/目次画面（#13）の実装（※Issue #12 で前半のルーティング＋`SCR-01` を実装し、本 Issue #13 Sub-issue ③ #27 で後半の `SCR-02` 本格実装を統合して完全解決する）                             | Issue #12 / Issue #13 (#27 IT PR) | Issue #13 PR マージ | `Open` |
-| `HO-08` | 本棚画面（`SCR-01`）からの作品カード選択（`TR-02`）→ 作品詳細・目次画面（`SCR-02`）での目次更新・未キャッシュ話選択（`TR-04`）→ リーダー（`SCR-03`）オンデマンド取得 → 作品詳細復帰（`TR-06`）での `取得済み` バッジ反映 → 確認ダイアログ付き作品削除（`TR-07`）の実ブラウザ結合テスト検証 | Issue #13 Sub-issue ③ (#27 IT PR) | Issue #13 PR マージ | `Open` |
+|   ID    | 申し送り事項の内容                                                                                                                                                                                                                                                                         | 解決先（対象 Issue / 成果物）     | 完了ゲート          |    状態    |
+| :-----: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------- | :------------------ | :--------: |
+| `HO-04` | `src/app/router.tsx` による画面ルーティング導入、および `SCR-01` 本棚画面（#12）・`SCR-02` 作品詳細/目次画面（#13）の実装（※Issue #12 で前半のルーティング＋`SCR-01` を実装し、本 Issue #13 Sub-issue ③ #27 で後半の `SCR-02` 本格実装を統合して完全解決する）                             | Issue #12 / Issue #13 (#27 IT PR) | Issue #13 PR マージ | `Resolved` |
+| `HO-08` | 本棚画面（`SCR-01`）からの作品カード選択（`TR-02`）→ 作品詳細・目次画面（`SCR-02`）での目次更新・未キャッシュ話選択（`TR-04`）→ リーダー（`SCR-03`）オンデマンド取得 → 作品詳細復帰（`TR-06`）での `取得済み` バッジ反映 → 確認ダイアログ付き作品削除（`TR-07`）の実ブラウザ結合テスト検証 | Issue #13 Sub-issue ③ (#27 IT PR) | Issue #13 PR マージ | `Resolved` |
