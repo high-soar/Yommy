@@ -23,7 +23,7 @@ docs/
 │   ├── features/                      # [App全体正本] 画面・機能別の現在仕様書（AC一覧・コンポーネント構成・テスト責務）
 │   │   ├── bookshelf.md               # 本棚画面仕様書（SCR-01: BookshelfPage / NovelCard / AddNovelDialog / useBookshelf）
 │   │   ├── novel-detail.md            # 作品詳細・目次画面仕様書（SCR-02: NovelDetailPage / EpisodeList / useNovelDetail）
-│   │   └── reader-view.md             # 小説リーダー機能仕様書（ReaderView / ReaderToolbar / PocReaderContainer）
+│   │   └── reader-view.md             # 小説リーダー画面仕様書（SCR-03: ReaderPage / ReaderView / ReaderToolbar / ReaderChapterNav / useReader）
 │   ├── parsers/                       # [App全体正本] 小説サイト別の現在スクレイピング・DOM解析仕様書
 │   │   └── kakuyomu.md                # カクヨム パーサー・スクレイピング仕様書（kakuyomu.jp）
 │   └── changes/                       # [差分仕様 (Delta Specs)] 要望（親Issue）ごとの設計差分・テスト計画・Sub-issue分割
