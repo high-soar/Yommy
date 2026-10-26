@@ -13,7 +13,7 @@ related_specs:
   - docs/specs/features/bookshelf.md
   - docs/specs/features/reader-view.md
   - docs/specs/parsers/kakuyomu.md
-  - docs/specs/changes/issue-14-reader-navigation-bookmark-settings.md
+  - docs/specs/changes/archive/issue-14-reader-navigation-bookmark-settings.md
 related_tests:
   - src/App.test.tsx
   - src/features/novel-detail/hooks/useNovelDetail.test.ts

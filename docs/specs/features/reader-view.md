@@ -12,7 +12,7 @@ related_specs:
   - docs/specs/db-schema.md
   - docs/specs/features/bookshelf.md
   - docs/specs/features/novel-detail.md
-  - docs/specs/changes/issue-14-reader-navigation-bookmark-settings.md
+  - docs/specs/changes/archive/issue-14-reader-navigation-bookmark-settings.md
 related_tests:
   - src/App.test.tsx
   - src/features/reader/hooks/useReader.test.ts

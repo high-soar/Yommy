@@ -15,7 +15,7 @@ related_specs:
   - docs/specs/features/reader-view.md
   - docs/specs/changes/archive/issue-15-app-icon-setup.md
   - docs/specs/changes/archive/issue-13-novel-detail-and-toc.md
-  - docs/specs/changes/issue-14-reader-navigation-bookmark-settings.md
+  - docs/specs/changes/archive/issue-14-reader-navigation-bookmark-settings.md
   - docs/guidelines/testing.md
 related_tests:
   - src/app/ServiceProvider.test.tsx

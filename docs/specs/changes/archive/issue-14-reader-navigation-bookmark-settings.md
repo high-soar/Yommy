@@ -3,7 +3,7 @@ type: spec-delta
 title: 小説リーダー画面（SCR-03）の前後話遷移・しおり保存・組版設定（文字サイズ/行間）拡張
 description: Issue #14 に対する差分仕様、小説リーダー画面（SCR-03: /novels/:novelId/chapters/:chapterIndex）の正式コンポーネント・useReaderフック設計、文字サイズ・行間設定、前後話遷移、既読・しおりスクロール進捗保存、テスト計画、およびSub-issue分割計画。
 issue: "#14"
-status: "Review (#14)"
+status: "Completed (Archived)"
 updated: "2026-10-26"
 tags: [delta, reader, scr-03, typography, bookmark, scroll-progress, navigation]
 related_specs:
@@ -40,7 +40,7 @@ related_tests:
 
 ### 2.1 小説リーダー画面（`SCR-03`）正本仕様書の正式化（`docs/specs/features/reader-view.md`）
 
-[docs/specs/features/reader-view.md](../features/reader-view.md) を PoC コンテナ仕様から正式な `SCR-03` 仕様へ全面更新し、以下のモジュール構成と受入条件（`AC-RD-01`〜`AC-RD-08`）を定義する：
+[docs/specs/features/reader-view.md](../../features/reader-view.md) を PoC コンテナ仕様から正式な `SCR-03` 仕様へ全面更新し、以下のモジュール構成と受入条件（`AC-RD-01`〜`AC-RD-08`）を定義する：
 
 1. **状態管理フック（`useReader`: `src/features/reader/hooks/useReader.ts`）の新設**:
    - **エピソード取得と未キャッシュ話オンデマンド取得（`SYS-REQ-02`, `TR-03`, `TR-04`, `TR-05`）**:
@@ -104,11 +104,11 @@ related_tests:
 
 ### 2.2 関連する App 全体正本の同期更新
 
-- [docs/index.md](../../index.md): `docs/specs/features/reader-view.md` の説明を正式コンポーネント構成に更新。
-- [docs/specs/requirements.md](../requirements.md): `SYS-REQ-02`, `SYS-REQ-07`〜`SYS-REQ-12` の受入条件 ID 列に `AC-RD-01`〜`AC-RD-08` を追記し、`related_specs` / `related_tests` を最新化。
-- [docs/specs/screen-transitions.md](../screen-transitions.md): `SCR-03`, `TR-05`, `TR-06` の記述を常時表示型ツールバー・前後話ナビゲーション・既読/しおり保存仕様に合わせて明確化。
-- [docs/specs/architecture.md](../architecture.md), [docs/specs/features/novel-detail.md](../features/novel-detail.md): `PocReaderContainer` の記述を `ReaderContainer` / `useReader` に更新し、`related_specs` に本差分仕様を追加。
-- [docs/quality/bug-and-handover-log.md](../../quality/bug-and-handover-log.md): `HO-05` の解決先 Sub-issue（`#34`）を明記し、実ブラウザ結合テスト検証項目 `HO-09` を登録。
+- [docs/index.md](../../../index.md): `docs/specs/features/reader-view.md` の説明を正式コンポーネント構成に更新。
+- [docs/specs/requirements.md](../../requirements.md): `SYS-REQ-02`, `SYS-REQ-07`〜`SYS-REQ-12` の受入条件 ID 列に `AC-RD-01`〜`AC-RD-08` を追記し、`related_specs` / `related_tests` を最新化。
+- [docs/specs/screen-transitions.md](../../screen-transitions.md): `SCR-03`, `TR-05`, `TR-06` の記述を常時表示型ツールバー・前後話ナビゲーション・既読/しおり保存仕様に合わせて明確化。
+- [docs/specs/architecture.md](../../architecture.md), [docs/specs/features/novel-detail.md](../../features/novel-detail.md): `PocReaderContainer` の記述を `ReaderContainer` / `useReader` に更新し、`related_specs` に本差分仕様を追加。
+- [docs/quality/bug-and-handover-log.md](../../../quality/bug-and-handover-log.md): `HO-05` の解決先 Sub-issue（`#34`）を明記し、実ブラウザ結合テスト検証項目 `HO-09` を登録。
 
 ---
 
@@ -158,7 +158,7 @@ related_tests:
 
 ## 5. 申し送り事項（Handover Items: `HO-xx`）
 
-|   ID    | 申し送り事項の内容                                                                                                                                                                                                                                                             | 解決先（対象 Issue / 成果物）     | 完了ゲート          |  状態  |
-| :-----: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------- | :------------------ | :----: |
-| `HO-05` | 小説リーダー画面（`SCR-03`）の文字サイズ・行間カスタマイズ、しおり自動保存、および前後話・目次ナビゲーションの実装（`SYS-REQ-09, 11, 12`）（※余白・フォント種別およびタップ/音量キー1画面送りはロードマップ通り Milestone `v0.2` スコープ）                                    | Issue #14 Sub-issue ③ (#34 IT PR) | Issue #14 PR マージ | `Open` |
-| `HO-09` | 小説リーダー画面（`SCR-03`）での文字サイズ・行間変更とリロード永続化、前後エピソード遷移（`TR-05`）、作品詳細・目次画面（`SCR-02`）への復帰（`TR-06`）時の `既読`・`しおり` バッジ反映、および「続きから読む」でのスクロール進捗位置復元の実ブラウザ結合テスト（`SCN-01`）検証 | Issue #14 Sub-issue ③ (#34 IT PR) | Issue #14 PR マージ | `Open` |
+|   ID    | 申し送り事項の内容                                                                                                                                                                                                                                                             | 解決先（対象 Issue / 成果物）     | 完了ゲート          |    状態    |
+| :-----: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------- | :------------------ | :--------: |
+| `HO-05` | 小説リーダー画面（`SCR-03`）の文字サイズ・行間カスタマイズ、しおり自動保存、および前後話・目次ナビゲーションの実装（`SYS-REQ-09, 11, 12`）（※余白・フォント種別およびタップ/音量キー1画面送りはロードマップ通り Milestone `v0.2` スコープ）                                    | Issue #14 Sub-issue ③ (#34 IT PR) | Issue #14 PR マージ | `Resolved` |
+| `HO-09` | 小説リーダー画面（`SCR-03`）での文字サイズ・行間変更とリロード永続化、前後エピソード遷移（`TR-05`）、作品詳細・目次画面（`SCR-02`）への復帰（`TR-06`）時の `既読`・`しおり` バッジ反映、および「続きから読む」でのスクロール進捗位置復元の実ブラウザ結合テスト（`SCN-01`）検証 | Issue #14 Sub-issue ③ (#34 IT PR) | Issue #14 PR マージ | `Resolved` |
