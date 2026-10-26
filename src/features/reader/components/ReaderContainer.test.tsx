@@ -1,4 +1,10 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  act,
+  fireEvent,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -161,7 +167,7 @@ interface TestWrapperProps extends ReaderContainerProps {
 }
 
 const TestWrapper: React.FC<TestWrapperProps> = ({
-  initialPath = "/novels/kakuyomu:16817330658027210412/chapters/1",
+  initialPath,
   novelRepository,
   chapterRepository,
   settingsRepository,
@@ -169,8 +175,14 @@ const TestWrapper: React.FC<TestWrapperProps> = ({
   parserRegistry,
   ...containerProps
 }) => {
+  const resolvedPath =
+    initialPath ??
+    (containerProps.novelId && containerProps.chapterIndex
+      ? `/novels/${containerProps.novelId}/chapters/${containerProps.chapterIndex}`
+      : "/novels/kakuyomu:16817330658027210412/chapters/1");
+
   return (
-    <RouterProvider initialPath={initialPath}>
+    <RouterProvider initialPath={resolvedPath}>
       <TestObserver
         containerProps={containerProps}
         services={{
@@ -395,7 +407,7 @@ describe("ReaderContainer", () => {
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
-          `/novels/${sampleNovel.id}`,
+          `/novels/${encodeURIComponent(sampleNovel.id)}`,
         );
       });
     });
@@ -467,7 +479,7 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-next-chapter")).toBeInTheDocument();
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
       await user.click(screen.getByTestId("reader-next-chapter"));
@@ -492,14 +504,14 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-next-chapter")).toBeInTheDocument();
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
       await user.click(screen.getByTestId("reader-next-chapter"));
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
-          `/novels/${sampleNovel.id}/chapters/2`,
+          `/novels/${encodeURIComponent(sampleNovel.id)}/chapters/2`,
         );
       });
     });
@@ -521,7 +533,7 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-prev-chapter")).toBeInTheDocument();
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
       await user.click(screen.getByTestId("reader-prev-chapter"));
@@ -546,14 +558,14 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-prev-chapter")).toBeInTheDocument();
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
       await user.click(screen.getByTestId("reader-prev-chapter"));
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
-          `/novels/${sampleNovel.id}/chapters/1`,
+          `/novels/${encodeURIComponent(sampleNovel.id)}/chapters/1`,
         );
       });
     });
@@ -574,7 +586,7 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-next-chapter")).toBeInTheDocument();
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
       await user.click(screen.getByTestId("reader-next-chapter"));
@@ -582,6 +594,82 @@ describe("ReaderContainer", () => {
       await waitFor(() => {
         expect(onNavigateChapter).toHaveBeenCalledWith(sampleNovel.id, 2);
       });
+    });
+
+    it("novelId 省略時でも novel.id から targetId を解決して前話遷移できること", async () => {
+      const user = userEvent.setup();
+      const onNavigateChapter = vi.fn();
+      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
+      const { repo: chapterRepository } = createMockChapterRepo();
+
+      render(
+        <TestWrapper
+          chapterIndex={2}
+          onNavigateChapter={onNavigateChapter}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId("reader-prev-chapter"));
+
+      await waitFor(() => {
+        expect(onNavigateChapter).toHaveBeenCalledWith(sampleNovel.id, 1);
+      });
+    });
+
+    it("第1話で「前の話へ」イベントが発火しても（goToChapter が false を返却）、遷移処理が実行されないこと", async () => {
+      const onNavigateChapter = vi.fn();
+      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
+      const { repo: chapterRepository } = createMockChapterRepo();
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          onNavigateChapter={onNavigateChapter}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+      });
+
+      // disabled ボタンに対して直接 click イベントを発火（goToChapter(0) が false を返す）
+      fireEvent.click(screen.getByTestId("reader-prev-chapter"));
+
+      expect(onNavigateChapter).not.toHaveBeenCalled();
+    });
+
+    it("最終話で「次の話へ」イベントが発火しても（goToChapter が false を返却）、遷移処理が実行されないこと", async () => {
+      const onNavigateChapter = vi.fn();
+      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
+      const { repo: chapterRepository } = createMockChapterRepo();
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={3}
+          onNavigateChapter={onNavigateChapter}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+      });
+
+      // disabled ボタンに対して直接 click イベントを発火（goToChapter(4) が false を返す）
+      fireEvent.click(screen.getByTestId("reader-next-chapter"));
+
+      expect(onNavigateChapter).not.toHaveBeenCalled();
     });
   });
 
@@ -601,7 +689,7 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("toggle-orientation")).toBeInTheDocument();
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
       expect(screen.getByTestId("reader-view")).toHaveAttribute(
@@ -634,7 +722,7 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("theme-sepia")).toBeInTheDocument();
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
       await user.click(screen.getByTestId("theme-sepia"));
@@ -662,7 +750,7 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("font-size-increase")).toBeInTheDocument();
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
       await user.click(screen.getByTestId("font-size-increase"));
@@ -690,7 +778,7 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("line-height-increase")).toBeInTheDocument();
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
       await user.click(screen.getByTestId("line-height-increase"));
@@ -735,7 +823,9 @@ describe("ReaderContainer", () => {
         configurable: true,
       });
 
-      readerView.dispatchEvent(new Event("scroll"));
+      await act(async () => {
+        readerView.dispatchEvent(new Event("scroll"));
+      });
 
       await waitFor(() => {
         expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0.5);
@@ -757,8 +847,10 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("fetch-novel-button")).toBeInTheDocument();
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
+
+      expect(screen.getByTestId("fetch-novel-button")).toBeInTheDocument();
 
       await user.click(screen.getByTestId("fetch-novel-button"));
 

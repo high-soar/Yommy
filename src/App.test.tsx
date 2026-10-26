@@ -53,8 +53,14 @@ describe("App コンポーネント", () => {
       expect(screen.getByTestId("app-title")).toHaveTextContent("Yommy");
       await waitFor(
         () => {
+          expect(screen.getByTestId("reader-page")).toBeInTheDocument();
           expect(screen.getByTestId("reader-toolbar")).toBeInTheDocument();
-          expect(screen.getByTestId("reader-nav")).toBeInTheDocument();
+          expect(
+            screen.getByTestId("reader-back-to-bookshelf"),
+          ).toBeInTheDocument();
+          expect(
+            screen.getByTestId("reader-back-to-detail"),
+          ).toBeInTheDocument();
         },
         { timeout: 3000 },
       );

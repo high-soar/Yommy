@@ -3,7 +3,7 @@ import { ServiceProvider } from "./app/ServiceProvider";
 import { RouterProvider, useRouter } from "./app/router";
 import { BookshelfContainer } from "./features/bookshelf/components/BookshelfContainer";
 import { NovelDetailContainer } from "./features/novel-detail/components/NovelDetailContainer";
-import { PocReaderContainer } from "./features/reader/components/PocReaderContainer";
+import { ReaderContainer } from "./features/reader/components/ReaderContainer";
 
 /**
  * App コンポーネントの Props
@@ -46,12 +46,10 @@ const AppContent: React.FC<AppContentProps> = ({ title, initialWorkUrl }) => {
           <NovelDetailContainer novelId={router.route.novelId} />
         )}
         {router.route.name === "reader" && (
-          <PocReaderContainer
+          <ReaderContainer
             novelId={router.route.novelId}
             chapterIndex={router.route.chapterIndex}
             initialWorkUrl={initialWorkUrl}
-            onBackToBookshelf={router.navigateToBookshelf}
-            onBackToDetail={(id) => router.navigateToNovelDetail(id)}
           />
         )}
       </main>
