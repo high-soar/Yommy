@@ -1,17 +1,7 @@
 import React from "react";
-import type { NovelRecord } from "../../../storage/types";
+import type { NovelDetailHeaderProps } from "../types";
 
-export interface NovelDetailHeaderProps {
-  novel: NovelRecord;
-  isRefreshing: boolean;
-  refreshMessage?: string | null;
-  error?: string | null;
-  onBackToBookshelf: () => void;
-  onStartFromBeginning: () => void;
-  onResumeBookmark: (chapterIndex: number) => void;
-  onRefreshToc: () => void | Promise<void>;
-  onOpenDeleteDialog: () => void;
-}
+export type { NovelDetailHeaderProps } from "../types";
 
 /**
  * 作品詳細ヘッダーコンポーネント（Presentational）

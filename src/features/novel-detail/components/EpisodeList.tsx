@@ -1,12 +1,8 @@
 import React from "react";
-import type { ChapterSummary } from "../../../storage/types";
 import { EpisodeListItem } from "./EpisodeListItem";
+import type { EpisodeListProps } from "../types";
 
-export interface EpisodeListProps {
-  chapters: ChapterSummary[];
-  bookmarkChapterIndex: number | null;
-  onSelectEpisode: (chapterIndex: number) => void;
-}
+export type { EpisodeListProps } from "../types";
 
 /**
  * 章見出し付きエピソード一覧コンポーネント（フラットリスト形式）

@@ -1,12 +1,7 @@
 import React, { useEffect } from "react";
+import type { DeleteConfirmDialogProps } from "../types";
 
-export interface DeleteConfirmDialogProps {
-  isOpen: boolean;
-  novelTitle: string;
-  isDeleting: boolean;
-  onClose: () => void;
-  onConfirm: () => void | Promise<void>;
-}
+export type { DeleteConfirmDialogProps } from "../types";
 
 /**
  * 作品削除確認モーダルダイアログ

@@ -3,7 +3,7 @@ import { fn } from "@storybook/test";
 import { NovelDetailHeader } from "./NovelDetailHeader";
 import type { NovelRecord } from "../../../storage/types";
 
-export const sampleNovel: NovelRecord = {
+const sampleNovel: NovelRecord = {
   id: "kakuyomu:16817330658027210412",
   siteType: "kakuyomu",
   remoteWorkId: "16817330658027210412",
