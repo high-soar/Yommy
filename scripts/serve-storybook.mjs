@@ -45,6 +45,15 @@ const server = http.createServer((req, res) => {
 
     res.setHeader("Content-Type", contentType);
     const stream = fs.createReadStream(filePath);
+    stream.on("error", () => {
+      if (!res.headersSent) {
+        res.statusCode = 500;
+      }
+      res.end();
+    });
+    res.on("error", () => {
+      stream.destroy();
+    });
     stream.pipe(res);
   });
 });
