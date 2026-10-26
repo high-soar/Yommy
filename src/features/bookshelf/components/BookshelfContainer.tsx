@@ -4,7 +4,9 @@ import { useBookshelf } from "../hooks/useBookshelf";
 import { BookshelfPage } from "./BookshelfPage";
 
 export interface BookshelfContainerProps {
+  /** 作品カード本体タップ時の遷移コールバック（省略時は useRouter().navigateToNovelDetail を使用） */
   onSelectNovel?: (novelId: string) => void;
+  /** 「続きから読む」タップ時の遷移コールバック（省略時は useRouter().navigateToReader を使用） */
   onResumeNovel?: (novelId: string, chapterIndex: number) => void;
 }
 
