@@ -21,6 +21,13 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Configure APT mirrors and timeouts
+        run: |
+          grep -rl "azure.archive.ubuntu.com" /etc/apt 2>/dev/null | xargs -r sudo sed -i "s/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g" || true
+          echo 'Acquire::Retries "3";' | sudo tee /etc/apt/apt.conf.d/99-retries
+          echo 'Acquire::http::Timeout "15";' | sudo tee -a /etc/apt/apt.conf.d/99-retries
+          echo 'Acquire::https::Timeout "15";' | sudo tee -a /etc/apt/apt.conf.d/99-retries
+
       - name: Install dependencies
         run: npm ci
 
@@ -65,18 +72,10 @@ jobs:
 
       - name: Configure APT mirrors and timeouts
         run: |
-          sudo sed -i 's/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g' /etc/apt/sources.list /etc/apt/sources.list.d/* || true
+          grep -rl "azure.archive.ubuntu.com" /etc/apt 2>/dev/null | xargs -r sudo sed -i "s/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g" || true
           echo 'Acquire::Retries "3";' | sudo tee /etc/apt/apt.conf.d/99-retries
           echo 'Acquire::http::Timeout "15";' | sudo tee -a /etc/apt/apt.conf.d/99-retries
           echo 'Acquire::https::Timeout "15";' | sudo tee -a /etc/apt/apt.conf.d/99-retries
-
-      - name: Cache APT font packages
-        uses: actions/cache@v4
-        with:
-          path: /var/cache/apt/archives
-          key: apt-fonts-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: |
-            apt-fonts-${{ runner.os }}-
 
       - name: Install Japanese Fonts & System Dependencies
         env:
