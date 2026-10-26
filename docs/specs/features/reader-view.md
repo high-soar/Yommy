@@ -123,6 +123,9 @@ src/features/reader/
   - 縮小ボタン: `data-testid="line-height-decrease"`（クリック時に `onChangeLineHeight(Math.max(1.4, Math.round((lineHeight - 0.2) * 10) / 10))` を呼び出す。`lineHeight <= 1.4` のときは `disabled`）。
   - 現在値表示: `data-testid="line-height-value"`（`{lineHeight.toFixed(1)}` を表示）。
   - 拡大ボタン: `data-testid="line-height-increase"`（クリック時に `onChangeLineHeight(Math.min(2.4, Math.round((lineHeight + 0.2) * 10) / 10))` を呼び出す。`lineHeight >= 2.4` のときは `disabled`）。
+- **手動作品取得・更新トリガー（任意表示）**:
+  - `onFetchNovel` 指定時のみ `data-testid="fetch-novel-button"` ボタンを表示し、クリック時に `onFetchNovel()` を呼び出す。
+  - ローディング中（`isLoading === true`）は `disabled` とし、ボタン内ラベルにスピナーまたは `取得中...` を表示する（通常時は `作品を取得/更新`）。
 
 ---
 
@@ -195,6 +198,8 @@ src/features/reader/
      - 最大スクロール量: `maxScroll = element.scrollWidth - element.clientWidth`
      - 進捗率算出: `progress = maxScroll > 0 ? Math.min(1, Math.max(0, Math.abs(element.scrollLeft) / maxScroll)) : 0`
      - 位置復元: `maxScroll > 0` のとき `element.scrollLeft = -clampedInitialProgress * maxScroll`（`maxScroll <= 0` のときは `0`）
+  3. **スクロール位置復元の発火トリガー条件**:
+     - マウント時、および `initialScrollProgress`・`bodyHtml`（エピソード切替時）・`writingMode`（縦書き/横書き切替時）のいずれかが変化したタイミングで、`clampedInitialProgress = Math.min(1, Math.max(0, initialScrollProgress))` に基づくスクロール位置復元を実行する（これにより、`initialScrollProgress` が `0 → 0` のまま別エピソードへ遷移した場合でも確実に先頭位置へリセットされ、組み方向切替時にも進捗位置が同期される）。
 
 ---
 
@@ -314,6 +319,13 @@ export interface UseReaderResult {
    - **スクロール操作時および画面離脱時**:
      - `updateScrollProgress(progress)` 呼び出し時、`0.0 〜 1.0` にクランプした進捗率で `scrollProgress` を更新し、`novelRepository.updateBookmark(novel.id, chapterIndex, clampedProgress)` で DB へ自動保存する。
      - 「作品詳細へ（目次へ戻る）」（`TR-06`）または「本棚へ戻る」押下時には、`flushBookmark()` により最新の `(chapterIndex, scrollProgress)` を確実に DB 保存してから画面遷移コールバックを呼び出す。
+5. **前後エピソード遷移（`goToChapter(targetChapterIndex)`、`TR-05`）**:
+   - `novel === null`、または `targetChapterIndex < 1` もしくは `targetChapterIndex > totalChapters`（範囲外）が指定された場合は何もせず `false` を返す。
+   - 有効範囲内の場合は、遷移前の現在話（次話遷移時を含む）に対して `chapterRepository.markChapterRead(novel.id, chapterIndex, true)` を実行した上で、`targetChapterIndex` のエピソード読み込み（未キャッシュ時はオンデマンド本文取得・`saveChapterBody` 保存）、表示完了時の `markChapterRead(novel.id, targetChapterIndex, true)`、および新エピソード先頭へのしおり更新（`updateBookmark(novel.id, targetChapterIndex, 0)`、`initialScrollProgress = 0`, `scrollProgress = 0`）を実行し、`true` を返す。
+6. **手動作品取得・更新パイプライン（`fetchNovelFromUrl()`）**:
+   - 単体検証・手動取得トリガー時、対象 URL を `const targetUrl = novel?.canonicalUrl ?? initialWorkUrl` として解決した上で、**HTTP 通信を行う前に** `parserRegistry.requireParser(targetUrl)` および `parser.normalizeWorkUrl(targetUrl)` を呼び出す（未対応サイトや不正 URL の場合は通信を行わずに直ちに `error` をセットして終了する）。
+   - 対応サイトの場合は `httpClient.getHtml({ url: normalizedWorkUrl })` で目次 HTML を取得し、`parser.parseNovelIndex(...)` → `novelRepository.upsertNovelWithToc(...)` で作品および目次を DB 保存する。
+   - 対象話（`chapterIndex`）が存在する場合はエピソード本文を取得・サニタイズ解析して `chapterRepository.saveChapterBody(...)` で保存し、`markChapterRead` および `updateBookmark` を反映して表示を更新する。
 
 ---
 

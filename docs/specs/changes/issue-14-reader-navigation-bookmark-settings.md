@@ -15,8 +15,12 @@ related_specs:
   - docs/specs/requirements.md
   - docs/specs/db-schema.md
 related_tests:
-  - src/features/reader/components/ReaderView.test.tsx
+  - src/features/reader/hooks/useReader.test.ts
   - src/features/reader/components/ReaderToolbar.test.tsx
+  - src/features/reader/components/ReaderChapterNav.test.tsx
+  - src/features/reader/components/ReaderView.test.tsx
+  - src/features/reader/components/ReaderPage.test.tsx
+  - src/features/reader/components/ReaderContainer.test.tsx
   - test/vrt/vrt.spec.ts
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
 ---
@@ -53,6 +57,9 @@ related_tests:
        - `changeFontSize(nextFontSizePx)`: `12〜32` (px) の範囲にクランプして更新（UI ステッパーは `±2px` 刻み、初期値 `18px`）
        - `changeLineHeight(nextLineHeight)`: `1.4〜2.4` の範囲にクランプ（小数第1位丸め）して更新（UI ステッパーは `±0.2` 刻み、初期値 `1.8`）
        - ※画面余白（`pageMarginPx`）・フォント種別（`fontFamily`）およびタップ1画面送り（`enableTapPaging`）はロードマップ通り Milestone `v0.2` スコープとする。
+   - **前後エピソード遷移（`goToChapter(targetChapterIndex)`）と手動作品取得（`fetchNovelFromUrl()`）**:
+     - `goToChapter(targetChapterIndex)` は `novel === null` または範囲外（`< 1` / `> totalChapters`）指定時に `false` を返して遷移せず、有効範囲時は現在話の既読化・対象話の取得（未キャッシュ時はオンデマンド取得）・対象話の既読化・しおり先頭（`0`）更新を行って `true` を返す。
+     - `fetchNovelFromUrl()` は `targetUrl = novel?.canonicalUrl ?? initialWorkUrl` を解決し、**HTTP 通信前に** `parserRegistry.requireParser(targetUrl)` と `parser.normalizeWorkUrl(targetUrl)` を実行（未対応 URL 時は通信せず即座に `error` 設定）した上で目次・本文を取得・保存する。
 
 2. **操作ツールバー（`ReaderToolbar`）の拡張**:
    - 常時表示型のヘッダーツールバーとして、以下の要素を配置する：
@@ -66,6 +73,7 @@ related_tests:
        - 縮小ボタン `data-testid="line-height-decrease"`（`lineHeight <= 1.4` で `disabled`、押下時 `round(lineHeight - 0.2, 1)`）
        - 現在値表示 `data-testid="line-height-value"`（表示例: `1.8`）
        - 拡大ボタン `data-testid="line-height-increase"`（`lineHeight >= 2.4` で `disabled`、押下時 `round(lineHeight + 0.2, 1)`）
+     - 手動取得ボタン（`onFetchNovel` 指定時のみ表示）: `data-testid="fetch-novel-button"`（`isLoading === true` 時は `disabled` かつ `取得中...`、通常時は `作品を取得/更新`）。
 
 3. **前後エピソード遷移ナビゲーションバー（`ReaderChapterNav`）の新設**:
    - 常時表示型のエピソード移動バー（`data-testid="reader-chapter-nav"`）を新設する：
@@ -85,6 +93,8 @@ related_tests:
        - 最大スクロール量 `maxScroll = scrollWidth - clientWidth`
        - 算出: `progress = maxScroll > 0 ? clamp(Math.abs(scrollLeft) / maxScroll, 0, 1) : 0`
        - 復元: `element.scrollLeft = -initialScrollProgress * maxScroll`
+     - **位置復元の発火トリガー条件**:
+       - マウント時、および `initialScrollProgress`・`bodyHtml`（エピソード切替）・`writingMode`（組み方向切替）の変化時にスクロール位置復元を実行する（`initialScrollProgress` が `0 → 0` のまま次話へ遷移した際も確実に先頭へリセットされるようにする）。
 
 5. **画面レイアウト統合（`ReaderPage`）と Container（`ReaderContainer`）への再編**:
    - `ReaderPage`（Presentational）を新設し、`ReaderToolbar`・`ReaderChapterNav`・ローディング（`reader-loading`）・エラー（`reader-error`）・空状態（`reader-empty`）・通常本文（`ReaderView`）の排他描画を管理する。
@@ -110,7 +120,7 @@ related_tests:
   - `novel.bookmarkChapterIndex === chapterIndex` 一致時の保存済み `bookmarkScrollProgress` 復元と、不一致時（別話・前後話遷移時）の先頭（`0`）リセット＆ `updateBookmark(novelId, chapterIndex, 0)` 更新
   - `updateScrollProgress(progress)` 呼び出し時のクランプ処理（`0.0〜1.0`）と `novelRepository.updateBookmark` 永続化
   - `toggleWritingMode`, `changeTheme`, `changeFontSize`（12〜32px クランプ）, `changeLineHeight`（1.4〜2.4 クランプ・丸め）による State 即時更新と `settingsRepository.updateReaderSettings` 永続化
-  - 前後話存在判定（`hasPrevChapter: chapterIndex > 1`, `hasNextChapter: chapterIndex < totalChapters`）および未登録作品・通信失敗時のエラー状態遷移
+  - 前後話存在判定（`hasPrevChapter: chapterIndex > 1`, `hasNextChapter: chapterIndex < totalChapters`）、`goToChapter` の範囲外ガード（`false` 返却）と有効遷移（`true` 返却・既読更新・しおり先頭更新）、`fetchNovelFromUrl` の通信前 URL 正規化検証、および未登録作品・通信失敗時のエラー状態遷移
 - **UI コンポーネント単体テスト（Portable Stories `composeStories`、1対1 `*.stories.tsx` / `*.test.tsx`）**:
   - `ReaderToolbar.test.tsx`: 戻るボタン（目次へ・本棚へ）の表示と発火、縦横切替・4テーマ切替、文字サイズ（`12px` 下限 disabled / `32px` 上限 disabled / `±2px` 増減発火）、行間（`1.4` 下限 disabled / `2.4` 上限 disabled / `±0.2` 増減発火）
   - `ReaderChapterNav.test.tsx`: 現在話数表示（`第 N 話 / 全 M 話`）、第1話での「前の話へ」disabled、最終話での「次の話へ」disabled、中間話での前後話ボタン発火、ローディング中の両方 disabled
