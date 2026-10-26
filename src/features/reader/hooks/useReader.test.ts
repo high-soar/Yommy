@@ -2,14 +2,14 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import React from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { ServiceProvider } from "../../../app/ServiceProvider";
-import { useReader } from "./useReader";
+import { useReader, toErrorMessage } from "./useReader";
 import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
 import { SqlNovelRepository } from "../../../storage/repositories/novelRepository";
 import { SqlChapterRepository } from "../../../storage/repositories/chapterRepository";
 import { SqlSettingsRepository } from "../../../storage/repositories/settingsRepository";
 import { MockHttpClient } from "../../../bridges/http/mockHttpClient";
 import { createDefaultParserRegistry } from "../../../parsers/parserRegistry";
-import type { SettingsRepository } from "../../../storage/types";
+import type { NovelRecord, SettingsRepository } from "../../../storage/types";
 import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 import episodeContentHtml from "../../../parsers/kakuyomu/__fixtures__/episode_content.html?raw";
 
@@ -340,6 +340,11 @@ describe("useReader", () => {
     });
 
     it("アンマウント後に非同期処理が完了した場合に状態更新が行われないこと（isMounted ガード）", async () => {
+      let resolveGetNovel: ((value: NovelRecord | null) => void) | null = null;
+      const deferredNovel = new Promise<NovelRecord | null>((resolve) => {
+        resolveGetNovel = resolve;
+      });
+
       const db = await resetTestDb();
       const novelRepo = new SqlNovelRepository(db);
       const chapterRepo = new SqlChapterRepository(db);
@@ -347,6 +352,10 @@ describe("useReader", () => {
         chapterCount: 2,
         cachedCount: 2,
       });
+
+      vi.spyOn(novelRepo, "getNovelById").mockImplementation(
+        () => deferredNovel,
+      );
 
       const { unmount } = renderHook(
         () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
@@ -358,9 +367,17 @@ describe("useReader", () => {
         },
       );
 
-      // 直ちにアンマウント
+      await waitFor(() => {
+        expect(novelRepo.getNovelById).toHaveBeenCalled();
+      });
+
+      // 非同期解決前にアンマウント
       unmount();
-      // エラーなく完了することを確認
+
+      // その後非同期処理を完了させる
+      await act(async () => {
+        resolveGetNovel!(seeded);
+      });
     });
   });
 
@@ -387,6 +404,46 @@ describe("useReader", () => {
       expect(result.current.theme).toBe("dark");
       expect(result.current.fontSizePx).toBe(22);
       expect(result.current.lineHeight).toBe(2.0);
+    });
+
+    it("初回ロード時に settingsRepository.getReaderSettings が例外を投げた場合でも、デフォルト設定値が維持されて正常にロードが完了すること", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 2,
+        cachedCount: 2,
+      });
+
+      const mockSettingsRepo: SettingsRepository = {
+        getReaderSettings: async () => {
+          throw new Error("設定読み出し失敗");
+        },
+        updateReaderSettings: async () => {
+          throw new Error("更新不可");
+        },
+      };
+
+      const { result } = renderHook(
+        () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+        {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+            settingsRepository: mockSettingsRepo,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.writingMode).toBe("vertical-rl");
+      expect(result.current.theme).toBe("light");
+      expect(result.current.fontSizePx).toBe(18);
+      expect(result.current.lineHeight).toBe(1.8);
+      expect(result.current.error).toBeNull();
     });
 
     it("toggleWritingMode で vertical-rl と horizontal-tb が相互に切り替わり永続化されること (AC-RD-03)", async () => {
@@ -750,10 +807,6 @@ describe("useReader", () => {
         cachedCount: 2,
       });
 
-      vi.spyOn(chapterRepo, "getChapter").mockRejectedValueOnce(
-        new Error("DB 読み込み例外"),
-      );
-
       const { result } = renderHook(
         () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
         {
@@ -767,6 +820,10 @@ describe("useReader", () => {
       await waitFor(() => {
         expect(result.current.isLoading).toBe(false);
       });
+
+      vi.spyOn(chapterRepo, "getChapter").mockRejectedValueOnce(
+        new Error("DB 読み込み例外"),
+      );
 
       let transitionResult = true;
       await act(async () => {
@@ -1256,6 +1313,122 @@ describe("useReader", () => {
       expect(result.current.novel?.title).toBe("空作品");
       expect(result.current.chapter).toBeNull();
       expect(result.current.error).toBeNull();
+    });
+
+    it("作品ロード済みの状態で fetchNovelFromUrl を呼び出した場合、novel.canonicalUrl が対象 URL として解決されること", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 2,
+        cachedCount: 2,
+      });
+
+      const httpClient = createMockHttpClient();
+
+      const { result } = renderHook(() => useReader({ novelId: seeded.id }), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          httpClient,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.fetchNovelFromUrl();
+      });
+
+      expect(result.current.novel).not.toBeNull();
+      expect(result.current.novel?.id).toBe(seeded.id);
+      expect(result.current.error).toBeNull();
+    });
+
+    it("現在の chapterIndex が目次に存在しない場合、第1話（chapters[0]）にフォールバックして取得・反映されること", async () => {
+      const httpClient = createMockHttpClient();
+
+      const { result } = renderHook(
+        () =>
+          useReader({
+            chapterIndex: 99,
+            initialWorkUrl: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}`,
+          }),
+        {
+          wrapper: createWrapper({ httpClient }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.fetchNovelFromUrl();
+      });
+
+      expect(result.current.novel).not.toBeNull();
+      expect(result.current.chapter).not.toBeNull();
+      expect(result.current.chapterIndex).toBe(1);
+      expect(result.current.error).toBeNull();
+    });
+
+    it("fetchNovelFromUrl 完了時に chapterRepository.getChapter が null を返却した場合、chapter が null となること", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+
+      const httpClient = createMockHttpClient();
+
+      const { result } = renderHook(
+        () =>
+          useReader({
+            initialWorkUrl: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}`,
+          }),
+        {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+            httpClient,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      vi.spyOn(chapterRepo, "getChapter").mockResolvedValue(null);
+
+      await act(async () => {
+        await result.current.fetchNovelFromUrl();
+      });
+
+      expect(result.current.novel).not.toBeNull();
+      expect(result.current.chapter).toBeNull();
+      expect(result.current.error).toBeNull();
+    });
+  });
+
+  describe("toErrorMessage ヘルパー関数", () => {
+    it("Error インスタンスで非空 message の場合はその message を返却すること", () => {
+      expect(toErrorMessage(new Error("カスタムエラー"))).toBe(
+        "カスタムエラー",
+      );
+    });
+
+    it("Error インスタンスで空 message の場合はデフォルトメッセージを返却すること", () => {
+      expect(toErrorMessage(new Error(""))).toBe("エラーが発生しました");
+    });
+
+    it("文字列が渡された場合はその文字列を返却すること", () => {
+      expect(toErrorMessage("文字列例外")).toBe("文字列例外");
+    });
+
+    it("その他の型（オブジェクト等）が渡された場合はデフォルトメッセージを返却すること", () => {
+      expect(toErrorMessage({ code: 500 })).toBe("エラーが発生しました");
     });
   });
 
