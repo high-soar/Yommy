@@ -10,6 +10,8 @@ export interface AppProps {
   title?: string;
   /** 初期取得対象の作品 URL（省略時はデフォルトのカクヨム検証用作品URL） */
   initialWorkUrl?: string;
+  /** 初期遷移パス（単体テスト・Storybook用、省略時は現在のURLまたは "/"） */
+  initialPath?: string;
 }
 
 /**
@@ -21,6 +23,7 @@ export interface AppProps {
 export const App: React.FC<AppProps> = ({
   title = "Yommy",
   initialWorkUrl,
+  initialPath: _initialPath,
 }) => {
   return (
     <ServiceProvider>
