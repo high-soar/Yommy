@@ -32,7 +32,24 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": [
         "warn",
-        { allowConstantExport: true },
+        {
+          allowConstantExport: true,
+          allowExportNames: [
+            "ServiceContext",
+            "useServices",
+            "persistDatabaseBinary",
+            "loadPersistedDatabaseBinary",
+            "getStoredDatabaseBinary",
+            "createDefaultMockHttpClient",
+            "createDefaultNativeSqliteAdapter",
+            "DB_STORAGE_KEY",
+            "RouterContext",
+            "useRouter",
+            "matchRoute",
+            "safeDecodeURIComponent",
+            "resolveInitialPath",
+          ],
+        },
       ],
       "@typescript-eslint/no-unused-vars": [
         "error",

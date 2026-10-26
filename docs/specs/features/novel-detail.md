@@ -60,6 +60,7 @@ related_tests:
 
 ```text
 src/features/novel-detail/
+├── types.ts                               # 作品詳細機能全体のフック返却値・各コンポーネントProps型定義
 ├── hooks/
 │   ├── useNovelDetail.ts                  # 作品情報・目次一覧取得、目次再取得、作品削除、状態管理フック
 │   └── useNovelDetail.test.ts             # フック単体テスト（Vitest）

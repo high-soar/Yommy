@@ -4,7 +4,27 @@ import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./NovelDetailHeader.stories";
 import { NovelDetailHeader } from "./NovelDetailHeader";
-import { sampleNovel } from "./NovelDetailHeader.stories";
+import type { NovelRecord } from "../../../storage/types";
+
+const sampleNovel: NovelRecord = {
+  id: "kakuyomu:16817330658027210412",
+  siteType: "kakuyomu",
+  remoteWorkId: "16817330658027210412",
+  canonicalUrl: "https://kakuyomu.jp/works/16817330658027210412",
+  title: "境界迷宮と異界の魔術師",
+  author: "小野崎",
+  synopsis: "異界から迷い込んだ青年が紡ぐファンタジー戦記。",
+  totalChapters: 45,
+  cachedChapters: 12,
+  totalByteSize: 102400,
+  bookmarkChapterIndex: null,
+  bookmarkScrollProgress: 0,
+  isFavorite: false,
+  lastCheckedAt: null,
+  lastReadAt: null,
+  createdAt: "2026-10-25T10:00:00Z",
+  updatedAt: "2026-10-26T07:00:00Z",
+};
 
 const {
   Unread,

@@ -1,11 +1,7 @@
 import React from "react";
-import type { ChapterSummary } from "../../../storage/types";
+import type { EpisodeListItemProps } from "../types";
 
-export interface EpisodeListItemProps {
-  chapter: ChapterSummary;
-  isBookmarked: boolean;
-  onSelectEpisode: (chapterIndex: number) => void;
-}
+export type { EpisodeListItemProps } from "../types";
 
 const formatEpisodeDate = (dateStr: string): string => {
   if (dateStr.includes("T")) {
