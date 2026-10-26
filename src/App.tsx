@@ -2,7 +2,7 @@ import React from "react";
 import { ServiceProvider } from "./app/ServiceProvider";
 import { RouterProvider, useRouter } from "./app/router";
 import { BookshelfContainer } from "./features/bookshelf/components/BookshelfContainer";
-import { NovelDetailPlaceholder } from "./features/novel-detail/components/NovelDetailPlaceholder";
+import { NovelDetailContainer } from "./features/novel-detail/components/NovelDetailContainer";
 import { PocReaderContainer } from "./features/reader/components/PocReaderContainer";
 
 /**
@@ -43,7 +43,7 @@ const AppContent: React.FC<AppContentProps> = ({ title, initialWorkUrl }) => {
       <main className="flex-1 p-6 max-w-4xl mx-auto w-full flex flex-col gap-6">
         {router.route.name === "bookshelf" && <BookshelfContainer />}
         {router.route.name === "novel-detail" && (
-          <NovelDetailPlaceholder novelId={router.route.novelId} />
+          <NovelDetailContainer novelId={router.route.novelId} />
         )}
         {router.route.name === "reader" && (
           <PocReaderContainer
@@ -63,7 +63,7 @@ const AppContent: React.FC<AppContentProps> = ({ title, initialWorkUrl }) => {
  * Yommy ルートアプリケーションコンポーネント
  *
  * ServiceProvider による依存性注入（DI）と、RouterProvider による画面ルーティング
- * （本棚 SCR-01、作品詳細プレースホルダ SCR-02、リーダー SCR-03）を統合管理する。
+ * （本棚 SCR-01、作品詳細・目次 SCR-02、リーダー SCR-03）を統合管理する。
  */
 export const App: React.FC<AppProps> = ({
   title = "Yommy",

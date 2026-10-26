@@ -292,7 +292,7 @@ describe("NovelDetailContainer", () => {
 
       expect(onBackToBookshelf).toHaveBeenCalledTimes(1);
       expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
-        `/novels/${sampleNovel.id}`,
+        `/novels/${encodeURIComponent(sampleNovel.id)}`,
       );
     });
 
@@ -375,7 +375,7 @@ describe("NovelDetailContainer", () => {
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
-          `/novels/${sampleNovel.id}/chapters/1`,
+          `/novels/${encodeURIComponent(sampleNovel.id)}/chapters/1`,
         );
       });
     });
@@ -402,7 +402,7 @@ describe("NovelDetailContainer", () => {
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
-          `/novels/${sampleNovelWithBookmark.id}/chapters/2`,
+          `/novels/${encodeURIComponent(sampleNovelWithBookmark.id)}/chapters/2`,
         );
       });
     });
@@ -431,7 +431,7 @@ describe("NovelDetailContainer", () => {
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
-          `/novels/${sampleNovel.id}/chapters/3`,
+          `/novels/${encodeURIComponent(sampleNovel.id)}/chapters/3`,
         );
       });
     });
@@ -483,7 +483,7 @@ describe("NovelDetailContainer", () => {
 
       // ルーターパスは変化していないこと
       expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
-        `/novels/${sampleNovelWithBookmark.id}`,
+        `/novels/${encodeURIComponent(sampleNovelWithBookmark.id)}`,
       );
     });
   });
@@ -630,7 +630,7 @@ describe("NovelDetailContainer", () => {
       });
       // ルーター遷移は行われない
       expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
-        `/novels/${sampleNovel.id}`,
+        `/novels/${encodeURIComponent(sampleNovel.id)}`,
       );
     });
 
@@ -668,7 +668,7 @@ describe("NovelDetailContainer", () => {
 
       // 本棚画面へは遷移しない
       expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
-        `/novels/${sampleNovel.id}`,
+        `/novels/${encodeURIComponent(sampleNovel.id)}`,
       );
     });
   });
