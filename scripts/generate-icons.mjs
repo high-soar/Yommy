@@ -1,8 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import { chromium } from "@playwright/test";
 
+/**
+ * Standard Android DPI configurations.
+ */
 export const DENSITIES = [
   { dpi: "mdpi", legacy: 48, fg: 108, safe: 72 },
   { dpi: "hdpi", legacy: 72, fg: 162, safe: 108 },
@@ -11,6 +14,9 @@ export const DENSITIES = [
   { dpi: "xxxhdpi", legacy: 192, fg: 432, safe: 288 },
 ];
 
+/**
+ * Yommy Dark Navy branding background color.
+ */
 export const BACKGROUND_COLOR = "#0D0E26";
 
 /**
@@ -112,18 +118,26 @@ export function updateLauncherBackgroundXml(
  * @param {string} [options.sourcePath]
  * @param {string} [options.androidResDir]
  * @param {string} [options.publicDir]
+ * @param {string} [options.backgroundColor]
+ * @param {Array<{ dpi: string, legacy: number, fg: number, safe: number }>} [options.densities]
  */
 export async function generateIcons(options = {}) {
   const rootDir = process.cwd();
-  let sourcePath =
-    options.sourcePath || path.resolve(rootDir, "assets", "icon.png");
+  let sourcePath = options.sourcePath;
 
-  if (!fs.existsSync(sourcePath)) {
-    const fallbackPath = path.resolve(rootDir, "reference", "image.png");
-    if (fs.existsSync(fallbackPath)) {
-      sourcePath = fallbackPath;
-    } else {
+  if (sourcePath) {
+    if (!fs.existsSync(sourcePath)) {
       throw new Error(`Master icon file not found: ${sourcePath}`);
+    }
+  } else {
+    sourcePath = path.resolve(rootDir, "assets", "icon.png");
+    if (!fs.existsSync(sourcePath)) {
+      const fallbackPath = path.resolve(rootDir, "reference", "image.png");
+      if (fs.existsSync(fallbackPath)) {
+        sourcePath = fallbackPath;
+      } else {
+        throw new Error(`Master icon file not found: ${sourcePath}`);
+      }
     }
   }
 
@@ -131,6 +145,8 @@ export async function generateIcons(options = {}) {
     options.androidResDir ||
     path.resolve(rootDir, "android", "app", "src", "main", "res");
   const publicDir = options.publicDir || path.resolve(rootDir, "public");
+  const bgColor = options.backgroundColor || BACKGROUND_COLOR;
+  const densities = options.densities || DENSITIES;
 
   const sourceBuffer = fs.readFileSync(sourcePath);
   const sourceBase64 = sourceBuffer.toString("base64");
@@ -139,7 +155,7 @@ export async function generateIcons(options = {}) {
   try {
     const page = await browser.newPage();
     const rendered = await page.evaluate(
-      async ({ b64, densities, bgColor }) => {
+      async ({ b64, densityList, backgroundHex }) => {
         const img = new Image();
         img.src = `data:image/png;base64,${b64}`;
         await new Promise((resolve, reject) => {
@@ -228,7 +244,7 @@ export async function generateIcons(options = {}) {
         const androidResults = {};
 
         // Render Android density assets
-        for (const item of densities) {
+        for (const item of densityList) {
           const { dpi, legacy, fg, safe } = item;
 
           // A: Legacy square (rounded rect)
@@ -238,7 +254,7 @@ export async function generateIcons(options = {}) {
           const ctxSquare = cSquare.getContext("2d");
           ctxSquare.beginPath();
           ctxSquare.roundRect(0, 0, legacy, legacy, legacy * 0.18);
-          ctxSquare.fillStyle = bgColor;
+          ctxSquare.fillStyle = backgroundHex;
           ctxSquare.fill();
           ctxSquare.clip();
           const padSq = Math.round(legacy * 0.08);
@@ -257,7 +273,7 @@ export async function generateIcons(options = {}) {
           const ctxRound = cRound.getContext("2d");
           ctxRound.beginPath();
           ctxRound.arc(legacy / 2, legacy / 2, legacy / 2, 0, Math.PI * 2);
-          ctxRound.fillStyle = bgColor;
+          ctxRound.fillStyle = backgroundHex;
           ctxRound.fill();
           ctxRound.clip();
           const padRd = Math.round(legacy * 0.1);
@@ -290,7 +306,7 @@ export async function generateIcons(options = {}) {
         c192.width = 192;
         c192.height = 192;
         const ctx192 = c192.getContext("2d");
-        ctx192.fillStyle = bgColor;
+        ctx192.fillStyle = backgroundHex;
         ctx192.fillRect(0, 0, 192, 192);
         const pad192 = Math.round(192 * 0.1);
         ctx192.drawImage(
@@ -306,7 +322,7 @@ export async function generateIcons(options = {}) {
         c512.width = 512;
         c512.height = 512;
         const ctx512 = c512.getContext("2d");
-        ctx512.fillStyle = bgColor;
+        ctx512.fillStyle = backgroundHex;
         ctx512.fillRect(0, 0, 512, 512);
         const pad512 = Math.round(512 * 0.1);
         ctx512.drawImage(
@@ -322,7 +338,7 @@ export async function generateIcons(options = {}) {
         cApple.width = 180;
         cApple.height = 180;
         const ctxApple = cApple.getContext("2d");
-        ctxApple.fillStyle = bgColor;
+        ctxApple.fillStyle = backgroundHex;
         ctxApple.fillRect(0, 0, 180, 180);
         const padApple = Math.round(180 * 0.1);
         ctxApple.drawImage(
@@ -342,7 +358,7 @@ export async function generateIcons(options = {}) {
           const ctxFav = cFav.getContext("2d");
           ctxFav.beginPath();
           ctxFav.roundRect(0, 0, fSize, fSize, fSize * 0.18);
-          ctxFav.fillStyle = bgColor;
+          ctxFav.fillStyle = backgroundHex;
           ctxFav.fill();
           ctxFav.clip();
           const padFav = Math.max(1, Math.round(fSize * 0.08));
@@ -366,11 +382,15 @@ export async function generateIcons(options = {}) {
           },
         };
       },
-      { b64: sourceBase64, densities: DENSITIES, bgColor: BACKGROUND_COLOR },
+      {
+        b64: sourceBase64,
+        densityList: densities,
+        backgroundHex: bgColor,
+      },
     );
 
     // Write Android assets
-    for (const item of DENSITIES) {
+    for (const item of densities) {
       const { dpi } = item;
       const targetDir = path.join(androidResDir, `mipmap-${dpi}`);
       if (!fs.existsSync(targetDir)) {
@@ -398,7 +418,7 @@ export async function generateIcons(options = {}) {
       "values",
       "ic_launcher_background.xml",
     );
-    updateLauncherBackgroundXml(backgroundXmlPath, BACKGROUND_COLOR);
+    updateLauncherBackgroundXml(backgroundXmlPath, bgColor);
 
     // Write Web assets
     if (!fs.existsSync(publicDir)) {

@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
 import {
@@ -6,10 +7,29 @@ import {
   createIco,
   updateLauncherBackgroundXml,
   generateIcons,
+  DENSITIES,
+  BACKGROUND_COLOR,
 } from "./generate-icons.mjs";
 
 describe("アプリアイコン生成スクリプト及びアセット配置検証 (AC-ICON-01〜04)", () => {
   const rootDir = process.cwd();
+
+  describe("定数定義", () => {
+    it("DENSITIES が 5 つの DPI 定義を持つこと", () => {
+      expect(DENSITIES).toHaveLength(5);
+      expect(DENSITIES.map((d) => d.dpi)).toEqual([
+        "mdpi",
+        "hdpi",
+        "xhdpi",
+        "xxhdpi",
+        "xxxhdpi",
+      ]);
+    });
+
+    it("BACKGROUND_COLOR が #0D0E26 であること", () => {
+      expect(BACKGROUND_COLOR).toBe("#0D0E26");
+    });
+  });
 
   describe("parsePngDimensions (PNGヘッダー解析)", () => {
     it("有効なPNGバッファから幅・高さ・ビット深度・カラータイプを抽出できること", () => {
@@ -137,6 +157,23 @@ describe("アプリアイコン生成スクリプト及びアセット配置検�
         }
       }
     });
+
+    it("親ディレクトリが存在しない場合でも自動作成して更新できること", () => {
+      const tempDir = path.join(os.tmpdir(), `yommy-test-xml-${Date.now()}`);
+      const xmlPath = path.join(tempDir, "sub", "ic_launcher_background.xml");
+      try {
+        updateLauncherBackgroundXml(xmlPath, "#123456");
+        expect(fs.existsSync(xmlPath)).toBe(true);
+        const content = fs.readFileSync(xmlPath, "utf-8");
+        expect(content).toContain(
+          '<color name="ic_launcher_background">#123456</color>',
+        );
+      } finally {
+        if (fs.existsSync(tempDir)) {
+          fs.rmSync(tempDir, { recursive: true, force: true });
+        }
+      }
+    });
   });
 
   describe("AC-ICON-01: マスター正本アセット配置検証", () => {
@@ -257,9 +294,69 @@ describe("アプリアイコン生成スクリプト及びアセット配置検�
     });
   });
 
-  describe("AC-ICON-04: generateIcons 自動生成実行検証", () => {
+  describe("AC-ICON-04: generateIcons 自動生成実行およびオプション検証", () => {
     it("generateIcons() の実行がエラーなく完了すること", async () => {
       await expect(generateIcons()).resolves.not.toThrow();
+    }, 30000);
+
+    it("存在しない sourcePath が明示指定された場合はエラーをスローすること", async () => {
+      const nonExistent = path.join(rootDir, "non-existent-source.png");
+      await expect(generateIcons({ sourcePath: nonExistent })).rejects.toThrow(
+        `Master icon file not found: ${nonExistent}`,
+      );
+    });
+
+    it("カスタム出力ディレクトリおよび単一 DPI 設定で生成できること", async () => {
+      const tempDir = path.join(os.tmpdir(), `yommy-test-icons-${Date.now()}`);
+      const customAndroid = path.join(tempDir, "res");
+      const customPublic = path.join(tempDir, "pub");
+
+      try {
+        await generateIcons({
+          androidResDir: customAndroid,
+          publicDir: customPublic,
+          densities: [{ dpi: "mdpi", legacy: 48, fg: 108, safe: 72 }],
+          backgroundColor: "#112233",
+        });
+
+        // Verify generated custom files
+        expect(
+          fs.existsSync(
+            path.join(customAndroid, "mipmap-mdpi", "ic_launcher.png"),
+          ),
+        ).toBe(true);
+        expect(
+          fs.existsSync(
+            path.join(customAndroid, "mipmap-mdpi", "ic_launcher_round.png"),
+          ),
+        ).toBe(true);
+        expect(
+          fs.existsSync(
+            path.join(
+              customAndroid,
+              "mipmap-mdpi",
+              "ic_launcher_foreground.png",
+            ),
+          ),
+        ).toBe(true);
+        expect(
+          fs.existsSync(path.join(customPublic, "apple-touch-icon.png")),
+        ).toBe(true);
+        expect(fs.existsSync(path.join(customPublic, "favicon.ico"))).toBe(
+          true,
+        );
+
+        const xmlPath = path.join(
+          customAndroid,
+          "values",
+          "ic_launcher_background.xml",
+        );
+        expect(fs.readFileSync(xmlPath, "utf-8")).toContain("#112233");
+      } finally {
+        if (fs.existsSync(tempDir)) {
+          fs.rmSync(tempDir, { recursive: true, force: true });
+        }
+      }
     }, 30000);
   });
 });
