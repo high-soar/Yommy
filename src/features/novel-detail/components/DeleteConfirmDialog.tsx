@@ -51,6 +51,7 @@ export const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="delete-confirm-dialog-title"
+        aria-describedby="delete-confirm-message"
         data-testid="delete-confirm-dialog"
         onClick={(e) => e.stopPropagation()}
         className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 shadow-xl w-full max-w-md mx-auto"

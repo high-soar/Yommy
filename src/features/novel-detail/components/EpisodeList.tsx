@@ -28,7 +28,12 @@ export const EpisodeList: React.FC<EpisodeListProps> = ({
   }
 
   return (
-    <div data-testid="episode-list" className="space-y-2">
+    <div
+      role="region"
+      aria-label="エピソード目次"
+      data-testid="episode-list"
+      className="space-y-2"
+    >
       {chapters.map((chapter, index) => {
         const prevPartTitle = index > 0 ? chapters[index - 1].partTitle : null;
         const hasPartTitle = Boolean(
@@ -41,6 +46,8 @@ export const EpisodeList: React.FC<EpisodeListProps> = ({
           <React.Fragment key={chapter.id}>
             {shouldRenderHeader && (
               <div
+                role="heading"
+                aria-level={3}
                 data-testid="chapter-section-header"
                 className="pt-4 pb-1 px-1 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
               >

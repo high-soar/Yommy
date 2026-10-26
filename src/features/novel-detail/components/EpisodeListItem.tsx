@@ -23,14 +23,18 @@ export const EpisodeListItem: React.FC<EpisodeListItemProps> = ({
   onSelectEpisode,
 }) => {
   const isCached = chapter.downloadedAt !== null || chapter.byteSize > 0;
+  const bookmarkStyle = isBookmarked
+    ? "border-amber-300 dark:border-amber-700/70 bg-amber-50/20 dark:bg-amber-950/20"
+    : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/80";
 
   return (
     <button
       type="button"
       data-testid="episode-item"
       data-chapter-index={chapter.chapterIndex}
+      aria-label={`第${chapter.chapterIndex}話 ${chapter.title}`}
       onClick={() => onSelectEpisode(chapter.chapterIndex)}
-      className="w-full text-left p-3.5 sm:p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/80 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer flex flex-col gap-1.5"
+      className={`w-full text-left p-3.5 sm:p-4 rounded-xl border ${bookmarkStyle} hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer flex flex-col gap-1.5`}
     >
       <div className="flex items-start justify-between gap-2">
         <span
