@@ -29,6 +29,10 @@ const themeStyles: Record<ReaderTheme, string> = {
   black: "bg-black text-slate-300 border-neutral-900",
 };
 
+function clampProgress(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
 /**
  * 小説本文の縦書き/横書き組版表示、ルビ・傍点、カラーテーマ描画、
  * および縦横双方のスクロール進捗率算出・初期位置復元を担う Presentational コンポーネント
@@ -55,14 +59,11 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     let progress = 0;
     if (writingMode === "horizontal-tb") {
       const maxScroll = el.scrollHeight - el.clientHeight;
-      progress =
-        maxScroll > 0 ? Math.min(1, Math.max(0, el.scrollTop / maxScroll)) : 0;
+      progress = maxScroll > 0 ? clampProgress(el.scrollTop / maxScroll) : 0;
     } else {
       const maxScroll = el.scrollWidth - el.clientWidth;
       progress =
-        maxScroll > 0
-          ? Math.min(1, Math.max(0, Math.abs(el.scrollLeft) / maxScroll))
-          : 0;
+        maxScroll > 0 ? clampProgress(Math.abs(el.scrollLeft) / maxScroll) : 0;
     }
     onScrollProgressChange(progress);
   }, [writingMode, onScrollProgressChange]);
@@ -72,7 +73,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     const el = containerRef.current;
     if (!el) return;
 
-    const clampedProgress = Math.min(1, Math.max(0, initialScrollProgress));
+    const clampedProgress = clampProgress(initialScrollProgress);
     if (writingMode === "horizontal-tb") {
       const maxScroll = el.scrollHeight - el.clientHeight;
       el.scrollTop = maxScroll > 0 ? clampedProgress * maxScroll : 0;
