@@ -4,8 +4,11 @@ import { useServices } from "../../../app/ServiceProvider";
 import type { NovelRecord } from "../../../storage/types";
 
 export interface NovelDetailPlaceholderProps {
+  /** 表示対象の作品ID */
   novelId: string;
+  /** 「本棚へ戻る」タップ時の遷移コールバック（省略時は useRouter().navigateToBookshelf を使用） */
   onBackToBookshelf?: () => void;
+  /** 「読む/続きから読む」タップ時の遷移コールバック（省略時は useRouter().navigateToReader を使用） */
   onRead?: (novelId: string, chapterIndex: number) => void;
 }
 
