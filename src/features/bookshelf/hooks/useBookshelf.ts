@@ -10,6 +10,7 @@ export interface UseBookshelfResult {
   isDialogOpen: boolean;
   isSubmitting: boolean;
   dialogError: string | null;
+  error: string | null;
   openDialog: () => void;
   closeDialog: () => void;
   addNovelByUrl: (url: string) => Promise<boolean>;
@@ -63,28 +64,35 @@ export function useBookshelf(): UseBookshelfResult {
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // 初回ロード
   useEffect(() => {
     if (!isReady) return;
-    let isMounted = true;
+    let cancelled = false;
     setIsLoading(true);
+    setError(null);
 
     novelRepository
       .listNovels()
       .then((list) => {
-        if (isMounted) {
+        if (!cancelled) {
           setNovels(list);
         }
       })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      })
       .finally(() => {
-        if (isMounted) {
+        if (!cancelled) {
           setIsLoading(false);
         }
       });
 
     return () => {
-      isMounted = false;
+      cancelled = true;
     };
   }, [isReady, novelRepository]);
 
@@ -101,9 +109,12 @@ export function useBookshelf(): UseBookshelfResult {
 
   const reloadNovels = useCallback(async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const list = await novelRepository.listNovels();
       setNovels(list);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsLoading(false);
     }
@@ -158,6 +169,7 @@ export function useBookshelf(): UseBookshelfResult {
     isDialogOpen,
     isSubmitting,
     dialogError,
+    error,
     openDialog,
     closeDialog,
     addNovelByUrl,
