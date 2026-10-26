@@ -4,8 +4,14 @@ import type { WritingMode, ReaderTheme } from "./ReaderView";
 export interface ReaderToolbarProps {
   writingMode: WritingMode;
   theme: ReaderTheme;
+  fontSizePx?: number;
+  lineHeight?: number;
   onToggleWritingMode: () => void;
   onChangeTheme: (theme: ReaderTheme) => void;
+  onChangeFontSize?: (nextSizePx: number) => void;
+  onChangeLineHeight?: (nextHeight: number) => void;
+  onBackToDetail?: () => void;
+  onBackToBookshelf?: () => void;
   onFetchNovel?: () => void;
   isLoading?: boolean;
 }
