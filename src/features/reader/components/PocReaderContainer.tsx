@@ -30,6 +30,10 @@ export interface PocReaderContainerProps {
  */
 export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
   initialWorkUrl = DEFAULT_KAKUYOMU_URL,
+  novelId,
+  chapterIndex,
+  onBackToBookshelf,
+  onBackToDetail,
 }) => {
   const {
     httpClient,
@@ -47,7 +51,7 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 初回ロード / リロード復元
+  // 初回ロード / リロード復元 / ルート指定ロード
   useEffect(() => {
     if (!isReady) return;
 
@@ -69,16 +73,75 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
           }
         }
 
-        const novels = await novelRepository.listNovels();
-        if (novels.length > 0) {
-          const firstNovel = await novelRepository.getNovelById(novels[0].id);
-          const firstChapter = await chapterRepository.getChapter(
-            novels[0].id,
-            1,
+        if (novelId) {
+          const targetIndex = chapterIndex ?? 1;
+          const targetNovel = await novelRepository.getNovelById(novelId);
+          let targetChapter = await chapterRepository.getChapter(
+            novelId,
+            targetIndex,
           );
+
+          // 未キャッシュ話のオンデマンド本文取得（TR-03 対応）
+          if (targetNovel && targetChapter && targetChapter.bodyHtml === null) {
+            if (isMounted) {
+              setIsLoading(true);
+            }
+            try {
+              const parser = parserRegistry.requireParser(targetChapter.url);
+              const chapterRes = await httpClient.getHtml({
+                url: targetChapter.url,
+              });
+              const parsedChapter = parser.parseChapterContent(
+                chapterRes.html,
+                targetChapter.url,
+              );
+              await chapterRepository.saveChapterBody(
+                novelId,
+                targetIndex,
+                parsedChapter,
+                new Date().toISOString(),
+              );
+              targetChapter = await chapterRepository.getChapter(
+                novelId,
+                targetIndex,
+              );
+            } catch (fetchErr: unknown) {
+              if (isMounted) {
+                setError(
+                  fetchErr instanceof Error
+                    ? fetchErr.message
+                    : String(fetchErr),
+                );
+              }
+            } finally {
+              if (isMounted) {
+                setIsLoading(false);
+              }
+            }
+          }
+
           if (isMounted) {
-            setNovel(firstNovel);
-            setChapter(firstChapter);
+            setNovel(targetNovel);
+            setChapter(targetChapter);
+          }
+        } else {
+          // novelId 未指定: 従来互換動作（DB内の先頭作品・第1話）
+          const novels = await novelRepository.listNovels();
+          if (novels.length > 0) {
+            const firstNovel = await novelRepository.getNovelById(novels[0].id);
+            const firstChapter = await chapterRepository.getChapter(
+              novels[0].id,
+              1,
+            );
+            if (isMounted) {
+              setNovel(firstNovel);
+              setChapter(firstChapter);
+            }
+          } else {
+            if (isMounted) {
+              setNovel(null);
+              setChapter(null);
+            }
           }
         }
       } catch (err: unknown) {
@@ -93,7 +156,16 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [isReady, novelRepository, chapterRepository, settingsRepository]);
+  }, [
+    isReady,
+    novelId,
+    chapterIndex,
+    novelRepository,
+    chapterRepository,
+    settingsRepository,
+    parserRegistry,
+    httpClient,
+  ]);
 
   // 作品取得操作
   const handleFetchNovel = useCallback(async () => {
@@ -101,9 +173,10 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
     setError(null);
 
     try {
+      const targetUrl = novel?.canonicalUrl ?? initialWorkUrl;
       // 1. パーサー解決と作品URL正規化（未対応URLは通信前に拒絶）
-      const parser = parserRegistry.requireParser(initialWorkUrl);
-      const normalizedWorkUrl = parser.normalizeWorkUrl(initialWorkUrl);
+      const parser = parserRegistry.requireParser(targetUrl);
+      const normalizedWorkUrl = parser.normalizeWorkUrl(targetUrl);
 
       // 2. 作品トップHTML取得
       const indexRes = await httpClient.getHtml({ url: normalizedWorkUrl });
@@ -118,27 +191,31 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
         new Date().toISOString(),
       );
 
-      // 4. 第1話エピソード本文取得
+      // 4. 対象話エピソード本文取得
       if (novelIndex.chapters.length > 0) {
-        const firstEpisodeToc = novelIndex.chapters[0];
+        const targetChapterIndex = chapterIndex ?? 1;
+        const targetEpisodeToc =
+          novelIndex.chapters.find(
+            (ch) => ch.chapterIndex === targetChapterIndex,
+          ) ?? novelIndex.chapters[0];
         const chapterRes = await httpClient.getHtml({
-          url: firstEpisodeToc.url,
+          url: targetEpisodeToc.url,
         });
         const parsedChapter = parser.parseChapterContent(
           chapterRes.html,
-          firstEpisodeToc.url,
+          targetEpisodeToc.url,
         );
 
         await chapterRepository.saveChapterBody(
           savedNovel.id,
-          1,
+          targetEpisodeToc.chapterIndex,
           parsedChapter,
           new Date().toISOString(),
         );
 
         const savedChapter = await chapterRepository.getChapter(
           savedNovel.id,
-          1,
+          targetEpisodeToc.chapterIndex,
         );
         setNovel(savedNovel);
         setChapter(savedChapter);
@@ -152,7 +229,9 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
       setIsLoading(false);
     }
   }, [
+    novel,
     initialWorkUrl,
+    chapterIndex,
     httpClient,
     parserRegistry,
     novelRepository,
@@ -176,8 +255,47 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
     [settingsRepository],
   );
 
+  const targetDetailId = novelId ?? novel?.id;
+
   return (
     <div className="flex flex-col gap-4 w-full">
+      {(onBackToBookshelf || onBackToDetail) && (
+        <nav
+          data-testid="reader-nav"
+          className="flex items-center justify-between gap-3 bg-white/80 dark:bg-slate-800/80 backdrop-blur border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 shadow-xs"
+        >
+          <div className="flex items-center gap-2">
+            {onBackToBookshelf && (
+              <button
+                type="button"
+                data-testid="reader-back-to-bookshelf"
+                onClick={onBackToBookshelf}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+              >
+                <span aria-hidden="true">←</span>
+                <span>本棚へ戻る</span>
+              </button>
+            )}
+            {onBackToDetail && (
+              <button
+                type="button"
+                data-testid="reader-back-to-detail"
+                onClick={() => {
+                  if (targetDetailId) {
+                    onBackToDetail(targetDetailId);
+                  }
+                }}
+                disabled={!targetDetailId}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+              >
+                <span>作品詳細へ</span>
+                <span aria-hidden="true">→</span>
+              </button>
+            )}
+          </div>
+        </nav>
+      )}
+
       <ReaderToolbar
         writingMode={writingMode}
         theme={theme}
