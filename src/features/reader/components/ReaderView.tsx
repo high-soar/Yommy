@@ -92,7 +92,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       data-font-size={String(fontSizePx)}
       data-line-height={String(lineHeight)}
       onScroll={handleScroll}
-      className={`rounded-lg p-6 shadow-sm border font-serif transition-colors duration-200 ${
+      className={`w-full max-w-full rounded-lg p-6 shadow-sm border font-serif transition-colors duration-200 ${
         themeStyles[theme]
       } ${
         isVertical

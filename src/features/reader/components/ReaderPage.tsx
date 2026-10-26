@@ -108,7 +108,7 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
         )}
 
         {/* メイン本文領域（排他描画） */}
-        <main>
+        <main className="w-full min-w-0">
           {error ? (
             <div
               role="alert"

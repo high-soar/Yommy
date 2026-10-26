@@ -186,10 +186,11 @@ src/features/reader/
   - `data-font-size`: 現在の文字サイズ数値（`String(fontSizePx)`）
   - `data-line-height`: 現在の行間倍率（`String(lineHeight)`）
 - **日本語組版スタイル**:
-  - 縦書き時: CSS `writing-mode: vertical-rl`、`text-orientation: mixed`、水平スクロール（`overflow-x-auto overflow-y-hidden`）
+  - 縦書き時: CSS `writing-mode: vertical-rl`、`text-orientation: mixed`、水平スクロール（`overflow-x-auto overflow-y-hidden`）。親要素（`horizontal-tb`）との直交フロー（Orthogonal Flow）においてブロック軸（横幅）がコンテンツ全文の幅まで膨張しないよう、ルート要素に `w-full max-w-full`（および親 `ReaderPage` の `<main>` に `w-full min-w-0`）を指定して親コンテナ幅（100%）に制約する。
   - 横書き時: CSS `writing-mode: horizontal-tb`、垂直スクロール（`overflow-y-auto overflow-x-hidden`）
   - フォント: 日本語明朝体（`font-serif`）をベースとし、禁則処理（`line-break: strict; word-break: break-word`）を適用
   - ルビ・傍点: `<ruby>` はブラウザ標準のルビ表示、`<em class="bouten">` は CSS `text-emphasis: filled sesame`（セサミ傍点）で描画
+  - Storybook / VRT バリエーション: 4カラーテーマ・縦書き/横書き・カスタム組版・初期スクロール位置に加え、1280px / 375px の双方で画面幅を超える長文データを用いた水平スクロール（Overflow）検証ストーリー（`VerticalLongContent`）を備える。
 - **縦書き・横書き双方のスクロール進捗率（`0.0 〜 1.0`）算出・復元アルゴリズム**:
   1. **横書き（`horizontal-tb`、上→下の垂直スクロール）**:
      - 最大スクロール量: `maxScroll = element.scrollHeight - element.clientHeight`
