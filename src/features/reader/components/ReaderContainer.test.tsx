@@ -11,15 +11,18 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./ReaderContainer.stories";
 import { ReaderContainer, type ReaderContainerProps } from "./ReaderContainer";
+import * as ReaderPageModule from "./ReaderPage";
 import { ServiceProvider } from "../../../app/ServiceProvider";
 import { RouterProvider, useRouter } from "../../../app/router";
 import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
+import type { DatabaseAdapter } from "../../../storage/adapter/types";
 import type {
   NovelRecord,
   ChapterRecord,
   NovelRepository,
   ChapterRepository,
   SettingsRepository,
+  ReaderSettings,
 } from "../../../storage/types";
 import type { HttpClientBridge } from "../../../bridges/http/types";
 import type { ParserRegistry } from "../../../parsers/parserRegistry";
@@ -157,11 +160,40 @@ function createMockChapterRepo(
   return { repo, markChapterReadSpy };
 }
 
+function createMockSettingsRepo(): SettingsRepository {
+  let current: ReaderSettings = {
+    writingMode: "vertical-rl",
+    theme: "light",
+    fontFamily: "mincho",
+    fontSizePx: 18,
+    lineHeight: 1.8,
+    pageMarginPx: 16,
+    enableTapPaging: false,
+    enableVolumeKeyPaging: false,
+    updatedAt: "2026-10-26T00:00:00Z",
+  };
+  return {
+    getReaderSettings: async () => current,
+    updateReaderSettings: async (patch) => {
+      current = { ...current, ...patch };
+      return current;
+    },
+  };
+}
+
+const mockDatabaseAdapter: DatabaseAdapter = {
+  execute: async () => {},
+  query: async () => [],
+  runTransaction: async (fn) => fn(),
+  close: async () => {},
+};
+
 interface TestWrapperProps extends ReaderContainerProps {
   initialPath?: string;
   novelRepository?: NovelRepository;
   chapterRepository?: ChapterRepository;
   settingsRepository?: SettingsRepository;
+  databaseAdapter?: DatabaseAdapter;
   httpClient?: HttpClientBridge;
   parserRegistry?: ParserRegistry;
 }
@@ -171,6 +203,7 @@ const TestWrapper: React.FC<TestWrapperProps> = ({
   novelRepository,
   chapterRepository,
   settingsRepository,
+  databaseAdapter,
   httpClient,
   parserRegistry,
   ...containerProps
@@ -181,14 +214,18 @@ const TestWrapper: React.FC<TestWrapperProps> = ({
       ? `/novels/${containerProps.novelId}/chapters/${containerProps.chapterIndex}`
       : "/novels/kakuyomu:16817330658027210412/chapters/1");
 
+  const resolvedSettingsRepo = settingsRepository ?? createMockSettingsRepo();
+  const resolvedDbAdapter = databaseAdapter ?? mockDatabaseAdapter;
+
   return (
     <RouterProvider initialPath={resolvedPath}>
       <TestObserver
         containerProps={containerProps}
         services={{
+          databaseAdapter: resolvedDbAdapter,
+          settingsRepository: resolvedSettingsRepo,
           ...(novelRepository ? { novelRepository } : {}),
           ...(chapterRepository ? { chapterRepository } : {}),
-          ...(settingsRepository ? { settingsRepository } : {}),
           ...(httpClient ? { httpClient } : {}),
           ...(parserRegistry ? { parserRegistry } : {}),
         }}
@@ -213,78 +250,121 @@ const TestObserver: React.FC<{
 };
 
 describe("ReaderContainer", () => {
-  beforeEach(async () => {
-    await resetTestDb();
+  beforeEach(() => {
     localStorage.clear();
     window.history.pushState(null, "", "/");
+    vi.restoreAllMocks();
     vi.clearAllMocks();
   });
 
   describe("Storybook Stories レンダリング検証 (composeStories)", () => {
-    it("Default ストーリーで作品名・サブタイトル・本文が描画されること (AC-RD-01)", async () => {
+    beforeEach(async () => {
+      await resetTestDb();
+    });
+
+    it("Default ストーリーで直接の子 ReaderPage に novel・chapter（第1話）・chapterIndex・totalChapters が渡され reader-page がマウントされること (AC-RD-01)", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       render(<Default />);
 
       await waitFor(() => {
         expect(screen.getByTestId("reader-page")).toBeInTheDocument();
-        expect(screen.getByTestId("reader-title")).toHaveTextContent(
-          "境界迷宮と異界の魔術師",
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            novel: expect.objectContaining({
+              id: sampleNovel.id,
+              title: "境界迷宮と異界の魔術師",
+            }),
+            chapter: expect.objectContaining({
+              chapterIndex: 1,
+              title: "第1話 出会い",
+            }),
+            chapterIndex: 1,
+            totalChapters: 3,
+            isLoading: false,
+          }),
+          undefined,
         );
       });
-
-      expect(screen.getByTestId("reader-chapter-title")).toHaveTextContent(
-        "第1話 出会い",
-      );
-      expect(screen.getByTestId("reader-chapter-indicator")).toHaveTextContent(
-        "第 1 話 / 全 3 話",
-      );
-      expect(screen.getByTestId("reader-body")).toBeInTheDocument();
     });
 
-    it("WithBookmark ストーリーで指定話数（第2話）の本文が表示されること (AC-RD-08)", async () => {
+    it("WithBookmark ストーリーで直接の子 ReaderPage に指定話数（第2話）および initialScrollProgress (0.5) が渡されること (AC-RD-08)", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       render(<WithBookmark />);
 
       await waitFor(() => {
         expect(screen.getByTestId("reader-page")).toBeInTheDocument();
-        expect(screen.getByTestId("reader-title")).toHaveTextContent(
-          "境界迷宮と異界の魔術師",
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            novel: expect.objectContaining({
+              id: sampleNovel.id,
+              title: "境界迷宮と異界の魔術師",
+            }),
+            chapter: expect.objectContaining({
+              chapterIndex: 2,
+              title: "第2話 覚醒",
+            }),
+            chapterIndex: 2,
+            totalChapters: 3,
+            initialScrollProgress: 0.5,
+            isLoading: false,
+          }),
+          undefined,
         );
       });
-
-      expect(screen.getByTestId("reader-chapter-title")).toHaveTextContent(
-        "第2話 覚醒",
-      );
-      expect(screen.getByTestId("reader-chapter-indicator")).toHaveTextContent(
-        "第 2 話 / 全 3 話",
-      );
     });
 
-    it("Loading ストーリーでローディング表示になること", async () => {
+    it("Loading ストーリーで ReaderPage に isLoading=true が渡されローディング表示になること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       render(<Loading />);
 
       await waitFor(() => {
         expect(screen.getByTestId("reader-loading")).toBeInTheDocument();
       });
+      expect(pageSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          isLoading: true,
+          novel: null,
+          chapter: null,
+        }),
+        undefined,
+      );
       expect(screen.queryByTestId("reader-view")).not.toBeInTheDocument();
     });
 
-    it("Empty ストーリーで空状態表示になること", async () => {
+    it("Empty ストーリーで ReaderPage に novel=null・chapter=null が渡され空状態表示になること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       render(<Empty />);
 
       await waitFor(() => {
         expect(screen.getByTestId("reader-empty")).toBeInTheDocument();
       });
-      expect(
-        screen.getByText("作品またはエピソードが見つかりません。"),
-      ).toBeInTheDocument();
+      expect(pageSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          isLoading: false,
+          novel: null,
+          chapter: null,
+        }),
+        undefined,
+      );
     });
 
-    it("WithCustomCallbacks ストーリーでカスタムコールバック注入時も正常に描画されること", async () => {
+    it("WithCustomCallbacks ストーリーでカスタムコールバック注入時も ReaderPage に作品・話データと遷移ハンドラが渡され正常に描画されること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       render(<WithCustomCallbacks />);
 
       await waitFor(() => {
         expect(screen.getByTestId("reader-page")).toBeInTheDocument();
-        expect(screen.getByTestId("reader-title")).toHaveTextContent(
-          "境界迷宮と異界の魔術師",
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            novel: expect.objectContaining({
+              id: sampleNovel.id,
+              title: "境界迷宮と異界の魔術師",
+            }),
+            chapterIndex: 1,
+            onBackToBookshelf: expect.any(Function),
+            onBackToDetail: expect.any(Function),
+          }),
+          undefined,
         );
       });
 
@@ -813,14 +893,17 @@ describe("ReaderContainer", () => {
       Object.defineProperty(readerView, "scrollWidth", {
         value: 1000,
         configurable: true,
+        writable: true,
       });
       Object.defineProperty(readerView, "clientWidth", {
         value: 500,
         configurable: true,
+        writable: true,
       });
       Object.defineProperty(readerView, "scrollLeft", {
         value: -250,
         configurable: true,
+        writable: true,
       });
 
       await act(async () => {
@@ -834,6 +917,7 @@ describe("ReaderContainer", () => {
 
     it("「作品を取得/更新」ボタン押下で手動作品取得が実行されること", async () => {
       const user = userEvent.setup();
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
 
@@ -854,15 +938,24 @@ describe("ReaderContainer", () => {
 
       await user.click(screen.getByTestId("fetch-novel-button"));
 
-      // 取得処理がトリガーされたことを確認
+      // 取得処理がトリガーされ ReaderPage に作品が再描画されたことを確認
       await waitFor(() => {
-        expect(screen.getByTestId("reader-title")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            novel: expect.objectContaining({
+              title: "境界迷宮と異界の魔術師",
+            }),
+            isLoading: false,
+          }),
+          undefined,
+        );
       });
     });
   });
 
   describe("Props 未指定時のデフォルト動作", () => {
-    it("Props を指定せずにマウントした際、DB の先頭作品が自動ロードされて描画されること", async () => {
+    it("Props を指定せずにマウントした際、DB の先頭作品が自動ロードされて ReaderPage に渡されること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
 
@@ -874,8 +967,17 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-title")).toHaveTextContent(
-          "境界迷宮と異界の魔術師",
+        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            novel: expect.objectContaining({
+              id: sampleNovel.id,
+              title: "境界迷宮と異界の魔術師",
+            }),
+            chapterIndex: 1,
+            isLoading: false,
+          }),
+          undefined,
         );
       });
     });

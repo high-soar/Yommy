@@ -107,3 +107,20 @@ export const WithInitialScrollProgress: Story = {
     initialScrollProgress: 0.5,
   },
 };
+
+const longBodyHtml = Array.from({ length: 18 }, (_, i) => {
+  const num = i + 1;
+  return `<p>第${num}段落：青い空に、二つの<ruby><rb>太陽</rb><rp>(</rp><rt>たいよう</rt><rp>)</rp></ruby>が輝いていた。少年にとって、それは<em class="bouten">信じがたい光景</em>であった。見知らぬ世界の風が吹き抜け、青草の香りが鼻腔をくすぐる。彼は古びた魔導書を胸に抱き、地平線の彼方へと続く石畳の街道を一歩ずつ踏みしめて進んでいった。</p>`;
+}).join("\n");
+
+/**
+ * 縦書き長文表示時の水平スクロール（Overflow）検証ストーリー
+ */
+export const VerticalLongContent: Story = {
+  name: "縦書き（長文スクロール・Overflow）",
+  args: {
+    writingMode: "vertical-rl",
+    theme: "light",
+    bodyHtml: longBodyHtml,
+  },
+};
