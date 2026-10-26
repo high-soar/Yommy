@@ -8,11 +8,14 @@ import { NovelDetailContainer } from "./NovelDetailContainer";
 import { ServiceProvider } from "../../../app/ServiceProvider";
 import { RouterProvider, useRouter } from "../../../app/router";
 import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
+import type { DatabaseAdapter } from "../../../storage/adapter/types";
 import type {
   NovelRecord,
   ChapterSummary,
   NovelRepository,
   ChapterRepository,
+  SettingsRepository,
+  ReaderSettings,
 } from "../../../storage/types";
 import type { HttpClientBridge } from "../../../bridges/http/types";
 import type { ParserRegistry } from "../../../parsers/parserRegistry";
@@ -128,6 +131,34 @@ function createMockChapterRepo(
   };
 }
 
+function createMockSettingsRepo(): SettingsRepository {
+  let current: ReaderSettings = {
+    writingMode: "vertical-rl",
+    theme: "light",
+    fontFamily: "mincho",
+    fontSizePx: 18,
+    lineHeight: 1.8,
+    pageMarginPx: 16,
+    enableTapPaging: false,
+    enableVolumeKeyPaging: false,
+    updatedAt: "2026-10-26T00:00:00Z",
+  };
+  return {
+    getReaderSettings: async () => current,
+    updateReaderSettings: async (patch) => {
+      current = { ...current, ...patch };
+      return current;
+    },
+  };
+}
+
+const mockDatabaseAdapter: DatabaseAdapter = {
+  execute: async () => {},
+  query: async () => [],
+  runTransaction: async (fn) => fn(),
+  close: async () => {},
+};
+
 /**
  * ルーターパスとコンテナを同時に観測するためのテストヘルパー
  */
@@ -137,6 +168,8 @@ const RouteObserverWrapper: React.FC<{
   onSelectEpisode?: (novelId: string, chapterIndex: number) => void;
   novelRepository?: NovelRepository;
   chapterRepository?: ChapterRepository;
+  settingsRepository?: SettingsRepository;
+  databaseAdapter?: DatabaseAdapter;
   httpClient?: HttpClientBridge;
   parserRegistry?: ParserRegistry;
 }> = ({
@@ -145,16 +178,22 @@ const RouteObserverWrapper: React.FC<{
   onSelectEpisode,
   novelRepository,
   chapterRepository,
+  settingsRepository,
+  databaseAdapter,
   httpClient,
   parserRegistry,
 }) => {
   const router = useRouter();
+  const resolvedSettingsRepo = settingsRepository ?? createMockSettingsRepo();
+  const resolvedDbAdapter = databaseAdapter ?? mockDatabaseAdapter;
 
   return (
     <div>
       <div data-testid="observed-current-path">{router.currentPath}</div>
       <ServiceProvider
         services={{
+          databaseAdapter: resolvedDbAdapter,
+          settingsRepository: resolvedSettingsRepo,
           ...(novelRepository ? { novelRepository } : {}),
           ...(chapterRepository ? { chapterRepository } : {}),
           ...(httpClient ? { httpClient } : {}),
@@ -172,12 +211,14 @@ const RouteObserverWrapper: React.FC<{
 };
 
 describe("NovelDetailContainer", () => {
-  beforeEach(async () => {
-    await resetTestDb();
+  beforeEach(() => {
     window.history.pushState(null, "", "/");
   });
 
   describe("Storybook Stories レンダリング検証 (composeStories)", () => {
+    beforeEach(async () => {
+      await resetTestDb();
+    });
     it("Default ストーリーで作品ヘッダーと目次一覧が描画されること (AC-ND-01, AC-ND-02)", async () => {
       render(<Default />);
 

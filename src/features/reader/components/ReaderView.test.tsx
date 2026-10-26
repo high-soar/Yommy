@@ -13,6 +13,7 @@ const {
   HorizontalLight,
   CustomTypography,
   WithInitialScrollProgress,
+  VerticalLongContent,
 } = composeStories(stories);
 
 /**
@@ -121,6 +122,15 @@ describe("ReaderView", () => {
     it("WithInitialScrollProgress ストーリーがエラーなく描画されること", () => {
       render(<WithInitialScrollProgress />);
       expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+    });
+
+    it("VerticalLongContent ストーリーで直交フロー時も親コンテナ幅に収まるクラス（w-full max-w-full）が付与され長文が描画されること", () => {
+      render(<VerticalLongContent />);
+      const container = screen.getByTestId("reader-view");
+      expect(container).toHaveClass("writing-vertical-rl");
+      expect(container).toHaveClass("w-full");
+      expect(container).toHaveClass("max-w-full");
+      expect(screen.getByTestId("reader-body")).toHaveTextContent("第18段落");
     });
   });
 

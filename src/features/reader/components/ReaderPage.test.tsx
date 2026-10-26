@@ -74,7 +74,11 @@ describe("ReaderPage", () => {
   describe("Storybook Stories 検証 (composeStories)", () => {
     it("Default ストーリーでツールバー、ナビゲーション、本文（ReaderView）が描画されること", () => {
       render(<Default />);
-      expect(screen.getByTestId("reader-page")).toBeInTheDocument();
+      const page = screen.getByTestId("reader-page");
+      expect(page).toBeInTheDocument();
+      const main = page.querySelector("main");
+      expect(main).toHaveClass("w-full");
+      expect(main).toHaveClass("min-w-0");
       expect(screen.getByTestId("reader-toolbar")).toBeInTheDocument();
       expect(screen.getByTestId("reader-chapter-nav")).toBeInTheDocument();
       expect(screen.getByTestId("reader-view")).toBeInTheDocument();
