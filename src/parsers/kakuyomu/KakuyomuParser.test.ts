@@ -63,6 +63,9 @@ describe("KakuyomuParser", () => {
         parser.normalizeWorkUrl("https://kakuyomu.jp/users/123"),
       ).toThrow("Invalid Kakuyomu work URL");
       expect(() =>
+        parser.normalizeWorkUrl("https://kakuyomu.jp/works/invalid"),
+      ).toThrow("Invalid Kakuyomu work URL");
+      expect(() =>
         parser.normalizeWorkUrl("https://example.com/works/12345"),
       ).toThrow("Invalid Kakuyomu work URL");
       expect(() => parser.normalizeWorkUrl("invalid-string")).toThrow(
