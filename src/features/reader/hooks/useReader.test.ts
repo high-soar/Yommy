@@ -1151,7 +1151,7 @@ describe("useReader", () => {
       });
 
       expect(getHtmlSpy).not.toHaveBeenCalled();
-      expect(result.current.error).toContain("Unsupported site");
+      expect(result.current.error).toContain("No parser registered for URL");
     });
 
     it("対象 URL が未指定（空文字）の場合、即座に error が設定されること", async () => {
