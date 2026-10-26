@@ -13,6 +13,7 @@ related_specs:
   - docs/specs/features/novel-detail.md
   - docs/specs/features/reader-view.md
 related_tests:
+  - src/App.test.tsx
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
   - test/it/smoke.spec.ts
 ---

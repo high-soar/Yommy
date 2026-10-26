@@ -3,7 +3,7 @@ type: spec-delta
 title: 画面ルーティング導入と本棚画面（SCR-01）・URL作品登録の実装
 description: Issue #12 に対する差分仕様、画面ルーティング基盤（src/app/router.tsx）、本棚画面（SCR-01）、リーダー・作品詳細ルート連携、テスト計画、およびSub-issue分割計画。
 issue: "#12"
-status: "Review (#12)"
+status: "Completed (Archived)"
 updated: "2026-10-26"
 tags: [delta, routing, bookshelf, scr-01, kakuyomu]
 related_specs:
@@ -46,7 +46,7 @@ related_tests:
 
 ### 2.2 本棚画面（`SCR-01`）の新規策定・実装
 
-- App 全体正本として [docs/specs/features/bookshelf.md](../features/bookshelf.md) を新規策定し、以下の機能と受入条件（`AC-BS-01`〜`AC-BS-06`）を定義する：
+- App 全体正本として [docs/specs/features/bookshelf.md](../../features/bookshelf.md) を新規策定し、以下の機能と受入条件（`AC-BS-01`〜`AC-BS-06`）を定義する：
   1. **登録済み作品カード一覧（`NovelCard`）**:
      - 既存の `NovelSummary` スキーマを変更せず、タイトル（`title`）、著者名（`author`）、全話数と取得済み話数（`全 N 話（取得済み M 話）`）、およびしおり位置バッジ（`しおり: 第K話` または `未読`）を表示する。
      - カード本体タップ（`novel-card-select`）で `/novels/:novelId` へ遷移する（`TR-02`）。
@@ -61,7 +61,7 @@ related_tests:
 
 ### 2.3 `SCR-02`（`/novels/:novelId`）最小プレースホルダ画面と `TR-02` の整理
 
-- [docs/specs/screen-transitions.md](../screen-transitions.md) の `TR-02` 定義を更新し、「URLから作品を追加」完了時は本棚画面（`SCR-01`）の一覧に即時反映して留まり、本棚の作品カード本体をタップしたときに `SCR-02`（`/novels/:novelId`）へ遷移する仕様に統一する。
+- [docs/specs/screen-transitions.md](../../screen-transitions.md) の `TR-02` 定義を更新し、「URLから作品を追加」完了時は本棚画面（`SCR-01`）の一覧に即時反映して留まり、本棚の作品カード本体をタップしたときに `SCR-02`（`/novels/:novelId`）へ遷移する仕様に統一する。
 - Issue #13 で `SCR-02` を本格実装するまでの受け皿として、`src/features/novel-detail/components/NovelDetailPlaceholder.tsx`（および 1対1 の `NovelDetailPlaceholder.stories.tsx`, `NovelDetailPlaceholder.test.tsx`）を作成し、`/novels/:novelId` ルートに以下の要素を持つ最小プレースホルダ画面（`data-testid="novel-detail-placeholder"`）を配置する：
   - `novelRepository.getNovelById(novelId)` から取得した作品タイトル・著者・あらすじの表示
   - 「第1話 / 続きから読む」ボタン（`data-testid="detail-read-button"` → `/novels/:novelId/chapters/:chapterIndex` へ遷移）
@@ -69,7 +69,7 @@ related_tests:
 
 ### 2.4 `SCR-03`（`/novels/:novelId/chapters/:chapterIndex`）リーダー画面のルート連携とオンデマンド本文取得
 
-- [docs/specs/features/reader-view.md](../features/reader-view.md) を更新し、`PocReaderContainer` がルートパラメータ `novelId` および `chapterIndex`（省略時は既存の初期表示動作を維持）を受け取って動作するよう拡張する。
+- [docs/specs/features/reader-view.md](../../features/reader-view.md) を更新し、`PocReaderContainer` がルートパラメータ `novelId` および `chapterIndex`（省略時は既存の初期表示動作を維持）を受け取って動作するよう拡張する。
 - **未キャッシュ話のオンデマンド取得（`TR-03` 対応）**:
   - URL 作品登録時点では目次のみが DB 保存され各話の `bodyHtml` は `null` であるため、リーダー画面マウント時に指定された `(novelId, chapterIndex)` の `ChapterRecord.bodyHtml` が `null` の場合は、自動的に `httpClient.getHtml({ url: chapter.url })` → `parser.parseChapterContent` → `chapterRepository.saveChapterBody` を実行して本文を表示する。
 - **ナビゲーション導線**:
@@ -128,7 +128,7 @@ related_tests:
 
 ## 5. 申し送り事項（Handover Items: `HO-xx`）
 
-|   ID    | 申し送り事項の内容                                                                                                                                                                                                          | 解決先（対象 Issue / 成果物）     | 完了ゲート          |  状態  |
-| :-----: | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------- | :------------------ | :----: |
-| `HO-04` | `src/app/router.tsx` による画面ルーティング導入、および `SCR-01` 本棚画面（#12）・`SCR-02` 作品詳細/目次画面（#13）の実装（※本 Issue #12 で前半のルーティング＋`SCR-01` を解決し、後半 `SCR-02` 本格実装を #13 へ引き継ぐ） | Issue #12 / Issue #13             | Milestone `v0.1`    | `Open` |
-| `HO-07` | 本棚画面（`SCR-01`）での URL 作品登録 → 「続きから読む」（`TR-03`）によるリーダー画面（`SCR-03`）での未キャッシュ第1話オンデマンド取得 → 縦書き・ルビ表示・リロード復元の実ブラウザ結合テスト（`SCN-01`）検証               | Issue #12 Sub-issue ③ (#23 IT PR) | Issue #12 PR マージ | `Open` |
+|   ID    | 申し送り事項の内容                                                                                                                                                                                                          | 解決先（対象 Issue / 成果物）     | 完了ゲート          |    状態    |
+| :-----: | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------- | :------------------ | :--------: |
+| `HO-04` | `src/app/router.tsx` による画面ルーティング導入、および `SCR-01` 本棚画面（#12）・`SCR-02` 作品詳細/目次画面（#13）の実装（※本 Issue #12 で前半のルーティング＋`SCR-01` を解決し、後半 `SCR-02` 本格実装を #13 へ引き継ぐ） | Issue #12 / Issue #13             | Milestone `v0.1`    |   `Open`   |
+| `HO-07` | 本棚画面（`SCR-01`）での URL 作品登録 → 「続きから読む」（`TR-03`）によるリーダー画面（`SCR-03`）での未キャッシュ第1話オンデマンド取得 → 縦書き・ルビ表示・リロード復元の実ブラウザ結合テスト（`SCN-01`）検証               | Issue #12 Sub-issue ③ (#23 IT PR) | Issue #12 PR マージ | `Resolved` |

@@ -13,10 +13,12 @@ related_specs:
   - docs/specs/features/bookshelf.md
   - docs/specs/features/novel-detail.md
 related_tests:
+  - src/App.test.tsx
   - src/features/reader/components/ReaderView.test.tsx
   - src/features/reader/components/ReaderToolbar.test.tsx
   - src/features/reader/components/PocReaderContainer.test.tsx
   - test/vrt/vrt.spec.ts
+  - test/it/smoke.spec.ts
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
 ---
 
