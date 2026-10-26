@@ -3,7 +3,7 @@ type: guideline
 title: テスト・実装規律の正本（SSOT）
 description: Yommyの3層テスト体系（Parser/Storage/Viewer）、TDDコミット規約、1対1 Story/UT、親子分離、C0/C1 100%、縦書きVRT、および原因D設計同期ルールの正本。
 status: Approved
-updated: "2026-10-25"
+updated: "2026-10-27"
 tags: [testing, tdd, vrt, storybook, vitest, playwright, coverage]
 related_specs:
   - docs/index.md
@@ -30,7 +30,7 @@ related_tests: []
 4. **テスト配置の統一（Co-location）**:
    単体テスト（`*.test.ts`, `*.test.tsx`）および Storybook ファイル（`*.stories.tsx`）は、対象ソースファイルと同一ディレクトリに配置する。
 5. **例外なしの 1 対 1 対応原則**:
-   - 全 `*.tsx` ファイルに対して、同階層に **`*.stories.tsx`（必須）** と **`*.test.tsx`（Portable Stories `composeStories` 全件実行 ＋ ロジック補完）** を 1 対 1 で作成する。
+   - 全 `*.tsx` ファイル（ただし §5.2 項4 に定めるブラウザ初期マウントエントリーポイント `src/main.tsx` を除く）に対して、同階層に **`*.stories.tsx`（必須）** と **`*.test.tsx`（Portable Stories `composeStories` 全件実行 ＋ ロジック補完）** を 1 対 1 で作成する。
    - 全 `*.ts` ファイル（型定義専用ファイルを除く）に対して、同階層に **`*.test.ts`（または `.test.tsx`）** を 1 対 1 で作成する。
 6. **親子コンポーネント分離原則（相乗りテスト禁止）**:
    親（Page / Container）のテストでは「状態管理・Loading/Error/Ready の切り替え・子への Props 渡し」のみを検証し、子コンポーネントの表示バリエーション・境界値・イベント発火は必ず子自身の `.stories.tsx` / `.test.tsx` で独立して検証する。
@@ -76,6 +76,7 @@ flowchart TB
 - **TDD・テスト規律**:
   - 単体テストでは外部ネットワーク通信を一切行わない。
   - ローカルのサンプル HTML フィクスチャ（正常ページ、ルビ `<ruby><rb><rt><rp>` や傍点を含む本文、複数ページ目次、短編、構造変更時の異常 HTML 等）を入力として、小説タイトル・著者・目次リスト・サニタイズ＆整形済み本文 HTML が正確に抽出されることを Vitest で C0/C1 100% 網羅する。
+  - **実サイト HTML 構造・動的展開制限の事前調査鉄則**: 外部小説サイトのパーサー策定・実装時は、現行サイトの初期表示 DOM 件数制限（例: カクヨム作品トップの直近7話のみ DOM 表示）やトグル非表示章、`<script id="__NEXT_DATA__">` 等の埋め込み JSON データ構造を実サイト HTML で必ず事前調査し、7話超・複数章構成を含むフィクスチャで全件取得を検証すること。
   - 小説サイト側の DOM 仕様変更が発生した際は、まず新しい HTML フィクスチャをテストに追加して Red を確認してからパーサーのセレクタ・抽出ロジックを修正する。
 
 ### 2.2 Storage Layer（ローカルDB・キャッシュ管理層）
@@ -94,6 +95,7 @@ flowchart TB
   - CORS 回避用のネイティブ HTTP 通信（`CapacitorHttp`）、レートリミット・ダウンロードキュー制御、および内蔵 WebView からの DOM 抽出ブリッジは薄いインターフェースとして分離し、UT / Storybook / IT ではモックまたはフィクスチャ応答を注入可能にする。
 - **小説組版 UI 単体テスト & VRT**:
   - 縦書き（`writing-mode: vertical-rl`）/ 横書き切り替え、ルビ（`<ruby>`）・傍点表示、フォント切り替え（Noto CJK / IPAex / BIZ UD明朝・ゴシック / Klee）、カラーテーマ（白 / セピア / ダーク / 純黒）、しおり位置復元などの UI 状態を Storybook の Story として網羅する。
+  - **スクロール・Overflow（直交フロー）検証の必須化**: スクロール・Overflow を伴う表示コンポーネント（特に親 `horizontal-tb` 内で `writing-mode: vertical-rl` となる直交フロー要素）では、`w-full max-w-full`（および親コンテナの `min-w-0`）等の幅制約を明示するとともに、画面外にはみ出す長文データを含めた Story（1280px / 375px 双方で Overflow するケース）を必須とし、VRT と実ブラウザ IT（負の `scrollLeft` 検証）の双方でスクロール可能性を保証すること。
   - DevContainer と GitHub Actions で同一の日本語フォント環境を使用し、Storybook 全 Story に対して **1280px / 375px の VRT（視覚的回帰テスト）** を実行して組版崩れを機械的に検知する。
 
 ---

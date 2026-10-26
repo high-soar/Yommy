@@ -51,10 +51,11 @@ MK 作業はファイル編集数やテスト・VRT 実行ログが多く、メ�
 
 ### Step 1: Red（テスト・Story 先行作成と失敗確認）
 
-- **Parser Layer**: `__fixtures__/*.html` にテスト用 HTML を用意し、`*.test.ts` で抽出期待値（タイトル、目次、`<ruby>`・傍点保持、サニタイズ、異常系）を日本語の `it("... (AC-xx)")` で記述する。
+- **Parser Layer**: `__fixtures__/*.html` にテスト用 HTML を用意し（現行サイトの初期表示 DOM 件数制限やトグル非表示章、`__NEXT_DATA__` 等の埋め込み JSON データ構造を事前調査し、7話超・複数章構成を含むフィクスチャを用意すること）、`*.test.ts` で抽出期待値（タイトル、目次、`<ruby>`・傍点保持、サニタイズ、異常系）を日本語の `it("... (AC-xx)")` で記述する。
 - **Storage Layer**: `resetTestDb()` で初期化するインメモリ DB を用い、Repository の CRUD・境界値テストを `*.test.ts` に記述する。
 - **Viewer & Bridge Layer**:
   - `*.stories.tsx` に表示バリエーション（縦書き `vertical-rl`、横書き、ルビ・傍点、各カラーテーマ、Loading/Error/Empty、操作 `play` 関数）を定義する。
+  - スクロール・Overflow を伴う表示コンポーネント（特に親 `horizontal-tb` 内で `writing-mode: vertical-rl` となる直交フロー要素）では、`w-full max-w-full` 等の幅制約を明示するとともに、画面外にはみ出す長文データを含めた Story（1280px / 375px 双方で Overflow するケース）を必須とし、VRT と実ブラウザ IT（負の `scrollLeft` 検証）の双方でスクロール可能性を保証する。
   - `*.test.tsx` で `composeStories` による全 Story 実行＋内部ロジック補完テストを記述する。
 - **失敗確認とコミット**: `npx vitest run <対象テスト>` を実行し、未実装により期待通り失敗することを確認して `test(<scope>): ...（Red）` をコミットする。
 

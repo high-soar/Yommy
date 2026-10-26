@@ -11,7 +11,7 @@
  * 3. Required OKF + workflow fields (type, title, description, status, updated, tags, related_specs, related_tests) exist.
  * 4. `type` matches the canonical 10-type taxonomy and directory placement rules.
  * 5. `spec-delta` lifecycle rules (active in changes/ vs Completed (Archived) in changes/archive/).
- * 6. All file paths in `related_specs` and relative Markdown links (outside code fences) resolve to existing files.
+ * 6. All file paths in `related_specs`, `related_tests`, and relative Markdown links (outside code fences) resolve to existing files.
  */
 
 import fs from "node:fs";
@@ -333,7 +333,19 @@ for (const filePath of docsFiles) {
     reportError(filePath, "Frontmatter 'related_specs' must be a list");
   }
 
-  if (!Array.isArray(fm.related_tests)) {
+  // Validate `related_tests` paths exist
+  if (Array.isArray(fm.related_tests)) {
+    for (const testPath of fm.related_tests) {
+      const target = testPath.split("#")[0];
+      const resolved = path.resolve(ROOT_DIR, target);
+      if (!fs.existsSync(resolved)) {
+        reportError(
+          filePath,
+          `related_tests path '${testPath}' does not exist`,
+        );
+      }
+    }
+  } else {
     reportError(filePath, "Frontmatter 'related_tests' must be a list");
   }
 }

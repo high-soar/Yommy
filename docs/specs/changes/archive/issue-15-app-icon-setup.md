@@ -4,7 +4,7 @@ title: アプリアイコン（Android Adaptive Icon / Web Favicon）設定の�
 description: Issue #15 に対するアプリアイコン・Favicon生成、配置先規約、Adaptive Icon仕様、テスト計画、およびSub-issue分割計画。
 issue: "#15"
 status: "Completed (Archived)"
-updated: "2026-10-26"
+updated: "2026-10-27"
 tags: [delta, icon, android, favicon, branding]
 related_specs:
   - docs/specs/requirements.md
@@ -130,6 +130,6 @@ Vite の静的アセットディレクトリ `public/` を新設し、ブラウ�
 
 ## 5. 申し送り事項（Handover Items: `HO-xx`）
 
-- **`HO-06`**: Android 実機およびエミュレータ環境におけるホーム画面アプリアイコンの表示（Adaptive Icon 各種マスク形状、解像度ごとの視認性）および Web ブラウザでの Favicon 表示の確認。
-  - 解決先: Sub-issue ② (IT PR)
-  - 完了ゲート: Issue #15 PR マージ
+|   ID    | 申し送り事項の内容                                                                                                                                                                                                                                                        | 解決先（対象 Issue / 成果物）     | 完了ゲート          |    状態    |
+| :-----: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :-------------------------------- | :------------------ | :--------: |
+| `HO-06` | Android 実機 / エミュレータ環境におけるホーム画面アプリアイコン表示（Adaptive Icon 各種マスク形状、解像度視認性）および Web ブラウザでの Favicon 表示の確認（※Android 実機ホーム画面での Adaptive Icon 最終視認確認は Milestone `v0.1` Step 3（#16 人間最終承認）で確認） | Issue #15 Sub-issue ② (#19 IT PR) | Issue #15 PR マージ | `Resolved` |
