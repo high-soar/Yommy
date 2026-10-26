@@ -7,6 +7,13 @@ import type { NovelRecord, ChapterRecord } from "../../../storage/types";
 const DEFAULT_KAKUYOMU_URL = "https://kakuyomu.jp/works/16817330658027210412";
 
 /**
+ * 例外オブジェクトをユーザー表示用エラーメッセージ文字列へ変換する
+ */
+function toErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/**
  * PoC リーダーコンテナの Props
  */
 export interface PocReaderContainerProps {
@@ -51,6 +58,32 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * 指定エピソードの本文をオンデマンドで取得・パースして DB に保存する共通関数
+   */
+  const fetchAndSaveChapterBody = useCallback(
+    async (
+      targetNovelId: string,
+      targetChapterIndex: number,
+      episodeUrl: string,
+    ): Promise<ChapterRecord | null> => {
+      const parser = parserRegistry.requireParser(episodeUrl);
+      const chapterRes = await httpClient.getHtml({ url: episodeUrl });
+      const parsedChapter = parser.parseChapterContent(
+        chapterRes.html,
+        episodeUrl,
+      );
+      await chapterRepository.saveChapterBody(
+        targetNovelId,
+        targetChapterIndex,
+        parsedChapter,
+        new Date().toISOString(),
+      );
+      return chapterRepository.getChapter(targetNovelId, targetChapterIndex);
+    },
+    [chapterRepository, httpClient, parserRegistry],
+  );
+
   // 初回ロード / リロード復元 / ルート指定ロード
   useEffect(() => {
     if (!isReady) return;
@@ -87,31 +120,14 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
               setIsLoading(true);
             }
             try {
-              const parser = parserRegistry.requireParser(targetChapter.url);
-              const chapterRes = await httpClient.getHtml({
-                url: targetChapter.url,
-              });
-              const parsedChapter = parser.parseChapterContent(
-                chapterRes.html,
+              targetChapter = await fetchAndSaveChapterBody(
+                novelId,
+                targetIndex,
                 targetChapter.url,
-              );
-              await chapterRepository.saveChapterBody(
-                novelId,
-                targetIndex,
-                parsedChapter,
-                new Date().toISOString(),
-              );
-              targetChapter = await chapterRepository.getChapter(
-                novelId,
-                targetIndex,
               );
             } catch (fetchErr: unknown) {
               if (isMounted) {
-                setError(
-                  fetchErr instanceof Error
-                    ? fetchErr.message
-                    : String(fetchErr),
-                );
+                setError(toErrorMessage(fetchErr));
               }
             } finally {
               if (isMounted) {
@@ -146,7 +162,7 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
         }
       } catch (err: unknown) {
         if (isMounted) {
-          setError(err instanceof Error ? err.message : String(err));
+          setError(toErrorMessage(err));
         }
       }
     }
@@ -163,8 +179,7 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
     novelRepository,
     chapterRepository,
     settingsRepository,
-    parserRegistry,
-    httpClient,
+    fetchAndSaveChapterBody,
   ]);
 
   // 作品取得操作
@@ -198,25 +213,13 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
           novelIndex.chapters.find(
             (ch) => ch.chapterIndex === targetChapterIndex,
           ) ?? novelIndex.chapters[0];
-        const chapterRes = await httpClient.getHtml({
-          url: targetEpisodeToc.url,
-        });
-        const parsedChapter = parser.parseChapterContent(
-          chapterRes.html,
+
+        const savedChapter = await fetchAndSaveChapterBody(
+          savedNovel.id,
+          targetEpisodeToc.chapterIndex,
           targetEpisodeToc.url,
         );
 
-        await chapterRepository.saveChapterBody(
-          savedNovel.id,
-          targetEpisodeToc.chapterIndex,
-          parsedChapter,
-          new Date().toISOString(),
-        );
-
-        const savedChapter = await chapterRepository.getChapter(
-          savedNovel.id,
-          targetEpisodeToc.chapterIndex,
-        );
         setNovel(savedNovel);
         setChapter(savedChapter);
       } else {
@@ -224,7 +227,7 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
         setChapter(null);
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(toErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -235,7 +238,7 @@ export const PocReaderContainer: React.FC<PocReaderContainerProps> = ({
     httpClient,
     parserRegistry,
     novelRepository,
-    chapterRepository,
+    fetchAndSaveChapterBody,
   ]);
 
   // 縦横切替
