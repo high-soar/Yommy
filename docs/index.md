@@ -33,7 +33,8 @@ docs/
 └── quality/                           # 【柱3：品質分析・バグ記録・申し送り管理】
     ├── bug-and-handover-log.md        # バグ記録票（製品/支援分離、原因5分類 L/S/D/B/A）＆ 申し送り事項（HO-xx）追跡シート
     └── reports/                       # ミニリリース Milestone ごとの品質分析・改善（Kaizen）レポート格納先
-        └── phase3-poc.md              # Phase 3 PoC 品質分析・改善レポート
+        ├── phase3-poc.md              # Phase 3 PoC 品質分析・改善レポート
+        └── v0.1-mvp.md                # Milestone v0.1（カクヨム MVP）品質分析・改善レポート
 ```
 
 > [!NOTE]
