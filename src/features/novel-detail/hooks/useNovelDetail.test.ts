@@ -27,6 +27,14 @@ describe("useNovelDetail", () => {
     ({ children }: { children: React.ReactNode }) =>
       React.createElement(ServiceProvider, { services }, children);
 
+  const KAKUYOMU_WORK_ID = "1177354054881162325";
+  const KAKUYOMU_EPISODE_IDS = [
+    "1177354054881162326",
+    "1177354054881162327",
+    "1177354054881162328",
+    "1177354054881162329",
+  ];
+
   const seedSampleNovel = async (
     novelRepo: SqlNovelRepository,
     chapterCount: number = 2,
@@ -34,17 +42,17 @@ describe("useNovelDetail", () => {
     return await novelRepo.upsertNovelWithToc(
       {
         siteType: "kakuyomu",
-        remoteWorkId: "16817330658027210412",
-        canonicalUrl: "https://kakuyomu.jp/works/16817330658027210412",
+        remoteWorkId: KAKUYOMU_WORK_ID,
+        canonicalUrl: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}`,
         title: "境界迷宮と異界の魔術師",
         author: "小野崎えいじ",
         synopsis: "異界の魔術師の物語",
         chapters: Array.from({ length: chapterCount }, (_, i) => ({
           chapterIndex: i + 1,
-          remoteChapterId: `ep_${i + 1}`,
+          remoteChapterId: KAKUYOMU_EPISODE_IDS[i],
           partTitle: i >= 2 ? "第二章" : "第一章",
           title: `第${i + 1}話`,
-          url: `https://kakuyomu.jp/works/16817330658027210412/episodes/ep_${i + 1}`,
+          url: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[i]}`,
           publishedAt: "2026-01-01T00:00:00Z",
         })),
         nextTocPageUrl: null,
@@ -300,22 +308,13 @@ describe("useNovelDetail", () => {
     const db = await resetTestDb();
     const novelRepo = new SqlNovelRepository(db);
     const chapterRepo = new SqlChapterRepository(db);
+    const seeded = await seedSampleNovel(novelRepo, 4);
 
-    // 先に4話取得済みの状態にしておく
-    const { result } = renderHook(
-      () => useNovelDetail("kakuyomu:16817330658027210412"),
-      {
-        wrapper: createWrapper({
-          novelRepository: novelRepo,
-          chapterRepository: chapterRepo,
-        }),
-      },
-    );
-
-    // 最初に事前登録（4話）
-    await act(async () => {
-      await seedSampleNovel(novelRepo, 4);
-      await result.current.reloadDetail();
+    const { result } = renderHook(() => useNovelDetail(seeded.id), {
+      wrapper: createWrapper({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+      }),
     });
 
     await waitFor(() => {
@@ -341,7 +340,7 @@ describe("useNovelDetail", () => {
 
     const mockHttp = new MockHttpClient();
     mockHttp.setResponse(
-      /^https:\/\/kakuyomu\.jp\/works\/16817330658027210412$/,
+      new RegExp(`^https://kakuyomu\\.jp/works/${KAKUYOMU_WORK_ID}$`),
       () => {
         throw new Error("HTTP 503 サービス一時停止中");
       },
@@ -380,7 +379,7 @@ describe("useNovelDetail", () => {
 
     const mockHttp = new MockHttpClient();
     mockHttp.setResponse(
-      /^https:\/\/kakuyomu\.jp\/works\/16817330658027210412$/,
+      new RegExp(`^https://kakuyomu\\.jp/works/${KAKUYOMU_WORK_ID}$`),
       () => {
         throw "非Error例外";
       },
@@ -404,6 +403,20 @@ describe("useNovelDetail", () => {
 
     expect(success).toBe(false);
     expect(result.current.error).toBe(DEFAULT_REFRESH_ERROR_MESSAGE);
+
+    // 空文字メッセージの Error インスタンス
+    mockHttp.setResponse(
+      new RegExp(`^https://kakuyomu\\.jp/works/${KAKUYOMU_WORK_ID}$`),
+      () => {
+        throw new Error("");
+      },
+    );
+
+    await act(async () => {
+      success = await result.current.refreshToc();
+    });
+    expect(success).toBe(false);
+    expect(result.current.error).toBe(DEFAULT_REFRESH_ERROR_MESSAGE);
   });
 
   it("refreshToc: 処理中（isRefreshing === true）の多重実行が無効化されること", async () => {
@@ -414,7 +427,7 @@ describe("useNovelDetail", () => {
     let resolveHttp: ((value: HttpResponse) => void) | null = null;
     const mockHttp = new MockHttpClient();
     mockHttp.setResponse(
-      /^https:\/\/kakuyomu\.jp\/works\/16817330658027210412$/,
+      new RegExp(`^https://kakuyomu\\.jp/works/${KAKUYOMU_WORK_ID}$`),
       () =>
         new Promise((resolve) => {
           resolveHttp = resolve;
@@ -446,11 +459,18 @@ describe("useNovelDetail", () => {
     });
     expect(secondResult).toBe(false);
 
+    // 目次更新中の削除実行試行（無効化されて false が返る）
+    let deleteResult = true;
+    await act(async () => {
+      deleteResult = await result.current.confirmDeleteNovel();
+    });
+    expect(deleteResult).toBe(false);
+
     // 1回目を完了させる
     await act(async () => {
       resolveHttp?.({
         status: 200,
-        url: "https://kakuyomu.jp/works/16817330658027210412",
+        url: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}`,
         headers: {},
         html: workIndexHtml,
       });
@@ -558,6 +578,16 @@ describe("useNovelDetail", () => {
 
     // 非Error例外の場合
     vi.spyOn(novelRepo, "deleteNovel").mockRejectedValueOnce("不明な削除例外");
+
+    await act(async () => {
+      success = await result.current.confirmDeleteNovel();
+    });
+
+    expect(success).toBe(false);
+    expect(result.current.error).toBe(DEFAULT_DELETE_ERROR_MESSAGE);
+
+    // 空文字メッセージの Error インスタンス
+    vi.spyOn(novelRepo, "deleteNovel").mockRejectedValueOnce(new Error(""));
 
     await act(async () => {
       success = await result.current.confirmDeleteNovel();
