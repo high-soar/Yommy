@@ -81,13 +81,13 @@ describe("NovelDetailPlaceholder", () => {
     it("WithBookmark ストーリーで作品情報としおり位置からの読書ボタンが表示されること", async () => {
       render(<WithBookmark />);
       await waitFor(() => {
-        expect(
-          screen.getByTestId("novel-detail-placeholder"),
-        ).toBeInTheDocument();
+        expect(screen.getByTestId("novel-detail-title")).toHaveTextContent(
+          "境界迷宮と異界の魔術師",
+        );
       });
-      expect(screen.getByTestId("novel-detail-title")).toHaveTextContent(
-        "境界迷宮と異界の魔術師",
-      );
+      expect(
+        screen.getByTestId("novel-detail-placeholder"),
+      ).toBeInTheDocument();
       expect(screen.getByTestId("novel-detail-author")).toHaveTextContent(
         "小野崎",
       );
@@ -124,10 +124,11 @@ describe("NovelDetailPlaceholder", () => {
     it("WithCustomCallbacks ストーリーで詳細画面が表示されること", async () => {
       render(<WithCustomCallbacks />);
       await waitFor(() => {
-        expect(
-          screen.getByTestId("novel-detail-placeholder"),
-        ).toBeInTheDocument();
+        expect(screen.getByTestId("novel-detail-title")).toBeInTheDocument();
       });
+      expect(
+        screen.getByTestId("novel-detail-placeholder"),
+      ).toBeInTheDocument();
     });
   });
 
