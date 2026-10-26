@@ -112,6 +112,7 @@ related_tests: []
 | 67  |  #16 / R1  | 節目横断レビュー (R1-25)             |                製品コード                | `src/features/novel-detail/components/*.tsx`, `architecture.md`      |            `D`             | `novel-detail` 子コンポーネント 5 件が `types.ts` の Props 型を import せず重複宣言していた不備、およびディレクトリツリーの `schema.ts` / `icon-512.png` 記載漏れ・Container UT の不要な `resetTestDb` 実行。テストコミット `df3f857`・是正コミット `450f8d7` で型統一と UT 最適化を行い、設計同期コミット `297d2fb` で `architecture.md` を更新。           |
 | 68  |  #16 / R1  | 実データ動作確認 (R1-26)             |                製品コード                | `src/features/reader/components/{ReaderView,ReaderPage}.tsx`         |            `B`             | 親 `horizontal-tb` 内で `ReaderView` が `writing-mode: vertical-rl`（直交フロー）となる際、横幅制約（`w-full max-w-full` / `min-w-0`）が未指定のため要素幅が全文幅まで膨張し長文で水平スクロール不能となっていた不備（Story も短文のみで Overflow 未検証）。テスト `df3f857`、実装・設計同期 `d9b514f`、VRT `450f8d7`、IT `ed71ad0`、規約 `297d2fb` で解消。 |
 | 69  |  #16 / R1  | 実データ動作確認 (R1-27)             |                製品コード                | `src/parsers/kakuyomu/KakuyomuParser.ts`                             |            `D`             | カクヨム現行（Next.js）サイトの作品トップでは初期 DOM に直近 7 話のみ表示され、アコーディオン章や 8 話目以降は `<script id="__NEXT_DATA__">`（`__APOLLO_STATE__`）に格納される仕様への追従漏れ。テスト `4a96938` で 8 話・複数章フィクスチャを追加、実装 `3250789` で `__NEXT_DATA__` 優先抽出を実装、設計同期 `9e88b60`（規約 `297d2fb`）で正本改定。       |
+| 70  | #45 / PR46 | 独立AIレビュー (`pr-reviewer` 指摘1) |                支援成果物                | `docs/quality/reports/v0.1-mvp.md`                                   |            `D`             | Milestone `v0.1` 品質分析レポート初版において、対象 Issue 説明・Phase 3 基準値・原因分類定義ラベル・§4 RCA の対象ファイル名/コミット SHA・§5 申し送り表が正本（`bug-and-handover-log.md`, `phase3-poc.md`, `testing.md`）および実コードベースと乖離していた不備。全セクションの記述・数値を正本および実測値に完全一致させて是正。                            |
 
 ---
 
@@ -150,11 +151,11 @@ related_tests: []
   - VRT の固定待機排除・アサーションベース待機化、0件空振り防止アサーションの義務化。
   - 詳細分析は [docs/quality/reports/phase3-poc.md](reports/phase3-poc.md) を参照。
 
-### Milestone `v0.1`: カクヨム MVP（3画面基本完成・アプリアイコン設定、対象 Issue: #12, #13, #14, #15, #42, #16、記録 No. 32〜69）
+### Milestone `v0.1`: カクヨム MVP（3画面基本完成・アプリアイコン設定、対象 Issue: #12, #13, #14, #15, #42, #16、記録 No. 32〜70）
 
 - **製品コード不備件数**: 7 件（うち MK/UT/PRレビュー検出: 0 件、横断コードレビュー検出: 5 件、実データ動作確認検出: 2 件［`R1-26`, `R1-27`］、リリース後流出: 0 件 → **自動テスト・コードレビュー段階 DRE: $5/7 \approx 71.4\%$、Milestone リリース前 DRE: 100%**）
-- **支援成果物不備件数**: 31 件（独立 AI PR レビュー設計同期 5 件、MK/IT/CI テスト・スクリプト是正 6 件、節目横断レビュー正本/テスト/CI 是正 20 件）
-- **原因分類内訳（Milestone `v0.1` 単体 38 件）**: `D`: 20 件（製品 3 / 支援 17） / `L`: 15 件（製品 2 / 支援 13） / `A`: 2 件（製品 1 / 支援 1） / `B`: 1 件（製品 1 / 支援 0） / `S`: 0 件（計 38 件、Phase 3 からの累計 69 件）
+- **支援成果物不備件数**: 32 件（独立 AI PR レビュー設計・レポート同期 6 件、MK/IT/CI テスト・スクリプト是正 6 件、節目横断レビュー正本/テスト/CI 是正 20 件）
+- **原因分類内訳（Milestone `v0.1` 単体 39 件）**: `D`: 21 件（製品 3 / 支援 18） / `L`: 15 件（製品 2 / 支援 13） / `A`: 2 件（製品 1 / 支援 1） / `B`: 1 件（製品 1 / 支援 0） / `S`: 0 件（計 39 件、Phase 3 からの累計 70 件）
 - **プロセス・スキル改善アクション（Kaizen）**:
   - **実サイト HTML 構造・埋め込みデータ事前調査の義務化（`R1-27` 再発防止）**: `docs/guidelines/testing.md` §2.1 および `.github/skills/c-ut-workflow/SKILL.md` に、外部小説サイトパーサー実装時の初期表示 DOM 制限（直近7話等）・トグル非表示章・`__NEXT_DATA__` 埋め込み JSON の事前調査と 7話超・複数章フィクスチャ検証を明文化。
   - **直交フロー（縦書き `vertical-rl`）の幅制約と長文 Overflow Story / IT 検証の義務化（`R1-26` 再発防止）**: `docs/guidelines/testing.md` §2.3 および `.github/skills/c-ut-workflow/SKILL.md` に、直交フロー要素の `w-full max-w-full` 幅制約、1280px/375px 双方で Overflow する長文 Story の必須化、および実ブラウザ IT での負の `scrollLeft` 検証を明文化。
