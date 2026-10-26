@@ -12,6 +12,14 @@ const DEFAULT_KAKUYOMU_URL = "https://kakuyomu.jp/works/16817330658027210412";
 export interface PocReaderContainerProps {
   /** 取得対象の作品 URL（デフォルト: カクヨムの検証用URL） */
   initialWorkUrl?: string;
+  /** 表示対象の作品ID */
+  novelId?: string;
+  /** 表示対象のエピソード連番（1始まり、省略時は 1） */
+  chapterIndex?: number;
+  /** 「本棚へ戻る」タップ時のコールバック（指定時のみ reader-back-to-bookshelf ボタンを表示） */
+  onBackToBookshelf?: () => void;
+  /** 「作品詳細へ」タップ時のコールバック（指定時のみ reader-back-to-detail ボタンを表示） */
+  onBackToDetail?: (novelId: string) => void;
 }
 
 /**
