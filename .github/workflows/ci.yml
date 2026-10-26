@@ -7,8 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  quality-gate:
-    name: Lint, Test & Quality Gates
+  lint-and-unit:
+    name: Static Checks & Unit Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -21,19 +21,22 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Install Japanese Fonts & System Dependencies
+      - name: Configure APT mirrors and timeouts
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            fonts-dejavu-core \
-            fonts-noto-cjk \
-            fonts-ipaexfont \
-            fonts-morisawa-bizud-mincho \
-            fonts-morisawa-bizud-gothic \
-            fonts-klee
+          grep -rl "azure.archive.ubuntu.com" /etc/apt 2>/dev/null | xargs -r sudo sed -i "s/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g" || true
+          echo 'Acquire::Retries "3";' | sudo tee /etc/apt/apt.conf.d/99-retries
+          echo 'Acquire::http::Timeout "15";' | sudo tee -a /etc/apt/apt.conf.d/99-retries
+          echo 'Acquire::https::Timeout "15";' | sudo tee -a /etc/apt/apt.conf.d/99-retries
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
       - name: Install Playwright Chromium with system dependencies
         run: npx playwright install --with-deps chromium
@@ -53,6 +56,53 @@ jobs:
       - name: Vitest unit tests & coverage (100% threshold)
         run: npm run test:coverage
 
+  vrt-and-e2e:
+    name: VRT, E2E & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Configure APT mirrors and timeouts
+        run: |
+          grep -rl "azure.archive.ubuntu.com" /etc/apt 2>/dev/null | xargs -r sudo sed -i "s/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g" || true
+          echo 'Acquire::Retries "3";' | sudo tee /etc/apt/apt.conf.d/99-retries
+          echo 'Acquire::http::Timeout "15";' | sudo tee -a /etc/apt/apt.conf.d/99-retries
+          echo 'Acquire::https::Timeout "15";' | sudo tee -a /etc/apt/apt.conf.d/99-retries
+
+      - name: Install Japanese Fonts & System Dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            fonts-dejavu-core \
+            fonts-noto-cjk \
+            fonts-ipaexfont \
+            fonts-morisawa-bizud-mincho \
+            fonts-morisawa-bizud-gothic \
+            fonts-klee
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright Chromium with system dependencies
+        run: npx playwright install --with-deps chromium
+
       - name: Storybook VRT (1280px / 375px)
         run: npm run test:vrt
 
@@ -70,3 +120,18 @@ jobs:
           path: |
             test-results/
             playwright-report/
+
+  quality-gate:
+    name: Lint, Test & Quality Gates
+    needs: [lint-and-unit, vrt-and-e2e]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Verify all quality gates passed
+        run: |
+          if [ "${{ needs.lint-and-unit.result }}" != "success" ] || [ "${{ needs.vrt-and-e2e.result }}" != "success" ]; then
+            echo "Quality Gate Failed: lint-and-unit=${{ needs.lint-and-unit.result }}, vrt-and-e2e=${{ needs.vrt-and-e2e.result }}"
+            exit 1
+          fi
+          echo "All quality gate checks passed successfully."
