@@ -16,6 +16,25 @@ export interface ReaderToolbarProps {
   isLoading?: boolean;
 }
 
+export const MIN_FONT_SIZE_PX = 12;
+export const MAX_FONT_SIZE_PX = 32;
+export const FONT_SIZE_STEP_PX = 2;
+
+export const MIN_LINE_HEIGHT = 1.4;
+export const MAX_LINE_HEIGHT = 2.4;
+export const LINE_HEIGHT_STEP = 0.2;
+
+function clampFontSize(size: number): number {
+  return Math.min(MAX_FONT_SIZE_PX, Math.max(MIN_FONT_SIZE_PX, size));
+}
+
+function clampLineHeight(height: number): number {
+  return Math.min(
+    MAX_LINE_HEIGHT,
+    Math.max(MIN_LINE_HEIGHT, Math.round(height * 10) / 10),
+  );
+}
+
 const themeOptions: { value: ReaderTheme; label: string; testId: string }[] = [
   { value: "light", label: "白", testId: "theme-light" },
   { value: "sepia", label: "セピア", testId: "theme-sepia" },
@@ -114,8 +133,10 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
           <button
             type="button"
             data-testid="font-size-decrease"
-            disabled={fontSizePx <= 12}
-            onClick={() => onChangeFontSize?.(Math.max(12, fontSizePx - 2))}
+            disabled={fontSizePx <= MIN_FONT_SIZE_PX}
+            onClick={() =>
+              onChangeFontSize?.(clampFontSize(fontSizePx - FONT_SIZE_STEP_PX))
+            }
             aria-label="文字サイズ縮小"
             className="w-5 h-5 flex items-center justify-center font-bold text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-600 rounded disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
           >
@@ -130,8 +151,10 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
           <button
             type="button"
             data-testid="font-size-increase"
-            disabled={fontSizePx >= 32}
-            onClick={() => onChangeFontSize?.(Math.min(32, fontSizePx + 2))}
+            disabled={fontSizePx >= MAX_FONT_SIZE_PX}
+            onClick={() =>
+              onChangeFontSize?.(clampFontSize(fontSizePx + FONT_SIZE_STEP_PX))
+            }
             aria-label="文字サイズ拡大"
             className="w-5 h-5 flex items-center justify-center font-bold text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-600 rounded disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
           >
@@ -147,10 +170,10 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
           <button
             type="button"
             data-testid="line-height-decrease"
-            disabled={lineHeight <= 1.4}
+            disabled={lineHeight <= MIN_LINE_HEIGHT}
             onClick={() =>
               onChangeLineHeight?.(
-                Math.max(1.4, Math.round((lineHeight - 0.2) * 10) / 10),
+                clampLineHeight(lineHeight - LINE_HEIGHT_STEP),
               )
             }
             aria-label="行間縮小"
@@ -167,10 +190,10 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
           <button
             type="button"
             data-testid="line-height-increase"
-            disabled={lineHeight >= 2.4}
+            disabled={lineHeight >= MAX_LINE_HEIGHT}
             onClick={() =>
               onChangeLineHeight?.(
-                Math.min(2.4, Math.round((lineHeight + 0.2) * 10) / 10),
+                clampLineHeight(lineHeight + LINE_HEIGHT_STEP),
               )
             }
             aria-label="行間拡大"
