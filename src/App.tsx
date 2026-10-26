@@ -22,6 +22,9 @@ interface AppContentProps {
   initialWorkUrl?: string;
 }
 
+/**
+ * ルーター状態を購読し、ヘッダーと各画面コンポーネント（SCR-01 / SCR-02 / SCR-03）を切り替え描画する内部コンポーネント
+ */
 const AppContent: React.FC<AppContentProps> = ({ title, initialWorkUrl }) => {
   const router = useRouter();
 
