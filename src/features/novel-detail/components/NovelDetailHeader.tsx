@@ -14,8 +14,10 @@ export interface NovelDetailHeaderProps {
 }
 
 /**
- * 作品詳細ヘッダーコンポーネント
- * メタ情報（タイトル、著者、あらすじ、統計）、読書開始ボタン、目次更新・削除ボタンを表示する
+ * 作品詳細ヘッダーコンポーネント（Presentational）
+ *
+ * メタ情報（タイトル、著者、あらすじ、話数・キャッシュ統計）、
+ * 読書開始ボタン（しおり有無に応じた制御）、目次更新および作品削除アクションを提供する。
  */
 export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
   novel,
@@ -37,12 +39,14 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
       data-testid="novel-detail-header"
       className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 p-5 md:p-6 shadow-xs mb-6 flex flex-col gap-4"
     >
+      {/* ナビゲーション & アクションバー */}
       <div className="flex items-center justify-between gap-4">
         <button
           type="button"
           data-testid="back-to-bookshelf-button"
+          aria-label="本棚へ戻る"
           onClick={onBackToBookshelf}
-          className="inline-flex items-center gap-1.5 text-xs md:text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 text-xs md:text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-blue-500 rounded-md"
         >
           <span aria-hidden="true">←</span>
           <span>本棚へ戻る</span>
@@ -54,7 +58,7 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
             data-testid="refresh-toc-button"
             onClick={onRefreshToc}
             disabled={isRefreshing}
-            className="px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-lg transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+            className="px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
           >
             {isRefreshing ? "更新中..." : "目次を更新"}
           </button>
@@ -63,13 +67,14 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
             data-testid="open-delete-dialog-button"
             onClick={onOpenDeleteDialog}
             disabled={isRefreshing}
-            className="px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+            className="px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-red-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
           >
             作品を削除
           </button>
         </div>
       </div>
 
+      {/* インライン通知メッセージ（目次更新完了フィードバック） */}
       {refreshMessage && (
         <div
           role="status"
@@ -80,6 +85,7 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
         </div>
       )}
 
+      {/* インラインエラーメッセージ */}
       {error && (
         <div
           role="alert"
@@ -90,10 +96,11 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
         </div>
       )}
 
+      {/* 作品メタ情報 */}
       <div className="flex flex-col gap-1.5">
         <h1
           data-testid="novel-detail-title"
-          className="text-xl md:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50"
+          className="text-xl md:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 leading-tight"
         >
           {novel.title}
         </h1>
@@ -111,13 +118,17 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
         </div>
       </div>
 
+      {/* あらすじ */}
       <div
+        role="region"
+        aria-label="作品あらすじ"
         data-testid="novel-detail-synopsis"
         className="text-xs md:text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800"
       >
         {synopsisText}
       </div>
 
+      {/* 読書開始ボタンエリア（しおり未設定時は1ボタン、しおり設定時は2ボタン並列） */}
       <div className="flex flex-wrap items-center gap-3 pt-2">
         {novel.bookmarkChapterIndex !== null ? (
           <>
