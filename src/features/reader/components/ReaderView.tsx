@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useCallback } from "react";
 
 /**
  * 小説リーダーの組版方向（縦書き/横書き）
@@ -30,7 +30,8 @@ const themeStyles: Record<ReaderTheme, string> = {
 };
 
 /**
- * 小説本文の縦書き/横書き組版表示、ルビ・傍点、カラーテーマ描画を担う Presentational コンポーネント
+ * 小説本文の縦書き/横書き組版表示、ルビ・傍点、カラーテーマ描画、
+ * および縦横双方のスクロール進捗率算出・初期位置復元を担う Presentational コンポーネント
  */
 export const ReaderView: React.FC<ReaderViewProps> = ({
   title,
@@ -40,14 +41,56 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   theme = "light",
   fontSizePx = 18,
   lineHeight = 1.8,
+  initialScrollProgress = 0,
+  onScrollProgressChange,
 }) => {
+  const containerRef = React.useRef<HTMLDivElement>(null);
   const isVertical = writingMode === "vertical-rl";
+
+  // スクロール操作時の進捗率（0.0 〜 1.0）算出
+  const handleScroll = useCallback(() => {
+    const el = containerRef.current;
+    if (!el || !onScrollProgressChange) return;
+
+    let progress = 0;
+    if (writingMode === "horizontal-tb") {
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      progress =
+        maxScroll > 0 ? Math.min(1, Math.max(0, el.scrollTop / maxScroll)) : 0;
+    } else {
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      progress =
+        maxScroll > 0
+          ? Math.min(1, Math.max(0, Math.abs(el.scrollLeft) / maxScroll))
+          : 0;
+    }
+    onScrollProgressChange(progress);
+  }, [writingMode, onScrollProgressChange]);
+
+  // マウント時および bodyHtml / writingMode / initialScrollProgress 変化時の位置復元
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const clampedProgress = Math.min(1, Math.max(0, initialScrollProgress));
+    if (writingMode === "horizontal-tb") {
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      el.scrollTop = maxScroll > 0 ? clampedProgress * maxScroll : 0;
+    } else {
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      el.scrollLeft = maxScroll > 0 ? -clampedProgress * maxScroll : 0;
+    }
+  }, [initialScrollProgress, bodyHtml, writingMode]);
 
   return (
     <div
+      ref={containerRef}
       data-testid="reader-view"
       data-writing-mode={writingMode}
       data-theme={theme}
+      data-font-size={String(fontSizePx)}
+      data-line-height={String(lineHeight)}
+      onScroll={handleScroll}
       className={`rounded-lg p-6 shadow-sm border font-serif transition-colors duration-200 ${
         themeStyles[theme]
       } ${

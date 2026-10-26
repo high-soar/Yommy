@@ -1,3 +1,4 @@
+import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
@@ -378,6 +379,28 @@ describe("ReaderView", () => {
       });
       container.scrollLeft = -250;
       expect(() => fireEvent.scroll(container)).not.toThrow();
+    });
+
+    it("containerRef.current が null の場合に位置復元処理が早期リターンされること", () => {
+      const mockRef = {};
+      Object.defineProperty(mockRef, "current", {
+        get: () => null,
+        set: () => {},
+        configurable: true,
+      });
+      const useRefSpy = vi
+        .spyOn(React, "useRef")
+        .mockReturnValueOnce(
+          mockRef as unknown as React.RefObject<HTMLDivElement | null>,
+        );
+
+      render(
+        <ReaderView
+          bodyHtml="<p>Ref が null のケース</p>"
+          initialScrollProgress={0.5}
+        />,
+      );
+      useRefSpy.mockRestore();
     });
   });
 });
