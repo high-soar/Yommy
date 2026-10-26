@@ -10,7 +10,8 @@ related_specs:
   - docs/specs/requirements.md
   - docs/specs/architecture.md
   - docs/quality/bug-and-handover-log.md
-related_tests: []
+related_tests:
+  - scripts/generate-icons.test.ts
 ---
 
 # 差分仕様書：アプリアイコン（Android / Web Favicon）の設定（Issue #15）
