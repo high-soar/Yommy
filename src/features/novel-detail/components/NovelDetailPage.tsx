@@ -25,7 +25,8 @@ export interface NovelDetailPageProps {
 
 /**
  * 作品詳細・目次画面全体のレイアウト統合コンポーネント（Presentational）
- * ローディング、未存在作品（Not Found）、通常表示の排他描画を制御する
+ *
+ * ローディング、未検出作品（Not Found）、および通常表示（ヘッダー＋目次リスト＋削除ダイアログ）の排他描画を制御する。
  */
 export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
   novel,
@@ -53,6 +54,7 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
       <div className="max-w-4xl mx-auto">
         {isLoading ? (
           <div
+            role="status"
             data-testid="novel-detail-loading"
             className="flex flex-col items-center justify-center py-24 text-slate-500 dark:text-slate-400"
           >
@@ -64,6 +66,7 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
           </div>
         ) : novel === null ? (
           <div
+            role="alert"
             data-testid="novel-detail-not-found"
             className="flex flex-col items-center justify-center py-20 px-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 text-center shadow-xs"
           >
@@ -76,8 +79,9 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
             <button
               type="button"
               data-testid="back-to-bookshelf-button"
+              aria-label="本棚へ戻る"
               onClick={onBackToBookshelf}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs md:text-sm font-medium rounded-lg shadow-xs transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs md:text-sm font-medium rounded-lg shadow-xs transition-colors cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             >
               <span aria-hidden="true">←</span>
               <span>本棚へ戻る</span>
