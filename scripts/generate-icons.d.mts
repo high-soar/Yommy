@@ -1,3 +1,10 @@
+export interface DensityConfig {
+  dpi: string;
+  legacy: number;
+  fg: number;
+  safe: number;
+}
+
 export interface PngDimensions {
   width: number;
   height: number;
@@ -13,10 +20,14 @@ export interface IcoImage {
 
 export interface GenerateIconsOptions {
   sourcePath?: string;
-  outputDir?: string;
   androidResDir?: string;
   publicDir?: string;
+  backgroundColor?: string;
+  densities?: DensityConfig[];
 }
+
+export const DENSITIES: DensityConfig[];
+export const BACKGROUND_COLOR: string;
 
 export function parsePngDimensions(buffer: Buffer): PngDimensions;
 export function createIco(images: IcoImage[]): Buffer;
