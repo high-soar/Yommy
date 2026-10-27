@@ -2,6 +2,83 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it, expect, vi } from "vitest";
+
+const { createDummyPngBuffer } = vi.hoisted(() => {
+  function createDummyPngBuffer(
+    width = 48,
+    height = 48,
+    colorType = 6,
+  ): Buffer {
+    const buf = Buffer.alloc(33);
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(buf, 0);
+    buf.writeUInt32BE(13, 8);
+    Buffer.from("IHDR").copy(buf, 12);
+    buf.writeUInt32BE(width, 16);
+    buf.writeUInt32BE(height, 20);
+    buf.writeUInt8(8, 24);
+    buf.writeUInt8(colorType, 25);
+    return buf;
+  }
+  return { createDummyPngBuffer };
+});
+
+vi.mock("@playwright/test", () => {
+  return {
+    chromium: {
+      launch: vi.fn().mockImplementation(async () => {
+        return {
+          newPage: vi.fn().mockResolvedValue({
+            evaluate: vi.fn().mockImplementation(
+              async (
+                _fn: unknown,
+                args: {
+                  densityList: Array<{
+                    dpi: string;
+                    legacy: number;
+                    fg: number;
+                  }>;
+                },
+              ) => {
+                const androidResults: Record<
+                  string,
+                  { legacy: string; round: string; foreground: string }
+                > = {};
+                for (const item of args.densityList) {
+                  const { dpi, legacy, fg } = item;
+                  androidResults[dpi] = {
+                    legacy: createDummyPngBuffer(legacy, legacy).toString(
+                      "base64",
+                    ),
+                    round: createDummyPngBuffer(legacy, legacy).toString(
+                      "base64",
+                    ),
+                    foreground: createDummyPngBuffer(fg, fg).toString("base64"),
+                  };
+                }
+                return {
+                  android: androidResults,
+                  web: {
+                    icon192: createDummyPngBuffer(192, 192).toString("base64"),
+                    icon512: createDummyPngBuffer(512, 512).toString("base64"),
+                    appleTouchIcon: createDummyPngBuffer(180, 180).toString(
+                      "base64",
+                    ),
+                    favicons: {
+                      16: createDummyPngBuffer(16, 16).toString("base64"),
+                      32: createDummyPngBuffer(32, 32).toString("base64"),
+                      48: createDummyPngBuffer(48, 48).toString("base64"),
+                    },
+                  },
+                };
+              },
+            ),
+          }),
+          close: vi.fn().mockResolvedValue(undefined),
+        };
+      }),
+    },
+  };
+});
 import {
   parsePngDimensions,
   createIco,
@@ -335,7 +412,7 @@ describe("アプリアイコン生成スクリプト及びアセット配置検�
           fs.rmSync(tempWorkspace, { recursive: true, force: true });
         }
       }
-    }, 30000);
+    });
 
     it("存在しない sourcePath が明示指定された場合はエラーをスローすること", async () => {
       const nonExistent = path.join(rootDir, "non-existent-source.png");
@@ -395,6 +472,100 @@ describe("アプリアイコン生成スクリプト及びアセット配置検�
           fs.rmSync(tempDir, { recursive: true, force: true });
         }
       }
-    }, 30000);
+    });
+
+    it("options.chromium によるカスタムランチャー注入（DI）が機能すること", async () => {
+      const customLaunch = vi.fn().mockResolvedValue({
+        newPage: vi.fn().mockResolvedValue({
+          evaluate: vi.fn().mockResolvedValue({
+            android: {
+              mdpi: {
+                legacy: createDummyPngBuffer(48, 48).toString("base64"),
+                round: createDummyPngBuffer(48, 48).toString("base64"),
+                foreground: createDummyPngBuffer(108, 108).toString("base64"),
+              },
+            },
+            web: {
+              icon192: createDummyPngBuffer(192, 192).toString("base64"),
+              icon512: createDummyPngBuffer(512, 512).toString("base64"),
+              appleTouchIcon: createDummyPngBuffer(180, 180).toString("base64"),
+              favicons: {
+                16: createDummyPngBuffer(16, 16).toString("base64"),
+                32: createDummyPngBuffer(32, 32).toString("base64"),
+                48: createDummyPngBuffer(48, 48).toString("base64"),
+              },
+            },
+          }),
+        }),
+        close: vi.fn().mockResolvedValue(undefined),
+      });
+
+      const tempDir = path.join(os.tmpdir(), `yommy-test-di-${Date.now()}`);
+      try {
+        await generateIcons({
+          chromium: { launch: customLaunch },
+          androidResDir: path.join(tempDir, "res"),
+          publicDir: path.join(tempDir, "pub"),
+          densities: [{ dpi: "mdpi", legacy: 48, fg: 108, safe: 72 }],
+        });
+        expect(customLaunch).toHaveBeenCalledWith({ headless: true });
+      } finally {
+        if (fs.existsSync(tempDir)) {
+          fs.rmSync(tempDir, { recursive: true, force: true });
+        }
+      }
+    });
+
+    it("assets/icon.png が存在せず reference/image.png が存在する場合にフォールバックすること", async () => {
+      const existsSpy = vi.spyOn(fs, "existsSync").mockImplementation((p) => {
+        const filePath = p.toString();
+        if (filePath.endsWith(path.join("assets", "icon.png"))) {
+          return false;
+        }
+        if (filePath.endsWith(path.join("reference", "image.png"))) {
+          return true;
+        }
+        return true;
+      });
+      const readSpy = vi.spyOn(fs, "readFileSync").mockImplementation((p) => {
+        const filePath = p.toString();
+        if (filePath.endsWith(path.join("reference", "image.png"))) {
+          return createDummyPngBuffer(1024, 1024);
+        }
+        return Buffer.from("");
+      });
+      const writeSpy = vi
+        .spyOn(fs, "writeFileSync")
+        .mockImplementation(() => {});
+
+      try {
+        await expect(generateIcons()).resolves.not.toThrow();
+      } finally {
+        existsSpy.mockRestore();
+        readSpy.mockRestore();
+        writeSpy.mockRestore();
+      }
+    });
+
+    it("マスターアイコンおよびフォールバック画像が両方とも存在しない場合はエラーをスローすること", async () => {
+      const existsSpy = vi.spyOn(fs, "existsSync").mockImplementation((p) => {
+        const filePath = p.toString();
+        if (
+          filePath.endsWith(path.join("assets", "icon.png")) ||
+          filePath.endsWith(path.join("reference", "image.png"))
+        ) {
+          return false;
+        }
+        return true;
+      });
+
+      try {
+        await expect(generateIcons()).rejects.toThrow(
+          "Master icon file not found",
+        );
+      } finally {
+        existsSpy.mockRestore();
+      }
+    });
   });
 });
