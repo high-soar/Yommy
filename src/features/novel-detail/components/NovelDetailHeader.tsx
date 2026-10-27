@@ -22,6 +22,7 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
 }) => {
   const [isSynopsisExpanded, setIsSynopsisExpanded] = useState(false);
 
+  // メタ情報のフォールバックおよび空文字判定
   const isStartDisabled = novel.totalChapters === 0;
   const authorText = novel.author?.trim() ? novel.author : "著者不明";
   const hasSynopsis = Boolean(

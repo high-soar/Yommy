@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
@@ -161,7 +161,9 @@ describe("NovelDetailHeader", () => {
 
     it("ExpandedSynopsis ストーリーで play 関数実行後にあらすじが展開され、スクロールスタイルが付与されること (AC-ND-01)", async () => {
       const { container } = render(<ExpandedSynopsis />);
-      await ExpandedSynopsis.play?.({ canvasElement: container });
+      await act(async () => {
+        await ExpandedSynopsis.play?.({ canvasElement: container });
+      });
 
       const toggleButton = screen.getByTestId("synopsis-toggle-button");
       expect(toggleButton).toHaveTextContent("あらすじを折りたたむ");
