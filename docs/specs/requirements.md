@@ -2,7 +2,7 @@
 type: spec-requirements
 title: 全体要件定義・機能一覧・ロードマップ（App 全体正本）
 description: Yommyのターゲット環境、小説サイト対応優先順位（カクヨム最優先）、全機能要件（SYS-REQ-01〜15）、およびミニMilestoneロードマップの正本。
-status: "Approved (#15)"
+status: Approved
 updated: "2026-10-27"
 tags: [requirements, roadmap, kakuyomu, narou, reader, branding]
 related_specs:

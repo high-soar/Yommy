@@ -2,7 +2,7 @@
 type: spec-parser
 title: カクヨム パーサー・スクレイピング仕様書（kakuyomu.jp）
 description: カクヨム小説の作品トップ・目次抽出、各話本文抽出、ルビ・傍点解析、およびURL正規化ルールの正本仕様。
-status: Approved (Phase 3)
+status: Approved
 updated: "2026-10-27"
 tags: [parser, kakuyomu, scraping, ruby, bouten]
 related_specs:
