@@ -1,8 +1,7 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect } from "react";
 import { useRouter } from "../../../app/router";
 import { useReader } from "../hooks/useReader";
 import { ReaderPage } from "./ReaderPage";
-import type { ReaderTheme } from "../../../storage/types";
 
 /**
  * 小説リーダーコンテナ（ReaderContainer）のプロパティ定義
@@ -29,17 +28,17 @@ export interface ReaderContainerProps {
  *
  * useReader フックと useRouter を接続し、以下の機能および画面遷移を統合管理する：
  * 1. 縦書き（vertical-rl）・横書き（horizontal-tb）組版表示およびルビ・傍点描画（AC-RD-01〜03）
- * 2. 4カラーテーマ・文字サイズ・行間の変更と永続化（AC-RD-04, AC-RD-05）
- * 3. 前後エピソード連続遷移（TR-05, AC-RD-06）および既読フラグの自動更新（AC-RD-07）
- * 4. しおり（bookmark_chapter_index）とスクロール進捗率（0.0〜1.0）の自動保存・復元（AC-RD-08）
- * 5. 本棚画面（SCR-01）および作品詳細・目次画面（SCR-02, TR-06）への画面遷移
+ * 2. 前後話ナビゲーションおよび下部タブ（本棚/設定）を統合した ReaderBottomOverlay との連携（AC-RD-06, AC-RD-10）
+ * 3. 前後エピソード連続遷移（TR-05）および既読フラグの自動更新（AC-RD-07）
+ * 4. 下部タブ遷移時および OS バックキー（popstate）離脱時のスクロール進捗率自動保存（flushBookmark, AC-RD-08）
+ * 5. 全画面テキスト表示化（AC-RD-09）
  */
 export const ReaderContainer: React.FC<ReaderContainerProps> = ({
   novelId,
   chapterIndex,
   initialWorkUrl,
   onBackToBookshelf,
-  onBackToDetail,
+  onNavigateSettings,
   onNavigateChapter,
 }) => {
   const router = useRouter();
@@ -55,38 +54,43 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
     initialScrollProgress,
     isLoading,
     error,
-    toggleWritingMode,
-    changeTheme,
-    changeFontSize,
-    changeLineHeight,
     updateScrollProgress,
     flushBookmark,
     goToChapter,
-    fetchNovelFromUrl,
   } = useReader({ novelId, chapterIndex, initialWorkUrl });
 
-  // 本棚へ戻る（TR-01 / TR-03逆方向）
-  const handleBackToBookshelf = useCallback(async () => {
-    await flushBookmark();
-    if (onBackToBookshelf) {
-      onBackToBookshelf();
-    } else {
-      router.navigateToBookshelf();
-    }
-  }, [flushBookmark, onBackToBookshelf, router]);
+  // OS バックキー（popstate イベント）およびアンマウント離脱時のしおり保存（AC-RD-08, TR-06）
+  useEffect(() => {
+    const handlePopState = () => {
+      void flushBookmark();
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      void flushBookmark();
+    };
+  }, [flushBookmark]);
 
-  // 作品詳細・目次へ戻る（TR-06）
-  const handleBackToDetail = useCallback(async () => {
-    await flushBookmark();
-    const targetId = novelId ?? novel?.id;
-    if (targetId) {
-      if (onBackToDetail) {
-        onBackToDetail(targetId);
-      } else {
-        router.navigateToNovelDetail(targetId);
+  // 下部タブ選択（本棚 / 設定）および画面遷移前のしおり保存（AC-RD-08, TR-01）
+  const handleSelectTab = useCallback(
+    async (tab: "bookshelf" | "settings") => {
+      await flushBookmark();
+      if (tab === "bookshelf") {
+        if (onBackToBookshelf) {
+          onBackToBookshelf();
+        } else {
+          router.navigateToBookshelf();
+        }
+      } else if (tab === "settings") {
+        if (onNavigateSettings) {
+          onNavigateSettings();
+        } else {
+          router.navigate("/settings");
+        }
       }
-    }
-  }, [flushBookmark, novelId, novel?.id, onBackToDetail, router]);
+    },
+    [flushBookmark, onBackToBookshelf, onNavigateSettings, router],
+  );
 
   // 前後話エピソード遷移共通処理（TR-05）
   const navigateToTargetChapter = useCallback(
@@ -116,35 +120,6 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
     await navigateToTargetChapter(currentChapterIndex + 1);
   }, [currentChapterIndex, navigateToTargetChapter]);
 
-  // 組み方向切替（AC-RD-03）
-  const handleToggleWritingMode = useCallback(() => {
-    void toggleWritingMode();
-  }, [toggleWritingMode]);
-
-  // カラーテーマ切替（AC-RD-04）
-  const handleChangeTheme = useCallback(
-    (nextTheme: ReaderTheme) => {
-      void changeTheme(nextTheme);
-    },
-    [changeTheme],
-  );
-
-  // 文字サイズ変更（AC-RD-05）
-  const handleChangeFontSize = useCallback(
-    (sizePx: number) => {
-      void changeFontSize(sizePx);
-    },
-    [changeFontSize],
-  );
-
-  // 行間変更（AC-RD-05）
-  const handleChangeLineHeight = useCallback(
-    (height: number) => {
-      void changeLineHeight(height);
-    },
-    [changeLineHeight],
-  );
-
   // スクロール進捗更新（AC-RD-08）
   const handleScrollProgressChange = useCallback(
     (progress: number) => {
@@ -152,11 +127,6 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
     },
     [updateScrollProgress],
   );
-
-  // 手動作品取得・更新パイプライン
-  const handleFetchNovel = useCallback(() => {
-    void fetchNovelFromUrl();
-  }, [fetchNovelFromUrl]);
 
   return (
     <ReaderPage
@@ -171,16 +141,10 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
       initialScrollProgress={initialScrollProgress}
       isLoading={isLoading}
       error={error}
-      onToggleWritingMode={handleToggleWritingMode}
-      onChangeTheme={handleChangeTheme}
-      onChangeFontSize={handleChangeFontSize}
-      onChangeLineHeight={handleChangeLineHeight}
       onPrevChapter={handlePrevChapter}
       onNextChapter={handleNextChapter}
       onScrollProgressChange={handleScrollProgressChange}
-      onBackToBookshelf={handleBackToBookshelf}
-      onBackToDetail={handleBackToDetail}
-      onFetchNovel={handleFetchNovel}
+      onSelectTab={handleSelectTab}
     />
   );
 };
