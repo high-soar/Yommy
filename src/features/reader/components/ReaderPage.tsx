@@ -143,17 +143,19 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
               </p>
             </div>
           ) : (
-            <ReaderView
-              title={novel.title}
-              chapterTitle={chapter.title}
-              bodyHtml={chapter.bodyHtml}
-              writingMode={writingMode}
-              theme={theme}
-              fontSizePx={fontSizePx}
-              lineHeight={lineHeight}
-              initialScrollProgress={initialScrollProgress}
-              onScrollProgressChange={onScrollProgressChange}
-            />
+            <div className="h-[70vh] md:h-[80vh]">
+              <ReaderView
+                title={novel.title}
+                chapterTitle={chapter.title}
+                bodyHtml={chapter.bodyHtml}
+                writingMode={writingMode}
+                theme={theme}
+                fontSizePx={fontSizePx}
+                lineHeight={lineHeight}
+                initialScrollProgress={initialScrollProgress}
+                onScrollProgressChange={onScrollProgressChange}
+              />
+            </div>
           )}
         </main>
       </div>
