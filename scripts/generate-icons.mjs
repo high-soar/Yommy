@@ -120,6 +120,7 @@ export function updateLauncherBackgroundXml(
  * @param {string} [options.publicDir]
  * @param {string} [options.backgroundColor]
  * @param {Array<{ dpi: string, legacy: number, fg: number, safe: number }>} [options.densities]
+ * @param {{ launch: (opts?: any) => Promise<any> }} [options.chromium]
  */
 export async function generateIcons(options = {}) {
   const rootDir = process.cwd();
@@ -151,7 +152,8 @@ export async function generateIcons(options = {}) {
   const sourceBuffer = fs.readFileSync(sourcePath);
   const sourceBase64 = sourceBuffer.toString("base64");
 
-  const browser = await chromium.launch({ headless: true });
+  const chromiumLauncher = options.chromium || chromium;
+  const browser = await chromiumLauncher.launch({ headless: true });
   try {
     const page = await browser.newPage();
     const rendered = await page.evaluate(

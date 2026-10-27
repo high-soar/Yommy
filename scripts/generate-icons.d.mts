@@ -24,6 +24,7 @@ export interface GenerateIconsOptions {
   publicDir?: string;
   backgroundColor?: string;
   densities?: DensityConfig[];
+  chromium?: { launch: (opts?: unknown) => Promise<unknown> };
 }
 
 export const DENSITIES: DensityConfig[];
