@@ -27,7 +27,6 @@ export interface NovelDetailHeaderProps {
   isRefreshing: boolean;
   refreshMessage?: string | null;
   error?: string | null;
-  onBackToBookshelf: () => void;
   onStartFromBeginning: () => void;
   onResumeBookmark: (chapterIndex: number) => void;
   onRefreshToc: () => void | Promise<void>;

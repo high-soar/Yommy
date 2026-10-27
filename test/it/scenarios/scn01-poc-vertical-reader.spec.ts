@@ -316,10 +316,10 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
     );
 
-    // 12. 「本棚へ戻る」（back-to-bookshelf-button）で本棚画面（/）へ戻り作品カードの取得済み話数・しおり表示を確認した後、本棚の「続きから読む」（novel-card-resume）からリーダー直接遷移（TR-03 / AC-BS-06）と「本棚へ戻る」（reader-back-to-bookshelf）を検証し、最後に SCR-02 から作品を削除して空状態（bookshelf-empty）となることを確認（TR-07）
-    const backToBookshelfButton = page.getByTestId("back-to-bookshelf-button");
-    await expect(backToBookshelfButton).toBeVisible();
-    await backToBookshelfButton.click();
+    // 12. ヘッダータイトル（app-title）タップで本棚画面（/）へ戻り作品カードの取得済み話数・しおり表示を確認した後、本棚の「続きから読む」（novel-card-resume）からリーダー直接遷移（TR-03 / AC-BS-06）と「本棚へ戻る」（reader-back-to-bookshelf）を検証し、最後に SCR-02 から作品を削除して空状態（bookshelf-empty）となることを確認（TR-07）
+    const appTitle = page.getByTestId("app-title");
+    await expect(appTitle).toBeVisible();
+    await appTitle.click();
 
     await expect(page).toHaveURL("/");
     await expect(page.getByTestId("bookshelf-page")).toBeVisible();
