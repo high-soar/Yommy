@@ -37,6 +37,10 @@ export function createMockSettingsRepository(
 const meta: Meta<typeof SettingsContainer> = {
   title: "Settings/SettingsContainer",
   component: SettingsContainer,
+  parameters: {
+    layout: "fullscreen",
+  },
+  excludeStories: ["createMockSettingsRepository"],
   decorators: [
     (Story) => (
       <ServiceProvider
