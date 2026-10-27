@@ -3,8 +3,8 @@ type: spec-delta
 title: 作品詳細・目次画面（SCR-02）のヘッダー固定・あらすじトグル化・各話内部スクロール＆しおり初期スクロール調整
 description: Issue #51 に対する差分仕様。SCR-02 の「本棚へ戻る」ボタン廃止、作品情報ヘッダー固定・あらすじトグル化、各話リスト内部スクロール化、初回表示時のしおり話数への自動スクロール調整、テスト計画、および Sub-issue 分割計画（#56, #57）。
 issue: "#51"
-status: "Review (#51)"
-updated: "2026-10-27"
+status: "Completed (Archived)"
+updated: "2026-10-28"
 tags: [delta, novel-detail, scr-02, toc, layout, scroll, bookmark]
 related_specs:
   - docs/specs/features/novel-detail.md
@@ -68,18 +68,18 @@ related_tests:
 
 ### 2.2 App 全体正本の同期更新
 
-- [docs/specs/features/novel-detail.md](../features/novel-detail.md):
+- [docs/specs/features/novel-detail.md](../../features/novel-detail.md):
   - コンポーネント構成、`NovelDetailHeaderProps`（`onBackToBookshelf` 削除）、`NovelDetailHeader` のあらすじトグル仕様、`NovelDetailPage` の内部スクロール構成、しおり初期スクロール仕様、および受入条件 `AC-ND-01`, `AC-ND-02`, `AC-ND-07`, `AC-ND-08` を更新。
   - フロントマター `status: "Review (#51)"`、`related_specs` に本差分仕様を追加。
-- [docs/specs/screen-transitions.md](../screen-transitions.md):
+- [docs/specs/screen-transitions.md](../../screen-transitions.md):
   - `TR-07` の説明を「作品削除確認ダイアログでの削除実行完了、下部タブバーの『本棚』タップ、OS バックキー操作、または作品未検出画面（`novel-detail-not-found`）の『本棚へ戻る』ボタン押下時に本棚画面へ戻る（ヘッダー内の『本棚へ戻る』ボタンは廃止）」に更新。
   - フロントマター `status: "Review (#51)"`、`related_specs` に本差分仕様を追加。
-- [docs/specs/requirements.md](../requirements.md):
+- [docs/specs/requirements.md](../../requirements.md):
   - `SYS-REQ-01` および `SYS-REQ-12` の受入条件 ID 列に `AC-ND-08` を追加。
   - フロントマター `status: "Review (#51)"`、`related_specs` に本差分仕様を追加。
-- [docs/index.md](../../index.md):
-  - ディレクトリツリーの `docs/specs/changes/` 配下に `issue-51-novel-detail-layout-and-scroll.md` を追加。
-- [docs/quality/bug-and-handover-log.md](../../quality/bug-and-handover-log.md):
+- [docs/index.md](../../../index.md):
+  - ディレクトリツリーの `docs/specs/changes/archive/` 配下に `issue-51-novel-detail-layout-and-scroll.md` を追加。
+- [docs/quality/bug-and-handover-log.md](../../../quality/bug-and-handover-log.md):
   - 申し送り事項 `HO-11`（`SCR-02` ヘッダー固定・あらすじトグル・内部スクロール・しおり初期スクロールの Playwright IT シナリオ検証）を登録。
 
 ---
