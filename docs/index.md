@@ -29,9 +29,9 @@ docs/
 │   │   └── kakuyomu.md                # カクヨム パーサー・スクレイピング仕様書（kakuyomu.jp）
 │   └── changes/                       # [差分仕様 (Delta Specs)] 要望（親Issue）ごとの設計差分・テスト計画・Sub-issue分割
 │       ├── issue-50-fullscreen-shell-and-settings.md # [Active] 100dvh全画面シェル・下部タブ・設定画面・論理階層遷移の差分仕様（#50）
-│       ├── issue-52-reader-fullscreen-and-bottom-overlay.md # [Active] 小説リーダー画面全画面テキスト表示化・下部オーバーレイ差分仕様 (#52)
 │       └── archive/                   # 完了済みの差分仕様アーカイブ（親Issueクローズ時に git mv で移動）
 │           ├── issue-51-novel-detail-layout-and-scroll.md # [Archived] 作品詳細・目次画面（SCR-02）レイアウト固定・あらすじトグル・内部スクロール差分仕様 (#51)
+│           ├── issue-52-reader-fullscreen-and-bottom-overlay.md # [Archived] 小説リーダー画面全画面テキスト表示化・下部オーバーレイ差分仕様 (#52)
 │           └── .gitkeep
 └── quality/                           # 【柱3：品質分析・バグ記録・申し送り管理】
     ├── bug-and-handover-log.md        # バグ記録票（製品/支援分離、原因5分類 L/S/D/B/A）＆ 申し送り事項（HO-xx）追跡シート（作業中Milestone＋未解決HO）
