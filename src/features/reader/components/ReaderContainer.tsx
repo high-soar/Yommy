@@ -15,7 +15,10 @@ export interface ReaderContainerProps {
   initialWorkUrl?: string;
   /** 「本棚へ戻る」タップ時のコールバック（省略時はルーターの navigateToBookshelf を使用） */
   onBackToBookshelf?: () => void;
-  /** 「作品詳細へ」タップ時のコールバック（省略時はルーターの navigateToNovelDetail を使用） */
+  /**
+   * 「作品詳細へ」タップ時のコールバック（省略時はルーターの navigateToNovelDetail を使用）
+   * @deprecated 画面上からの目次復帰は OS バックキー（popstate）に一元化。下位互換性のため維持。
+   */
   onBackToDetail?: (novelId: string) => void;
   /** 「設定へ」タップ時のコールバック（省略時はルーターの navigate('/settings') を使用） */
   onNavigateSettings?: () => void;
