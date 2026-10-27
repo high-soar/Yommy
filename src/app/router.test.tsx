@@ -11,8 +11,13 @@ import {
   resolveInitialPath,
 } from "./router";
 
-const { BookshelfRoute, NovelDetailRoute, ReaderRoute, SettingsRoute, UnknownFallbackRoute } =
-  composeStories(stories);
+const {
+  BookshelfRoute,
+  NovelDetailRoute,
+  ReaderRoute,
+  SettingsRoute,
+  UnknownFallbackRoute,
+} = composeStories(stories);
 
 describe("router", () => {
   beforeEach(() => {
@@ -63,8 +68,12 @@ describe("router", () => {
 
     it("SettingsRoute ストーリーが設定画面ルートを描画すること", () => {
       render(<SettingsRoute />);
-      expect(screen.getByTestId("current-path")).toHaveTextContent("Path: /settings");
-      expect(screen.getByTestId("route-name")).toHaveTextContent("Route: settings");
+      expect(screen.getByTestId("current-path")).toHaveTextContent(
+        "Path: /settings",
+      );
+      expect(screen.getByTestId("route-name")).toHaveTextContent(
+        "Route: settings",
+      );
     });
 
     it("UnknownFallbackRoute ストーリーが未知パスを本棚ルートへフォールバックすること", () => {
@@ -204,7 +213,9 @@ describe("router", () => {
         <div>
           <span data-testid="path-display">{router.currentPath}</span>
           <span data-testid="route-display">{router.route.name}</span>
-          <span data-testid="previous-path-display">{router.previousPath ?? "none"}</span>
+          <span data-testid="previous-path-display">
+            {router.previousPath ?? "none"}
+          </span>
           <button
             data-testid="btn-bookshelf"
             onClick={() => router.navigateToBookshelf()}
@@ -287,7 +298,9 @@ describe("router", () => {
       expect(screen.getByTestId("route-display")).toHaveTextContent(
         "novel-detail",
       );
-      expect(screen.getByTestId("previous-path-display")).toHaveTextContent("/");
+      expect(screen.getByTestId("previous-path-display")).toHaveTextContent(
+        "/",
+      );
 
       act(() => {
         screen.getByTestId("btn-reader").click();
@@ -394,8 +407,12 @@ describe("router", () => {
           screen.getByTestId("btn-back").click();
         });
 
-        expect(screen.getByTestId("path-display")).toHaveTextContent("/novels/work1");
-        expect(screen.getByTestId("route-display")).toHaveTextContent("novel-detail");
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/novels/work1",
+        );
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "novel-detail",
+        );
       });
 
       it("目次画面 (SCR-02) から back() を呼んだとき、親である本棚画面 (SCR-01) へ遷移すること", () => {
@@ -410,7 +427,9 @@ describe("router", () => {
         });
 
         expect(screen.getByTestId("path-display")).toHaveTextContent("/");
-        expect(screen.getByTestId("route-display")).toHaveTextContent("bookshelf");
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "bookshelf",
+        );
       });
 
       it("設定画面 (SCR-05) から back() を呼んだとき、直前の previousPath へ復帰すること", () => {
@@ -424,14 +443,20 @@ describe("router", () => {
         act(() => {
           screen.getByTestId("btn-settings").click();
         });
-        expect(screen.getByTestId("path-display")).toHaveTextContent("/settings");
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/settings",
+        );
 
         // 戻る
         act(() => {
           screen.getByTestId("btn-back").click();
         });
-        expect(screen.getByTestId("path-display")).toHaveTextContent("/novels/work1");
-        expect(screen.getByTestId("route-display")).toHaveTextContent("novel-detail");
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/novels/work1",
+        );
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "novel-detail",
+        );
       });
 
       it("設定画面 (SCR-05) に直接アクセスした場合、previousPath が無いため本棚画面 (/) へ復帰すること", () => {
@@ -445,7 +470,9 @@ describe("router", () => {
           screen.getByTestId("btn-back").click();
         });
         expect(screen.getByTestId("path-display")).toHaveTextContent("/");
-        expect(screen.getByTestId("route-display")).toHaveTextContent("bookshelf");
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "bookshelf",
+        );
       });
 
       it("本棚画面 (SCR-01) で back() を呼んだ場合、論理親がないためパスが変わらないこと", () => {
@@ -459,7 +486,9 @@ describe("router", () => {
           screen.getByTestId("btn-back").click();
         });
         expect(screen.getByTestId("path-display")).toHaveTextContent("/");
-        expect(screen.getByTestId("route-display")).toHaveTextContent("bookshelf");
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "bookshelf",
+        );
       });
 
       it("本棚の「続きから読む」(fromBookshelfResume: true) で直行した場合、履歴スタックに目次が介在すること", () => {
@@ -475,8 +504,16 @@ describe("router", () => {
         });
 
         // 1回目の pushState が目次 (/novels/kakuyomu...) で、2回目がリーダー (/novels/.../chapters/5) であること
-        expect(pushSpy).toHaveBeenCalledWith(null, "", "/novels/kakuyomu%3A16817330658027210412");
-        expect(pushSpy).toHaveBeenCalledWith(null, "", "/novels/kakuyomu%3A16817330658027210412/chapters/5");
+        expect(pushSpy).toHaveBeenCalledWith(
+          null,
+          "",
+          "/novels/kakuyomu%3A16817330658027210412",
+        );
+        expect(pushSpy).toHaveBeenCalledWith(
+          null,
+          "",
+          "/novels/kakuyomu%3A16817330658027210412/chapters/5",
+        );
 
         expect(screen.getByTestId("path-display")).toHaveTextContent(
           "/novels/kakuyomu%3A16817330658027210412/chapters/5",
