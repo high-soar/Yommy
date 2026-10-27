@@ -45,6 +45,16 @@ const sampleNovels: NovelSummary[] = [
 const meta: Meta<typeof BookshelfPage> = {
   title: "Bookshelf/BookshelfPage",
   component: BookshelfPage,
+  parameters: {
+    layout: "fullscreen",
+  },
+  decorators: [
+    (Story) => (
+      <div className="h-screen w-full bg-slate-50 dark:bg-slate-900">
+        <Story />
+      </div>
+    ),
+  ],
   args: {
     novels: sampleNovels,
     isLoading: false,
