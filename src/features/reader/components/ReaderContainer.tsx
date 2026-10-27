@@ -105,7 +105,7 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
           if (onNavigateChapter) {
             onNavigateChapter(targetId, targetIndex);
           } else {
-            router.navigateToReader(targetId, targetIndex);
+            router.navigateToReader(targetId, targetIndex, { replace: true });
           }
         }
       }
