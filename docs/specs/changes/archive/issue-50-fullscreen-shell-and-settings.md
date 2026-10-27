@@ -3,7 +3,7 @@ type: spec-delta
 title: 100dvh全画面シェル・下部タブバー・設定画面（SCR-05）新設・OSバックキー階層遷移の設計
 description: Issue #50 に対する差分仕様、影響する全体正本、テスト計画、および実装Sub-issue分割計画。
 issue: "#50"
-status: "Review (#50)"
+status: "Completed (Archived)"
 updated: "2026-10-27"
 tags: [delta, shell, dvh, bottom-nav, settings, scr-05, back-button, routing]
 related_specs:
@@ -245,7 +245,7 @@ flowchart TD
 
 ## 6. 申し送り事項（Handover Items）
 
-本要望の設計に伴い、以下の申し送り事項を [docs/quality/bug-and-handover-log.md](../../quality/bug-and-handover-log.md) へ登録します。
+本要望の設計に伴い、以下の申し送り事項を [docs/quality/bug-and-handover-log.md](../../../quality/bug-and-handover-log.md) へ登録します。
 
 |   ID    | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                                                                 | 解決先（対象 Issue / 成果物）        |     完了ゲート      |  状態  |
 | :-----: | :---------------: | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------- | :-----------------: | :----: |

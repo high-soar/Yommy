@@ -28,8 +28,8 @@ docs/
 │   ├── parsers/                       # [App全体正本] 小説サイト別の現在スクレイピング・DOM解析仕様書
 │   │   └── kakuyomu.md                # カクヨム パーサー・スクレイピング仕様書（kakuyomu.jp）
 │   └── changes/                       # [差分仕様 (Delta Specs)] 要望（親Issue）ごとの設計差分・テスト計画・Sub-issue分割
-│       ├── issue-50-fullscreen-shell-and-settings.md # [Active] 100dvh全画面シェル・下部タブ・設定画面・論理階層遷移の差分仕様（#50）
 │       └── archive/                   # 完了済みの差分仕様アーカイブ（親Issueクローズ時に git mv で移動）
+│           ├── issue-50-fullscreen-shell-and-settings.md # [Archived] 100dvh全画面シェル・下部タブ・設定画面・論理階層遷移の差分仕様（#50）
 │           ├── issue-51-novel-detail-layout-and-scroll.md # [Archived] 作品詳細・目次画面（SCR-02）レイアウト固定・あらすじトグル・内部スクロール差分仕様 (#51)
 │           ├── issue-52-reader-fullscreen-and-bottom-overlay.md # [Archived] 小説リーダー画面全画面テキスト表示化・下部オーバーレイ差分仕様 (#52)
 │           └── .gitkeep

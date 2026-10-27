@@ -14,7 +14,7 @@ related_specs:
   - docs/specs/features/reader-view.md
   - docs/specs/features/settings.md
   - docs/specs/parsers/kakuyomu.md
-  - docs/specs/changes/issue-50-fullscreen-shell-and-settings.md
+  - docs/specs/changes/archive/issue-50-fullscreen-shell-and-settings.md
   - docs/specs/changes/archive/issue-12-bookshelf-and-routing.md
 related_tests:
   - src/App.test.tsx

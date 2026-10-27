@@ -13,10 +13,14 @@ related_specs:
   - docs/specs/features/bookshelf.md
   - docs/specs/features/novel-detail.md
   - docs/specs/features/reader-view.md
-  - docs/specs/changes/issue-50-fullscreen-shell-and-settings.md
+  - docs/specs/changes/archive/issue-50-fullscreen-shell-and-settings.md
 related_tests:
   - src/App.test.tsx
   - src/app/router.test.tsx
+  - src/features/settings/hooks/useSettings.test.tsx
+  - src/features/settings/components/SampleTextPreview.test.tsx
+  - src/features/settings/components/SettingsPage.test.tsx
+  - src/features/settings/components/SettingsContainer.test.tsx
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
 ---
 
