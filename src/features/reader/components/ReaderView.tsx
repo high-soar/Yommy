@@ -34,7 +34,7 @@ function clampProgress(value: number): number {
 }
 
 /**
- * 小説本文の縦書き/横書き組版表示、ルビ・傍点、カラーテーマ描画、
+ * 小説本文の全画面（h-full w-full）縦書き/横書き組版表示、ルビ・傍点、カラーテーマ描画、
  * および縦横双方のスクロール進捗率算出・初期位置復元を担う Presentational コンポーネント
  */
 export const ReaderView: React.FC<ReaderViewProps> = ({
@@ -92,12 +92,12 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       data-font-size={String(fontSizePx)}
       data-line-height={String(lineHeight)}
       onScroll={handleScroll}
-      className={`w-full max-w-full rounded-lg p-6 shadow-sm border font-serif transition-colors duration-200 ${
+      className={`h-full w-full max-w-full p-6 font-serif transition-colors duration-200 ${
         themeStyles[theme]
       } ${
         isVertical
-          ? "writing-vertical-rl overflow-x-auto overflow-y-hidden h-[70vh] md:h-[80vh] leading-loose"
-          : "writing-horizontal-tb overflow-y-auto overflow-x-hidden max-h-[70vh] md:max-h-[80vh] leading-relaxed"
+          ? "writing-vertical-rl overflow-x-auto overflow-y-hidden leading-loose"
+          : "writing-horizontal-tb overflow-y-auto overflow-x-hidden leading-relaxed"
       }`}
       style={{
         fontSize: `${fontSizePx}px`,
