@@ -60,11 +60,18 @@ function mockElementDimensions(
 
 describe("ReaderView", () => {
   describe("Storybook Stories 検証 (composeStories)", () => {
-    it("VerticalLight ストーリーで縦書きとライトテーマが適用されること", () => {
+    it("VerticalLight ストーリーで縦書きとライトテーマが適用され、全画面スタイル（h-full w-full）でカード装飾・高さ制限が撤廃されていること", () => {
       render(<VerticalLight />);
       const container = screen.getByTestId("reader-view");
       expect(container).toHaveClass("writing-vertical-rl");
       expect(container).toHaveClass("bg-[#fcfcfc]");
+      expect(container).toHaveClass("h-full");
+      expect(container).toHaveClass("w-full");
+      expect(container).not.toHaveClass("rounded-lg");
+      expect(container).not.toHaveClass("shadow-sm");
+      expect(container).not.toHaveClass("border");
+      expect(container).not.toHaveClass("h-[70vh]");
+      expect(container).not.toHaveClass("md:h-[80vh]");
       expect(container).toHaveAttribute("data-writing-mode", "vertical-rl");
       expect(container).toHaveAttribute("data-theme", "light");
       expect(container).toHaveAttribute("data-font-size", "18");
@@ -101,10 +108,14 @@ describe("ReaderView", () => {
       expect(container).toHaveAttribute("data-theme", "black");
     });
 
-    it("HorizontalLight ストーリーで横書きが適用されること", () => {
+    it("HorizontalLight ストーリーで横書きが適用され、全画面高さ（h-full）が指定されていること", () => {
       render(<HorizontalLight />);
       const container = screen.getByTestId("reader-view");
       expect(container).toHaveClass("writing-horizontal-tb");
+      expect(container).toHaveClass("h-full");
+      expect(container).toHaveClass("w-full");
+      expect(container).not.toHaveClass("max-h-[70vh]");
+      expect(container).not.toHaveClass("md:max-h-[80vh]");
       expect(container).toHaveAttribute("data-writing-mode", "horizontal-tb");
     });
 
