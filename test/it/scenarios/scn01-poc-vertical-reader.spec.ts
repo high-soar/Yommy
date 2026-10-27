@@ -122,11 +122,41 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     const overlay = page.getByTestId("reader-bottom-overlay");
     await expect(overlay).toHaveClass(/translate-y-full/);
 
-    // 画面最下部ゾーン（reader-bottom-touch-zone）をタップしてオーバーレイをスライドイン表示（AC-RD-10）
     const touchZone = page.getByTestId("reader-bottom-touch-zone");
     await expect(touchZone).toBeVisible();
-    await touchZone.click();
 
+    // 最下部ゾーンでのスワイプ・ドラッグ操作（移動距離 >= 10px）ではオーバーレイが開かないこと（HO-12: スワイプ誤検知防止）
+    const touchBox = await touchZone.boundingBox();
+    if (touchBox) {
+      const startX = touchBox.x + touchBox.width / 2;
+      const startY = touchBox.y + touchBox.height / 2;
+      await page.mouse.move(startX, startY);
+      await page.mouse.down();
+      await page.mouse.move(startX, startY - 30, { steps: 5 });
+      await page.mouse.up();
+      await expect(overlay).toHaveClass(/translate-y-full/);
+    }
+
+    // 画面最下部ゾーン（reader-bottom-touch-zone）をタップしてオーバーレイをスライドイン表示（AC-RD-10）
+    await touchZone.click();
+    await expect(overlay).toHaveClass(/translate-y-0/);
+
+    // 外側タップ: オーバーレイ外の本文エリア（reader-view）をタップしてオーバーレイが自動非表示（translate-y-full）になることを確認（AC-RD-10）
+    await readerView.click({ position: { x: 100, y: 100 } });
+    await expect(overlay).toHaveClass(/translate-y-full/);
+
+    // 再度最下部ゾーンをタップしてオーバーレイを再表示
+    await touchZone.click();
+    await expect(overlay).toHaveClass(/translate-y-0/);
+
+    // 閉じるボタン（reader-bottom-overlay-close）でオーバーレイが閉じることを確認
+    const overlayCloseButton = page.getByTestId("reader-bottom-overlay-close");
+    await expect(overlayCloseButton).toBeVisible();
+    await overlayCloseButton.click();
+    await expect(overlay).toHaveClass(/translate-y-full/);
+
+    // 再度最下部ゾーンをタップしてオーバーレイを表示
+    await touchZone.click();
     await expect(overlay).toHaveClass(/translate-y-0/);
     const chapterIndicator = page.getByTestId("reader-chapter-indicator");
     await expect(chapterIndicator).toBeVisible();
@@ -351,6 +381,20 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     const backToBookshelfButton = page.getByTestId("back-to-bookshelf-button");
     await expect(backToBookshelfButton).toBeVisible();
     await backToBookshelfButton.click();
+
+    await expect(page).toHaveURL("/");
+    await expect(page.getByTestId("bookshelf-empty")).toBeVisible();
+
+    // 14. 未存在作品・エピソードのリーダー画面 (/novels/non-existent/chapters/1) において、空状態（reader-empty）および下部オーバーレイ初期表示（translate-y-0）と「本棚」タブによる復帰を検証（AC-RD-10）
+    await page.goto("/novels/kakuyomu:9999999999999999999/chapters/1");
+    const readerEmpty = page.getByTestId("reader-empty");
+    await expect(readerEmpty).toBeVisible();
+    const errorOverlay = page.getByTestId("reader-bottom-overlay");
+    await expect(errorOverlay).toHaveClass(/translate-y-0/);
+
+    const errorBookshelfTab = page.getByTestId("reader-bottom-tab-bookshelf");
+    await expect(errorBookshelfTab).toBeVisible();
+    await errorBookshelfTab.click();
 
     await expect(page).toHaveURL("/");
     await expect(page.getByTestId("bookshelf-empty")).toBeVisible();
