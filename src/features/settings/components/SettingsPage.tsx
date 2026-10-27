@@ -33,6 +33,23 @@ export const MIN_LINE_HEIGHT = 1.4;
 export const MAX_LINE_HEIGHT = 2.4;
 export const LINE_HEIGHT_STEP = 0.2;
 
+/**
+ * 文字サイズを許容範囲 [12, 32] 内に制限する
+ */
+function clampFontSize(size: number): number {
+  return Math.min(MAX_FONT_SIZE_PX, Math.max(MIN_FONT_SIZE_PX, size));
+}
+
+/**
+ * 行間倍率を許容範囲 [1.4, 2.4] 内に制限し、小数第1位で丸める
+ */
+function clampLineHeight(height: number): number {
+  return Math.min(
+    MAX_LINE_HEIGHT,
+    Math.max(MIN_LINE_HEIGHT, Math.round(height * 10) / 10),
+  );
+}
+
 interface ThemeOption {
   key: ReaderTheme;
   label: string;
@@ -68,6 +85,9 @@ const THEME_OPTIONS: readonly ThemeOption[] = [
   },
 ];
 
+const STEPPER_BUTTON_BASE =
+  "w-9 h-9 flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-xs";
+
 /**
  * 設定画面（SCR-05）の Presentational コンポーネント（AC-ST-03, AC-ST-04, AC-ST-05）
  * ヘッダー、組版設定項目（組み方向・テーマ・文字サイズ・行間）、および組版プレビューを配置する
@@ -87,34 +107,25 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const rootClasses =
     `h-full flex flex-col overflow-y-auto bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 ${className ?? ""}`.trim();
 
+  const isMinFontSize = fontSizePx <= MIN_FONT_SIZE_PX;
+  const isMaxFontSize = fontSizePx >= MAX_FONT_SIZE_PX;
+  const isMinLineHeight = lineHeight <= MIN_LINE_HEIGHT;
+  const isMaxLineHeight = lineHeight >= MAX_LINE_HEIGHT;
+
   const handleDecreaseFontSize = () => {
-    onChangeFontSize(
-      Math.max(MIN_FONT_SIZE_PX, fontSizePx - FONT_SIZE_STEP_PX),
-    );
+    onChangeFontSize(clampFontSize(fontSizePx - FONT_SIZE_STEP_PX));
   };
 
   const handleIncreaseFontSize = () => {
-    onChangeFontSize(
-      Math.min(MAX_FONT_SIZE_PX, fontSizePx + FONT_SIZE_STEP_PX),
-    );
+    onChangeFontSize(clampFontSize(fontSizePx + FONT_SIZE_STEP_PX));
   };
 
   const handleDecreaseLineHeight = () => {
-    onChangeLineHeight(
-      Math.max(
-        MIN_LINE_HEIGHT,
-        Math.round((lineHeight - LINE_HEIGHT_STEP) * 10) / 10,
-      ),
-    );
+    onChangeLineHeight(clampLineHeight(lineHeight - LINE_HEIGHT_STEP));
   };
 
   const handleIncreaseLineHeight = () => {
-    onChangeLineHeight(
-      Math.min(
-        MAX_LINE_HEIGHT,
-        Math.round((lineHeight + LINE_HEIGHT_STEP) * 10) / 10,
-      ),
-    );
+    onChangeLineHeight(clampLineHeight(lineHeight + LINE_HEIGHT_STEP));
   };
 
   return (
@@ -214,9 +225,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 type="button"
                 data-testid="font-size-decrease"
                 aria-label="文字サイズを縮小"
-                disabled={isLoading || fontSizePx <= MIN_FONT_SIZE_PX}
+                disabled={isLoading || isMinFontSize}
                 onClick={handleDecreaseFontSize}
-                className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-xs"
+                className={STEPPER_BUTTON_BASE}
               >
                 −
               </button>
@@ -230,9 +241,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 type="button"
                 data-testid="font-size-increase"
                 aria-label="文字サイズを拡大"
-                disabled={isLoading || fontSizePx >= MAX_FONT_SIZE_PX}
+                disabled={isLoading || isMaxFontSize}
                 onClick={handleIncreaseFontSize}
-                className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-xs"
+                className={STEPPER_BUTTON_BASE}
               >
                 ＋
               </button>
@@ -253,9 +264,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 type="button"
                 data-testid="line-height-decrease"
                 aria-label="行間を縮小"
-                disabled={isLoading || lineHeight <= MIN_LINE_HEIGHT}
+                disabled={isLoading || isMinLineHeight}
                 onClick={handleDecreaseLineHeight}
-                className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-xs"
+                className={STEPPER_BUTTON_BASE}
               >
                 −
               </button>
@@ -269,9 +280,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 type="button"
                 data-testid="line-height-increase"
                 aria-label="行間を拡大"
-                disabled={isLoading || lineHeight >= MAX_LINE_HEIGHT}
+                disabled={isLoading || isMaxLineHeight}
                 onClick={handleIncreaseLineHeight}
-                className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-xs"
+                className={STEPPER_BUTTON_BASE}
               >
                 ＋
               </button>
