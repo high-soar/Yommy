@@ -15,6 +15,9 @@ export interface SampleTextPreviewProps {
   className?: string;
 }
 
+/**
+ * カラーテーマ別の配色・ボーダースタイル定義（ReaderView と一致）
+ */
 const themeStyles: Record<ReaderTheme, string> = {
   light: "bg-[#fcfcfc] text-slate-900 border-slate-200",
   sepia: "bg-[#fbf0d9] text-[#5f4b32] border-[#ebd9b9]",
@@ -22,13 +25,32 @@ const themeStyles: Record<ReaderTheme, string> = {
   black: "bg-black text-slate-300 border-neutral-900",
 };
 
+/**
+ * 組み方向別のレイアウト・スクロールスタイル定義
+ */
+const orientationStyles: Record<WritingMode, string> = {
+  "vertical-rl":
+    "writing-vertical-rl overflow-x-auto overflow-y-hidden leading-loose",
+  "horizontal-tb":
+    "writing-horizontal-tb overflow-y-auto overflow-x-hidden leading-relaxed",
+};
+
+/**
+ * プレビュー枠の共通外枠スタイル
+ */
+const BASE_FRAME_CLASSES =
+  "rounded-xl border shadow-xs h-64 w-full p-4 md:p-6 font-serif transition-colors duration-200 select-none";
+
+/**
+ * ルビ・傍点を含むサンプル小説文の原本文
+ */
 const SAMPLE_TEXT_HTML =
   "<p>吾輩は<ruby>猫<rp>（</rp><rt>ねこ</rt><rp>）</rp></ruby>である。名前はまだ無い。</p>" +
   '<p>どこで生れたかとんと<em class="bouten">見当</em>がつかぬ。何でも薄暗いじめじめした所でニャーニャー泣いていた事だけは記憶している。</p>';
 
 /**
  * 設定画面（SCR-05）において、組版・フォント・テーマ変更をリアルタイムに反映する
- * サンプル小説文プレビュー Presentational コンポーネント
+ * サンプル小説文プレビュー Presentational コンポーネント（AC-ST-02）
  */
 export const SampleTextPreview: React.FC<SampleTextPreviewProps> = ({
   writingMode,
@@ -37,18 +59,15 @@ export const SampleTextPreview: React.FC<SampleTextPreviewProps> = ({
   lineHeight,
   className,
 }) => {
-  const isVertical = writingMode === "vertical-rl";
   const sanitizedHtml = useMemo(
     () => sanitizeChapterHtml(SAMPLE_TEXT_HTML),
     [],
   );
 
   const containerClasses = [
-    "rounded-xl border shadow-xs h-64 w-full p-4 md:p-6 font-serif transition-colors duration-200 select-none",
+    BASE_FRAME_CLASSES,
     themeStyles[theme],
-    isVertical
-      ? "writing-vertical-rl overflow-x-auto overflow-y-hidden leading-loose"
-      : "writing-horizontal-tb overflow-y-auto overflow-x-hidden leading-relaxed",
+    orientationStyles[writingMode],
     className,
   ]
     .filter(Boolean)
