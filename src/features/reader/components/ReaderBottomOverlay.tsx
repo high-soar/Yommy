@@ -2,14 +2,23 @@ import React from "react";
 import { ReaderChapterNav } from "./ReaderChapterNav";
 
 export interface ReaderBottomOverlayProps {
+  /** オーバーレイの開閉表示状態（true: スライドイン表示、false: 画面外へ退避） */
   isOpen: boolean;
+  /** 現在表示中のエピソード連番（1始まり） */
   chapterIndex: number;
+  /** 作品の全エピソード数 */
   totalChapters: number;
+  /** エピソード通信中フラグ（省略時: false） */
   isLoading?: boolean;
+  /** リーダー画面のアクティブタブ（省略時: "bookshelf"） */
   activeTab?: "bookshelf" | "settings";
+  /** 「前の話へ」ボタン押下時のコールバック */
   onPrevChapter: () => void;
+  /** 「次の話へ」ボタン押下時のコールバック */
   onNextChapter: () => void;
+  /** 下部タブ選択時のコールバック */
   onSelectTab?: (tab: "bookshelf" | "settings") => void;
+  /** オーバーレイを閉じる要求コールバック */
   onClose?: () => void;
 }
 
