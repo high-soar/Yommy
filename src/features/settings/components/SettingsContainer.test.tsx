@@ -154,7 +154,7 @@ describe("SettingsContainer", () => {
       });
       expect(screen.getByTestId("sample-text-preview")).toHaveAttribute(
         "data-line-height",
-        "2.0",
+        "2",
       );
 
       // 縮小ボタン押下: 2.0 -> 1.8
