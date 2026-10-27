@@ -58,13 +58,10 @@ const meta: Meta<typeof ReaderPage> = {
     initialScrollProgress: 0,
     isLoading: false,
     error: null,
-    onToggleWritingMode: fn(),
-    onChangeTheme: fn(),
-    onChangeFontSize: fn(),
-    onChangeLineHeight: fn(),
     onPrevChapter: fn(),
     onNextChapter: fn(),
     onScrollProgressChange: fn(),
+    onSelectTab: fn(),
   },
 };
 
@@ -72,10 +69,20 @@ export default meta;
 type Story = StoryObj<typeof ReaderPage>;
 
 /**
- * 通常表示（第1話・縦書き・ライトテーマ）
+ * 通常表示（第1話・縦書き・白テーマ・オーバーレイ初期非表示）
  */
 export const Default: Story = {
   name: "通常表示（第1話・縦書き・白テーマ）",
+};
+
+/**
+ * 下部オーバーレイ展開時
+ */
+export const OverlayOpen: Story = {
+  name: "下部オーバーレイ展開時",
+  args: {
+    initialOverlayOpen: true,
+  },
 };
 
 /**
@@ -109,7 +116,7 @@ export const Loading: Story = {
 };
 
 /**
- * エラー発生状態
+ * エラー発生状態（下部オーバーレイ初期展開）
  */
 export const ErrorState: Story = {
   name: "エラー状態",
@@ -122,7 +129,7 @@ export const ErrorState: Story = {
 };
 
 /**
- * 空状態（作品未登録・エピソードなし）
+ * 空状態（作品未登録・エピソードなし・下部オーバーレイ初期展開）
  */
 export const Empty: Story = {
   name: "空状態（未登録）",
@@ -131,17 +138,5 @@ export const Empty: Story = {
     chapter: null,
     isLoading: false,
     error: null,
-  },
-};
-
-/**
- * 戻る導線（作品詳細へ・本棚へ）付き
- */
-export const WithNavigation: Story = {
-  name: "戻る導線・手動取得ボタン付き",
-  args: {
-    onBackToDetail: fn(),
-    onBackToBookshelf: fn(),
-    onFetchNovel: fn(),
   },
 };

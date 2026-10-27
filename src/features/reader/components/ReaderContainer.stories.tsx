@@ -274,6 +274,7 @@ export const WithCustomCallbacks: Story = {
     chapterIndex: 1,
     onBackToBookshelf: fn(),
     onBackToDetail: fn(),
+    onNavigateSettings: fn(),
     onNavigateChapter: fn(),
   },
   render: (args) => (

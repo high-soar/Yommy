@@ -21,13 +21,16 @@ export interface ReaderPageProps {
   initialScrollProgress: number;
   isLoading: boolean;
   error?: string | null;
-  onToggleWritingMode: () => void;
-  onChangeTheme: (theme: ReaderTheme) => void;
-  onChangeFontSize: (sizePx: number) => void;
-  onChangeLineHeight: (height: number) => void;
   onPrevChapter: () => void;
   onNextChapter: () => void;
   onScrollProgressChange: (progress: number) => void;
+  onSelectTab?: (tab: "bookshelf" | "settings") => void;
+  initialOverlayOpen?: boolean;
+  // 過渡的インターフェース（旧Props）
+  onToggleWritingMode?: () => void;
+  onChangeTheme?: (theme: ReaderTheme) => void;
+  onChangeFontSize?: (sizePx: number) => void;
+  onChangeLineHeight?: (height: number) => void;
   onBackToDetail?: () => void;
   onBackToBookshelf?: () => void;
   onFetchNovel?: () => void;
@@ -57,10 +60,10 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
   initialScrollProgress,
   isLoading,
   error,
-  onToggleWritingMode,
-  onChangeTheme,
-  onChangeFontSize,
-  onChangeLineHeight,
+  onToggleWritingMode = () => {},
+  onChangeTheme = () => {},
+  onChangeFontSize = () => {},
+  onChangeLineHeight = () => {},
   onPrevChapter,
   onNextChapter,
   onScrollProgressChange,

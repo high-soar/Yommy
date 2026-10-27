@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
@@ -6,7 +6,7 @@ import * as stories from "./ReaderPage.stories";
 import { ReaderPage, type ReaderPageProps } from "./ReaderPage";
 import type { NovelRecord, ChapterRecord } from "../../../storage/types";
 
-const { Default, HorizontalSepia, Loading, ErrorState, Empty, WithNavigation } =
+const { Default, OverlayOpen, HorizontalSepia, Loading, ErrorState, Empty } =
   composeStories(stories);
 
 const sampleNovel: NovelRecord = {
@@ -59,32 +59,47 @@ function createDefaultProps(
     initialScrollProgress: 0,
     isLoading: false,
     error: null,
-    onToggleWritingMode: vi.fn(),
-    onChangeTheme: vi.fn(),
-    onChangeFontSize: vi.fn(),
-    onChangeLineHeight: vi.fn(),
     onPrevChapter: vi.fn(),
     onNextChapter: vi.fn(),
     onScrollProgressChange: vi.fn(),
+    onSelectTab: vi.fn(),
     ...overrides,
   };
 }
 
 describe("ReaderPage", () => {
   describe("Storybook Stories 検証 (composeStories)", () => {
-    it("Default ストーリーでツールバー、ナビゲーション、本文（ReaderView）が描画されること", () => {
+    it("Default ストーリーで全画面本文と最下部タッチゾーンが描画され、オーバーレイは初期非表示（AC-RD-09）", () => {
       render(<Default />);
       const page = screen.getByTestId("reader-page");
       expect(page).toBeInTheDocument();
-      const main = page.querySelector("main");
-      expect(main).toHaveClass("w-full");
-      expect(main).toHaveClass("min-w-0");
-      expect(screen.getByTestId("reader-toolbar")).toBeInTheDocument();
-      expect(screen.getByTestId("reader-chapter-nav")).toBeInTheDocument();
+      expect(page).toHaveClass("h-dvh");
+      expect(page).toHaveClass("w-full");
+      expect(page).toHaveClass("overflow-hidden");
+
+      // 常時表示ツールバーおよび章ナビが廃止されていること
+      expect(screen.queryByTestId("reader-toolbar")).not.toBeInTheDocument();
+
+      // 本文全画面描画
       expect(screen.getByTestId("reader-view")).toBeInTheDocument();
-      expect(screen.queryByTestId("reader-loading")).not.toBeInTheDocument();
-      expect(screen.queryByTestId("reader-error")).not.toBeInTheDocument();
-      expect(screen.queryByTestId("reader-empty")).not.toBeInTheDocument();
+
+      // 最下部タッチゾーン
+      expect(
+        screen.getByTestId("reader-bottom-touch-zone"),
+      ).toBeInTheDocument();
+
+      // 下部オーバーレイは初期非表示（aria-hidden=true）
+      const overlay = screen.getByTestId("reader-bottom-overlay");
+      expect(overlay).toBeInTheDocument();
+      expect(overlay).toHaveAttribute("aria-hidden", "true");
+      expect(overlay).toHaveClass("translate-y-full");
+    });
+
+    it("OverlayOpen ストーリーで下部オーバーレイが展開表示されていること", () => {
+      render(<OverlayOpen />);
+      const overlay = screen.getByTestId("reader-bottom-overlay");
+      expect(overlay).toHaveAttribute("aria-hidden", "false");
+      expect(overlay).toHaveClass("translate-y-0");
     });
 
     it("HorizontalSepia ストーリーで横書き・セピアの ReaderView が描画されること", () => {
@@ -96,39 +111,35 @@ describe("ReaderPage", () => {
 
     it("Loading ストーリーでローディング表示が描画され本文や空状態が非表示となること", () => {
       render(<Loading />);
-      expect(screen.getByTestId("reader-toolbar")).toBeInTheDocument();
       expect(screen.getByTestId("reader-loading")).toBeInTheDocument();
       expect(screen.queryByTestId("reader-view")).not.toBeInTheDocument();
       expect(screen.queryByTestId("reader-empty")).not.toBeInTheDocument();
       expect(screen.queryByTestId("reader-error")).not.toBeInTheDocument();
     });
 
-    it("ErrorState ストーリーでエラーアラートが描画され本文やローディングが非表示となること", () => {
+    it("ErrorState ストーリーでエラーアラートが描画され下部オーバーレイが初期展開表示されること（AC-RD-10）", () => {
       render(<ErrorState />);
       const errorEl = screen.getByTestId("reader-error");
       expect(errorEl).toBeInTheDocument();
       expect(errorEl).toHaveAttribute("role", "alert");
       expect(errorEl).toHaveTextContent("エピソード本文の取得に失敗しました");
       expect(screen.queryByTestId("reader-view")).not.toBeInTheDocument();
-      expect(screen.queryByTestId("reader-loading")).not.toBeInTheDocument();
-      expect(screen.queryByTestId("reader-empty")).not.toBeInTheDocument();
+
+      // エラー時は初期状態でオーバーレイが展開表示
+      const overlay = screen.getByTestId("reader-bottom-overlay");
+      expect(overlay).toHaveAttribute("aria-hidden", "false");
+      expect(overlay).toHaveClass("translate-y-0");
     });
 
-    it("Empty ストーリーで空状態が描画されること", () => {
+    it("Empty ストーリーで空状態が描画され下部オーバーレイが初期展開表示されること（AC-RD-10）", () => {
       render(<Empty />);
       expect(screen.getByTestId("reader-empty")).toBeInTheDocument();
       expect(screen.queryByTestId("reader-view")).not.toBeInTheDocument();
-      expect(screen.queryByTestId("reader-loading")).not.toBeInTheDocument();
-      expect(screen.queryByTestId("reader-error")).not.toBeInTheDocument();
-    });
 
-    it("WithNavigation ストーリーで戻るボタンや取得ボタンがツールバーに表示されること", () => {
-      render(<WithNavigation />);
-      expect(screen.getByTestId("reader-back-to-detail")).toBeInTheDocument();
-      expect(
-        screen.getByTestId("reader-back-to-bookshelf"),
-      ).toBeInTheDocument();
-      expect(screen.getByTestId("fetch-novel-button")).toBeInTheDocument();
+      // 空状態時は初期状態でオーバーレイが展開表示
+      const overlay = screen.getByTestId("reader-bottom-overlay");
+      expect(overlay).toHaveAttribute("aria-hidden", "false");
+      expect(overlay).toHaveClass("translate-y-0");
     });
   });
 
@@ -143,6 +154,10 @@ describe("ReaderPage", () => {
       expect(screen.getByTestId("reader-error")).toBeInTheDocument();
       expect(screen.queryByTestId("reader-loading")).not.toBeInTheDocument();
       expect(screen.queryByTestId("reader-view")).not.toBeInTheDocument();
+      expect(screen.getByTestId("reader-bottom-overlay")).toHaveAttribute(
+        "aria-hidden",
+        "false",
+      );
     });
 
     it("isLoading が true であっても既に chapter.bodyHtml が存在する場合は ReaderView が維持されること", () => {
@@ -155,27 +170,17 @@ describe("ReaderPage", () => {
       expect(screen.queryByTestId("reader-loading")).not.toBeInTheDocument();
     });
 
-    it("novel === null のとき空状態となり、ReaderChapterNav は描画されないこと", () => {
+    it("novel === null のとき空状態となり、オーバーレイが初期展開されること", () => {
       const props = createDefaultProps({
         novel: null,
       });
       render(<ReaderPage {...props} />);
 
       expect(screen.getByTestId("reader-empty")).toBeInTheDocument();
-      expect(
-        screen.queryByTestId("reader-chapter-nav"),
-      ).not.toBeInTheDocument();
-    });
-
-    it("totalChapters === 0 のとき ReaderChapterNav は描画されないこと", () => {
-      const props = createDefaultProps({
-        totalChapters: 0,
-      });
-      render(<ReaderPage {...props} />);
-
-      expect(
-        screen.queryByTestId("reader-chapter-nav"),
-      ).not.toBeInTheDocument();
+      expect(screen.getByTestId("reader-bottom-overlay")).toHaveAttribute(
+        "aria-hidden",
+        "false",
+      );
     });
 
     it("chapter === null または chapter.bodyHtml === null のとき空状態が描画されること", () => {
@@ -195,68 +200,211 @@ describe("ReaderPage", () => {
     });
   });
 
-  describe("子コンポーネントへの Props 渡し・コールバック委譲の検証", () => {
-    it("ツールバーおよび前後ナビの各コールバックが正しく呼び出されること", async () => {
-      const user = userEvent.setup();
-      const onToggleWritingMode = vi.fn();
-      const onChangeTheme = vi.fn();
-      const onChangeFontSize = vi.fn();
-      const onChangeLineHeight = vi.fn();
-      const onPrevChapter = vi.fn();
-      const onNextChapter = vi.fn();
-      const onBackToDetail = vi.fn();
-      const onBackToBookshelf = vi.fn();
-      const onFetchNovel = vi.fn();
+  describe("最下部タッチゾーンによるオーバーレイ開閉制御（AC-RD-10）", () => {
+    it("最下部タッチゾーンをタップ（移動10px未満・500ms未満）するとオーバーレイが表示され、再タップで非表示になること", () => {
+      render(<ReaderPage {...createDefaultProps()} />);
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      const overlay = screen.getByTestId("reader-bottom-overlay");
 
-      const props = createDefaultProps({
-        chapterIndex: 2,
-        totalChapters: 3,
-        onToggleWritingMode,
-        onChangeTheme,
-        onChangeFontSize,
-        onChangeLineHeight,
-        onPrevChapter,
-        onNextChapter,
-        onBackToDetail,
-        onBackToBookshelf,
-        onFetchNovel,
+      expect(overlay).toHaveAttribute("aria-hidden", "true");
+
+      // 1回目のタップ（展開）
+      const now = Date.now();
+      vi.spyOn(Date, "now").mockReturnValue(now);
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      vi.spyOn(Date, "now").mockReturnValue(now + 100);
+      fireEvent.pointerUp(touchZone, { clientX: 102, clientY: 503 });
+
+      expect(overlay).toHaveAttribute("aria-hidden", "false");
+      expect(overlay).toHaveClass("translate-y-0");
+
+      // 2回目のタップ（閉じる）
+      vi.spyOn(Date, "now").mockReturnValue(now + 200);
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      vi.spyOn(Date, "now").mockReturnValue(now + 250);
+      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
+
+      expect(overlay).toHaveAttribute("aria-hidden", "true");
+    });
+
+    it("タッチ移動距離が10px以上のスワイプ・ドラッグ操作ではオーバーレイが開かないこと", () => {
+      render(<ReaderPage {...createDefaultProps()} />);
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      const overlay = screen.getByTestId("reader-bottom-overlay");
+
+      expect(overlay).toHaveAttribute("aria-hidden", "true");
+
+      const now = Date.now();
+      vi.spyOn(Date, "now").mockReturnValue(now);
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      // 上方向へ20pxスワイプ
+      vi.spyOn(Date, "now").mockReturnValue(now + 80);
+      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 480 });
+
+      expect(overlay).toHaveAttribute("aria-hidden", "true");
+    });
+
+    it("タッチ時間が500ms以上の長押し操作ではオーバーレイが開かないこと", () => {
+      render(<ReaderPage {...createDefaultProps()} />);
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      const overlay = screen.getByTestId("reader-bottom-overlay");
+
+      const now = Date.now();
+      vi.spyOn(Date, "now").mockReturnValue(now);
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      // 600ms経過
+      vi.spyOn(Date, "now").mockReturnValue(now + 600);
+      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
+
+      expect(overlay).toHaveAttribute("aria-hidden", "true");
+    });
+
+    it("pointercancel が発生した場合はその後の pointerup でオーバーレイが開かないこと", () => {
+      render(<ReaderPage {...createDefaultProps()} />);
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      const overlay = screen.getByTestId("reader-bottom-overlay");
+
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      fireEvent.pointerCancel(touchZone);
+      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
+
+      expect(overlay).toHaveAttribute("aria-hidden", "true");
+    });
+
+    it("キーボード操作（Enter / Space）でオーバーレイの開閉がトグルされること", () => {
+      render(<ReaderPage {...createDefaultProps()} />);
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      const overlay = screen.getByTestId("reader-bottom-overlay");
+
+      fireEvent.keyDown(touchZone, { key: "Enter" });
+      expect(overlay).toHaveAttribute("aria-hidden", "false");
+
+      fireEvent.keyDown(touchZone, { key: " " });
+      expect(overlay).toHaveAttribute("aria-hidden", "true");
+
+      // その他のキーでは反応しないこと
+      fireEvent.keyDown(touchZone, { key: "Tab" });
+      expect(overlay).toHaveAttribute("aria-hidden", "true");
+    });
+  });
+
+  describe("自動非表示（Auto-Hide）トリガーの検証（AC-RD-10）", () => {
+    it("オーバーレイ展開中に本文スクロールが発生した際に自動的に閉じること", async () => {
+      const onScrollProgressChange = vi.fn();
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            initialOverlayOpen: true,
+            onScrollProgressChange,
+          })}
+        />,
+      );
+      const overlay = screen.getByTestId("reader-bottom-overlay");
+      expect(overlay).toHaveAttribute("aria-hidden", "false");
+
+      const readerView = screen.getByTestId("reader-view");
+      Object.defineProperty(readerView, "scrollWidth", {
+        value: 1000,
+        configurable: true,
+      });
+      Object.defineProperty(readerView, "clientWidth", {
+        value: 500,
+        configurable: true,
+      });
+      Object.defineProperty(readerView, "scrollLeft", {
+        value: -200,
+        configurable: true,
       });
 
-      render(<ReaderPage {...props} />);
+      await act(async () => {
+        readerView.dispatchEvent(new Event("scroll"));
+      });
 
-      // 組み方向
-      await user.click(screen.getByTestId("toggle-orientation"));
-      expect(onToggleWritingMode).toHaveBeenCalledTimes(1);
+      expect(onScrollProgressChange).toHaveBeenCalled();
+      expect(overlay).toHaveAttribute("aria-hidden", "true");
+    });
 
-      // テーマ
-      await user.click(screen.getByTestId("theme-sepia"));
-      expect(onChangeTheme).toHaveBeenCalledWith("sepia");
+    it("オーバーレイ展開中に本文エリアをクリックした際に自動的に閉じること", async () => {
+      const user = userEvent.setup();
+      render(
+        <ReaderPage {...createDefaultProps({ initialOverlayOpen: true })} />,
+      );
+      const overlay = screen.getByTestId("reader-bottom-overlay");
+      expect(overlay).toHaveAttribute("aria-hidden", "false");
 
-      // 文字サイズ
-      await user.click(screen.getByTestId("font-size-increase"));
-      expect(onChangeFontSize).toHaveBeenCalledWith(20);
+      await user.click(screen.getByTestId("reader-view"));
+      expect(overlay).toHaveAttribute("aria-hidden", "true");
+    });
 
-      // 行間
-      await user.click(screen.getByTestId("line-height-increase"));
-      expect(onChangeLineHeight).toHaveBeenCalledWith(2.0);
+    it("オーバーレイ展開中に「前の話へ」をクリックすると onPrevChapter が呼ばれ自動的に閉じること", async () => {
+      const user = userEvent.setup();
+      const onPrevChapter = vi.fn();
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            chapterIndex: 2,
+            initialOverlayOpen: true,
+            onPrevChapter,
+          })}
+        />,
+      );
+      const overlay = screen.getByTestId("reader-bottom-overlay");
+      expect(overlay).toHaveAttribute("aria-hidden", "false");
 
-      // 前後話ナビ
       await user.click(screen.getByTestId("reader-prev-chapter"));
       expect(onPrevChapter).toHaveBeenCalledTimes(1);
+      expect(overlay).toHaveAttribute("aria-hidden", "true");
+    });
+
+    it("オーバーレイ展開中に「次の話へ」をクリックすると onNextChapter が呼ばれ自動的に閉じること", async () => {
+      const user = userEvent.setup();
+      const onNextChapter = vi.fn();
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            chapterIndex: 1,
+            initialOverlayOpen: true,
+            onNextChapter,
+          })}
+        />,
+      );
+      const overlay = screen.getByTestId("reader-bottom-overlay");
+      expect(overlay).toHaveAttribute("aria-hidden", "false");
 
       await user.click(screen.getByTestId("reader-next-chapter"));
       expect(onNextChapter).toHaveBeenCalledTimes(1);
+      expect(overlay).toHaveAttribute("aria-hidden", "true");
+    });
 
-      // 戻る導線
-      await user.click(screen.getByTestId("reader-back-to-detail"));
-      expect(onBackToDetail).toHaveBeenCalledTimes(1);
+    it("オーバーレイの閉じるボタン（✕）をクリックした際にオーバーレイが閉じること", async () => {
+      const user = userEvent.setup();
+      render(
+        <ReaderPage {...createDefaultProps({ initialOverlayOpen: true })} />,
+      );
+      const overlay = screen.getByTestId("reader-bottom-overlay");
+      expect(overlay).toHaveAttribute("aria-hidden", "false");
 
-      await user.click(screen.getByTestId("reader-back-to-bookshelf"));
-      expect(onBackToBookshelf).toHaveBeenCalledTimes(1);
+      await user.click(screen.getByTestId("reader-bottom-overlay-close"));
+      expect(overlay).toHaveAttribute("aria-hidden", "true");
+    });
 
-      // 手動取得
-      await user.click(screen.getByTestId("fetch-novel-button"));
-      expect(onFetchNovel).toHaveBeenCalledTimes(1);
+    it("下部タブ（本棚 / 設定）をクリックした際に onSelectTab が呼ばれること", async () => {
+      const user = userEvent.setup();
+      const onSelectTab = vi.fn();
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            initialOverlayOpen: true,
+            onSelectTab,
+          })}
+        />,
+      );
+
+      await user.click(screen.getByTestId("reader-bottom-tab-bookshelf"));
+      expect(onSelectTab).toHaveBeenCalledWith("bookshelf");
+
+      await user.click(screen.getByTestId("reader-bottom-tab-settings"));
+      expect(onSelectTab).toHaveBeenCalledWith("settings");
     });
   });
 });

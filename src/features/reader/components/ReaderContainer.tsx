@@ -18,6 +18,8 @@ export interface ReaderContainerProps {
   onBackToBookshelf?: () => void;
   /** 「作品詳細へ」タップ時のコールバック（省略時はルーターの navigateToNovelDetail を使用） */
   onBackToDetail?: (novelId: string) => void;
+  /** 「設定へ」タップ時のコールバック（省略時はルーターの navigate('/settings') を使用） */
+  onNavigateSettings?: () => void;
   /** 前後話遷移タップ時のコールバック（省略時はルーターの navigateToReader を使用） */
   onNavigateChapter?: (novelId: string, chapterIndex: number) => void;
 }
