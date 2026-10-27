@@ -15,7 +15,56 @@ export interface BottomTabBarProps {
 
 /**
  * 画面最下部に固定表示される下部タブバー（Presentational）
+ *
+ * 「本棚」と「設定」の切り替えナビゲーションを提供する。
  */
-export const BottomTabBar: React.FC<BottomTabBarProps> = () => {
-  return null;
+export const BottomTabBar: React.FC<BottomTabBarProps> = ({
+  activeTab,
+  onSelectBookshelf,
+  onSelectSettings,
+  className,
+}) => {
+  const baseButtonClass =
+    "flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium transition-colors cursor-pointer";
+  const activeClass =
+    "text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50/50 dark:bg-emerald-950/20";
+  const inactiveClass =
+    "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100";
+
+  return (
+    <nav
+      data-testid="bottom-tab-bar"
+      role="tablist"
+      aria-label="メインナビゲーション"
+      className={`h-14 border-t bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 grid grid-cols-2 max-w-4xl mx-auto w-full ${className ?? ""}`.trim()}
+    >
+      <button
+        type="button"
+        role="tab"
+        data-testid="tab-bookshelf"
+        aria-selected={activeTab === "bookshelf"}
+        onClick={onSelectBookshelf}
+        className={`${baseButtonClass} ${
+          activeTab === "bookshelf" ? activeClass : inactiveClass
+        }`}
+      >
+        <span aria-hidden="true">📚</span>
+        <span>本棚</span>
+      </button>
+
+      <button
+        type="button"
+        role="tab"
+        data-testid="tab-settings"
+        aria-selected={activeTab === "settings"}
+        onClick={onSelectSettings}
+        className={`${baseButtonClass} ${
+          activeTab === "settings" ? activeClass : inactiveClass
+        }`}
+      >
+        <span aria-hidden="true">⚙️</span>
+        <span>設定</span>
+      </button>
+    </nav>
+  );
 };
