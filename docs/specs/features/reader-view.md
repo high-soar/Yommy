@@ -14,7 +14,7 @@ related_specs:
   - docs/specs/features/novel-detail.md
   - docs/specs/features/settings.md
   - docs/specs/parsers/kakuyomu.md
-  - docs/specs/changes/issue-50-fullscreen-shell-and-settings.md
+  - docs/specs/changes/archive/issue-50-fullscreen-shell-and-settings.md
   - docs/specs/changes/archive/issue-52-reader-fullscreen-and-bottom-overlay.md
   - docs/specs/changes/archive/issue-12-bookshelf-and-routing.md
   - docs/specs/changes/archive/issue-13-novel-detail-and-toc.md
