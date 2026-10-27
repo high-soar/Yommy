@@ -3,7 +3,8 @@ import { App } from "./App";
 
 /**
  * Yommy ルートアプリケーションコンポーネント。
- * ServiceProvider と RouterProvider を統合し、本棚・作品詳細・リーダーの各画面ルーティングを提供します。
+ * ServiceProvider と RouterProvider を統合し、100dvh 全画面シェル内での画面ルーティング
+ * （本棚 SCR-01、作品詳細 SCR-02、リーダー SCR-03、設定 SCR-05）および下部タブバー（BottomTabBar）を提供します。
  */
 const meta: Meta<typeof App> = {
   title: "App",
@@ -18,7 +19,7 @@ type Story = StoryObj<typeof App>;
 
 /**
  * デフォルト表示ストーリー。
- * 初期状態（/ 本棚画面・作品未登録状態）を描画します。
+ * 初期状態（/ 本棚画面・作品未登録状態・下部タブバー「本棚」アクティブ）を描画します。
  */
 export const Default: Story = {
   name: "デフォルト（本棚画面・初期表示）",
@@ -28,19 +29,20 @@ export const Default: Story = {
 };
 
 /**
- * カスタムタイトル指定ストーリー。
- * ヘッダーに任意のアプリケーション名を設定した状態を描画します。
+ * 設定画面ルートストーリー。
+ * /settings へのアクセス時（設定画面・下部タブバー「設定」アクティブ）を描画します。
  */
-export const CustomTitle: Story = {
-  name: "カスタムタイトル指定",
+export const SettingsRoute: Story = {
+  name: "設定画面ルート表示",
   args: {
-    title: "Yommy Web Novel Reader",
+    title: "Yommy",
+    initialPath: "/settings",
   },
 };
 
 /**
  * 作品詳細・目次画面ルートストーリー。
- * /novels/kakuyomu:16817330658027210412 への直接アクセス時（未登録作品時は未検出表示）を描画します。
+ * /novels/kakuyomu:16817330658027210412 への直接アクセス時（未登録作品時は未検出表示・下部タブバー「本棚」アクティブ）を描画します。
  */
 export const NovelDetailRoute: Story = {
   name: "作品詳細ルート表示",
@@ -52,7 +54,7 @@ export const NovelDetailRoute: Story = {
 
 /**
  * リーダー画面ルートストーリー。
- * /novels/kakuyomu:16817330658027210412/chapters/1 への直接アクセス時のリーダー画面を描画します。
+ * /novels/kakuyomu:16817330658027210412/chapters/1 への直接アクセス時（全画面リーダー・下部タブバー非表示）を描画します。
  */
 export const ReaderRoute: Story = {
   name: "リーダー画面ルート表示",
