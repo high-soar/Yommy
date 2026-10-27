@@ -54,9 +54,9 @@ related_tests:
   - `TR-07`（作品詳細ヘッダーの「本棚へ戻る」ボタン、OS バックキー、または作品削除確認ダイアログでの削除実行完了による本棚画面 `SCR-01` `/` への遷移）
 - **対象外スコープ（後続 Issue / Milestone）**:
   - エピソード閲覧に伴うしおり位置（`bookmarkChapterIndex`, `bookmarkScrollProgress`）および既読フラグ（`isRead`）の自動更新ロジック本体（Issue #14 の `SCR-03` リーダー画面拡張で一括実装）
-  - レートリミット付きバックグラウンド DL キューによる未取得全話の一括ダウンロード（Milestone `v0.2`：`SYS-REQ-03`, `TR-08`）
-  - 内蔵 WebView（`SCR-04`）での手動インポート連携（Milestone `v0.3`：`SYS-REQ-13, 14`, `TR-09`）
-  - 作品単位の「本文キャッシュのみ削除（目次は残す）」操作（Milestone `v0.3`：`SYS-REQ-05`）
+  - レートリミット付きバックグラウンド DL キューによる未取得全話の一括ダウンロード（Milestone `v0.3`：`SYS-REQ-03`, `TR-08`）
+  - 内蔵 WebView（`SCR-04`）での手動インポート連携（Milestone `v0.4`：`SYS-REQ-13, 14`, `TR-09`）
+  - 作品単位の「本文キャッシュのみ削除（目次は残す）」操作（Milestone `v0.4`：`SYS-REQ-05`）
 
 ---
 

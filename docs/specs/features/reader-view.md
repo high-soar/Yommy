@@ -326,6 +326,7 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
 | **`AC-RD-06`** | 前後エピソード連続遷移と境界制御         | `ReaderChapterNav` の「前の話へ」「次の話へ」ボタンで同一作品の `chapterIndex ± 1` へ遷移（`TR-05`、`replaceState` 適用）でき、第1話では「前の話へ」が `disabled`、最終話では「次の話へ」が `disabled` となること。また遷移先が未キャッシュの場合はオンデマンド取得されること。 | `SYS-REQ-11` / `TR-05`                                |
 | **`AC-RD-07`** | 既読フラグ（`is_read`）の自動更新        | エピソード本文の表示完了時および次話遷移時（`TR-05`）に `markChapterRead(novelId, chapterIndex, true)` が実行され、作品詳細・目次画面（`SCR-02`）へ戻った際に閲覧済み話に `既読` バッジ（`episode-read-badge`）が表示されること。                                               | `SYS-REQ-12` / `TR-05`, `TR-06`                       |
 | **`AC-RD-08`** | しおり話数・スクロール進捗率の保存復元   | 現在閲覧中の `bookmark_chapter_index` と、縦書き（水平スクロール）・横書き（垂直スクロール）双方のスクロール進捗率（`0.0〜1.0`）が自動保存され、OS バックキーでの目次復帰（`TR-06`）や「続きから読む（`TR-03`, `TR-04`）」で同じ話・スクロール位置が復元されること。            | `SYS-REQ-12, 16` / `TR-03`, `TR-04`, `TR-05`, `TR-06` |
+| **`AC-RD-09`** | 100dvh 全画面表示とツールバー廃止        | リーダー画面が 100dvh 全画面シェル（`h-full flex flex-col overflow-hidden`）全体を専有し、`ReaderToolbar` が非描画で下部タブバーも非表示となり、本文領域（`ReaderView`）が画面いっぱいに全画面表示されること。                                                                  | `SYS-REQ-16` / `TR-03`, `TR-04`                       |
 
 ---
 
