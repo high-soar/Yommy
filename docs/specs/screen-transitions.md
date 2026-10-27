@@ -2,7 +2,7 @@
 type: spec-screen-transition
 title: 全体画面一覧・画面遷移の骨格（App 全体正本）
 description: 主要5画面（SCR-01〜SCR-05）の役割・ルート定義と、画面間遷移（TR-01〜TR-11）の全体マップ正本。
-status: "Approved (#14)"
+status: Approved
 updated: "2026-10-27"
 tags: [screens, transitions, routing, ui]
 related_specs:

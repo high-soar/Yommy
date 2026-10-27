@@ -2,7 +2,7 @@
 type: spec-feature
 title: 小説リーダー画面仕様書（SCR-03: Novel Reader）
 description: 小説本文の縦書き・横書き組版表示、ルビ・傍点描画、4カラーテーマ・文字サイズ・行間設定の永続化、前後エピソード遷移、未キャッシュ話のオンデマンド取得、既読・しおり・スクロール進捗率の自動保存/復元、およびSCN-01統合シナリオの正本仕様。
-status: "Approved (#14)"
+status: Approved
 updated: "2026-10-27"
 tags: [reader, scr-03, vertical-writing, ruby, bouten, theme, typography, bookmark, scn01]
 related_specs:
