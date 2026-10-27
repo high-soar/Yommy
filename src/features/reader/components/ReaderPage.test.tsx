@@ -67,6 +67,20 @@ function createDefaultProps(
   };
 }
 
+function firePointer(
+  element: HTMLElement,
+  type: "pointerdown" | "pointerup" | "pointercancel",
+  init: { clientX?: number; clientY?: number } = {},
+) {
+  const event = new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    clientX: init.clientX ?? 0,
+    clientY: init.clientY ?? 0,
+  });
+  fireEvent(element, event);
+}
+
 describe("ReaderPage", () => {
   describe("Storybook Stories 検証 (composeStories)", () => {
     it("Default ストーリーで全画面本文と最下部タッチゾーンが描画され、オーバーレイは初期非表示（AC-RD-09）", () => {
@@ -211,18 +225,18 @@ describe("ReaderPage", () => {
       // 1回目のタップ（展開）
       const now = Date.now();
       vi.spyOn(Date, "now").mockReturnValue(now);
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      firePointer(touchZone, "pointerdown", { clientX: 100, clientY: 500 });
       vi.spyOn(Date, "now").mockReturnValue(now + 100);
-      fireEvent.pointerUp(touchZone, { clientX: 102, clientY: 503 });
+      firePointer(touchZone, "pointerup", { clientX: 102, clientY: 503 });
 
       expect(overlay).toHaveAttribute("aria-hidden", "false");
       expect(overlay).toHaveClass("translate-y-0");
 
       // 2回目のタップ（閉じる）
       vi.spyOn(Date, "now").mockReturnValue(now + 200);
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      firePointer(touchZone, "pointerdown", { clientX: 100, clientY: 500 });
       vi.spyOn(Date, "now").mockReturnValue(now + 250);
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
+      firePointer(touchZone, "pointerup", { clientX: 100, clientY: 500 });
 
       expect(overlay).toHaveAttribute("aria-hidden", "true");
     });
@@ -236,10 +250,10 @@ describe("ReaderPage", () => {
 
       const now = Date.now();
       vi.spyOn(Date, "now").mockReturnValue(now);
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      firePointer(touchZone, "pointerdown", { clientX: 100, clientY: 500 });
       // 上方向へ20pxスワイプ
       vi.spyOn(Date, "now").mockReturnValue(now + 80);
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 480 });
+      firePointer(touchZone, "pointerup", { clientX: 100, clientY: 480 });
 
       expect(overlay).toHaveAttribute("aria-hidden", "true");
     });
@@ -251,10 +265,10 @@ describe("ReaderPage", () => {
 
       const now = Date.now();
       vi.spyOn(Date, "now").mockReturnValue(now);
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      firePointer(touchZone, "pointerdown", { clientX: 100, clientY: 500 });
       // 600ms経過
       vi.spyOn(Date, "now").mockReturnValue(now + 600);
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
+      firePointer(touchZone, "pointerup", { clientX: 100, clientY: 500 });
 
       expect(overlay).toHaveAttribute("aria-hidden", "true");
     });
@@ -264,9 +278,9 @@ describe("ReaderPage", () => {
       const touchZone = screen.getByTestId("reader-bottom-touch-zone");
       const overlay = screen.getByTestId("reader-bottom-overlay");
 
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
-      fireEvent.pointerCancel(touchZone);
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
+      firePointer(touchZone, "pointerdown", { clientX: 100, clientY: 500 });
+      firePointer(touchZone, "pointercancel");
+      firePointer(touchZone, "pointerup", { clientX: 100, clientY: 500 });
 
       expect(overlay).toHaveAttribute("aria-hidden", "true");
     });

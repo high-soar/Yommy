@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, beforeEach } from "vitest";
 import { composeStories } from "@storybook/react";
@@ -54,12 +54,11 @@ describe("App コンポーネント", () => {
       await waitFor(
         () => {
           expect(screen.getByTestId("reader-page")).toBeInTheDocument();
-          expect(screen.getByTestId("reader-toolbar")).toBeInTheDocument();
           expect(
-            screen.getByTestId("reader-back-to-bookshelf"),
+            screen.getByTestId("reader-bottom-touch-zone"),
           ).toBeInTheDocument();
           expect(
-            screen.getByTestId("reader-back-to-detail"),
+            screen.getByTestId("reader-bottom-overlay"),
           ).toBeInTheDocument();
         },
         { timeout: 3000 },
@@ -97,7 +96,7 @@ describe("App コンポーネント", () => {
       });
     });
 
-    it("リーダー画面で「本棚へ戻る」をクリックすると本棚画面へ遷移する", async () => {
+    it("リーダー画面で下部オーバーレイの「本棚」タブをクリックすると本棚画面へ遷移する", async () => {
       const user = userEvent.setup();
       render(
         <App initialPath="/novels/kakuyomu:16817330658027210412/chapters/1" />,
@@ -106,35 +105,47 @@ describe("App コンポーネント", () => {
       await waitFor(
         () => {
           expect(
-            screen.getByTestId("reader-back-to-bookshelf"),
+            screen.getByTestId("reader-bottom-touch-zone"),
           ).toBeInTheDocument();
         },
         { timeout: 3000 },
       );
 
-      await user.click(screen.getByTestId("reader-back-to-bookshelf"));
+      await user.click(screen.getByTestId("reader-bottom-touch-zone"));
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("reader-bottom-tab-bookshelf"),
+        ).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId("reader-bottom-tab-bookshelf"));
 
       await waitFor(() => {
         expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
       });
     });
 
-    it("リーダー画面で「作品詳細へ」をクリックすると作品詳細画面へ遷移する", async () => {
-      const user = userEvent.setup();
+    it("リーダー画面で OS 戻る操作（popstate）を行うと作品詳細画面へ戻る", async () => {
       render(
         <App initialPath="/novels/kakuyomu:16817330658027210412/chapters/1" />,
       );
 
       await waitFor(
         () => {
-          expect(
-            screen.getByTestId("reader-back-to-detail"),
-          ).toBeInTheDocument();
+          expect(screen.getByTestId("reader-page")).toBeInTheDocument();
         },
         { timeout: 3000 },
       );
 
-      await user.click(screen.getByTestId("reader-back-to-detail"));
+      await act(async () => {
+        window.history.pushState(
+          null,
+          "",
+          "/novels/kakuyomu:16817330658027210412",
+        );
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
@@ -151,7 +162,7 @@ describe("App コンポーネント", () => {
 
       await waitFor(
         () => {
-          expect(screen.getByTestId("reader-toolbar")).toBeInTheDocument();
+          expect(screen.getByTestId("reader-page")).toBeInTheDocument();
         },
         { timeout: 3000 },
       );
