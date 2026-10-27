@@ -48,7 +48,9 @@ export const BookshelfContainer: React.FC<BookshelfContainerProps> = ({
       if (onResumeNovel) {
         onResumeNovel(novelId, chapterIndex);
       } else {
-        router.navigateToReader(novelId, chapterIndex);
+        router.navigateToReader(novelId, chapterIndex, {
+          fromBookshelfResume: true,
+        });
       }
     },
     [onResumeNovel, router],

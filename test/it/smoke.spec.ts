@@ -6,14 +6,18 @@ test.describe("アプリケーションスモーク結合テスト", () => {
   }) => {
     await page.goto("/");
 
-    // ヘッダータイトル表示の確認
-    const title = page.getByTestId("app-title");
-    await expect(title).toBeVisible();
-    await expect(title).toHaveText("Yommy");
+    // 全画面シェルおよび本棚ヘッダー表示の確認
+    const appRoot = page.getByTestId("app-root");
+    await expect(appRoot).toBeVisible();
 
     // 本棚ページが表示されていることの確認
     const bookshelfPage = page.getByTestId("bookshelf-page");
     await expect(bookshelfPage).toBeVisible();
+    await expect(bookshelfPage.locator("h1")).toHaveText("本棚");
+
+    // 下部タブバーが表示されていることの確認
+    const bottomTabBar = page.getByTestId("bottom-tab-bar");
+    await expect(bottomTabBar).toBeVisible();
 
     // 「URLから作品を追加」ボタンが表示されていることの確認
     const addNovelButton = page.getByTestId("open-add-novel-button");
