@@ -75,5 +75,8 @@ Round 1 横断レビュー完了後、以下の手順で Step 2（Sub-issue に�
 2. **品質分析・Kaizen レポートの作成（`docs/quality/reports/<milestone>.md`）**:
    - 当該 Milestone（または Phase 3）における製品コード不備件数、支援成果物不備件数、テストケースあたり/KLoC あたりバグ密度、単体テスト段階の欠陥除去率（$\text{DRE} = \frac{\text{MK/UT/PRレビュー検出製品不備}}{\text{全検出製品不備}} \times 100\%$）、および原因分類（`L`/`S`/`D`/`B`/`A`）の傾向を分析する。
    - 多発した原因や IT/横断レビューまで流出した不備について、再発防止策として **`docs/guidelines/` や `.github/skills/*/SKILL.md` のチェック項目・規約を直接アップデート（Kaizen）** し、同一 PR に含める。
-3. **Round 2 収束確認と人間承認（Step 3）**:
-   - Kaizen PR がマージされた後、追跡 Issue 上で全指摘の解消（Round 2 指摘なし）をコメント報告し、人間による Milestone 最終承認を待つ。
+3. **Round 2 収束確認・正本 Approved 化 ＆ バグ記録アーカイブ（Step 3）**:
+   - Kaizen PR がマージされた後、追跡 Issue 上で全指摘の解消（Round 2 指摘なし）をコメント報告する。
+   - 人間の承認を受け、`docs/specs/` 配下の正本仕様書フロントマター `status` を一括で `Approved` に揃える承認 PR（`Closes #Milestone承認Issue`）を作成する。
+   - 同一 PR 内で、当該 Milestone で検出されたバグ記録（No. xx〜yy）および解決済み（`Resolved`）の申し送り事項（`HO-xx`）を `docs/quality/archive/<milestone>-log.md`（OKF `type: quality-log`, `status: Completed (Archived)`）へ切り出し、`docs/quality/bug-and-handover-log.md` には未解決（`Open`）の申し送りと次期マイルストーン用の記録枠のみを残す。
+   - 人間による本 PR のマージをもって Milestone を完了とする。

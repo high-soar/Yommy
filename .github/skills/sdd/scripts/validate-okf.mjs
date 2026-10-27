@@ -270,6 +270,26 @@ for (const filePath of docsFiles) {
       `Files in docs/quality/reports/ must have type 'quality-report' (got '${typeVal}')`,
     );
   }
+  if (
+    relPath.startsWith("docs/quality/archive/") &&
+    typeVal !== "quality-log"
+  ) {
+    reportError(
+      filePath,
+      `Files in docs/quality/archive/ must have type 'quality-log' (got '${typeVal}')`,
+    );
+  }
+  if (
+    relPath.startsWith("docs/quality/") &&
+    !relPath.startsWith("docs/quality/reports/") &&
+    !relPath.startsWith("docs/quality/archive/") &&
+    typeVal !== "quality-log"
+  ) {
+    reportError(
+      filePath,
+      `Files in docs/quality/ (excluding reports/) must have type 'quality-log' (got '${typeVal}')`,
+    );
+  }
 
   // Validate `status`
   const statusVal = typeof fm.status === "string" ? fm.status : "";
@@ -299,6 +319,16 @@ for (const filePath of docsFiles) {
       reportError(
         filePath,
         `Archived delta spec in 'docs/specs/changes/archive/' must have status 'Completed (Archived)' (got '${statusVal}')`,
+      );
+    }
+  }
+
+  // Validate `quality-log` archive lifecycle
+  if (relPath.startsWith("docs/quality/archive/")) {
+    if (statusVal !== "Completed (Archived)") {
+      reportError(
+        filePath,
+        `Archived quality log in 'docs/quality/archive/' must have status 'Completed (Archived)' (got '${statusVal}')`,
       );
     }
   }

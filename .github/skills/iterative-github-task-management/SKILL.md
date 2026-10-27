@@ -81,4 +81,7 @@ AI が Sub-issue を起票する際は以下の形式を使用します。
 
 1. **Step 1（全体横断レビュー）**: Milestone 内の全要望 Issue 完了後、`phase-final-review` スキルで横断レビューを実施し、Milestone 承認 Issue に Round 1 結果をコメント投稿する（PR は作らない）。
 2. **Step 2（指摘是正・品質分析レポート・Kaizen PR）**: Sub-issue を起票し、横断レビュー指摘の是正、`docs/quality/bug-and-handover-log.md` の集計、`docs/quality/reports/` への品質分析レポート（バグ密度・DRE・原因傾向）作成、および再発防止の `SKILL.md` / `docs/guidelines/` 改善を含む PR（`Closes #Sub-issue`）を作成・マージする。
-3. **Step 3（Milestone 承認・一括 Approved 更新）**: Round 2 指摘収束と人間の承認後、`docs/specs/` の状態を `Approved` に揃える PR（`Closes #Milestone承認Issue`）をマージして Milestone を完了する。
+3. **Step 3（Milestone 承認・一括 Approved 更新 ＆ 品質記録アーカイブ）**:
+   - Round 2 指摘収束と人間の承認後、`docs/specs/` 配下の正本仕様書のフロントマター `status` を一括で `Approved` に揃える。
+   - 同一 PR 内で、当該 Milestone で完了したバグ記録および解決済み（`Resolved`）申し送り事項を `docs/quality/archive/<milestone>-log.md`（OKF `type: quality-log`, `status: Completed (Archived)`）へ移動し、`docs/quality/bug-and-handover-log.md` を「次期マイルストーンのバグ記録」「未解決（`Open`）申し送り事項」のみが残るクリーンな状態に整理する。
+   - PR（`Closes #Milestone承認Issue`）を作成・検証し、人間のマージをもって Milestone を完了する。
