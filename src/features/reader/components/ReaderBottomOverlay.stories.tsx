@@ -5,6 +5,13 @@ import { ReaderBottomOverlay } from "./ReaderBottomOverlay";
 const meta: Meta<typeof ReaderBottomOverlay> = {
   title: "Reader/ReaderBottomOverlay",
   component: ReaderBottomOverlay,
+  decorators: [
+    (Story) => (
+      <div className="min-h-screen relative bg-slate-100 dark:bg-slate-900">
+        <Story />
+      </div>
+    ),
+  ],
   args: {
     isOpen: true,
     chapterIndex: 2,
