@@ -64,6 +64,22 @@ const RouterStateInspector: React.FC = () => {
         </button>
         <button
           type="button"
+          data-testid="nav-settings-button"
+          onClick={() => router.navigateToSettings()}
+          className="px-3 py-1.5 bg-amber-600 text-white rounded text-xs font-medium hover:bg-amber-700"
+        >
+          設定へ
+        </button>
+        <button
+          type="button"
+          data-testid="nav-back-button"
+          onClick={() => router.back()}
+          className="px-3 py-1.5 bg-zinc-600 text-white rounded text-xs font-medium hover:bg-zinc-700"
+        >
+          戻る
+        </button>
+        <button
+          type="button"
           data-testid="nav-unknown-button"
           onClick={() => router.navigate("/unknown/route")}
           className="px-3 py-1.5 bg-slate-600 text-white rounded text-xs font-medium hover:bg-slate-700"
@@ -114,6 +130,18 @@ export const ReaderRoute: Story = {
   name: "小説リーダー画面ルート（/novels/:novelId/chapters/:chapterIndex）",
   render: () => (
     <RouterProvider initialPath="/novels/kakuyomu%3A16817330658027210412/chapters/1">
+      <RouterStateInspector />
+    </RouterProvider>
+  ),
+};
+
+/**
+ * 設定画面ルート（/settings）の初期表示ストーリー
+ */
+export const SettingsRoute: Story = {
+  name: "設定画面ルート（/settings）",
+  render: () => (
+    <RouterProvider initialPath="/settings">
       <RouterStateInspector />
     </RouterProvider>
   ),

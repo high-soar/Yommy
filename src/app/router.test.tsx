@@ -11,7 +11,7 @@ import {
   resolveInitialPath,
 } from "./router";
 
-const { BookshelfRoute, NovelDetailRoute, ReaderRoute, UnknownFallbackRoute } =
+const { BookshelfRoute, NovelDetailRoute, ReaderRoute, SettingsRoute, UnknownFallbackRoute } =
   composeStories(stories);
 
 describe("router", () => {
@@ -61,6 +61,12 @@ describe("router", () => {
       );
     });
 
+    it("SettingsRoute ストーリーが設定画面ルートを描画すること", () => {
+      render(<SettingsRoute />);
+      expect(screen.getByTestId("current-path")).toHaveTextContent("Path: /settings");
+      expect(screen.getByTestId("route-name")).toHaveTextContent("Route: settings");
+    });
+
     it("UnknownFallbackRoute ストーリーが未知パスを本棚ルートへフォールバックすること", () => {
       render(<UnknownFallbackRoute />);
       expect(screen.getByTestId("current-path")).toHaveTextContent(
@@ -92,6 +98,17 @@ describe("router", () => {
       expect(matchRoute("/")).toEqual({ name: "bookshelf", path: "/" });
       expect(matchRoute("")).toEqual({ name: "bookshelf", path: "/" });
       expect(matchRoute("   ")).toEqual({ name: "bookshelf", path: "/" });
+    });
+
+    it("/settings で settings ルートが解決されること", () => {
+      expect(matchRoute("/settings")).toEqual({
+        name: "settings",
+        path: "/settings",
+      });
+      expect(matchRoute("/settings/")).toEqual({
+        name: "settings",
+        path: "/settings",
+      });
     });
 
     it("/novels/:novelId で novel-detail ルートが安全に解決されること", () => {
@@ -143,7 +160,7 @@ describe("router", () => {
     });
 
     it("未知のパスの場合は bookshelf へフォールバックすること", () => {
-      expect(matchRoute("/settings")).toEqual({
+      expect(matchRoute("/unknown/route")).toEqual({
         name: "bookshelf",
         path: "/",
       });
@@ -187,6 +204,7 @@ describe("router", () => {
         <div>
           <span data-testid="path-display">{router.currentPath}</span>
           <span data-testid="route-display">{router.route.name}</span>
+          <span data-testid="previous-path-display">{router.previousPath ?? "none"}</span>
           <button
             data-testid="btn-bookshelf"
             onClick={() => router.navigateToBookshelf()}
@@ -210,6 +228,35 @@ describe("router", () => {
             リーダー
           </button>
           <button
+            data-testid="btn-reader-resume"
+            onClick={() =>
+              router.navigateToReader("kakuyomu:16817330658027210412", 5, {
+                fromBookshelfResume: true,
+              })
+            }
+          >
+            リーダー続きから
+          </button>
+          <button
+            data-testid="btn-reader-replace"
+            onClick={() =>
+              router.navigateToReader("kakuyomu:16817330658027210412", 6, {
+                replace: true,
+              })
+            }
+          >
+            リーダー次話置換
+          </button>
+          <button
+            data-testid="btn-settings"
+            onClick={() => router.navigateToSettings()}
+          >
+            設定
+          </button>
+          <button data-testid="btn-back" onClick={() => router.back()}>
+            戻る
+          </button>
+          <button
             data-testid="btn-custom"
             onClick={() => router.navigate("/custom/path")}
           >
@@ -219,7 +266,7 @@ describe("router", () => {
       );
     };
 
-    it("navigateToBookshelf, navigateToNovelDetail, navigateToReader, navigate で画面遷移できること", () => {
+    it("navigateToBookshelf, navigateToNovelDetail, navigateToReader, navigateToSettings, navigate で画面遷移できること", () => {
       render(
         <RouterProvider initialPath="/">
           <TestConsumer />
@@ -240,6 +287,7 @@ describe("router", () => {
       expect(screen.getByTestId("route-display")).toHaveTextContent(
         "novel-detail",
       );
+      expect(screen.getByTestId("previous-path-display")).toHaveTextContent("/");
 
       act(() => {
         screen.getByTestId("btn-reader").click();
@@ -248,6 +296,18 @@ describe("router", () => {
         "/novels/kakuyomu%3A16817330658027210412/chapters/5",
       );
       expect(screen.getByTestId("route-display")).toHaveTextContent("reader");
+      expect(screen.getByTestId("previous-path-display")).toHaveTextContent(
+        "/novels/kakuyomu%3A16817330658027210412",
+      );
+
+      act(() => {
+        screen.getByTestId("btn-settings").click();
+      });
+      expect(screen.getByTestId("path-display")).toHaveTextContent("/settings");
+      expect(screen.getByTestId("route-display")).toHaveTextContent("settings");
+      expect(screen.getByTestId("previous-path-display")).toHaveTextContent(
+        "/novels/kakuyomu%3A16817330658027210412/chapters/5",
+      );
 
       act(() => {
         screen.getByTestId("btn-custom").click();
@@ -320,6 +380,133 @@ describe("router", () => {
       expect(screen.getByTestId("path-display")).toHaveTextContent(
         "/novels/sample-init",
       );
+    });
+
+    describe("論理階層遷移制御 (back, fromBookshelfResume, replace)", () => {
+      it("各話View (SCR-03) から back() を呼んだとき、親である目次画面 (SCR-02) へ遷移すること", () => {
+        render(
+          <RouterProvider initialPath="/novels/work1/chapters/3">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+
+        expect(screen.getByTestId("path-display")).toHaveTextContent("/novels/work1");
+        expect(screen.getByTestId("route-display")).toHaveTextContent("novel-detail");
+      });
+
+      it("目次画面 (SCR-02) から back() を呼んだとき、親である本棚画面 (SCR-01) へ遷移すること", () => {
+        render(
+          <RouterProvider initialPath="/novels/work1">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+
+        expect(screen.getByTestId("path-display")).toHaveTextContent("/");
+        expect(screen.getByTestId("route-display")).toHaveTextContent("bookshelf");
+      });
+
+      it("設定画面 (SCR-05) から back() を呼んだとき、直前の previousPath へ復帰すること", () => {
+        render(
+          <RouterProvider initialPath="/novels/work1">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        // 詳細から設定へ
+        act(() => {
+          screen.getByTestId("btn-settings").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent("/settings");
+
+        // 戻る
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent("/novels/work1");
+        expect(screen.getByTestId("route-display")).toHaveTextContent("novel-detail");
+      });
+
+      it("設定画面 (SCR-05) に直接アクセスした場合、previousPath が無いため本棚画面 (/) へ復帰すること", () => {
+        render(
+          <RouterProvider initialPath="/settings">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent("/");
+        expect(screen.getByTestId("route-display")).toHaveTextContent("bookshelf");
+      });
+
+      it("本棚画面 (SCR-01) で back() を呼んだ場合、論理親がないためパスが変わらないこと", () => {
+        render(
+          <RouterProvider initialPath="/">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent("/");
+        expect(screen.getByTestId("route-display")).toHaveTextContent("bookshelf");
+      });
+
+      it("本棚の「続きから読む」(fromBookshelfResume: true) で直行した場合、履歴スタックに目次が介在すること", () => {
+        const pushSpy = vi.spyOn(window.history, "pushState");
+        render(
+          <RouterProvider initialPath="/">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-reader-resume").click();
+        });
+
+        // 1回目の pushState が目次 (/novels/kakuyomu...) で、2回目がリーダー (/novels/.../chapters/5) であること
+        expect(pushSpy).toHaveBeenCalledWith(null, "", "/novels/kakuyomu%3A16817330658027210412");
+        expect(pushSpy).toHaveBeenCalledWith(null, "", "/novels/kakuyomu%3A16817330658027210412/chapters/5");
+
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/novels/kakuyomu%3A16817330658027210412/chapters/5",
+        );
+        expect(screen.getByTestId("previous-path-display")).toHaveTextContent(
+          "/novels/kakuyomu%3A16817330658027210412",
+        );
+      });
+
+      it("リーダー話数遷移で replace: true を指定した場合、history.replaceState が呼ばれること", () => {
+        const replaceSpy = vi.spyOn(window.history, "replaceState");
+        render(
+          <RouterProvider initialPath="/novels/kakuyomu%3A16817330658027210412/chapters/5">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-reader-replace").click();
+        });
+
+        expect(replaceSpy).toHaveBeenCalledWith(
+          null,
+          "",
+          "/novels/kakuyomu%3A16817330658027210412/chapters/6",
+        );
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/novels/kakuyomu%3A16817330658027210412/chapters/6",
+        );
+      });
     });
   });
 });
