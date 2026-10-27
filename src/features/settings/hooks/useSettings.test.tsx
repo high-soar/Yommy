@@ -1,7 +1,10 @@
 import { renderHook, act, waitFor } from "@testing-library/react";
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ServiceContext, ServiceContextValue } from "../../../app/ServiceProvider";
+import {
+  ServiceContext,
+  ServiceContextValue,
+} from "../../../app/ServiceProvider";
 import {
   NovelRepository,
   ChapterRepository,
@@ -19,11 +22,14 @@ function createMockServices(
   },
 ): ServiceContextValue {
   let settingsState: ReaderSettings = {
-    id: 1,
     writingMode: "vertical-rl",
     theme: "light",
+    fontFamily: "mincho",
     fontSizePx: 18,
     lineHeight: 1.8,
+    pageMarginPx: 16,
+    enableTapPaging: true,
+    enableVolumeKeyPaging: false,
     updatedAt: "2026-10-27T00:00:00Z",
   };
 
@@ -48,9 +54,15 @@ function createMockServices(
   };
 }
 
-function createWrapper(services: ServiceContextValue): React.FC<{ children: React.ReactNode }> {
+function createWrapper(
+  services: ServiceContextValue,
+): React.FC<{ children: React.ReactNode }> {
   return function Wrapper({ children }: { children: React.ReactNode }) {
-    return <ServiceContext.Provider value={services}>{children}</ServiceContext.Provider>;
+    return (
+      <ServiceContext.Provider value={services}>
+        {children}
+      </ServiceContext.Provider>
+    );
   };
 }
 
@@ -64,11 +76,14 @@ describe("useSettings", () => {
       const services = createMockServices({
         settingsRepoOverrides: {
           getReaderSettings: vi.fn().mockResolvedValue({
-            id: 1,
             writingMode: "horizontal-tb",
             theme: "sepia",
+            fontFamily: "gothic",
             fontSizePx: 22,
             lineHeight: 2.0,
+            pageMarginPx: 16,
+            enableTapPaging: true,
+            enableVolumeKeyPaging: false,
             updatedAt: "2026-10-27T10:00:00Z",
           }),
         },
@@ -112,7 +127,9 @@ describe("useSettings", () => {
     it("初期読み込みで getReaderSettings が例外をスローした場合でもデフォルト値を維持し、エラーは設定されないこと（または安全にハンドリングされること）", async () => {
       const services = createMockServices({
         settingsRepoOverrides: {
-          getReaderSettings: vi.fn().mockRejectedValue(new Error("DB read failed")),
+          getReaderSettings: vi
+            .fn()
+            .mockRejectedValue(new Error("DB read failed")),
         },
       });
 
@@ -152,14 +169,18 @@ describe("useSettings", () => {
       });
 
       expect(result.current.writingMode).toBe("horizontal-tb");
-      expect(updateReaderSettings).toHaveBeenCalledWith({ writingMode: "horizontal-tb" });
+      expect(updateReaderSettings).toHaveBeenCalledWith({
+        writingMode: "horizontal-tb",
+      });
 
       await act(async () => {
         await result.current.toggleWritingMode();
       });
 
       expect(result.current.writingMode).toBe("vertical-rl");
-      expect(updateReaderSettings).toHaveBeenCalledWith({ writingMode: "vertical-rl" });
+      expect(updateReaderSettings).toHaveBeenCalledWith({
+        writingMode: "vertical-rl",
+      });
     });
   });
 
@@ -266,7 +287,9 @@ describe("useSettings", () => {
 
   describe("エラーハンドリング", () => {
     it("設定保存時に settingsRepository が例外を投げた場合、error にエラーメッセージが設定されること", async () => {
-      const updateReaderSettings = vi.fn().mockRejectedValue(new Error("Storage write error"));
+      const updateReaderSettings = vi
+        .fn()
+        .mockRejectedValue(new Error("Storage write error"));
       const services = createMockServices({
         settingsRepoOverrides: { updateReaderSettings },
       });
@@ -289,6 +312,18 @@ describe("useSettings", () => {
         await result.current.changeTheme("dark");
       });
       expect(result.current.error).toBe("String error");
+
+      updateReaderSettings.mockRejectedValue(new Error("Font size error"));
+      await act(async () => {
+        await result.current.changeFontSize(20);
+      });
+      expect(result.current.error).toBe("Font size error");
+
+      updateReaderSettings.mockRejectedValue(new Error("Line height error"));
+      await act(async () => {
+        await result.current.changeLineHeight(2.0);
+      });
+      expect(result.current.error).toBe("Line height error");
     });
   });
 });

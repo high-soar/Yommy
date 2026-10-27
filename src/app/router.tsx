@@ -10,15 +10,28 @@ import React, {
 export type AppRoute =
   | { name: "bookshelf"; path: "/" }
   | { name: "novel-detail"; path: string; novelId: string }
-  | { name: "reader"; path: string; novelId: string; chapterIndex: number };
+  | { name: "reader"; path: string; novelId: string; chapterIndex: number }
+  | { name: "settings"; path: "/settings" };
+
+export interface NavigateToReaderOptions {
+  replace?: boolean;
+  fromBookshelfResume?: boolean;
+}
 
 export interface RouterContextValue {
   currentPath: string;
+  previousPath?: string;
   route: AppRoute;
   navigate: (path: string) => void;
   navigateToBookshelf: () => void;
   navigateToNovelDetail: (novelId: string) => void;
-  navigateToReader: (novelId: string, chapterIndex: number) => void;
+  navigateToReader: (
+    novelId: string,
+    chapterIndex: number,
+    options?: NavigateToReaderOptions,
+  ) => void;
+  navigateToSettings: () => void;
+  back: () => void;
 }
 
 export interface RouterProviderProps {
@@ -62,6 +75,11 @@ export function matchRoute(path: string): AppRoute {
 
   if (normalized === "" || normalized === "/") {
     return { name: "bookshelf", path: "/" };
+  }
+
+  // SCR-05: 設定画面 (/settings)
+  if (normalized === "/settings") {
+    return { name: "settings", path: "/settings" };
   }
 
   // SCR-03: リーダー画面 (/novels/:novelId/chapters/:chapterIndex)
@@ -134,6 +152,9 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
   const [currentPath, setCurrentPath] = useState<string>(() =>
     resolveInitialPath(initialPath, window.location.pathname),
   );
+  const [previousPath, setPreviousPath] = useState<string | undefined>(
+    undefined,
+  );
 
   useEffect(() => {
     if (initialPath !== undefined) {
@@ -143,7 +164,11 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
 
   useEffect(() => {
     const handlePopState = () => {
-      setCurrentPath(window.location.pathname);
+      const nextPath = window.location.pathname;
+      setCurrentPath((prev) => {
+        setPreviousPath(prev);
+        return nextPath;
+      });
     };
 
     window.addEventListener("popstate", handlePopState);
@@ -154,7 +179,10 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
 
   const navigate = useCallback((to: string) => {
     window.history.pushState(null, "", to);
-    setCurrentPath(to);
+    setCurrentPath((prev) => {
+      setPreviousPath(prev);
+      return to;
+    });
   }, []);
 
   const navigateToBookshelf = useCallback(() => {
@@ -169,32 +197,81 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
   );
 
   const navigateToReader = useCallback(
-    (novelId: string, chapterIndex: number) => {
-      navigate(
-        `/novels/${encodeURIComponent(novelId)}/chapters/${chapterIndex}`,
-      );
+    (
+      novelId: string,
+      chapterIndex: number,
+      options?: NavigateToReaderOptions,
+    ) => {
+      const targetPath = `/novels/${encodeURIComponent(novelId)}/chapters/${chapterIndex}`;
+
+      if (options?.fromBookshelfResume) {
+        const detailPath = `/novels/${encodeURIComponent(novelId)}`;
+        window.history.pushState(null, "", detailPath);
+        window.history.pushState(null, "", targetPath);
+        setPreviousPath(detailPath);
+        setCurrentPath(targetPath);
+      } else if (options?.replace) {
+        window.history.replaceState(null, "", targetPath);
+        setCurrentPath(targetPath);
+      } else {
+        navigate(targetPath);
+      }
     },
     [navigate],
   );
 
+  const navigateToSettings = useCallback(() => {
+    navigate("/settings");
+  }, [navigate]);
+
   const route = useMemo(() => matchRoute(currentPath), [currentPath]);
+
+  const back = useCallback(() => {
+    // 論理階層遷移制御
+    // 1. 各話View (SCR-03: reader) -> 目次画面 (SCR-02: novel-detail)
+    if (route.name === "reader") {
+      const detailPath = `/novels/${encodeURIComponent(route.novelId)}`;
+      navigate(detailPath);
+      return;
+    }
+
+    // 2. 目次画面 (SCR-02: novel-detail) -> 本棚画面 (SCR-01: bookshelf)
+    if (route.name === "novel-detail") {
+      navigate("/");
+      return;
+    }
+
+    // 3. 設定画面 (SCR-05: settings) -> 直前の画面 previousPath (未指定時は "/")
+    if (route.name === "settings") {
+      navigate(previousPath ?? "/");
+      return;
+    }
+
+    // 4. 本棚画面 (SCR-01: bookshelf) -> ルート（何もしない）
+  }, [route, previousPath, navigate]);
 
   const contextValue = useMemo<RouterContextValue>(
     () => ({
       currentPath,
+      previousPath,
       route,
       navigate,
       navigateToBookshelf,
       navigateToNovelDetail,
       navigateToReader,
+      navigateToSettings,
+      back,
     }),
     [
       currentPath,
+      previousPath,
       route,
       navigate,
       navigateToBookshelf,
       navigateToNovelDetail,
       navigateToReader,
+      navigateToSettings,
+      back,
     ],
   );
 
