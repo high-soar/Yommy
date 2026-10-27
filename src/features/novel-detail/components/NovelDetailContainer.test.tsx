@@ -278,8 +278,7 @@ describe("NovelDetailContainer", () => {
   });
 
   describe("ルーター遷移とカスタムコールバック注入の検証", () => {
-    it("ヘッダーの「本棚へ戻る」ボタン押下時、デフォルトでルーターの本棚画面へ遷移する (TR-07, AC-ND-07)", async () => {
-      const user = userEvent.setup();
+    it("通常表示時、NovelDetailHeader 内に「本棚へ戻る」ボタンが描画されないこと (AC-ND-07)", async () => {
       render(
         <RouterProvider
           initialPath={`/novels/${encodeURIComponent(sampleNovel.id)}`}
@@ -293,22 +292,15 @@ describe("NovelDetailContainer", () => {
       );
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("back-to-bookshelf-button"),
-        ).toBeInTheDocument();
+        expect(screen.getByTestId("novel-detail-header")).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId("back-to-bookshelf-button"));
-
-      await waitFor(() => {
-        expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
-          "/",
-        );
-      });
+      expect(
+        screen.queryByTestId("back-to-bookshelf-button"),
+      ).not.toBeInTheDocument();
     });
 
-    it("onBackToBookshelf が注入された場合、カスタムコールバックが呼ばれルーター遷移しない", async () => {
-      const user = userEvent.setup();
+    it("通常表示時に onBackToBookshelf が渡されていても、ヘッダーに「本棚へ戻る」ボタンが描画されないこと (AC-ND-07)", async () => {
       const onBackToBookshelf = vi.fn();
       render(
         <RouterProvider
@@ -324,17 +316,13 @@ describe("NovelDetailContainer", () => {
       );
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("back-to-bookshelf-button"),
-        ).toBeInTheDocument();
+        expect(screen.getByTestId("novel-detail-header")).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId("back-to-bookshelf-button"));
-
-      expect(onBackToBookshelf).toHaveBeenCalledTimes(1);
-      expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
-        `/novels/${encodeURIComponent(sampleNovel.id)}`,
-      );
+      expect(
+        screen.queryByTestId("back-to-bookshelf-button"),
+      ).not.toBeInTheDocument();
+      expect(onBackToBookshelf).not.toHaveBeenCalled();
     });
 
     it("未検出（NotFound）画面での「本棚へ戻る」ボタン押下時、デフォルトで本棚へ遷移する (AC-ND-07)", async () => {

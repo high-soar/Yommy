@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "@storybook/test";
+import { fn, userEvent } from "@storybook/test";
 import { NovelDetailHeader } from "./NovelDetailHeader";
 import type { NovelRecord } from "../../../storage/types";
 
@@ -31,7 +31,6 @@ const meta: Meta<typeof NovelDetailHeader> = {
     isRefreshing: false,
     refreshMessage: null,
     error: null,
-    onBackToBookshelf: fn(),
     onStartFromBeginning: fn(),
     onResumeBookmark: fn(),
     onRefreshToc: fn(),
@@ -120,5 +119,27 @@ export const FallbackAuthorAndSynopsis: Story = {
       author: "",
       synopsis: "",
     },
+  },
+};
+
+/**
+ * あらすじ展開状態（トグル押下後の最大高さ＋スクロール表示）
+ */
+export const ExpandedSynopsis: Story = {
+  name: "あらすじ展開状態",
+  args: {
+    novel: {
+      ...sampleNovel,
+      synopsis:
+        "異界から迷い込んだ青年が紡ぐファンタジー戦記。\n圧倒的な魔術と知略を武器に、未踏の迷宮深層へと挑む。\n仲間たちとの出会いと別れ、そして世界の理を揺るがす強大な敵との対峙。\n迷宮の最深部に眠る真実とは一体何なのか――\n過酷な運命に抗いながら、青年は自らの道を切り拓いていく。",
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const toggleButton = canvasElement.querySelector(
+      '[data-testid="synopsis-toggle-button"]',
+    );
+    if (toggleButton instanceof HTMLElement) {
+      await userEvent.click(toggleButton);
+    }
   },
 };

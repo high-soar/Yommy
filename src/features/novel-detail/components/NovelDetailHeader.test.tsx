@@ -34,17 +34,18 @@ const {
   WithError,
   EmptyChapters,
   FallbackAuthorAndSynopsis,
+  ExpandedSynopsis,
 } = composeStories(stories);
 
 describe("NovelDetailHeader", () => {
   describe("Storybook Stories 検証 (composeStories)", () => {
-    it("Unread ストーリーで作品情報・統計・最初から読むボタンが表示され、続きから読むボタンは非表示であること (AC-ND-01, AC-ND-03)", () => {
+    it("Unread ストーリーで作品情報・統計・最初から読むボタンが表示され、「本棚へ戻る」ボタンは非表示であること (AC-ND-01, AC-ND-03, AC-ND-07)", () => {
       render(<Unread />);
 
       expect(screen.getByTestId("novel-detail-header")).toBeInTheDocument();
       expect(
-        screen.getByTestId("back-to-bookshelf-button"),
-      ).toBeInTheDocument();
+        screen.queryByTestId("back-to-bookshelf-button"),
+      ).not.toBeInTheDocument();
       expect(screen.getByTestId("novel-detail-title")).toHaveTextContent(
         "境界迷宮と異界の魔術師",
       );
@@ -54,8 +55,19 @@ describe("NovelDetailHeader", () => {
       expect(screen.getByTestId("novel-detail-stats")).toHaveTextContent(
         "全 45 話（取得済み 12 話）",
       );
-      expect(screen.getByTestId("novel-detail-synopsis")).toHaveTextContent(
+
+      const synopsis = screen.getByTestId("novel-detail-synopsis");
+      expect(synopsis).toHaveTextContent(
         "異界から迷い込んだ青年が紡ぐファンタジー戦記。",
+      );
+      expect(synopsis).toHaveClass("line-clamp-2");
+
+      const toggleButton = screen.getByTestId("synopsis-toggle-button");
+      expect(toggleButton).toHaveTextContent("あらすじを展開");
+      expect(toggleButton).toHaveAttribute("aria-expanded", "false");
+      expect(toggleButton).toHaveAttribute(
+        "aria-controls",
+        "novel-detail-synopsis",
       );
 
       const readFirstButton = screen.getByTestId("detail-read-first-button");
@@ -133,7 +145,7 @@ describe("NovelDetailHeader", () => {
       expect(readFirstButton).toBeDisabled();
     });
 
-    it("FallbackAuthorAndSynopsis ストーリーで著者名・あらすじが空文字の場合にフォールバック文字列が表示されること", () => {
+    it("FallbackAuthorAndSynopsis ストーリーで著者名・あらすじが空文字の場合にフォールバック文字列が表示されトグルボタンは非表示であること (AC-ND-01)", () => {
       render(<FallbackAuthorAndSynopsis />);
 
       expect(screen.getByTestId("novel-detail-author")).toHaveTextContent(
@@ -142,19 +154,32 @@ describe("NovelDetailHeader", () => {
       expect(screen.getByTestId("novel-detail-synopsis")).toHaveTextContent(
         "あらすじはありません。",
       );
+      expect(
+        screen.queryByTestId("synopsis-toggle-button"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("ExpandedSynopsis ストーリーで play 関数実行後にあらすじが展開され、スクロールスタイルが付与されること (AC-ND-01)", async () => {
+      const { container } = render(<ExpandedSynopsis />);
+      await ExpandedSynopsis.play?.({ canvasElement: container });
+
+      const toggleButton = screen.getByTestId("synopsis-toggle-button");
+      expect(toggleButton).toHaveTextContent("あらすじを折りたたむ");
+      expect(toggleButton).toHaveAttribute("aria-expanded", "true");
+
+      const synopsis = screen.getByTestId("novel-detail-synopsis");
+      expect(synopsis).not.toHaveClass("line-clamp-2");
+      expect(synopsis).toHaveClass("max-h-40");
+      expect(synopsis).toHaveClass("overflow-y-auto");
     });
   });
 
   describe("ユーザーインタラクションの検証", () => {
-    it("「本棚へ戻る」ボタンをクリックしたときに onBackToBookshelf が呼び出されること (AC-ND-07)", async () => {
-      const user = userEvent.setup();
-      const onBackToBookshelf = vi.fn();
-
+    it("「本棚へ戻る」ボタンはヘッダー内に描画されないこと (AC-ND-07)", () => {
       render(
         <NovelDetailHeader
           novel={sampleNovel}
           isRefreshing={false}
-          onBackToBookshelf={onBackToBookshelf}
           onStartFromBeginning={vi.fn()}
           onResumeBookmark={vi.fn()}
           onRefreshToc={vi.fn()}
@@ -162,8 +187,69 @@ describe("NovelDetailHeader", () => {
         />,
       );
 
-      await user.click(screen.getByTestId("back-to-bookshelf-button"));
-      expect(onBackToBookshelf).toHaveBeenCalledTimes(1);
+      expect(
+        screen.queryByTestId("back-to-bookshelf-button"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("あらすじの折りたたみ・展開トグルボタンをクリックすると表示状態が切り替わること (AC-ND-01)", async () => {
+      const user = userEvent.setup();
+
+      render(
+        <NovelDetailHeader
+          novel={sampleNovel}
+          isRefreshing={false}
+          onStartFromBeginning={vi.fn()}
+          onResumeBookmark={vi.fn()}
+          onRefreshToc={vi.fn()}
+          onOpenDeleteDialog={vi.fn()}
+        />,
+      );
+
+      const synopsis = screen.getByTestId("novel-detail-synopsis");
+      const toggleButton = screen.getByTestId("synopsis-toggle-button");
+
+      // 初期状態: 折りたたみ（line-clamp-2）
+      expect(synopsis).toHaveClass("line-clamp-2");
+      expect(synopsis).not.toHaveClass("max-h-40");
+      expect(toggleButton).toHaveTextContent("あらすじを展開");
+      expect(toggleButton).toHaveAttribute("aria-expanded", "false");
+
+      // 1回目のクリック: 展開
+      await user.click(toggleButton);
+      expect(synopsis).not.toHaveClass("line-clamp-2");
+      expect(synopsis).toHaveClass("max-h-40");
+      expect(synopsis).toHaveClass("overflow-y-auto");
+      expect(toggleButton).toHaveTextContent("あらすじを折りたたむ");
+      expect(toggleButton).toHaveAttribute("aria-expanded", "true");
+
+      // 2回目のクリック: 折りたたみに戻る
+      await user.click(toggleButton);
+      expect(synopsis).toHaveClass("line-clamp-2");
+      expect(synopsis).not.toHaveClass("max-h-40");
+      expect(synopsis).not.toHaveClass("overflow-y-auto");
+      expect(toggleButton).toHaveTextContent("あらすじを展開");
+      expect(toggleButton).toHaveAttribute("aria-expanded", "false");
+    });
+
+    it("あらすじが未設定または空白のみの場合、フォールバックが表示されトグルボタンは非表示であること (AC-ND-01)", () => {
+      render(
+        <NovelDetailHeader
+          novel={{ ...sampleNovel, synopsis: "   \n  " }}
+          isRefreshing={false}
+          onStartFromBeginning={vi.fn()}
+          onResumeBookmark={vi.fn()}
+          onRefreshToc={vi.fn()}
+          onOpenDeleteDialog={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByTestId("novel-detail-synopsis")).toHaveTextContent(
+        "あらすじはありません。",
+      );
+      expect(
+        screen.queryByTestId("synopsis-toggle-button"),
+      ).not.toBeInTheDocument();
     });
 
     it("しおり未設定時に「最初から読む」ボタンをクリックすると onStartFromBeginning が呼び出されること (AC-ND-03)", async () => {
@@ -174,7 +260,6 @@ describe("NovelDetailHeader", () => {
         <NovelDetailHeader
           novel={sampleNovel}
           isRefreshing={false}
-          onBackToBookshelf={vi.fn()}
           onStartFromBeginning={onStartFromBeginning}
           onResumeBookmark={vi.fn()}
           onRefreshToc={vi.fn()}
@@ -194,7 +279,6 @@ describe("NovelDetailHeader", () => {
         <NovelDetailHeader
           novel={{ ...sampleNovel, bookmarkChapterIndex: 8 }}
           isRefreshing={false}
-          onBackToBookshelf={vi.fn()}
           onStartFromBeginning={vi.fn()}
           onResumeBookmark={onResumeBookmark}
           onRefreshToc={vi.fn()}
@@ -215,7 +299,6 @@ describe("NovelDetailHeader", () => {
         <NovelDetailHeader
           novel={{ ...sampleNovel, bookmarkChapterIndex: 8 }}
           isRefreshing={false}
-          onBackToBookshelf={vi.fn()}
           onStartFromBeginning={onStartFromBeginning}
           onResumeBookmark={vi.fn()}
           onRefreshToc={vi.fn()}
@@ -235,7 +318,6 @@ describe("NovelDetailHeader", () => {
         <NovelDetailHeader
           novel={sampleNovel}
           isRefreshing={false}
-          onBackToBookshelf={vi.fn()}
           onStartFromBeginning={vi.fn()}
           onResumeBookmark={vi.fn()}
           onRefreshToc={onRefreshToc}
@@ -255,7 +337,6 @@ describe("NovelDetailHeader", () => {
         <NovelDetailHeader
           novel={sampleNovel}
           isRefreshing={false}
-          onBackToBookshelf={vi.fn()}
           onStartFromBeginning={vi.fn()}
           onResumeBookmark={vi.fn()}
           onRefreshToc={vi.fn()}
@@ -277,7 +358,6 @@ describe("NovelDetailHeader", () => {
             bookmarkChapterIndex: 1,
           }}
           isRefreshing={false}
-          onBackToBookshelf={vi.fn()}
           onStartFromBeginning={vi.fn()}
           onResumeBookmark={vi.fn()}
           onRefreshToc={vi.fn()}

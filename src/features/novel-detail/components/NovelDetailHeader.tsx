@@ -14,7 +14,6 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
   isRefreshing,
   refreshMessage,
   error,
-  onBackToBookshelf,
   onStartFromBeginning,
   onResumeBookmark,
   onRefreshToc,
@@ -35,7 +34,7 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
           type="button"
           data-testid="back-to-bookshelf-button"
           aria-label="本棚へ戻る"
-          onClick={onBackToBookshelf}
+          onClick={() => {}}
           className="inline-flex items-center gap-1.5 text-xs md:text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-blue-500 rounded-md"
         >
           <span aria-hidden="true">←</span>
