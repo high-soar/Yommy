@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { NovelDetailHeader } from "./NovelDetailHeader";
 import { EpisodeList } from "./EpisodeList";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
@@ -9,7 +9,7 @@ export type { NovelDetailPageProps } from "../types";
 /**
  * 作品詳細・目次画面全体のレイアウト統合コンポーネント（Presentational）
  *
- * ローディング、未検出作品（Not Found）、および通常表示（ヘッダー＋目次リスト＋削除ダイアログ）の排他描画を制御する。
+ * ローディング、未検出作品（Not Found）、および通常表示（固定ヘッダー＋内部スクロール目次リスト＋削除ダイアログ）の排他描画を制御する。
  */
 export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
   novel,
@@ -29,13 +29,39 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
   onCloseDeleteDialog,
   onConfirmDelete,
 }) => {
+  const episodeContainerRef = useRef<HTMLElement | null>(null);
+  const scrolledNovelIdRef = useRef<string | null>(null);
+
+  const currentNovelId = novel?.id ?? null;
+  const bookmarkChapterIndex = novel?.bookmarkChapterIndex ?? null;
+
+  useEffect(() => {
+    if (!isLoading && currentNovelId && bookmarkChapterIndex !== null) {
+      if (scrolledNovelIdRef.current !== currentNovelId) {
+        const targetElement = episodeContainerRef.current?.querySelector(
+          `[data-chapter-index="${bookmarkChapterIndex}"]`,
+        );
+        if (
+          targetElement &&
+          typeof targetElement.scrollIntoView === "function"
+        ) {
+          targetElement.scrollIntoView({
+            block: "start",
+            behavior: "instant",
+          });
+          scrolledNovelIdRef.current = currentNovelId;
+        }
+      }
+    }
+  }, [isLoading, currentNovelId, bookmarkChapterIndex]);
+
   return (
     <div
       data-testid="novel-detail-page"
-      className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-4 md:p-6 lg:p-8"
+      className="h-full flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100"
     >
-      <div className="max-w-4xl mx-auto">
-        {isLoading ? (
+      {isLoading ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-4">
           <div
             role="status"
             data-testid="novel-detail-loading"
@@ -47,11 +73,13 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
             />
             <p className="text-sm font-medium">作品情報を読み込み中...</p>
           </div>
-        ) : novel === null ? (
+        </div>
+      ) : novel === null ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-4">
           <div
             role="alert"
             data-testid="novel-detail-not-found"
-            className="flex flex-col items-center justify-center py-20 px-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 text-center shadow-xs"
+            className="w-full max-w-md flex flex-col items-center justify-center py-16 px-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 text-center shadow-xs"
           >
             <div className="text-4xl mb-3" aria-hidden="true">
               📭
@@ -70,8 +98,10 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
               <span>本棚へ戻る</span>
             </button>
           </div>
-        ) : (
-          <>
+        </div>
+      ) : (
+        <>
+          <div className="shrink-0 w-full max-w-4xl mx-auto p-4 md:p-6 lg:p-8 pb-0 md:pb-0 lg:pb-0">
             <NovelDetailHeader
               novel={novel}
               isRefreshing={isRefreshing}
@@ -82,25 +112,29 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
               onRefreshToc={onRefreshToc}
               onOpenDeleteDialog={onOpenDeleteDialog}
             />
+          </div>
 
-            <main>
-              <EpisodeList
-                chapters={chapters}
-                bookmarkChapterIndex={novel.bookmarkChapterIndex}
-                onSelectEpisode={onSelectEpisode}
-              />
-            </main>
-
-            <DeleteConfirmDialog
-              isOpen={isDeleteDialogOpen}
-              novelTitle={novel.title}
-              isDeleting={isDeleting}
-              onClose={onCloseDeleteDialog}
-              onConfirm={onConfirmDelete}
+          <main
+            ref={episodeContainerRef}
+            data-testid="episode-list-container"
+            className="flex-1 min-h-0 overflow-y-auto w-full max-w-4xl mx-auto p-4 md:p-6 lg:p-8 pt-3 md:pt-4 lg:pt-4"
+          >
+            <EpisodeList
+              chapters={chapters}
+              bookmarkChapterIndex={novel.bookmarkChapterIndex}
+              onSelectEpisode={onSelectEpisode}
             />
-          </>
-        )}
-      </div>
+          </main>
+
+          <DeleteConfirmDialog
+            isOpen={isDeleteDialogOpen}
+            novelTitle={novel.title}
+            isDeleting={isDeleting}
+            onClose={onCloseDeleteDialog}
+            onConfirm={onConfirmDelete}
+          />
+        </>
+      )}
     </div>
   );
 };
