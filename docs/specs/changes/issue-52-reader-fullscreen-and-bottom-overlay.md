@@ -25,6 +25,7 @@ related_tests:
   - src/App.test.tsx
   - src/features/reader/hooks/useReader.test.ts
   - src/features/reader/components/ReaderChapterNav.test.tsx
+  - src/features/reader/components/ReaderBottomOverlay.test.tsx
   - src/features/reader/components/ReaderView.test.tsx
   - src/features/reader/components/ReaderPage.test.tsx
   - src/features/reader/components/ReaderContainer.test.tsx
@@ -124,8 +125,9 @@ src/features/reader/
 #### セマンティック属性とアクセシビリティ
 
 - ルート要素: `data-testid="reader-bottom-overlay"`、`aria-hidden={!isOpen}`
+- 閉じるボタン: `data-testid="reader-bottom-overlay-close"`（`onClose` 提供時に描画、`aria-label="オーバーレイを閉じる"`）
 - 前後話ナビ部: `ReaderChapterNav`（`data-testid="reader-chapter-nav"`）を内包
-- 下部タブ部: `data-testid="reader-bottom-tabs"`、各タブボタン `data-testid="tab-bookshelf"`, `data-testid="tab-settings"`
+- 下部タブ部: `data-testid="reader-bottom-tabs"`（`role="tablist"`）、各タブボタン `data-testid="reader-bottom-tab-bookshelf"`, `data-testid="reader-bottom-tab-settings"`
 
 ### 3.3 `ReaderPage` のプロパティ契約変更（`ReaderPageProps`）
 

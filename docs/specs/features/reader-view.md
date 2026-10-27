@@ -24,6 +24,7 @@ related_tests:
   - src/features/reader/hooks/useReader.test.ts
   - src/features/reader/components/ReaderToolbar.test.tsx
   - src/features/reader/components/ReaderChapterNav.test.tsx
+  - src/features/reader/components/ReaderBottomOverlay.test.tsx
   - src/features/reader/components/ReaderView.test.tsx
   - src/features/reader/components/ReaderPage.test.tsx
   - src/features/reader/components/ReaderContainer.test.tsx
@@ -151,9 +152,10 @@ src/features/reader/
 #### セマンティック属性とスタイル仕様
 
 - **ルート要素**: `data-testid="reader-bottom-overlay"`、`aria-hidden={!isOpen}`
+- **閉じるボタン**: `data-testid="reader-bottom-overlay-close"`（`onClose` 提供時に描画、`aria-label="オーバーレイを閉じる"`）
 - **配置・アニメーション**: 画面下端固定（`fixed bottom-0 left-0 right-0 z-40`）、背景にはテーマに合わせた半透明または不透明背景（例: `bg-white/95 dark:bg-zinc-900/95 shadow-lg border-t border-zinc-200 dark:border-zinc-800`）、開閉時のなめらかなスライド（`transition-transform duration-200 ease-in-out`、`isOpen ? 'translate-y-0' : 'translate-y-full'`）。
-- **上段（エピソードナビ）**: `ReaderChapterNav` を描画し、前話/次話遷移と話数インジケーターを提供。
-- **下段（下部タブバー）**: `data-testid="reader-bottom-tabs"` を描画し、「本棚（`/`）」「設定（`/settings`）」の 2 タブを表示（常に「本棚」をアクティブ `aria-selected="true"` 表示）。
+- **上段（エピソードナビ）**: `ReaderChapterNav`（`data-testid="reader-chapter-nav"`）を描画し、前話/次話遷移と話数インジケーターを提供。
+- **下段（下部タブバー）**: `data-testid="reader-bottom-tabs"`（`role="tablist"`）を描画し、各タブボタン `data-testid="reader-bottom-tab-bookshelf"`（「本棚」/ 常にアクティブ `aria-selected="true"` 表示）、`data-testid="reader-bottom-tab-settings"`（「設定」）を表示。
 
 ---
 
