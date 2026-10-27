@@ -22,7 +22,6 @@ related_specs:
 related_tests:
   - src/App.test.tsx
   - src/features/reader/hooks/useReader.test.ts
-  - src/features/reader/components/ReaderToolbar.test.tsx
   - src/features/reader/components/ReaderChapterNav.test.tsx
   - src/features/reader/components/ReaderBottomOverlay.test.tsx
   - src/features/reader/components/ReaderView.test.tsx
