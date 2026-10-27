@@ -6,7 +6,7 @@ import * as stories from "./App.stories";
 import { App } from "./App";
 import { resetTestDb } from "./storage/adapter/inMemoryDb";
 
-const { Default, CustomTitle, NovelDetailRoute, ReaderRoute } =
+const { Default, SettingsRoute, NovelDetailRoute, ReaderRoute } =
   composeStories(stories);
 
 describe("App コンポーネント", () => {
@@ -17,40 +17,77 @@ describe("App コンポーネント", () => {
   });
 
   describe("Storybook ストーリーのレンダリング検証 (composeStories)", () => {
-    it("Default ストーリー: 本棚画面（空状態）とデフォルトタイトル Yommy を描画する", async () => {
+    it("Default ストーリー: 全画面シェル内に本棚画面と下部タブバー（本棚アクティブ）を描画する", async () => {
       render(<Default />);
 
-      expect(screen.getByTestId("app-title")).toHaveTextContent("Yommy");
+      const appRoot = screen.getByTestId("app-root");
+      expect(appRoot).toBeInTheDocument();
+      expect(appRoot).toHaveClass("h-dvh");
+
       await waitFor(() => {
         expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
         expect(screen.getByTestId("bookshelf-empty")).toBeInTheDocument();
       });
-    });
 
-    it("CustomTitle ストーリー: 指定されたカスタムタイトルを描画する", async () => {
-      render(<CustomTitle />);
-
-      expect(screen.getByTestId("app-title")).toHaveTextContent(
-        "Yommy Web Novel Reader",
+      const tabBar = screen.getByTestId("bottom-tab-bar");
+      expect(tabBar).toBeInTheDocument();
+      expect(screen.getByTestId("tab-bookshelf")).toHaveAttribute(
+        "aria-selected",
+        "true",
       );
-      await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
-      });
+      expect(screen.getByTestId("tab-settings")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
     });
 
-    it("NovelDetailRoute ストーリー: 作品詳細・目次画面を描画する", async () => {
+    it("SettingsRoute ストーリー: 設定画面と下部タブバー（設定アクティブ）を描画する", async () => {
+      render(<SettingsRoute />);
+
+      expect(screen.getByTestId("app-root")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+        expect(
+          screen.getByTestId("typography-settings-section"),
+        ).toBeInTheDocument();
+      });
+
+      const tabBar = screen.getByTestId("bottom-tab-bar");
+      expect(tabBar).toBeInTheDocument();
+      expect(screen.getByTestId("tab-settings")).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      expect(screen.getByTestId("tab-bookshelf")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+    });
+
+    it("NovelDetailRoute ストーリー: 作品詳細・目次画面と下部タブバー（本棚アクティブ）を描画する", async () => {
       render(<NovelDetailRoute />);
 
-      expect(screen.getByTestId("app-title")).toHaveTextContent("Yommy");
+      expect(screen.getByTestId("app-root")).toBeInTheDocument();
       await waitFor(() => {
         expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
       });
+
+      const tabBar = screen.getByTestId("bottom-tab-bar");
+      expect(tabBar).toBeInTheDocument();
+      expect(screen.getByTestId("tab-bookshelf")).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      expect(screen.getByTestId("tab-settings")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
     });
 
-    it("ReaderRoute ストーリー: リーダー画面を描画する", async () => {
+    it("ReaderRoute ストーリー: リーダー画面を描画し、常駐下部タブバーは非表示とする", async () => {
       render(<ReaderRoute />);
 
-      expect(screen.getByTestId("app-title")).toHaveTextContent("Yommy");
+      expect(screen.getByTestId("app-root")).toBeInTheDocument();
       await waitFor(
         () => {
           expect(screen.getByTestId("reader-page")).toBeInTheDocument();
@@ -63,34 +100,56 @@ describe("App コンポーネント", () => {
         },
         { timeout: 3000 },
       );
+
+      // リーダー画面では常駐 BottomTabBar は描画されない
+      expect(screen.queryByTestId("bottom-tab-bar")).not.toBeInTheDocument();
     });
   });
 
-  describe("ルーティングとナビゲーション操作の検証", () => {
-    it("ヘッダータイトルをクリックすると本棚画面へ遷移する", async () => {
+  describe("ルーティングと下部タブナビゲーション操作の検証", () => {
+    it("下部タブバーの「設定」をクリックすると設定画面へ遷移する (TR-01)", async () => {
       const user = userEvent.setup();
-      render(
-        <App
-          title="Yommy"
-          initialPath="/novels/kakuyomu:16817330658027210412"
-        />,
-      );
+      render(<App initialPath="/" />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
+        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId("app-title"));
+      const settingsTab = screen.getByTestId("tab-settings");
+      await user.click(settingsTab);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+      });
+    });
+
+    it("設定画面で下部タブバーの「本棚」をクリックすると本棚画面へ遷移する (TR-01b)", async () => {
+      const user = userEvent.setup();
+      render(<App initialPath="/settings" />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+      });
+
+      const bookshelfTab = screen.getByTestId("tab-bookshelf");
+      await user.click(bookshelfTab);
 
       await waitFor(() => {
         expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
       });
     });
 
-    it("Props 未指定時にデフォルト値で本棚画面が描画される", async () => {
-      render(<App />);
+    it("作品詳細画面で下部タブバーの「本棚」をクリックすると本棚画面へ遷移する (TR-01b)", async () => {
+      const user = userEvent.setup();
+      render(<App initialPath="/novels/kakuyomu:16817330658027210412" />);
 
-      expect(screen.getByTestId("app-title")).toHaveTextContent("Yommy");
+      await waitFor(() => {
+        expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
+      });
+
+      const bookshelfTab = screen.getByTestId("tab-bookshelf");
+      await user.click(bookshelfTab);
+
       await waitFor(() => {
         expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
       });
@@ -126,6 +185,36 @@ describe("App コンポーネント", () => {
       });
     });
 
+    it("リーダー画面で下部オーバーレイの「設定」タブをクリックすると設定画面へ遷移する", async () => {
+      const user = userEvent.setup();
+      render(
+        <App initialPath="/novels/kakuyomu:16817330658027210412/chapters/1" />,
+      );
+
+      await waitFor(
+        () => {
+          expect(
+            screen.getByTestId("reader-bottom-touch-zone"),
+          ).toBeInTheDocument();
+        },
+        { timeout: 3000 },
+      );
+
+      await user.click(screen.getByTestId("reader-bottom-touch-zone"));
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("reader-bottom-tab-settings"),
+        ).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId("reader-bottom-tab-settings"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+      });
+    });
+
     it("リーダー画面で OS 戻る操作（popstate）を行うと作品詳細画面へ戻る", async () => {
       render(
         <App initialPath="/novels/kakuyomu:16817330658027210412/chapters/1" />,
@@ -152,9 +241,10 @@ describe("App コンポーネント", () => {
       });
     });
 
-    it("カスタム initialWorkUrl が渡された場合にも正常に動作する", async () => {
+    it("カスタム initialWorkUrl および props 省略時にも正常に動作する", async () => {
       render(
         <App
+          title="Custom Yommy"
           initialPath="/novels/kakuyomu:16817330658027210412/chapters/1"
           initialWorkUrl="https://kakuyomu.jp/works/16817330658027210412"
         />,
