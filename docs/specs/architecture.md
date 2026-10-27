@@ -2,9 +2,17 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Review (#52)"
+status: "Review (#50)"
 updated: "2026-10-27"
-tags: [architecture, parser, storage, bridge, sanitizer, assets]
+tags:
+  - architecture
+  - parser
+  - storage
+  - bridge
+  - sanitizer
+  - assets
+  - settings
+  - shell
 related_specs:
   - docs/specs/requirements.md
   - docs/specs/db-schema.md
@@ -13,6 +21,8 @@ related_specs:
   - docs/specs/features/bookshelf.md
   - docs/specs/features/novel-detail.md
   - docs/specs/features/reader-view.md
+  - docs/specs/features/settings.md
+  - docs/specs/changes/issue-50-fullscreen-shell-and-settings.md
   - docs/specs/changes/issue-52-reader-fullscreen-and-bottom-overlay.md
   - docs/specs/changes/archive/issue-12-bookshelf-and-routing.md
   - docs/specs/changes/archive/issue-13-novel-detail-and-toc.md
@@ -37,8 +47,8 @@ AI による TDD 実装の確実性と保守性を最大化するため、Capaci
 flowchart TB
     subgraph UILayer ["3. Viewer & UI Layer (src/features/*, src/shared/ui/*)"]
         Pages["Pages / Containers (SCR-01〜SCR-05)"]
-        Components["Presentational UI Components<br>(縦書き vertical-rl / ルビ / テーマ / 本棚カード)"]
-        Hooks["Application Hooks<br>(useBookshelf, useNovelDetail, useReader, useDownloadQueue)"]
+        Components["Presentational UI Components<br>(縦書き vertical-rl / ルビ / テーマ / 本棚カード / BottomTabBar / サンプルプレビュー)"]
+        Hooks["Application Hooks<br>(useBookshelf, useNovelDetail, useReader, useSettings, useDownloadQueue)"]
         Pages --> Components
         Pages --> Hooks
     end
@@ -136,10 +146,23 @@ Yommy/
     │   ├── bookshelf/                 # SCR-01: 本棚一覧・作品URL追加
     │   ├── novel-detail/              # SCR-02: 作品詳細・目次一覧・取得操作
     │   ├── reader/                    # SCR-03: 小説リーダー（全画面100dvh・最下部タッチオーバーレイ・ルビ・しおり保存）
-    │   ├── webview-import/            # SCR-04: 内蔵ブラウザ表示・DOMインポート（v0.3〜）
-    │   └── queue-settings/            # SCR-05: DLキュー・キャッシュ管理・全体設定（v0.2〜）
+    │   ├── webview-import/            # SCR-04: 内蔵ブラウザ表示・DOMインポート（v0.4〜）
+    │   └── settings/                  # SCR-05: 設定画面（組版・テーマ設定・サンプル文章プレビュー、v0.2〜）
+    │       ├── hooks/
+    │       │   ├── useSettings.ts
+    │       │   └── useSettings.test.ts
+    │       └── components/
+    │           ├── SampleTextPreview.tsx
+    │           ├── SampleTextPreview.stories.tsx
+    │           ├── SampleTextPreview.test.tsx
+    │           ├── SettingsPage.tsx
+    │           ├── SettingsPage.stories.tsx
+    │           ├── SettingsPage.test.tsx
+    │           ├── SettingsContainer.tsx
+    │           ├── SettingsContainer.stories.tsx
+    │           └── SettingsContainer.test.tsx
     └── shared/                        # 複数機能で共有する汎用 UI コンポーネント・ユーティリティ
-        ├── ui/                        # Header, BottomNav, Button, Modal, Toast, Badge 等
+        ├── ui/                        # BottomTabBar, Header, Button, Modal, Toast, Badge 等
         └── lib/                       # URL正規化、バイトサイズ整形、日時フォーマット等
 ```
 
@@ -327,26 +350,36 @@ export interface SettingsRepository {
 
 ### 3.4 Application Router 契約（`src/app/router.tsx`）
 
-外部ルーティングライブラリへの依存を持たず、History API（`window.history.pushState` / `popstate`）と React Context による軽量ルーターで画面遷移（[docs/specs/screen-transitions.md](screen-transitions.md)）を管理します。
+外部ルーティングライブラリへの依存を持たず、History API（`window.history.pushState` / `popstate` / `replaceState`）と React Context による軽量ルーターで画面遷移（[docs/specs/screen-transitions.md](screen-transitions.md)）を管理します。
 
 ```ts
 export type AppRoute =
   | { name: "bookshelf"; path: "/" }
   | { name: "novel-detail"; path: string; novelId: string }
-  | { name: "reader"; path: string; novelId: string; chapterIndex: number };
+  | { name: "reader"; path: string; novelId: string; chapterIndex: number }
+  | { name: "settings"; path: "/settings" };
 
 export interface RouterContextValue {
   currentPath: string;
   route: AppRoute;
+  previousPath?: string;
   navigate: (path: string) => void;
   navigateToBookshelf: () => void;
   navigateToNovelDetail: (novelId: string) => void;
   navigateToReader: (novelId: string, chapterIndex: number) => void;
+  navigateToSettings: () => void;
+  back: () => void;
 }
 ```
 
 - `novelId`（例: `"kakuyomu:16817330658027210412"`）を URL パスに含める際は `encodeURIComponent` でエンコードし、ルート解決（`matchRoute`）時に `decodeURIComponent` でデコードする。
 - `RouterProvider` は `initialPath?: string` プロパティを受け取り、Vitest 単体テストや Storybook において任意のルート状態を決定論的に再現できる。
+- **OS バックキー（ブラウザ戻る）の論理階層遷移制御**:
+  - ブラウザ履歴順に依存せず、常に論理階層順（**各話View `SCR-03` → 目次 `SCR-02` → 本棚 `SCR-01`**、**設定 `SCR-05` → 直前画面**）で戻るよう制御する。
+  - 本棚の「続きから読む」から各話Viewへ直行した場合も、ルーターが履歴スタックに目次（`/novels/:novelId`）を介在させることで、バックキー 1 回で確実に目次画面へ戻る。
+  - リーダー画面内の前後話連続遷移（第1話 → 第2話）では `history.replaceState` を適用し、履歴の肥大化を防ぎつつバックキー 1 回で目次へ復帰できるようにする。
+  - リーダー離脱時には最新の閲覧話数・スクロール進捗率を SQLite へ自動保存（`flushBookmark`）する。
+  - 設定画面（`SCR-05`）からのバックキー操作時は、設定を開く直前の画面（本棚・目次・各話View）へ戻る。
 
 ---
 

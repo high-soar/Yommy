@@ -12,7 +12,9 @@ related_specs:
   - docs/specs/db-schema.md
   - docs/specs/features/bookshelf.md
   - docs/specs/features/novel-detail.md
+  - docs/specs/features/settings.md
   - docs/specs/parsers/kakuyomu.md
+  - docs/specs/changes/issue-50-fullscreen-shell-and-settings.md
   - docs/specs/changes/issue-52-reader-fullscreen-and-bottom-overlay.md
   - docs/specs/changes/archive/issue-12-bookshelf-and-routing.md
   - docs/specs/changes/archive/issue-13-novel-detail-and-toc.md
