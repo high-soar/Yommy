@@ -361,22 +361,23 @@ describe("ReaderContainer", () => {
               title: "境界迷宮と異界の魔術師",
             }),
             chapterIndex: 1,
-            onBackToBookshelf: expect.any(Function),
-            onBackToDetail: expect.any(Function),
+            onSelectTab: expect.any(Function),
+            onPrevChapter: expect.any(Function),
+            onNextChapter: expect.any(Function),
           }),
           undefined,
         );
       });
 
       expect(
-        screen.getByTestId("reader-back-to-bookshelf"),
+        screen.getByTestId("reader-bottom-touch-zone"),
       ).toBeInTheDocument();
-      expect(screen.getByTestId("reader-back-to-detail")).toBeInTheDocument();
+      expect(screen.getByTestId("reader-bottom-overlay")).toBeInTheDocument();
     });
   });
 
-  describe("ルーティングと画面遷移操作の検証 (SCR-03, TR-05, TR-06)", () => {
-    it("「本棚へ戻る」クリック時、flushBookmark が実行され、カスタムコールバックが呼び出されること", async () => {
+  describe("下部タブ遷移時のしおり保存と画面遷移の検証 (AC-RD-08, TR-01)", () => {
+    it("下部オーバーレイの「本棚」タブクリック時、flushBookmark が実行されカスタムコールバックが呼び出されること", async () => {
       const user = userEvent.setup();
       const onBackToBookshelf = vi.fn();
       const { repo: novelRepository, updateBookmarkSpy } =
@@ -394,12 +395,16 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("reader-back-to-bookshelf"),
-        ).toBeInTheDocument();
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId("reader-back-to-bookshelf"));
+      // 最下部タッチゾーンをタップしてオーバーレイを展開
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
+
+      const bookshelfTab = screen.getByTestId("reader-bottom-tab-bookshelf");
+      await user.click(bookshelfTab);
 
       await waitFor(() => {
         expect(updateBookmarkSpy).toHaveBeenCalled();
@@ -407,7 +412,7 @@ describe("ReaderContainer", () => {
       });
     });
 
-    it("「本棚へ戻る」クリック時、コールバック省略時にルーターの navigateToBookshelf が呼び出されること", async () => {
+    it("下部オーバーレイの「本棚」タブクリック時、コールバック省略時にルーターの navigateToBookshelf が呼び出されること", async () => {
       const user = userEvent.setup();
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -422,12 +427,15 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("reader-back-to-bookshelf"),
-        ).toBeInTheDocument();
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId("reader-back-to-bookshelf"));
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
+
+      const bookshelfTab = screen.getByTestId("reader-bottom-tab-bookshelf");
+      await user.click(bookshelfTab);
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
@@ -436,9 +444,9 @@ describe("ReaderContainer", () => {
       });
     });
 
-    it("「作品詳細へ」クリック時、flushBookmark が実行され、対象作品ID でカスタムコールバックが呼び出されること (TR-06)", async () => {
+    it("下部オーバーレイの「設定」タブクリック時、flushBookmark が実行されカスタムコールバックが呼び出されること", async () => {
       const user = userEvent.setup();
-      const onBackToDetail = vi.fn();
+      const onNavigateSettings = vi.fn();
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -447,25 +455,30 @@ describe("ReaderContainer", () => {
         <TestWrapper
           novelId={sampleNovel.id}
           chapterIndex={1}
-          onBackToDetail={onBackToDetail}
+          onNavigateSettings={onNavigateSettings}
           novelRepository={novelRepository}
           chapterRepository={chapterRepository}
         />,
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-back-to-detail")).toBeInTheDocument();
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId("reader-back-to-detail"));
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
+
+      const settingsTab = screen.getByTestId("reader-bottom-tab-settings");
+      await user.click(settingsTab);
 
       await waitFor(() => {
         expect(updateBookmarkSpy).toHaveBeenCalled();
-        expect(onBackToDetail).toHaveBeenCalledWith(sampleNovel.id);
+        expect(onNavigateSettings).toHaveBeenCalledTimes(1);
       });
     });
 
-    it("「作品詳細へ」クリック時、コールバック省略時にルーターの navigateToNovelDetail が呼び出されること (TR-06)", async () => {
+    it("下部オーバーレイの「設定」タブクリック時、コールバック省略時にルーターの navigate('/settings') が呼び出されること", async () => {
       const user = userEvent.setup();
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -480,69 +493,84 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-back-to-detail")).toBeInTheDocument();
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId("reader-back-to-detail"));
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
+
+      const settingsTab = screen.getByTestId("reader-bottom-tab-settings");
+      await user.click(settingsTab);
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
-          `/novels/${encodeURIComponent(sampleNovel.id)}`,
+          "/settings",
         );
       });
     });
+  });
 
-    it("novelId 省略時でも novel.id から targetId を解決して「作品詳細へ」遷移できること", async () => {
-      const user = userEvent.setup();
-      const onBackToDetail = vi.fn();
-      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
+  describe("OS バックキーおよび画面離脱時のしおり自動保存 (AC-RD-08, TR-06)", () => {
+    it("popstate イベント（OS バックキー操作）発生時に flushBookmark が実行されること", async () => {
+      const { repo: novelRepository, updateBookmarkSpy } =
+        createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
 
       render(
         <TestWrapper
-          onBackToDetail={onBackToDetail}
+          novelId={sampleNovel.id}
+          chapterIndex={1}
           novelRepository={novelRepository}
           chapterRepository={chapterRepository}
         />,
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-back-to-detail")).toBeInTheDocument();
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId("reader-back-to-detail"));
+      updateBookmarkSpy.mockClear();
+
+      await act(async () => {
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      });
 
       await waitFor(() => {
-        expect(onBackToDetail).toHaveBeenCalledWith(sampleNovel.id);
+        expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
       });
     });
 
-    it("targetId が存在しない（未登録空状態）場合、「作品詳細へ」を押下しても遷移コールバックが呼ばれないこと", async () => {
-      const user = userEvent.setup();
-      const onBackToDetail = vi.fn();
-      const { repo: novelRepository } = createMockNovelRepo(null);
-      const { repo: chapterRepository } = createMockChapterRepo([]);
+    it("コンポーネントのアンマウント時に flushBookmark が実行されること", async () => {
+      const { repo: novelRepository, updateBookmarkSpy } =
+        createMockNovelRepo(sampleNovel);
+      const { repo: chapterRepository } = createMockChapterRepo();
 
-      render(
+      const { unmount } = render(
         <TestWrapper
-          onBackToDetail={onBackToDetail}
+          novelId={sampleNovel.id}
+          chapterIndex={1}
           novelRepository={novelRepository}
           chapterRepository={chapterRepository}
         />,
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-empty")).toBeInTheDocument();
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId("reader-back-to-detail"));
+      updateBookmarkSpy.mockClear();
 
-      expect(onBackToDetail).not.toHaveBeenCalled();
+      unmount();
+
+      await waitFor(() => {
+        expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
+      });
     });
   });
 
   describe("前後エピソード遷移の検証 (TR-05, AC-RD-06)", () => {
-    it("第1話で「次の話へ」クリック時、第2話へ遷移し、カスタム onNavigateChapter が呼び出されること (TR-05)", async () => {
+    it("第1話でオーバーレイを展開して「次の話へ」クリック時、第2話へ遷移しカスタム onNavigateChapter が呼び出されること (TR-05)", async () => {
       const user = userEvent.setup();
       const onNavigateChapter = vi.fn();
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
@@ -562,6 +590,10 @@ describe("ReaderContainer", () => {
         expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
+
       await user.click(screen.getByTestId("reader-next-chapter"));
 
       await waitFor(() => {
@@ -569,7 +601,7 @@ describe("ReaderContainer", () => {
       });
     });
 
-    it("第1話で「次の話へ」クリック時、コールバック省略時にルーターの navigateToReader が呼び出されること (TR-05)", async () => {
+    it("第1話でオーバーレイから「次の話へ」クリック時、コールバック省略時にルーターの navigateToReader が呼び出されること (TR-05)", async () => {
       const user = userEvent.setup();
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -586,6 +618,10 @@ describe("ReaderContainer", () => {
       await waitFor(() => {
         expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
+
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
 
       await user.click(screen.getByTestId("reader-next-chapter"));
 
@@ -596,7 +632,7 @@ describe("ReaderContainer", () => {
       });
     });
 
-    it("第2話で「前の話へ」クリック時、第1話へ遷移し、カスタム onNavigateChapter が呼び出されること (TR-05)", async () => {
+    it("第2話でオーバーレイから「前の話へ」クリック時、第1話へ遷移しカスタム onNavigateChapter が呼び出されること (TR-05)", async () => {
       const user = userEvent.setup();
       const onNavigateChapter = vi.fn();
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
@@ -616,6 +652,10 @@ describe("ReaderContainer", () => {
         expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
+
       await user.click(screen.getByTestId("reader-prev-chapter"));
 
       await waitFor(() => {
@@ -623,7 +663,7 @@ describe("ReaderContainer", () => {
       });
     });
 
-    it("第2話で「前の話へ」クリック時、コールバック省略時にルーターの navigateToReader が呼び出されること (TR-05)", async () => {
+    it("第2話でオーバーレイから「前の話へ」クリック時、コールバック省略時にルーターの navigateToReader が呼び出されること (TR-05)", async () => {
       const user = userEvent.setup();
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -640,6 +680,10 @@ describe("ReaderContainer", () => {
       await waitFor(() => {
         expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
+
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
 
       await user.click(screen.getByTestId("reader-prev-chapter"));
 
@@ -669,6 +713,10 @@ describe("ReaderContainer", () => {
         expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
+
       await user.click(screen.getByTestId("reader-next-chapter"));
 
       await waitFor(() => {
@@ -694,6 +742,10 @@ describe("ReaderContainer", () => {
       await waitFor(() => {
         expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
+
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
 
       await user.click(screen.getByTestId("reader-prev-chapter"));
 
@@ -721,6 +773,10 @@ describe("ReaderContainer", () => {
         expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
+
       // disabled ボタンに対して直接 click イベントを発火（goToChapter(0) が false を返す）
       fireEvent.click(screen.getByTestId("reader-prev-chapter"));
 
@@ -746,6 +802,10 @@ describe("ReaderContainer", () => {
         expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
+
       // disabled ボタンに対して直接 click イベントを発火（goToChapter(4) が false を返す）
       fireEvent.click(screen.getByTestId("reader-next-chapter"));
 
@@ -753,124 +813,7 @@ describe("ReaderContainer", () => {
     });
   });
 
-  describe("組版・設定変更およびスクロール進捗の検証 (AC-RD-03, AC-RD-04, AC-RD-05)", () => {
-    it("組み方向切替ボタン押下で縦書き/横書きが切り替わること (AC-RD-03)", async () => {
-      const user = userEvent.setup();
-      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
-      const { repo: chapterRepository } = createMockChapterRepo();
-
-      render(
-        <TestWrapper
-          novelId={sampleNovel.id}
-          chapterIndex={1}
-          novelRepository={novelRepository}
-          chapterRepository={chapterRepository}
-        />,
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
-      });
-
-      expect(screen.getByTestId("reader-view")).toHaveAttribute(
-        "data-writing-mode",
-        "vertical-rl",
-      );
-
-      await user.click(screen.getByTestId("toggle-orientation"));
-
-      await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toHaveAttribute(
-          "data-writing-mode",
-          "horizontal-tb",
-        );
-      });
-    });
-
-    it("テーマボタン押下でテーマが変更されること (AC-RD-04)", async () => {
-      const user = userEvent.setup();
-      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
-      const { repo: chapterRepository } = createMockChapterRepo();
-
-      render(
-        <TestWrapper
-          novelId={sampleNovel.id}
-          chapterIndex={1}
-          novelRepository={novelRepository}
-          chapterRepository={chapterRepository}
-        />,
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
-      });
-
-      await user.click(screen.getByTestId("theme-sepia"));
-
-      await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toHaveAttribute(
-          "data-theme",
-          "sepia",
-        );
-      });
-    });
-
-    it("文字サイズステッパー操作で文字サイズが変更されること (AC-RD-05)", async () => {
-      const user = userEvent.setup();
-      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
-      const { repo: chapterRepository } = createMockChapterRepo();
-
-      render(
-        <TestWrapper
-          novelId={sampleNovel.id}
-          chapterIndex={1}
-          novelRepository={novelRepository}
-          chapterRepository={chapterRepository}
-        />,
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
-      });
-
-      await user.click(screen.getByTestId("font-size-increase"));
-
-      await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toHaveAttribute(
-          "data-font-size",
-          "20",
-        );
-      });
-    });
-
-    it("行間ステッパー操作で行間が変更されること (AC-RD-05)", async () => {
-      const user = userEvent.setup();
-      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
-      const { repo: chapterRepository } = createMockChapterRepo();
-
-      render(
-        <TestWrapper
-          novelId={sampleNovel.id}
-          chapterIndex={1}
-          novelRepository={novelRepository}
-          chapterRepository={chapterRepository}
-        />,
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
-      });
-
-      await user.click(screen.getByTestId("line-height-increase"));
-
-      await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toHaveAttribute(
-          "data-line-height",
-          "2",
-        );
-      });
-    });
-
+  describe("本文スクロール時の進捗率更新 (AC-RD-08)", () => {
     it("本文スクロール時にスクロール進捗率が更新されること (AC-RD-08)", async () => {
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
@@ -912,43 +855,6 @@ describe("ReaderContainer", () => {
 
       await waitFor(() => {
         expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0.5);
-      });
-    });
-
-    it("「作品を取得/更新」ボタン押下で手動作品取得が実行されること", async () => {
-      const user = userEvent.setup();
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
-      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
-      const { repo: chapterRepository } = createMockChapterRepo();
-
-      render(
-        <TestWrapper
-          novelId={sampleNovel.id}
-          chapterIndex={1}
-          novelRepository={novelRepository}
-          chapterRepository={chapterRepository}
-        />,
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
-      });
-
-      expect(screen.getByTestId("fetch-novel-button")).toBeInTheDocument();
-
-      await user.click(screen.getByTestId("fetch-novel-button"));
-
-      // 取得処理がトリガーされ ReaderPage に作品が再描画されたことを確認
-      await waitFor(() => {
-        expect(pageSpy).toHaveBeenLastCalledWith(
-          expect.objectContaining({
-            novel: expect.objectContaining({
-              title: "境界迷宮と異界の魔術師",
-            }),
-            isLoading: false,
-          }),
-          undefined,
-        );
       });
     });
   });
