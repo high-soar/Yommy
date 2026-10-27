@@ -31,7 +31,10 @@ docs/
 │       └── archive/                   # 完了済みの差分仕様アーカイブ（親Issueクローズ時に git mv で移動）
 │           └── .gitkeep
 └── quality/                           # 【柱3：品質分析・バグ記録・申し送り管理】
-    ├── bug-and-handover-log.md        # バグ記録票（製品/支援分離、原因5分類 L/S/D/B/A）＆ 申し送り事項（HO-xx）追跡シート
+    ├── bug-and-handover-log.md        # バグ記録票（製品/支援分離、原因5分類 L/S/D/B/A）＆ 申し送り事項（HO-xx）追跡シート（作業中Milestone＋未解決HO）
+    ├── archive/                       # 完了した各マイルストーンのバグ記録・解決済み申し送りアーカイブ（Step 3 で移動）
+    │   ├── phase3-poc-log.md          # Phase 3 PoC バグ記録（No. 1〜31）＆ 申し送りアーカイブ
+    │   └── v0.1-mvp-log.md            # Milestone v0.1 MVP バグ記録（No. 32〜70）＆ 申し送りアーカイブ
     └── reports/                       # ミニリリース Milestone ごとの品質分析・改善（Kaizen）レポート格納先
         ├── phase3-poc.md              # Phase 3 PoC 品質分析・改善レポート
         └── v0.1-mvp.md                # Milestone v0.1（カクヨム MVP）品質分析・改善レポート
@@ -87,17 +90,17 @@ flowchart LR
 
 ### 4.1 必須・標準フィールド定義
 
-| フィールド名        |   必須   | 型         | 説明・記載ルール                                                                                                                        |
-| :------------------ | :------: | :--------- | :-------------------------------------------------------------------------------------------------------------------------------------- |
-| **`type`**          | **必須** | `string`   | OKF 必須の概念種別。下表「4.2 `type` タクソノミー一覧」のいずれかを指定する。                                                           |
-| **`title`**         | **必須** | `string`   | ドキュメントの人間向け表示タイトル。                                                                                                    |
-| **`description`**   | **必須** | `string`   | AI エージェントや検索がコンテキストを即座に把握するための 1 行要約。                                                                    |
-| **`status`**        | **必須** | `string`   | 成果物の状態（`Draft` / `Review (#N)` / `Approved (Phase N)` / `Approved (#N)` / `Completed (Archived)` / 恒久運用文書は `Approved`）。 |
-| **`updated`**       | **必須** | `string`   | 最終更新日（`"YYYY-MM-DD"` 形式）。                                                                                                     |
-| **`tags`**          |   推奨   | `string[]` | 関連領域を表すタグ配列（例: `[parser, kakuyomu, tdd]`）。                                                                               |
-| **`related_specs`** |   推奨   | `string[]` | 関連する仕様書・ガイドラインのリポジトリルートからのパス配列（該当なしは `[]`）。                                                       |
-| **`related_tests`** |   推奨   | `string[]` | 関連する単体テストや Playwright IT シナリオのパス配列（該当なしは `[]`）。                                                              |
-| **`issue`**         |   任意   | `string`   | 差分仕様（`spec-delta`）における対象親 Issue 番号（例: `"#10"`）。                                                                      |
+| フィールド名        |   必須   | 型         | 説明・記載ルール                                                                                                                                                                                           |
+| :------------------ | :------: | :--------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`type`**          | **必須** | `string`   | OKF 必須の概念種別。下表「4.2 `type` タクソノミー一覧」のいずれかを指定する。                                                                                                                              |
+| **`title`**         | **必須** | `string`   | ドキュメントの人間向け表示タイトル。                                                                                                                                                                       |
+| **`description`**   | **必須** | `string`   | AI エージェントや検索がコンテキストを即座に把握するための 1 行要約。                                                                                                                                       |
+| **`status`**        | **必須** | `string`   | 成果物の状態（`Draft` / `Review (#N)` / `Approved (Phase N)` / `Approved (#N)` / `Completed (Archived)` / 恒久運用文書は `Approved`。完了差分仕様および完了品質記録アーカイブは `Completed (Archived)`）。 |
+| **`updated`**       | **必須** | `string`   | 最終更新日（`"YYYY-MM-DD"` 形式）。                                                                                                                                                                        |
+| **`tags`**          |   推奨   | `string[]` | 関連領域を表すタグ配列（例: `[parser, kakuyomu, tdd]`）。                                                                                                                                                  |
+| **`related_specs`** |   推奨   | `string[]` | 関連する仕様書・ガイドラインのリポジトリルートからのパス配列（該当なしは `[]`）。                                                                                                                          |
+| **`related_tests`** |   推奨   | `string[]` | 関連する単体テストや Playwright IT シナリオのパス配列（該当なしは `[]`）。                                                                                                                                 |
+| **`issue`**         |   任意   | `string`   | 差分仕様（`spec-delta`）における対象親 Issue 番号（例: `"#10"`）。                                                                                                                                         |
 
 ### 4.2 `type` タクソノミー（全10種）
 
@@ -109,18 +112,18 @@ flowchart LR
 > node .github/skills/sdd/scripts/validate-okf.mjs
 > ```
 
-| `type` 値                | 対象ディレクトリ / ファイル            | 用途                                                         |
-| :----------------------- | :------------------------------------- | :----------------------------------------------------------- |
-| `guideline`              | `docs/guidelines/*.md`                 | 人間・AI 共通の開発プロセス・テスト・レビュー規約の正本      |
-| `spec-requirements`      | `docs/specs/requirements.md`           | App 全体の要件定義・機能一覧・ロードマップの正本             |
-| `spec-architecture`      | `docs/specs/architecture.md`           | 3層アーキテクチャと共通インターフェース契約の正本            |
-| `spec-db-schema`         | `docs/specs/db-schema.md`              | SQLite ローカル DB スキーマ定義の正本                        |
-| `spec-screen-transition` | `docs/specs/screen-transitions.md`     | 主要画面一覧（`SCR-xx`）と画面遷移（`TR-xx`）の正本          |
-| `spec-feature`           | `docs/specs/features/*.md`             | 各画面・機能の現在仕様（外部設計 `AC-xx` ＋ 詳細設計）の正本 |
-| `spec-parser`            | `docs/specs/parsers/*.md`              | 各小説サイトのスクレイピング・DOM 解析仕様の正本             |
-| `spec-delta`             | `docs/specs/changes/**/*.md`           | 要望 Issue ごとの差分仕様・テスト計画・Sub-issue 分割計画    |
-| `quality-log`            | `docs/quality/bug-and-handover-log.md` | バグ記録票および申し送り事項（`HO-xx`）追跡シート            |
-| `quality-report`         | `docs/quality/reports/*.md`            | ミニリリース Milestone ごとの品質分析・Kaizen レポート       |
+| `type` 値                | 対象ディレクトリ / ファイル                                           | 用途                                                                                         |
+| :----------------------- | :-------------------------------------------------------------------- | :------------------------------------------------------------------------------------------- |
+| `guideline`              | `docs/guidelines/*.md`                                                | 人間・AI 共通の開発プロセス・テスト・レビュー規約の正本                                      |
+| `spec-requirements`      | `docs/specs/requirements.md`                                          | App 全体の要件定義・機能一覧・ロードマップの正本                                             |
+| `spec-architecture`      | `docs/specs/architecture.md`                                          | 3層アーキテクチャと共通インターフェース契約の正本                                            |
+| `spec-db-schema`         | `docs/specs/db-schema.md`                                             | SQLite ローカル DB スキーマ定義の正本                                                        |
+| `spec-screen-transition` | `docs/specs/screen-transitions.md`                                    | 主要画面一覧（`SCR-xx`）と画面遷移（`TR-xx`）の正本                                          |
+| `spec-feature`           | `docs/specs/features/*.md`                                            | 各画面・機能の現在仕様（外部設計 `AC-xx` ＋ 詳細設計）の正本                                 |
+| `spec-parser`            | `docs/specs/parsers/*.md`                                             | 各小説サイトのスクレイピング・DOM 解析仕様の正本                                             |
+| `spec-delta`             | `docs/specs/changes/**/*.md`                                          | 要望 Issue ごとの差分仕様・テスト計画・Sub-issue 分割計画                                    |
+| `quality-log`            | `docs/quality/bug-and-handover-log.md`<br>`docs/quality/archive/*.md` | バグ記録票および申し送り事項（`HO-xx`）追跡シート（正本台帳および Milestone 完了アーカイブ） |
+| `quality-report`         | `docs/quality/reports/*.md`                                           | ミニリリース Milestone ごとの品質分析・Kaizen レポート                                       |
 
 ### 4.3 記述テンプレート例
 

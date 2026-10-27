@@ -69,12 +69,12 @@ flowchart LR
 
 `docs/specs/` 配下の設計ドキュメントの状態は、各ファイル先頭の YAML フロントマター内の `status` フィールドで管理します（詳細は [docs/index.md](../index.md#4-okfopen-knowledge-formatyaml-フロントマター規約) 参照）。
 
-| 状態            | `status` 表記例                         | 意味・遷移条件                                                                                                   |
-| :-------------- | :-------------------------------------- | :--------------------------------------------------------------------------------------------------------------- |
-| **`Draft`**     | `Draft`                                 | 初期作成中・対話検討中（Phase 2 の初期ドラフト等）                                                               |
-| **`Review`**    | `Review (#12)`                          | PR 提出済み・レビュー待ち。個別作業 PR では必ず `Review` 状態とし、AI が勝手に `Approved` に書き換えてはならない |
-| **`Approved`**  | `Approved (Phase 2)` / `Approved (#12)` | 人間レビュアーによる合意・承認完了                                                                               |
-| **`Completed`** | `Completed (Archived)`                  | 親 Issue の全工程が完了し、`docs/specs/changes/archive/` へアーカイブされた差分仕様                              |
+| 状態            | `status` 表記例                         | 意味・遷移条件                                                                                                                                                               |
+| :-------------- | :-------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`Draft`**     | `Draft`                                 | 初期作成中・対話検討中（Phase 2 の初期ドラフト等）                                                                                                                           |
+| **`Review`**    | `Review (#12)`                          | PR 提出済み・レビュー待ち。個別作業 PR では必ず `Review` 状態とし、AI が勝手に `Approved` に書き換えてはならない                                                             |
+| **`Approved`**  | `Approved (Phase 2)` / `Approved (#12)` | 人間レビュアーによる合意・承認完了                                                                                                                                           |
+| **`Completed`** | `Completed (Archived)`                  | 親 Issue の全工程が完了し `docs/specs/changes/archive/` へアーカイブされた差分仕様、または Milestone 完了（Step 3）に伴い `docs/quality/archive/` へアーカイブされた品質記録 |
 
 ### 局所的再承認（Local Re-approval）ルール
 
@@ -117,5 +117,9 @@ Phase 4 以降は、直近の要望（親 Issue）を 3〜5 件程度束ねた *
    - 横断レビュー（各モデルの追記スレッドで検出された全指摘）を是正する。
    - `docs/quality/bug-and-handover-log.md` のバグ記録を集計し、製品コードバグ密度、原因分類（`L`/`S`/`D`/`B`/`A`）の傾向、欠陥除去率（DRE: 単体テスト・レビュー段階での除去率）、および未消化の申し送り事項（`HO-xx`）を分析した品質レポート（`type: quality-report`）を `docs/quality/reports/` に作成する。
    - 再発防止策として、`docs/guidelines/` や `.github/skills/*/SKILL.md` の規約・チェックリスト改善を同一 PR に含める。
-3. **Step 3: 人間による Milestone 承認と次 Milestone への移行**:
-   - 指摘収束（Round 2）と全品質ゲート PASS を確認し、人間の承認・マージをもって Milestone を完了とする。
+3. **Step 3: 人間による Milestone 承認・正本仕様一括 Approved 化とバグ記録アーカイブ**:
+   - **① 正本仕様の一括 `Approved` 化**: Round 2 指摘収束と全品質ゲート PASS を確認後、`docs/specs/` 配下の正本仕様書のフロントマター `status` を一括で `Approved` に揃える PR（`Closes #Milestone承認Issue`）を作成する。
+   - **② バグ記録・解決済み申し送りのアーカイブ化**:
+     - 当該 Milestone（または Phase）で完了したバグ記録（No. xx〜yy）および解決済み（`Resolved`）の申し送り事項（`HO-xx`）を `docs/quality/archive/<milestone>-log.md`（OKF `type: quality-log`, `status: Completed (Archived)`）へ移動しアーカイブ化する。
+     - 正本台帳 `docs/quality/bug-and-handover-log.md` から完了分を除去し、「次期作業中マイルストーンのバグ記録枠」および「未解決（`Open`）の申し送り事項」のみが残るクリーンな状態に整理する（§4 サマリーには各アーカイブへのリンクを保持）。
+   - **③ 人間による最終承認とマージ**: 上記 PR を人間がレビュー・マージすることで Milestone 完了を確定し、次期 Milestone へ移行する。
