@@ -2,9 +2,9 @@
 type: spec-feature
 title: 本棚画面仕様書（SCR-01: Bookshelf）
 description: 登録済み小説カード一覧の表示、URLからの新規作品登録ダイアログ、しおり位置からのワンタップ読書再開を提供する本棚画面（SCR-01）の正本仕様。
-status: Approved
+status: "Review (#50)"
 updated: "2026-10-27"
-tags: [bookshelf, scr-01, routing, url-registration, ui]
+tags: [bookshelf, scr-01, routing, url-registration, ui, shell, bottom-nav]
 related_specs:
   - docs/specs/requirements.md
   - docs/specs/architecture.md
@@ -12,7 +12,9 @@ related_specs:
   - docs/specs/screen-transitions.md
   - docs/specs/features/novel-detail.md
   - docs/specs/features/reader-view.md
+  - docs/specs/features/settings.md
   - docs/specs/parsers/kakuyomu.md
+  - docs/specs/changes/issue-50-fullscreen-shell-and-settings.md
   - docs/specs/changes/archive/issue-12-bookshelf-and-routing.md
 related_tests:
   - src/App.test.tsx
@@ -39,12 +41,14 @@ related_tests:
   - `SYS-REQ-01`（作品登録・目次取得）
   - `SYS-REQ-02`（本文取得・オフライン閲覧：未キャッシュ話に対する「続きから読む」遷移時のオンデマンド本文取得導線）
   - `SYS-REQ-12`（しおり・スクロール位置自動保存に基づく読書再開導線）
+  - `SYS-REQ-16`（100dvh 全画面シェル・下部タブバー固定・作品一覧内部縦スクロール）
 - **関連画面遷移**:
+  - `TR-01`（下部タブ「設定」タップによる設定画面 `SCR-05` `/settings` への遷移）
+  - `TR-01b`（下部タブ「本棚」タップによる本棚トップ `/` への直接復帰遷移）
   - `TR-02`（作品カード本体タップによる作品詳細・目次画面 `SCR-02` `/novels/:novelId` への遷移）
-  - `TR-03`（「続きから読む」ボタンタップによる小説リーダー画面 `SCR-03` `/novels/:novelId/chapters/:chapterIndex` への直接遷移）
-- **対象外スコープ（Milestone `v0.2` 以降）**:
+  - `TR-03`（「続きから読む」ボタンタップによる小説リーダー画面 `SCR-03` `/novels/:novelId/chapters/:chapterIndex` への直接遷移 ※目次介在）
+- **対象外スコープ（Milestone `v0.3` 以降）**:
   - お気に入りフィルタおよび新着一括更新チェック（`SYS-REQ-04`）
-  - 下部タブナビゲーションによる管理・設定画面（`SCR-05` `/manage`）への本格遷移（`TR-01`）
 
 ---
 
@@ -250,3 +254,4 @@ export interface UseBookshelfResult {
 | **`AC-BS-04`** | 作品カード情報表示         | 登録済み作品カードにタイトル、著者名、全話数・取得済み話数（`totalChapters` / `cachedChapters`）、およびしおり位置（`bookmarkChapterIndex` または `未読`）が正確に表示されること。                                                                             | `SYS-REQ-01`, `SYS-REQ-12`           |
 | **`AC-BS-05`** | 作品詳細画面への遷移       | 作品カード本体（`novel-card-select`）をタップすると、対象作品の詳細・目次画面（`/novels/:novelId`）へ遷移（`TR-02`）すること。                                                                                                                                 | `SYS-REQ-01` / `TR-02`               |
 | **`AC-BS-06`** | 続きから読むワンタップ起動 | 作品カードの「続きから読む」ボタン（`novel-card-resume`）をタップすると、`bookmarkChapterIndex`（未設定時は第1話）のリーダー画面（`/novels/:novelId/chapters/:chapterIndex`）へ直接遷移（`TR-03`）し、未キャッシュ時は本文をオンデマンド取得して表示すること。 | `SYS-REQ-02`, `SYS-REQ-12` / `TR-03` |
+| **`AC-BS-07`** | 全画面シェルと下部タブ固定 | 画面全体が 100dvh 固定シェルに収まりウィンドウスクロールが発生せず、画面上部ヘッダー固定、作品カード一覧が枠内縦スクロール（`overflow-y-auto`）可能で、画面最下部に下部タブバー（`BottomTabBar`）が「本棚」アクティブ状態で固定表示されること。                | `SYS-REQ-16` / `TR-01`, `TR-01b`     |

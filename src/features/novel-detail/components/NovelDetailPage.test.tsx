@@ -207,7 +207,6 @@ describe("NovelDetailPage", () => {
 
     it("通常表示時にヘッダーの各アクションが正しく各コールバックに伝達されること", async () => {
       const user = userEvent.setup();
-      const onBackToBookshelf = vi.fn();
       const onStartFromBeginning = vi.fn();
       const onResumeBookmark = vi.fn();
       const onRefreshToc = vi.fn();
@@ -221,7 +220,7 @@ describe("NovelDetailPage", () => {
           isRefreshing={false}
           isDeleteDialogOpen={false}
           isDeleting={false}
-          onBackToBookshelf={onBackToBookshelf}
+          onBackToBookshelf={vi.fn()}
           onStartFromBeginning={onStartFromBeginning}
           onResumeBookmark={onResumeBookmark}
           onSelectEpisode={vi.fn()}
@@ -231,9 +230,6 @@ describe("NovelDetailPage", () => {
           onConfirmDelete={vi.fn()}
         />,
       );
-
-      await user.click(screen.getByTestId("back-to-bookshelf-button"));
-      expect(onBackToBookshelf).toHaveBeenCalledTimes(1);
 
       await user.click(screen.getByTestId("detail-resume-button"));
       expect(onResumeBookmark).toHaveBeenCalledWith(2);

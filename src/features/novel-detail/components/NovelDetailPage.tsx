@@ -77,7 +77,6 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
               isRefreshing={isRefreshing}
               refreshMessage={refreshMessage}
               error={error}
-              onBackToBookshelf={onBackToBookshelf}
               onStartFromBeginning={onStartFromBeginning}
               onResumeBookmark={onResumeBookmark}
               onRefreshToc={onRefreshToc}
