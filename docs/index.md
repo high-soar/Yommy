@@ -23,11 +23,12 @@ docs/
 │   ├── features/                      # [App全体正本] 画面・機能別の現在仕様書（AC一覧・コンポーネント構成・テスト責務）
 │   │   ├── bookshelf.md               # 本棚画面仕様書（SCR-01: BookshelfPage / NovelCard / AddNovelDialog / useBookshelf）
 │   │   ├── novel-detail.md            # 作品詳細・目次画面仕様書（SCR-02: NovelDetailPage / EpisodeList / useNovelDetail）
-│   │   └── reader-view.md             # 小説リーダー画面仕様書（SCR-03: ReaderPage / ReaderView / ReaderToolbar / ReaderChapterNav / useReader）
+│   │   └── reader-view.md             # 小説リーダー画面仕様書（SCR-03: ReaderPage / ReaderView / ReaderBottomOverlay / ReaderChapterNav / useReader）
 │   ├── parsers/                       # [App全体正本] 小説サイト別の現在スクレイピング・DOM解析仕様書
 │   │   └── kakuyomu.md                # カクヨム パーサー・スクレイピング仕様書（kakuyomu.jp）
 │   └── changes/                       # [差分仕様 (Delta Specs)] 要望（親Issue）ごとの設計差分・テスト計画・Sub-issue分割
-│       ├── issue-XX-<slug>.md         # 現在進行中の要望Issueの差分仕様（Active）
+│       ├── issue-51-novel-detail-layout-and-scroll.md # [Active] 作品詳細・目次画面（SCR-02）レイアウト固定・あらすじトグル・内部スクロール差分仕様 (#51)
+│       ├── issue-52-reader-fullscreen-and-bottom-overlay.md # [Active] 小説リーダー画面全画面テキスト表示化・下部オーバーレイ差分仕様 (#52)
 │       └── archive/                   # 完了済みの差分仕様アーカイブ（親Issueクローズ時に git mv で移動）
 │           └── .gitkeep
 └── quality/                           # 【柱3：品質分析・バグ記録・申し送り管理】

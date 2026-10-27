@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: Approved
+status: "Review (#52)"
 updated: "2026-10-27"
 tags: [architecture, parser, storage, bridge, sanitizer, assets]
 related_specs:
@@ -13,6 +13,7 @@ related_specs:
   - docs/specs/features/bookshelf.md
   - docs/specs/features/novel-detail.md
   - docs/specs/features/reader-view.md
+  - docs/specs/changes/issue-52-reader-fullscreen-and-bottom-overlay.md
   - docs/specs/changes/archive/issue-12-bookshelf-and-routing.md
   - docs/specs/changes/archive/issue-13-novel-detail-and-toc.md
   - docs/specs/changes/archive/issue-14-reader-navigation-bookmark-settings.md
@@ -134,7 +135,7 @@ Yommy/
     ├── features/                      # 【3. Viewer & UI Layer（画面・機能別モジュール）】
     │   ├── bookshelf/                 # SCR-01: 本棚一覧・作品URL追加
     │   ├── novel-detail/              # SCR-02: 作品詳細・目次一覧・取得操作
-    │   ├── reader/                    # SCR-03: 小説リーダー（縦書き/横書き・ルビ・テーマ・しおり保存）
+    │   ├── reader/                    # SCR-03: 小説リーダー（全画面100dvh・最下部タッチオーバーレイ・ルビ・しおり保存）
     │   ├── webview-import/            # SCR-04: 内蔵ブラウザ表示・DOMインポート（v0.3〜）
     │   └── queue-settings/            # SCR-05: DLキュー・キャッシュ管理・全体設定（v0.2〜）
     └── shared/                        # 複数機能で共有する汎用 UI コンポーネント・ユーティリティ

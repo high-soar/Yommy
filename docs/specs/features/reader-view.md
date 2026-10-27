@@ -1,10 +1,10 @@
 ---
 type: spec-feature
 title: 小説リーダー画面仕様書（SCR-03: Novel Reader）
-description: 小説本文の縦書き・横書き組版表示、ルビ・傍点描画、4カラーテーマ・文字サイズ・行間設定の永続化、前後エピソード遷移、未キャッシュ話のオンデマンド取得、既読・しおり・スクロール進捗率の自動保存/復元、およびSCN-01統合シナリオの正本仕様。
-status: Approved
+description: 小説本文の全画面（100dvh）縦書き・横書き組版表示、最下部タッチによる下部オーバーレイ（ReaderBottomOverlay: 前後話ナビ＋下部タブ）、ルビ・傍点描画、4カラーテーマ・文字サイズ・行間設定の永続化、前後エピソード遷移、未キャッシュ話のオンデマンド取得、既読・しおり・スクロール進捗率の自動保存/復元、およびSCN-01統合シナリオの正本仕様。
+status: "Review (#52)"
 updated: "2026-10-27"
-tags: [reader, scr-03, vertical-writing, ruby, bouten, theme, typography, bookmark, scn01]
+tags: [reader, scr-03, vertical-writing, ruby, bouten, theme, typography, bookmark, scn01, fullscreen, bottom-overlay]
 related_specs:
   - docs/specs/architecture.md
   - docs/specs/requirements.md
@@ -13,6 +13,7 @@ related_specs:
   - docs/specs/features/bookshelf.md
   - docs/specs/features/novel-detail.md
   - docs/specs/parsers/kakuyomu.md
+  - docs/specs/changes/issue-52-reader-fullscreen-and-bottom-overlay.md
   - docs/specs/changes/archive/issue-12-bookshelf-and-routing.md
   - docs/specs/changes/archive/issue-13-novel-detail-and-toc.md
   - docs/specs/changes/archive/issue-14-reader-navigation-bookmark-settings.md
@@ -31,7 +32,7 @@ related_tests:
 
 # 小説リーダー画面仕様書（SCR-03）
 
-本ドキュメントは、Yommy における小説本文閲覧（**`SCR-03`: ルート `/novels/:novelId/chapters/:chapterIndex`**）の組版描画、操作ツールバー（文字サイズ・行間・テーマ・組み方向）、前後エピソード遷移ナビゲーション、しおり・スクロール進捗率・既読状態の自動保存、およびブラウザ環境におけるローカル永続化の仕様を定める正本（Single Source of Truth）です。
+本ドキュメントは、Yommy における小説本文閲覧（**`SCR-03`: ルート `/novels/:novelId/chapters/:chapterIndex`**）の全画面テキスト組版描画、最下部タッチによる下部オーバーレイ（前後話ナビ＋下部タブ）、しおり・スクロール進捗率・既読状態の自動保存、およびブラウザ環境におけるローカル永続化の仕様を定める正本（Single Source of Truth）です。
 
 ---
 
@@ -41,26 +42,26 @@ related_tests:
 - **対応要件**:
   - `SYS-REQ-02`（本文取得・オフライン閲覧・未キャッシュ話オンデマンド取得）
   - `SYS-REQ-07`（ルビ `<ruby>`・傍点 `<em class="bouten">` のサニタイズ済み組版描画）
-  - `SYS-REQ-08`（縦書き `vertical-rl` / 横書き `horizontal-tb` 切り替え）
-  - `SYS-REQ-09`（文字サイズ `fontSizePx`・行間 `lineHeight` のカスタマイズと永続化 ※余白・フォント種別は `v0.2`）
-  - `SYS-REQ-10`（4カラーテーマ `light` / `sepia` / `dark` / `black` 切り替え）
-  - `SYS-REQ-11`（連続スクロールおよび前話・次話への連続遷移 ※1画面タップ/音量キー送りは `v0.2`）
-  - `SYS-REQ-12`（しおり話数 `bookmark_chapter_index`・本文スクロール進捗率 `bookmark_scroll_progress` の自動保存・復元、および既読フラグ `is_read` の自動更新）
+  - `SYS-REQ-08`（全画面 `100dvh` での縦書き `vertical-rl` / 横書き `horizontal-tb` 表示）
+  - `SYS-REQ-09`（文字サイズ `fontSizePx`・行間 `lineHeight` のカスタマイズと永続化 ※設定画面 `SCR-05` で変更、余白・フォント種別は `v0.3`）
+  - `SYS-REQ-10`（4カラーテーマ `light` / `sepia` / `dark` / `black` 切り替え ※設定画面 `SCR-05` で変更）
+  - `SYS-REQ-11`（全画面連続スクロール、最下部タッチによる `ReaderBottomOverlay` 開閉、および前後話ナビゲーションによる前話・次話への連続遷移 ※1画面タップ/音量キー送りは `v0.3`）
+  - `SYS-REQ-12`（しおり話数 `bookmark_chapter_index`・本文スクロール進捗率 `bookmark_scroll_progress` の自動保存・復元、OSバックキー・下部タブ遷移時の `flushBookmark` 実行、および既読フラグ `is_read` の自動更新）
 - **関連画面遷移**:
   - `TR-03`（本棚画面 `SCR-01` の「続きから読む」から `SCR-03` への直接遷移）
   - `TR-04`（作品詳細・目次画面 `SCR-02` のエピソード選択または読書開始ボタンから `SCR-03` への遷移）
-  - `TR-05`（`SCR-03` 内の「前の話へ」「次の話へ」操作による同一作品の前後エピソード `chapterIndex ± 1` への遷移）
-  - `TR-06`（`SCR-03` の「作品詳細へ（目次へ戻る）」ボタンによりスクロール進捗率を保存して `SCR-02` `/novels/:novelId` へ戻る遷移）
+  - `TR-05`（`SCR-03` 内の下部オーバーレイ「前の話へ」「次の話へ」操作による同一作品の前後エピソード `chapterIndex ± 1` への遷移）
+  - `TR-06`（OS バックキーまたは下部オーバーレイの「本棚」「設定」タブ遷移によりスクロール進捗率を保存して `SCR-02` `/novels/:novelId`、`SCR-01` `/`、または `SCR-05` `/settings` へ戻る・遷移）
 - **対象外スコープ（後続 Milestone）**:
-  - 画面余白（`pageMarginPx`）・フォント種別（`fontFamily`）の UI カスタマイズ（Milestone `v0.2`：`SYS-REQ-09` 拡張）
-  - 画面左右タップ（`enableTapPaging`）およびハードウェア音量キー（`enableVolumeKeyPaging`）による1画面ジャンプ送り・オーバーレイ表示切替（Milestone `v0.2`：`SYS-REQ-11` 拡張）
-  - 取得失敗時の内蔵 WebView フォールバック遷移 `TR-10`（Milestone `v0.3`：`SYS-REQ-13`）
+  - 画面左右タップ（`enableTapPaging`）およびハードウェア音量キー（`enableVolumeKeyPaging`）による1画面ジャンプ送り（Milestone `v0.3`：`SYS-REQ-11` 拡張）
+  - 画面余白（`pageMarginPx`）・フォント種別（`fontFamily`）の UI カスタマイズ（Milestone `v0.3`：`SYS-REQ-09` 拡張）
+  - 取得失敗時の内蔵 WebView フォールバック遷移 `TR-10`（Milestone `v0.4`：`SYS-REQ-13`）
 
 ---
 
 ## 2. コンポーネント構成と責務境界
 
-`docs/guidelines/testing.md` の親子分離原則および 1対1 Story/UT 原則に従い、`src/features/reader/` 配下を以下のモジュール構成とします（Phase 3 PoC の `PocReaderContainer.*` は `ReaderContainer.*` への移行に伴い廃止します）。
+`docs/guidelines/testing.md` の親子分離原則および 1対1 Story/UT 原則に従い、`src/features/reader/` 配下を以下のモジュール構成とします（`ReaderToolbar` は Issue #50 で廃止され設定画面 `SCR-05` へ移設、`ReaderBottomOverlay` を新設して全画面没入型 UI とします）。
 
 ```text
 src/features/reader/
@@ -68,75 +69,40 @@ src/features/reader/
 │   ├── useReader.ts                       # エピソード取得・オンデマンド通信・既読/しおり保存・組版設定永続化フック
 │   └── useReader.test.ts                  # フック単体テスト（Vitest）
 └── components/
-    ├── ReaderToolbar.tsx                  # 戻る導線・縦横切替・4テーマ・文字サイズ/行間ステッパー操作バー（Presentational）
-    ├── ReaderToolbar.stories.tsx
-    ├── ReaderToolbar.test.tsx
-    ├── ReaderChapterNav.tsx               # 前話へ / 現在話数 / 次話へナビゲーションバー（Presentational）
+    ├── ReaderBottomOverlay.tsx            # 【新設】前後話ナビ＋下部タブを統合したスライドインオーバーレイ（Presentational）
+    ├── ReaderBottomOverlay.stories.tsx    # 【新設】Storybookストーリー（表示/非表示/第1話/最終話）
+    ├── ReaderBottomOverlay.test.tsx       # 【新設】単体テスト（Portable Stories）
+    ├── ReaderChapterNav.tsx               # 前話へ / 現在話数 / 次話へナビゲーションバー（Presentational、オーバーレイ内で再利用）
     ├── ReaderChapterNav.stories.tsx
     ├── ReaderChapterNav.test.tsx
-    ├── ReaderView.tsx                     # 本文組版・ルビ/傍点描画・縦横スクロール進捗率算出/復元（Presentational）
+    ├── ReaderView.tsx                     # 【改修】全画面本文組版・ルビ/傍点描画・縦横スクロール進捗率算出/復元（Presentational）
     ├── ReaderView.stories.tsx
     ├── ReaderView.test.tsx
-    ├── ReaderPage.tsx                     # リーダー画面全体のレイアウト統合・状態別排他描画（Presentational）
+    ├── ReaderPage.tsx                     # 【改修】全画面レイアウト、最下部タッチ検知、オーバーレイ開閉・自動非表示制御（Presentational）
     ├── ReaderPage.stories.tsx
     ├── ReaderPage.test.tsx
-    ├── ReaderContainer.tsx                # ServiceProvider / Router / useReader を接続する Container
+    ├── ReaderContainer.tsx                # 【改修】ServiceProvider / Router / useReader を接続し、タブ遷移・OSバックキー時のしおり保存を連携（Container）
     ├── ReaderContainer.stories.tsx
-    └── ReaderContainer.test.tsx
+    ├── ReaderContainer.test.tsx
+    ├── ReaderToolbar.tsx                  # （Issue #50 で廃止・設定画面 SCR-05 へ移設）
+    ├── ReaderToolbar.stories.tsx
+    └── ReaderToolbar.test.tsx
 ```
 
 ---
 
 ## 3. 各コンポーネント・フックの詳細契約
 
-### 3.1 `ReaderToolbar`（操作ツールバー）
+### 3.1 `ReaderToolbar`（組版設定操作ツールバー：Issue #50 で設定画面へ移設）
 
-画面上部に常時表示され、作品詳細（目次）・本棚への復帰導線、組み方向切替、4カラーテーマ選択、および文字サイズ・行間のステッパー操作を提供する Presentational コンポーネントです。
-
-#### プロパティ契約（`ReaderToolbarProps`）
-
-| プロパティ名          | 型                             | 必須 | 既定値  | 説明                                                                                 |
-| :-------------------- | :----------------------------- | :--- | :------ | :----------------------------------------------------------------------------------- |
-| `writingMode`         | `WritingMode`                  | 必須 | -       | 現在の組み方向（`'vertical-rl'` または `'horizontal-tb'`）                           |
-| `theme`               | `ReaderTheme`                  | 必須 | -       | 現在のカラーテーマ（`'light'`, `'sepia'`, `'dark'`, `'black'`）                      |
-| `fontSizePx`          | `number`                       | 任意 | `18`    | 現在の文字サイズ (`12 〜 32` px)                                                     |
-| `lineHeight`          | `number`                       | 任意 | `1.8`   | 現在の行間倍率 (`1.4 〜 2.4`)                                                        |
-| `onToggleWritingMode` | `() => void`                   | 必須 | -       | 組み方向切替ボタン押下時のコールバック                                               |
-| `onChangeTheme`       | `(theme: ReaderTheme) => void` | 必須 | -       | テーマ選択ボタン押下時のコールバック                                                 |
-| `onChangeFontSize`    | `(nextSizePx: number) => void` | 任意 | -       | 文字サイズ変更ボタン（`−` / `＋`）押下時のコールバック                               |
-| `onChangeLineHeight`  | `(nextHeight: number) => void` | 任意 | -       | 行間変更ボタン（`−` / `＋`）押下時のコールバック                                     |
-| `onBackToDetail`      | `() => void`                   | 任意 | -       | 「作品詳細へ（目次へ戻る）」押下時のコールバック（指定時のみボタン表示、`TR-06` 用） |
-| `onBackToBookshelf`   | `() => void`                   | 任意 | -       | 「本棚へ戻る」押下時のコールバック（指定時のみボタン表示）                           |
-| `onFetchNovel`        | `() => void`                   | 任意 | -       | 手動再取得コールバック（指定時のみ `fetch-novel-button` を表示）                     |
-| `isLoading`           | `boolean`                      | 任意 | `false` | 通信ローディング中フラグ                                                             |
-
-#### 表示項目・セマンティック属性・活性制御ルール
-
-- **ルート要素**: `data-testid="reader-toolbar"`
-- **戻るナビゲーション**:
-  - `onBackToDetail` 指定時: `data-testid="reader-back-to-detail"` ボタンを表示し、クリック時に `onBackToDetail()` を呼び出す（`TR-06`）。
-  - `onBackToBookshelf` 指定時: `data-testid="reader-back-to-bookshelf"` ボタンを表示し、クリック時に `onBackToBookshelf()` を呼び出す。
-- **組み方向切替**: `data-testid="toggle-orientation"` ボタン
-  - 現在が縦書き（`'vertical-rl'`）の場合は `横書き表示に切替`、横書き（`'horizontal-tb'`）の場合は `縦書き表示に切替` のラベルを表示。
-- **カラーテーマ切替**: `data-testid="theme-{light|sepia|dark|black}"` ボタングループ
-  - 選択中のテーマボタンには `aria-pressed="true"` を設定。
-- **文字サイズステッパー（`12px 〜 32px`、`±2px` 刻み）**:
-  - 縮小ボタン: `data-testid="font-size-decrease"`（クリック時に `onChangeFontSize(Math.max(12, fontSizePx - 2))` を呼び出す。`fontSizePx <= 12` のときは `disabled`）。
-  - 現在値表示: `data-testid="font-size-value"`（`{fontSizePx}px` を表示）。
-  - 拡大ボタン: `data-testid="font-size-increase"`（クリック時に `onChangeFontSize(Math.min(32, fontSizePx + 2))` を呼び出す。`fontSizePx >= 32` のときは `disabled`）。
-- **行間ステッパー（`1.4 〜 2.4`、`±0.2` 刻み）**:
-  - 縮小ボタン: `data-testid="line-height-decrease"`（クリック時に `onChangeLineHeight(Math.max(1.4, Math.round((lineHeight - 0.2) * 10) / 10))` を呼び出す。`lineHeight <= 1.4` のときは `disabled`）。
-  - 現在値表示: `data-testid="line-height-value"`（`{lineHeight.toFixed(1)}` を表示）。
-  - 拡大ボタン: `data-testid="line-height-increase"`（クリック時に `onChangeLineHeight(Math.min(2.4, Math.round((lineHeight + 0.2) * 10) / 10))` を呼び出す。`lineHeight >= 2.4` のときは `disabled`）。
-- **手動作品取得・更新トリガー（任意表示）**:
-  - `onFetchNovel` 指定時のみ `data-testid="fetch-novel-button"` ボタンを表示し、クリック時に `onFetchNovel()` を呼び出す。
-  - ローディング中（`isLoading === true`）は `disabled` とし、ボタン内ラベルにスピナーまたは `取得中...` を表示する（通常時は `作品を取得/更新`）。
+> [!NOTE]
+> `ReaderToolbar` は Milestone `v0.1` で画面上部に常時表示されていましたが、読書没入感向上のため Milestone `v0.2`（Issue #50）において廃止され、組版設定機能（文字サイズ・行間・テーマ・縦横切替）は設定画面（`SCR-05: /settings`）へ完全移設されました。
 
 ---
 
 ### 3.2 `ReaderChapterNav`（前後エピソード遷移ナビゲーションバー）
 
-同一作品の「前の話へ」「次の話へ」の連続遷移（`TR-05`）と現在話数インジケーターを常時表示する Presentational コンポーネントです。
+同一作品の「前の話へ」「次の話へ」の連続遷移（`TR-05`）と現在話数インジケーターを提供する Presentational コンポーネントです（`ReaderBottomOverlay` の上段として内包されます）。
 
 #### プロパティ契約（`ReaderChapterNavProps`）
 
@@ -162,9 +128,36 @@ src/features/reader/
 
 ---
 
-### 3.3 `ReaderView`（本文組版レンダリング ＆ スクロール進捗制御）
+### 3.3 `ReaderBottomOverlay`（下部スライドインオーバーレイ）
 
-サニタイズ済み本文 HTML の縦書き・横書き組版、ルビ・傍点描画、テーマ・文字サイズ・行間適用、および縦横双方のスクロール進捗率（`0.0〜1.0`）算出・復元を担う Presentational コンポーネントです。
+画面最下部タッチにより下からスライドイン表示され、前後話ナビゲーションと下部タブバー（本棚/設定）を一体化して提供する Presentational コンポーネントです。
+
+#### プロパティ契約（`ReaderBottomOverlayProps`）
+
+| プロパティ名    | 型                                         | 必須 | 既定値        | 説明                                                                              |
+| :-------------- | :----------------------------------------- | :--- | :------------ | :-------------------------------------------------------------------------------- |
+| `isOpen`        | `boolean`                                  | 必須 | -             | オーバーレイの表示・展開状態（`true` でスライドイン表示、`false` で画面外へ退避） |
+| `chapterIndex`  | `number`                                   | 必須 | -             | 現在表示中のエピソード連番（1始まり）                                             |
+| `totalChapters` | `number`                                   | 必須 | -             | 作品の全エピソード数                                                              |
+| `isLoading`     | `boolean`                                  | 任意 | `false`       | エピソード通信中フラグ                                                            |
+| `activeTab`     | `'bookshelf' \| 'settings'`                | 任意 | `'bookshelf'` | リーダー画面の論理所属タブ（常に `'bookshelf'` をアクティブ表示）                 |
+| `onPrevChapter` | `() => void`                               | 必須 | -             | 「前の話へ」ボタン押下時のコールバック                                            |
+| `onNextChapter` | `() => void`                               | 必須 | -             | 「次の話へ」ボタン押下時のコールバック                                            |
+| `onSelectTab`   | `(tab: 'bookshelf' \| 'settings') => void` | 任意 | -             | 下部タブ（本棚 / 設定）押下時のコールバック                                       |
+| `onClose`       | `() => void`                               | 任意 | -             | オーバーレイを閉じる要求コールバック                                              |
+
+#### セマンティック属性とスタイル仕様
+
+- **ルート要素**: `data-testid="reader-bottom-overlay"`、`aria-hidden={!isOpen}`
+- **配置・アニメーション**: 画面下端固定（`fixed bottom-0 left-0 right-0 z-40`）、背景にはテーマに合わせた半透明または不透明背景（例: `bg-white/95 dark:bg-zinc-900/95 shadow-lg border-t border-zinc-200 dark:border-zinc-800`）、開閉時のなめらかなスライド（`transition-transform duration-200 ease-in-out`、`isOpen ? 'translate-y-0' : 'translate-y-full'`）。
+- **上段（エピソードナビ）**: `ReaderChapterNav` を描画し、前話/次話遷移と話数インジケーターを提供。
+- **下段（下部タブバー）**: `data-testid="reader-bottom-tabs"` を描画し、「本棚（`/`）」「設定（`/settings`）」の 2 タブを表示（常に「本棚」をアクティブ `aria-selected="true"` 表示）。
+
+---
+
+### 3.4 `ReaderView`（本文組版レンダリング ＆ スクロール進捗制御）
+
+サニタイズ済み本文 HTML の縦書き・横書き組版、ルビ・傍点描画、テーマ・文字サイズ・行間適用、および全画面（`h-full w-full`）での縦横双方のスクロール進捗率（`0.0〜1.0`）算出・復元を担う Presentational コンポーネントです。
 
 #### プロパティ契約（`ReaderViewProps`）
 
@@ -188,11 +181,12 @@ src/features/reader/
   - `data-theme`: 現在のカラーテーマ（`"light"`, `"sepia"`, `"dark"`, `"black"`）
   - `data-font-size`: 現在の文字サイズ数値（`String(fontSizePx)`）
   - `data-line-height`: 現在の行間倍率（`String(lineHeight)`）
-- **日本語組版スタイル**:
-  - 縦書き時: CSS `writing-mode: vertical-rl`、`text-orientation: mixed`、水平スクロール（`overflow-x-auto overflow-y-hidden`）。親要素（`horizontal-tb`）との直交フロー（Orthogonal Flow）においてブロック軸（横幅）がコンテンツ全文の幅まで膨張しないよう、ルート要素に `w-full max-w-full`（および親 `ReaderPage` の `<main>` に `w-full min-w-0`）を指定して親コンテナ幅（100%）に制約する。
-  - 横書き時: CSS `writing-mode: horizontal-tb`、垂直スクロール（`overflow-y-auto overflow-x-hidden`）
-  - フォント: 日本語明朝体（`font-serif`）をベースとし、禁則処理（`line-break: strict; word-break: break-word`）を適用
-  - ルビ・傍点: `<ruby>` はブラウザ標準のルビ表示、`<em class="bouten">` は CSS `text-emphasis: filled sesame`（セサミ傍点）で描画
+- **全画面レイアウト ＆ スタイル**:
+  - カード装飾（`rounded-lg border shadow-sm`）および高さ制限（`h-[70vh] / max-h-[70vh]`）を撤廃し、画面全体（`h-full w-full`）をフルに使って本文を表示する。
+  - 縦書き時: CSS `writing-mode: vertical-rl`、`text-orientation: mixed`、水平スクロール（`overflow-x-auto overflow-y-hidden`）。直交フロー（Orthogonal Flow）での横幅膨張を防ぐため `w-full max-w-full` を指定。
+  - 横書き時: CSS `writing-mode: horizontal-tb`、垂直スクロール（`overflow-y-auto overflow-x-hidden`）。
+  - フォント: 日本語明朝体（`font-serif`）をベースとし、禁則処理（`line-break: strict; word-break: break-word`）を適用。
+  - ルビ・傍点: `<ruby>` はブラウザ標準のルビ表示、`<em class="bouten">` は CSS `text-emphasis: filled sesame`（セサミ傍点）で描画。
   - Storybook / VRT バリエーション: 4カラーテーマ・縦書き/横書き・カスタム組版・初期スクロール位置に加え、1280px / 375px の双方で画面幅を超える長文データを用いた水平スクロール（Overflow）検証ストーリー（`VerticalLongContent`）を備える。
 - **縦書き・横書き双方のスクロール進捗率（`0.0 〜 1.0`）算出・復元アルゴリズム**:
   1. **横書き（`horizontal-tb`、上→下の垂直スクロール）**:
@@ -205,67 +199,66 @@ src/features/reader/
      - 進捗率算出: `progress = maxScroll > 0 ? Math.min(1, Math.max(0, Math.abs(element.scrollLeft) / maxScroll)) : 0`
      - 位置復元: `maxScroll > 0` のとき `element.scrollLeft = -clampedInitialProgress * maxScroll`（`maxScroll <= 0` のときは `0`）
   3. **スクロール位置復元の発火トリガー条件**:
-     - マウント時、および `initialScrollProgress`・`bodyHtml`（エピソード切替時）・`writingMode`（縦書き/横書き切替時）のいずれかが変化したタイミングで、`clampedInitialProgress = Math.min(1, Math.max(0, initialScrollProgress))` に基づくスクロール位置復元を実行する（これにより、`initialScrollProgress` が `0 → 0` のまま別エピソードへ遷移した場合でも確実に先頭位置へリセットされ、組み方向切替時にも進捗位置が同期される）。
+     - マウント時、および `initialScrollProgress`・`bodyHtml`（エピソード切替時）・`writingMode`（縦書き/横書き切替時）のいずれかが変化したタイミングで、`clampedInitialProgress = Math.min(1, Math.max(0, initialScrollProgress))` に基づくスクロール位置復元を実行する。
 
 ---
 
-### 3.4 `ReaderPage`（リーダー画面 Presentational コンポーネント）
+### 3.5 `ReaderPage`（リーダー画面 Presentational コンポーネント）
 
-`ReaderToolbar`、`ReaderChapterNav`、および状態別のメイン表示領域（ローディング・エラー・空状態・`ReaderView`）を統合する画面レイアウトコンポーネントです。
+全画面本文（`ReaderView`）と最下部タッチ連動の下部オーバーレイ（`ReaderBottomOverlay`）、および状態別表示（ローディング・エラー・空状態）を統合する画面レイアウトコンポーネントです。
 
 #### プロパティ契約（`ReaderPageProps`）
 
-| プロパティ名             | 型                             | 必須 | 説明                                          |
-| :----------------------- | :----------------------------- | :--- | :-------------------------------------------- |
-| `novel`                  | `NovelRecord \| null`          | 必須 | 現在の作品レコード                            |
-| `chapter`                | `ChapterRecord \| null`        | 必須 | 現在のエピソードレコード                      |
-| `chapterIndex`           | `number`                       | 必須 | 現在のエピソード連番（1始まり）               |
-| `totalChapters`          | `number`                       | 必須 | 作品の全エピソード数                          |
-| `writingMode`            | `WritingMode`                  | 必須 | 現在の組み方向                                |
-| `theme`                  | `ReaderTheme`                  | 必須 | 現在のカラーテーマ                            |
-| `fontSizePx`             | `number`                       | 必須 | 現在の文字サイズ (px)                         |
-| `lineHeight`             | `number`                       | 必須 | 現在の行間倍率                                |
-| `initialScrollProgress`  | `number`                       | 必須 | 初期復元するスクロール進捗率（`0.0 〜 1.0`）  |
-| `isLoading`              | `boolean`                      | 必須 | 読み込み・通信中フラグ                        |
-| `error`                  | `string \| null`               | 任意 | エラーメッセージ文字列                        |
-| `onToggleWritingMode`    | `() => void`                   | 必須 | 組み方向切替時                                |
-| `onChangeTheme`          | `(theme: ReaderTheme) => void` | 必須 | テーマ変更時                                  |
-| `onChangeFontSize`       | `(sizePx: number) => void`     | 必須 | 文字サイズ変更時                              |
-| `onChangeLineHeight`     | `(height: number) => void`     | 必須 | 行間変更時                                    |
-| `onPrevChapter`          | `() => void`                   | 必須 | 「前の話へ」押下時（`TR-05`）                 |
-| `onNextChapter`          | `() => void`                   | 必須 | 「次の話へ」押下時（`TR-05`）                 |
-| `onScrollProgressChange` | `(progress: number) => void`   | 必須 | 本文スクロール進捗変化時                      |
-| `onBackToDetail`         | `() => void`                   | 任意 | 「作品詳細へ（目次へ戻る）」押下時（`TR-06`） |
-| `onBackToBookshelf`      | `() => void`                   | 任意 | 「本棚へ戻る」押下時                          |
-| `onFetchNovel`           | `() => void`                   | 任意 | 手動作品取得・更新トリガー時                  |
+| プロパティ名             | 型                                         | 必須 | 説明                                         |
+| :----------------------- | :----------------------------------------- | :--- | :------------------------------------------- |
+| `novel`                  | `NovelRecord \| null`                      | 必須 | 現在の作品レコード                           |
+| `chapter`                | `ChapterRecord \| null`                    | 必須 | 現在のエピソードレコード                     |
+| `chapterIndex`           | `number`                                   | 必須 | 現在のエピソード連番（1始まり）              |
+| `totalChapters`          | `number`                                   | 必須 | 作品の全エピソード数                         |
+| `writingMode`            | `WritingMode`                              | 必須 | 現在の組み方向                               |
+| `theme`                  | `ReaderTheme`                              | 必須 | 現在のカラーテーマ                           |
+| `fontSizePx`             | `number`                                   | 必須 | 現在の文字サイズ (px)                        |
+| `lineHeight`             | `number`                                   | 必須 | 現在の行間倍率                               |
+| `initialScrollProgress`  | `number`                                   | 必須 | 初期復元するスクロール進捗率（`0.0 〜 1.0`） |
+| `isLoading`              | `boolean`                                  | 必須 | 読み込み・通信中フラグ                       |
+| `error`                  | `string \| null`                           | 任意 | エラーメッセージ文字列                       |
+| `onPrevChapter`          | `() => void`                               | 必須 | 「前の話へ」押下時（`TR-05`）                |
+| `onNextChapter`          | `() => void`                               | 必須 | 「次の話へ」押下時（`TR-05`）                |
+| `onScrollProgressChange` | `(progress: number) => void`               | 必須 | 本文スクロール進捗変化時                     |
+| `onSelectTab`            | `(tab: 'bookshelf' \| 'settings') => void` | 任意 | 下部タブ押下時                               |
+| `initialOverlayOpen`     | `boolean`                                  | 任意 | `false`（エラー/空状態時は `true`）          | オーバーレイ初期展開状態制御用 |
 
-#### セマンティック属性と排他描画ルール
+#### セマンティック属性とレイアウト・排他描画ルール
 
-- **画面ルート**: `data-testid="reader-page"`
-- **上部ツールバー**: `ReaderToolbar` を常時描画する。
-- **前後話ナビゲーション**: `novel !== null` かつ `totalChapters > 0` の場合、`ReaderChapterNav` を常時描画する。
-- **メイン本文領域の排他描画ルール**:
-  1. `error` が非 null の場合: エラー表示要素 `data-testid="reader-error"`（`role="alert"`）を描画する。
+- **画面ルート**: `data-testid="reader-page"`（外枠パディングなし、`h-dvh w-full overflow-hidden relative`）
+- **最下部タッチゾーン**:
+  - 画面最下部（下端約 72px または画面高さ 15% の領域）へのタップ操作を検知。
+  - **スワイプ誤検知防止**: タッチ開始（`pointerdown`）から終了（`pointerup`）までの移動距離が 10px 未満かつ 500ms 未満のタップ操作時のみオーバーレイ開閉をトグルする（スクロール操作では開閉しない）。
+- **自動非表示（Auto-Hide）**:
+  - オーバーレイ表示中に「本文エリアのスクロール操作」「オーバーレイ外（本文エリア）の再タップ」「前後話への移動」が行われた場合は、自動的にオーバーレイを閉じる。
+- **メイン表示領域の排他描画ルール**:
+  1. `error` が非 null の場合: エラー表示要素 `data-testid="reader-error"`（`role="alert"`）を描画し、**下部オーバーレイを最初から開いた状態とする**。
   2. `error === null` かつ `isLoading === true` かつ表示可能な本文（`chapter?.bodyHtml`）が未取得の場合: ローディング表示要素 `data-testid="reader-loading"` を描画する。
-  3. `error === null` かつ `isLoading === false` かつ（`novel === null` または `chapter === null` または `chapter.bodyHtml === null`）の場合: 空状態要素 `data-testid="reader-empty"` を描画する。
-  4. 上記以外（`novel !== null` かつ `chapter?.bodyHtml` が存在する場合）: `ReaderView` を描画する。
+  3. `error === null` かつ `isLoading === false` かつ（`novel === null` または `chapter === null` または `chapter.bodyHtml === null`）の場合: 空状態要素 `data-testid="reader-empty"` を描画し、**下部オーバーレイを最初から開いた状態とする**。
+  4. 上記以外（`novel !== null` かつ `chapter?.bodyHtml` が存在する場合）: 全画面 `ReaderView` を描画し、オーバーレイは初期非表示（最下部タッチで開閉可能）とする。
 
 ---
 
-### 3.5 `ReaderContainer`（リーダー画面 Container コンポーネント）
+### 3.6 `ReaderContainer`（リーダー画面 Container コンポーネント）
 
-`useReader` フックおよびルーター遷移コールバック（または Props で注入されたコールバック）を接続し、`ReaderPage` を描画する Container コンポーネントです。
+`useReader` フック、ルーター遷移コールバック、下部タブ遷移時の `flushBookmark` 連携、および OS バックキーによる目次復帰時のしおり保存を統合する Container コンポーネントです。
 
 #### プロパティ契約（`ReaderContainerProps`）
 
-| プロパティ名        | 型                                                | 必須 | 説明                                                                                                 |
-| :------------------ | :------------------------------------------------ | :--- | :--------------------------------------------------------------------------------------------------- |
-| `novelId`           | `string`                                          | 任意 | ルート `/novels/:novelId/chapters/:chapterIndex` から渡される対象作品 ID                             |
-| `chapterIndex`      | `number`                                          | 任意 | ルートから渡される対象エピソード連番（1始まり、省略時は `1`）                                        |
-| `initialWorkUrl`    | `string`                                          | 任意 | 単体検証・手動取得時の対象作品 URL（既定値: 検証用カクヨム作品 URL）                                 |
-| `onBackToBookshelf` | `() => void`                                      | 任意 | 「本棚へ戻る」（`/`）コールバック（省略時はルーター環境下で `navigateToBookshelf` を使用）           |
-| `onBackToDetail`    | `(novelId: string) => void`                       | 任意 | 「作品詳細へ」（`/novels/:novelId`）コールバック（省略時はルーター環境下で `navigateToNovelDetail`） |
-| `onNavigateChapter` | `(novelId: string, chapterIndex: number) => void` | 任意 | 前後話遷移コールバック（省略時はルーター環境下で `navigateToReader` を使用し、内部話数も同期）       |
+| プロパティ名         | 型                                                | 必須 | 説明                                                                                                 |
+| :------------------- | :------------------------------------------------ | :--- | :--------------------------------------------------------------------------------------------------- |
+| `novelId`            | `string`                                          | 任意 | ルート `/novels/:novelId/chapters/:chapterIndex` から渡される対象作品 ID                             |
+| `chapterIndex`       | `number`                                          | 任意 | ルートから渡される対象エピソード連番（1始まり、省略時は `1`）                                        |
+| `initialWorkUrl`     | `string`                                          | 任意 | 単体検証・手動取得時の対象作品 URL（既定値: 検証用カクヨム作品 URL）                                 |
+| `onBackToBookshelf`  | `() => void`                                      | 任意 | 「本棚へ戻る」（`/`）コールバック（省略時はルーター環境下で `navigateToBookshelf` を使用）           |
+| `onBackToDetail`     | `(novelId: string) => void`                       | 任意 | 「作品詳細へ」（`/novels/:novelId`）コールバック（省略時はルーター環境下で `navigateToNovelDetail`） |
+| `onNavigateSettings` | `() => void`                                      | 任意 | 「設定へ」（`/settings`）コールバック（省略時はルーター環境下で `navigateToSettings`）               |
+| `onNavigateChapter`  | `(novelId: string, chapterIndex: number) => void` | 任意 | 前後話遷移コールバック（省略時はルーター環境下で `navigateToReader` を使用し、内部話数も同期）       |
 
 ---
 
@@ -354,33 +347,35 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
 
 ## 6. 受入条件一覧（Acceptance Criteria: `AC-RD-xx`）
 
-| AC ID          | 対象機能                                 | 検証条件                                                                                                                                                                                                                                                      | 関連要件 / 遷移                                   |
-| :------------- | :--------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :------------------------------------------------ |
-| **`AC-RD-01`** | 本文表示と未キャッシュ話オンデマンド取得 | キャッシュ済み話は通信なしで即時表示され、未キャッシュ話（`bodyHtml === null`）を開いた場合は自動的に HTML 取得・サニタイズ解析・DB 保存（`saveChapterBody`）が行われて作品名・サブタイトル・本文が表示されること。                                           | `SYS-REQ-02` / `TR-03`, `TR-04`, `TR-05`          |
-| **`AC-RD-02`** | ルビ・傍点の正確な描画とサニタイズ       | 本文中の `<ruby>`（`<rt>`, `<rp>`）および傍点 `<em class="bouten">` が XSS サニタイズを維持したまま組版崩れなく描画されること。                                                                                                                               | `SYS-REQ-07`                                      |
-| **`AC-RD-03`** | 縦書き / 横書き切替と永続化              | `toggle-orientation` ボタンにより `vertical-rl`（縦書き）と `horizontal-tb`（横書き）を即座に切り替えられ、`reader_settings` テーブルへ永続化されてリロード後も維持されること。                                                                               | `SYS-REQ-08`                                      |
-| **`AC-RD-04`** | 4カラーテーマ切替と永続化                | `theme-{light\|sepia\|dark\|black}` ボタンにより4種類のカラーテーマを切り替えられ、選択中テーマに `aria-pressed="true"` が付与され、`reader_settings` テーブルへ永続化されること。                                                                            | `SYS-REQ-10`                                      |
-| **`AC-RD-05`** | 文字サイズ・行間ステッパーと永続化       | 文字サイズ（`12〜32px`、`±2px` 刻み、初期値 `18px`）および行間（`1.4〜2.4`、`±0.2` 刻み、初期値 `1.8`）を `−` / `＋` ボタンで変更でき、上下限でボタンが `disabled` となり、`ReaderView` のスタイル反映と `reader_settings` への永続化が行われること。         | `SYS-REQ-09`                                      |
-| **`AC-RD-06`** | 前後エピソード連続遷移と境界制御         | `ReaderChapterNav` の「前の話へ」「次の話へ」ボタンで同一作品の `chapterIndex ± 1` へ遷移（`TR-05`）でき、第1話では「前の話へ」が `disabled`、最終話では「次の話へ」が `disabled` となること。また遷移先が未キャッシュの場合はオンデマンド取得されること。    | `SYS-REQ-11` / `TR-05`                            |
-| **`AC-RD-07`** | 既読フラグ（`is_read`）の自動更新        | エピソード本文の表示完了時および次話遷移時（`TR-05`）に `markChapterRead(novelId, chapterIndex, true)` が実行され、作品詳細・目次画面（`SCR-02`）へ戻った際に閲覧済み話に `既読` バッジ（`episode-read-badge`）が表示されること。                             | `SYS-REQ-12` / `TR-05`, `TR-06`                   |
-| **`AC-RD-08`** | しおり話数・スクロール進捗率の保存復元   | 現在閲覧中の `bookmark_chapter_index` と、縦書き（水平スクロール）・横書き（垂直スクロール）双方のスクロール進捗率（`0.0〜1.0`）が自動保存され、「作品詳細へ戻る（`TR-06`）」や「続きから読む（`TR-03`, `TR-04`）」で同じ話・スクロール位置が復元されること。 | `SYS-REQ-12` / `TR-03`, `TR-04`, `TR-05`, `TR-06` |
+| AC ID          | 対象機能                                 | 検証条件                                                                                                                                                                                                                                                                            | 関連要件 / 遷移                                   |
+| :------------- | :--------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------ |
+| **`AC-RD-01`** | 本文表示と未キャッシュ話オンデマンド取得 | キャッシュ済み話は通信なしで即時表示され、未キャッシュ話（`bodyHtml === null`）を開いた場合は自動的に HTML 取得・サニタイズ解析・DB 保存（`saveChapterBody`）が行われて作品名・サブタイトル・本文が表示されること。                                                                 | `SYS-REQ-02` / `TR-03`, `TR-04`, `TR-05`          |
+| **`AC-RD-02`** | ルビ・傍点の正確な描画とサニタイズ       | 本文中の `<ruby>`（`<rt>`, `<rp>`）および傍点 `<em class="bouten">` が XSS サニタイズを維持したまま組版崩れなく描画されること。                                                                                                                                                     | `SYS-REQ-07`                                      |
+| **`AC-RD-03`** | 縦書き / 横書き切替と永続化              | 設定画面（`SCR-05`）等での組み方向変更により、`ReaderView` の `vertical-rl`（縦書き）と `horizontal-tb`（横書き）が即座に反映され、`reader_settings` テーブルへ永続化されてリロード後も維持されること。                                                                             | `SYS-REQ-08`                                      |
+| **`AC-RD-04`** | 4カラーテーマ切替と永続化                | 設定画面（`SCR-05`）等でのカラーテーマ変更（light/sepia/dark/black）が `ReaderView` に即座に反映され、`reader_settings` テーブルへ永続化されてリロード後も維持されること。                                                                                                          | `SYS-REQ-10`                                      |
+| **`AC-RD-05`** | 文字サイズ・行間設定と永続化             | 設定画面（`SCR-05`）等での文字サイズ（`12〜32px`）および行間（`1.4〜2.4`）変更が `ReaderView` に即座に反映され、`reader_settings` テーブルへ永続化されてリロード後も維持されること。                                                                                                | `SYS-REQ-09`                                      |
+| **`AC-RD-06`** | 前後エピソード連続遷移とオーバーレイ連携 | `ReaderBottomOverlay` 内の「前の話へ」「次の話へ」ボタンで同一作品の `chapterIndex ± 1` へ遷移（`TR-05`）でき、第1話では「前の話へ」が `disabled`、最終話では「次の話へ」が `disabled` となること。遷移後はオーバーレイが自動的に隠れ、未キャッシュ話はオンデマンド取得されること。 | `SYS-REQ-11` / `TR-05`                            |
+| **`AC-RD-07`** | 既読フラグ（`is_read`）の自動更新        | エピソード本文の表示完了時および次話遷移時（`TR-05`）に `markChapterRead(novelId, chapterIndex, true)` が実行され、作品詳細・目次画面（`SCR-02`）へ戻った際に閲覧済み話に `既読` バッジ（`episode-read-badge`）が表示されること。                                                   | `SYS-REQ-12` / `TR-05`, `TR-06`                   |
+| **`AC-RD-08`** | しおり話数・スクロール進捗率の保存復元   | 現在閲覧中の `bookmark_chapter_index` とスクロール進捗率（`0.0〜1.0`）が自動保存され、下部オーバーレイの「本棚」「設定」タブ遷移時および OS バックキーによる目次復帰時にも `flushBookmark` が実行され、再開時に同じ話・スクロール位置が復元されること。                             | `SYS-REQ-12` / `TR-03`, `TR-04`, `TR-05`, `TR-06` |
+| **`AC-RD-09`** | 全画面テキスト表示化                     | 外枠パディング（`p-3 md:p-6`）、カード枠線・影（`rounded-lg border shadow-sm`）、および常時表示のバーが撤廃され、画面全体（`100dvh`）に本文が全画面でレンダリングされること。                                                                                                       | `SYS-REQ-08, 11`                                  |
+| **`AC-RD-10`** | 最下部タッチによる下部オーバーレイ開閉   | 画面最下部ゾーン（下端約 72px または 15% 領域）のタップで `ReaderBottomOverlay` がスライドイン表示され、本文スクロール・本文エリア再タップ・前後話遷移で自動的に隠れること。またエラー時（`reader-error`）や空状態時は最初から表示されること。                                      | `SYS-REQ-11` / `TR-05`                            |
 
 ---
 
 ## 7. SCN-01 結合シナリオ仕様（Playwright IT）
 
 - **シナリオ ID**: `SCN-01`
-- **目的**: 本棚画面（`SCR-01`）での URL 作品登録から、作品詳細・目次画面（`SCR-02`）での目次確認・更新・エピソード選択（`TR-02`, `TR-04`）、リーダー画面（`SCR-03`）での未キャッシュ話オンデマンド取得、縦書き・ルビ・傍点描画、縦書き・横書き双方でのスクロール進捗保存と復元（`AC-RD-08`）、組版設定（テーマ・組み方向・文字サイズ・行間）変更とリロード永続化、前後エピソード双方向遷移（`TR-05`）、既読・しおり保存と作品詳細・本棚「続きから読む」からの再開復元（`TR-06`, `TR-04`, `TR-03`）、および作品削除（`TR-07`）までの一連のユーザー体験を一気通貫で検証する。
+- **目的**: 本棚画面（`SCR-01`）での URL 作品登録から、作品詳細・目次画面（`SCR-02`）での目次確認・更新・エピソード選択（`TR-02`, `TR-04`）、リーダー画面（`SCR-03`）での未キャッシュ話オンデマンド取得、全画面（100dvh）テキスト表示、縦書き・ルビ・傍点描画、画面最下部タップによる下部オーバーレイ（`ReaderBottomOverlay`）のスライドイン展開、スクロール操作による自動非表示、縦書き・横書き双方でのスクロール進捗保存と復元（`AC-RD-08`）、下部オーバーレイからの前後エピソード遷移（`TR-05`）、既読・しおり保存と作品詳細・本棚「続きから読む」からの再開復元（`TR-06`, `TR-04`, `TR-03`）、および作品削除（`TR-07`）までの一連のユーザー体験を一気通貫で検証する。
 - **検証ステップ**:
   1. 初期表示（`/`）で本棚の空状態（`bookshelf-empty`）が表示されることを確認。
   2. 「URLから作品を追加」ダイアログを開き、カクヨム作品 URL を入力して登録を実行し、本棚一覧に作品カード（`novel-card`）が追加され、しおり位置バッジ（`novel-card-bookmark`）に `未読` が表示されることを確認。
   3. 作品カード本体（`novel-card-select`）をクリックして `/novels/:novelId`（`SCR-02` 作品詳細・目次画面）へ遷移（`TR-02`）し、作品ヘッダー情報・章見出し・エピソード一覧（`未取得` バッジ）が表示されること、および「目次を更新」ボタン押下で最新状態が通知されることを確認。
   4. 目次一覧から第1話を選択して `/novels/:novelId/chapters/1`（`SCR-03`）へ遷移（`TR-04`）することを確認。
-  5. 第1話本文がオンデマンド取得され、`reader-title`（作品名）、`reader-chapter-title`（サブタイトル）、`reader-chapter-indicator`（`第 1 話 / 全 4 話`）、および `reader-view` が表示されることを確認。
-  6. 初期表示が `writing-vertical-rl`（縦書き）、文字サイズ `18px`、行間 `1.8` であり、第1話では「前の話へ」（`reader-prev-chapter`）が `disabled` かつ「次の話へ」（`reader-next-chapter`）が有効であることを確認。
-  7. 本文内の `<ruby>`（ルビ）および `<em class="bouten">`（傍点）が可視状態で正しくレンダリングされていること、および縦書き（`writing-vertical-rl`）状態で左方向（負の `scrollLeft`）へ水平スクロールした進捗率が保存され、「作品詳細へ」（`TR-06`）→「続きから読む（第1話）」（`TR-04`）で再開した際に負の `scrollLeft` 位置が復元されることを確認（`AC-RD-08`）。
-  8. テーマを「セピア」、組み方向を「横書き」、文字サイズを拡大（`20px`）、行間を拡大（`2.0`）に変更し、`ReaderView` の属性・スタイルに反映されることを確認。
-  9. ブラウザをリロード（F5）し、再取得操作を行うことなく、即座に作品・本文および変更後の全組版設定（横書き・セピア・`20px`・`2.0`）が復元表示されることを確認。
-  10. 「次の話へ」（`reader-next-chapter`）をクリックして `/novels/:novelId/chapters/2` へ遷移（`TR-05`）し、第2話本文がオンデマンド取得されて `reader-chapter-indicator`（`第 2 話 / 全 4 話`）および `reader-chapter-title` が更新されることを確認した後、「前の話へ」（`reader-prev-chapter`）をクリックして第1話（`/novels/:novelId/chapters/1`）へ戻る遷移（`TR-05`、インジケーター・サブタイトル復帰・前話ボタン `disabled`）を検証し、再度「次の話へ」で第2話へ進んで垂直スクロール操作により進捗率が保存されることを確認。
-  11. 「作品詳細へ」（`reader-back-to-detail`）をクリックして `SCR-02` へ戻り（`TR-06`）、第1話・第2話が `取得済み`（`episode-cached-badge`）かつ `既読`（`episode-read-badge`）に、第2話に `しおり`（`episode-bookmark-badge`）が表示され、ヘッダーに「続きから読む（第2話）」（`detail-resume-button`）と「最初から読む（第1話）」（`detail-read-first-button`）が併存表示（`AC-ND-03`）されて再開時にスクロール位置が復元されることを確認。
-  12. 本棚画面（`/`）へ戻り取得済み話数・しおり表示（`しおり: 第2話`）を確認した上で、作品カードの「第2話から読む」（`novel-card-resume`）をクリックして `/novels/:novelId/chapters/2` へ直接遷移（`TR-03` / `AC-BS-06`）し第2話本文・しおりスクロール位置が復元されること、リーダーの「本棚へ戻る」（`reader-back-to-bookshelf`）で `/` へ戻れることを確認し、最後に `SCR-02` から「作品を削除」→ 確認ダイアログの「削除する」を実行して本棚（`/`）へ戻り空状態（`bookshelf-empty`）となることを確認（`TR-07`）。
+  5. 第1話本文がオンデマンド取得され、外枠余白・枠線のない全画面（`100dvh`）で `reader-view` が表示され、常時固定バーが表示されていないことを確認（`AC-RD-09`）。
+  6. 初期表示が `writing-vertical-rl`（縦書き）であり、本文内の `<ruby>`（ルビ）および `<em class="bouten">`（傍点）が可視状態で正しくレンダリングされていることを確認。
+  7. 画面最下部ゾーンをタップし、下端から `ReaderBottomOverlay`（`data-testid="reader-bottom-overlay"`）がスライドイン表示され、第1話では「前の話へ」（`reader-prev-chapter`）が `disabled` かつ「次の話へ」（`reader-next-chapter`）が有効であること、および下部タブバーが表示されていることを確認（`AC-RD-10`）。
+  8. 縦書き（`writing-vertical-rl`）状態で左方向（負の `scrollLeft`）へ水平スクロール操作を行い、スクロール開始に伴いオーバーレイが自動的に隠れること、および進捗率が自動保存されることを確認。
+  9. ブラウザの戻る操作（OS バックキー相当）により現在のスクロール進捗率を保存して作品詳細（`SCR-02`）へ戻り、「続きから読む（第1話）」（`TR-04`）で再開した際に負の `scrollLeft` 位置が復元されることを確認（`AC-RD-08`）。
+  10. 再度画面最下部ゾーンをタップしてオーバーレイを表示し、「次の話へ」（`reader-next-chapter`）をクリックして `/novels/:novelId/chapters/2` へ遷移（`TR-05`）することを確認。遷移後に第2話本文がオンデマンド取得され、オーバーレイが自動的に隠れることを確認。
+  11. 第2話で最下部タップによりオーバーレイを表示し、「前の話へ」（`reader-prev-chapter`）をクリックして第1話へ戻る遷移（`TR-05`）を確認した後、再度第2話へ進んでスクロール操作を行う。
+  12. オーバーレイを表示して下部タブ「本棚」をタップし、しおり進捗率が DB 保存（`flushBookmark`）された上で本棚画面（`/`）へ遷移（`TR-06`）することを確認。本棚の作品カードに `しおり: 第2話` が表示され、「第2話から読む」（`novel-card-resume`）で第2話のスクロール位置が復元されること、および最後に `SCR-02` から作品を削除して本棚が空状態になることを確認（`TR-07`）。
