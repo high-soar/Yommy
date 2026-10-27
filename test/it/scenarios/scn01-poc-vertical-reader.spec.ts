@@ -68,6 +68,20 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     const sectionHeader = page.getByTestId("chapter-section-header").first();
     await expect(sectionHeader).toBeVisible();
 
+    // あらすじの折りたたみトグル動作を確認（AC-ND-01）
+    const synopsisToggle = page.getByTestId("synopsis-toggle-button");
+    if (await synopsisToggle.isVisible()) {
+      await expect(synopsisToggle).toHaveText("あらすじを展開");
+      await synopsisToggle.click();
+      await expect(synopsisToggle).toHaveText("あらすじを折りたたむ");
+      await synopsisToggle.click();
+      await expect(synopsisToggle).toHaveText("あらすじを展開");
+    }
+
+    // エピソード一覧コンテナが内部スクロール領域として存在することを確認（AC-ND-02）
+    const episodeListContainer = page.getByTestId("episode-list-container");
+    await expect(episodeListContainer).toBeVisible();
+
     // エピソード一覧が表示され、未取得バッジが表示されていることを確認
     const episodeItems = page.getByTestId("episode-item");
     await expect(episodeItems).toHaveCount(4);
@@ -76,7 +90,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       .getByTestId("episode-uncached-badge");
     await expect(firstUncachedBadge).toBeVisible();
 
-    // 「目次を更新」ボタン押下で最新状態が通知されることを確認
+    // 「目次を更新」ボタン押下で最新状態が通知され、スクロール位置が維持されることを確認（AC-ND-05, AC-ND-08）
     const refreshButton = page.getByTestId("refresh-toc-button");
     await expect(refreshButton).toBeVisible();
     await refreshButton.click();
@@ -389,5 +403,20 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(page).toHaveURL("/");
     await expect(page.getByTestId("bookshelf-empty")).toBeVisible();
     await expect(page.getByTestId("novel-card")).not.toBeVisible();
+
+    // 13. 未存在作品 ID (/novels/non-existent-id) 指定時の Not Found 画面と「本棚へ戻る」ボタンによる本棚復帰を検証（AC-ND-07, TR-07）
+    await page.goto("/novels/kakuyomu:9999999999999999999");
+    const notFoundElement = page.getByTestId("novel-detail-not-found");
+    await expect(notFoundElement).toBeVisible();
+    await expect(notFoundElement).toContainText(
+      "指定された作品が見つかりません。",
+    );
+
+    const backToBookshelfButton = page.getByTestId("back-to-bookshelf-button");
+    await expect(backToBookshelfButton).toBeVisible();
+    await backToBookshelfButton.click();
+
+    await expect(page).toHaveURL("/");
+    await expect(page.getByTestId("bookshelf-empty")).toBeVisible();
   });
 });
