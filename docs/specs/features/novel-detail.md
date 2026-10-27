@@ -2,7 +2,7 @@
 type: spec-feature
 title: 作品詳細・目次画面仕様書（SCR-02: Novel Detail & TOC）
 description: 登録済み作品のヘッダー情報・あらすじ表示、章見出し付きエピソード一覧（キャッシュ済み・既読・しおり状態）、目次更新（再取得）、作品削除、およびリーダー画面への閲覧遷移を提供する作品詳細・目次画面（SCR-02）の正本仕様。
-status: Approved
+status: "Review (#51)"
 updated: "2026-10-27"
 tags: [novel-detail, scr-02, toc, routing, ui]
 related_specs:
@@ -13,6 +13,7 @@ related_specs:
   - docs/specs/features/bookshelf.md
   - docs/specs/features/reader-view.md
   - docs/specs/parsers/kakuyomu.md
+  - docs/specs/changes/issue-51-novel-detail-layout-and-scroll.md
   - docs/specs/changes/archive/issue-13-novel-detail-and-toc.md
   - docs/specs/changes/archive/issue-14-reader-navigation-bookmark-settings.md
 related_tests:
@@ -46,7 +47,7 @@ related_tests:
   - `TR-02`（本棚画面 `SCR-01` の作品カード本体タップによる `SCR-02` `/novels/:novelId` への遷移）
   - `TR-04`（目次リストのエピソード行タップ、または「最初から読む／続きから読む」ボタンタップによる小説リーダー画面 `SCR-03` `/novels/:novelId/chapters/:chapterIndex` への遷移）
   - `TR-06`（小説リーダー画面 `SCR-03` の「作品詳細へ（目次へ戻る）」ボタンによる `SCR-02` `/novels/:novelId` への復帰）
-  - `TR-07`（作品詳細ヘッダーの「本棚へ戻る」ボタン、または作品削除確認ダイアログでの削除実行完了による本棚画面 `SCR-01` `/` への遷移）
+  - `TR-07`（作品詳細画面からの本棚復帰導線：作品未検出画面 `novel-detail-not-found` の「本棚へ戻る」ボタン、作品削除確認ダイアログでの削除実行完了、下部タブバー「本棚」タップ、または OS バックキー操作による本棚画面 `SCR-01` `/` への遷移。※`NovelDetailHeader` 内の「← 本棚へ戻る」ボタンは廃止）
 - **対象外スコープ（後続 Issue / Milestone）**:
   - エピソード閲覧に伴うしおり位置（`bookmarkChapterIndex`, `bookmarkScrollProgress`）および既読フラグ（`isRead`）の自動更新ロジック本体（Issue #14 の `SCR-03` リーダー画面拡張で一括実装）
   - レートリミット付きバックグラウンド DL キューによる未取得全話の一括ダウンロード（Milestone `v0.2`：`SYS-REQ-03`, `TR-08`）
@@ -92,7 +93,7 @@ src/features/novel-detail/
 
 ### 3.1 `NovelDetailHeader`（作品詳細ヘッダー）
 
-作品のメタ情報（タイトル、著者、あらすじ、総話数・取得済み話数）、読書開始ボタン（「最初から読む」「続きから読む」）、目次更新ボタン、作品削除ボタン、および「本棚へ戻る」ナビゲーションを表示する Presentational コンポーネントです。
+作品のメタ情報（タイトル、著者、あらすじ、総話数・取得済み話数）、読書開始ボタン（「最初から読む」「続きから読む」）、目次更新ボタン、および作品削除ボタンを表示する Presentational コンポーネントです。画面上部に固定配置（`shrink-0`）され、あらすじの折りたたみトグルおよび省スペース化を提供します（画面内の「← 本棚へ戻る」ボタンは廃止）。
 
 #### プロパティ契約（`NovelDetailHeaderProps`）
 
@@ -102,7 +103,6 @@ src/features/novel-detail/
 | `isRefreshing`         | `boolean`                        | 必須 | 目次再取得（更新）通信中フラグ                      |
 | `refreshMessage`       | `string \| null`                 | 任意 | 目次再取得完了時のインライン通知メッセージ          |
 | `error`                | `string \| null`                 | 任意 | 目次再取得失敗または削除失敗時のエラーメッセージ    |
-| `onBackToBookshelf`    | `() => void`                     | 必須 | 「本棚へ戻る」ボタン押下時のコールバック（`TR-07`） |
 | `onStartFromBeginning` | `() => void`                     | 必須 | 「最初から読む（第1話）」ボタン押下時のコールバック |
 | `onResumeBookmark`     | `(chapterIndex: number) => void` | 必須 | 「続きから読む（第N話）」ボタン押下時のコールバック |
 | `onRefreshToc`         | () => void \| Promise<void>      | 必須 | 「目次を更新」ボタン押下時のコールバック            |
@@ -110,15 +110,22 @@ src/features/novel-detail/
 
 #### 表示項目・セマンティック属性・活性制御ルール
 
-- **ルート要素**: `data-testid="novel-detail-header"`
+- **ルート要素**: `data-testid="novel-detail-header"`、画面上部固定（`shrink-0`）
 - **ナビゲーション**:
-  - **本棚へ戻るボタン**: `data-testid="back-to-bookshelf-button"`（クリック時に `onBackToBookshelf()` を呼び出す）
-- **作品メタ情報**:
-  - **作品タイトル**: `data-testid="novel-detail-title"`（`novel.title`）
+  - ヘッダー内の「← 本棚へ戻る」ボタン（`data-testid="back-to-bookshelf-button"`）は廃止（下部タブバーおよび OS バックキーにより復帰するため）。
+- **作品メタ情報（省スペース配置）**:
+  - **作品タイトル**: `data-testid="novel-detail-title"`（`novel.title`、コンパクトな見出しサイズ）
   - **著者名**: `data-testid="novel-detail-author"`（`novel.author`、空文字の場合は `著者不明`）
   - **話数・キャッシュ統計**: `data-testid="novel-detail-stats"`
     - `全 {novel.totalChapters} 話（取得済み {novel.cachedChapters} 話）` の形式で表示する。
-  - **あらすじ**: `data-testid="novel-detail-synopsis"`（`novel.synopsis`、空文字の場合は `あらすじはありません。`）
+- **あらすじの折りたたみトグル（`synopsis`）**:
+  - `data-testid="novel-detail-synopsis"`（`novel.synopsis`、空文字の場合は `あらすじはありません。`）
+  - **初期状態（折りたたみ）**: 数行（2〜3行、`line-clamp-2` 等）のみ表示する。
+  - **トグルボタン**: `data-testid="synopsis-toggle-button"`
+    - 折りたたみ時ラベル: `あらすじを展開`、展開時ラベル: `あらすじを折りたたむ`
+    - セマンティック属性: `aria-expanded={isSynopsisExpanded}`、`aria-controls="novel-detail-synopsis"`
+  - **展開時の制御**: タップで全文を展開する。展開時も各話リスト領域が押し潰されないよう、最大高さ制限と内部スクロール（`max-h-40 overflow-y-auto`）を設ける。
+  - ※`novel.synopsis` が空文字・未設定の場合は「あらすじはありません。」を表示し、トグルボタンは描画しない。
 - **読書開始ボタンの表示制御（`TR-04`）**:
   - **しおり未設定時（`novel.bookmarkChapterIndex === null`）**:
     - プライマリボタン `data-testid="detail-read-first-button"`（ラベル: `最初から読む（第1話）`）の **1 ボタンのみ** を表示し、クリック時に `onStartFromBeginning()` を呼び出す（`detail-resume-button` は描画しない）。
@@ -166,7 +173,7 @@ src/features/novel-detail/
 
 ### 3.3 `EpisodeList`（章見出し付きエピソード一覧）
 
-全エピソード配列（`ChapterSummary[]`）を受け取り、章・部見出し（`partTitle`）の境界ごとにセクションヘッダーを挿入したフラットリストとして描画する Presentational コンポーネントです。
+全エピソード配列（`ChapterSummary[]`）を受け取り、章・部見出し（`partTitle`）の境界ごとにセクションヘッダーを挿入したフラットリストとして描画する Presentational コンポーネントです。`NovelDetailPage` の内部スクロール領域（`episode-list-container`）内に配置されます。
 
 #### プロパティ契約（`EpisodeListProps`）
 
@@ -186,6 +193,7 @@ src/features/novel-detail/
   - `chapter.partTitle === null`（または空文字）のエピソードには章見出し要素を描画しない。
 - **各話描画**:
   - 各 `chapter` に対して `EpisodeListItem` を描画し、`isBookmarked={bookmarkChapterIndex === chapter.chapterIndex}` を渡す。
+  - 各話要素には `data-chapter-index={chapter.chapterIndex}` が付与されており、初期スクロール位置調整のターゲットとして使用される。
 
 ---
 
@@ -216,36 +224,45 @@ src/features/novel-detail/
 
 ### 3.5 `NovelDetailPage`（作品詳細・目次画面 Presentational コンポーネント）
 
-`NovelDetailHeader`、`EpisodeList`、および `DeleteConfirmDialog` を統合し、ローディング状態や未存在作品（Not Found）状態の排他描画を制御する画面コンポーネントです。
+`NovelDetailHeader`、`EpisodeList`、および `DeleteConfirmDialog` を統合し、ローディング状態や未存在作品（Not Found）状態の排他描画、ヘッダー固定・各話リスト内部スクロールレイアウト、およびしおり話数への初期スクロール調整を制御する画面コンポーネントです。
 
 #### プロパティ契約（`NovelDetailPageProps`）
 
-| プロパティ名           | 型                               | 必須 | 説明                                              |
-| :--------------------- | :------------------------------- | :--- | :------------------------------------------------ |
-| `novel`                | `NovelRecord \| null`            | 必須 | 作品レコード（未取得・存在しない場合は `null`）   |
-| `chapters`             | `ChapterSummary[]`               | 必須 | エピソード目次一覧                                |
-| `isLoading`            | `boolean`                        | 必須 | 初回データ読み込み中フラグ                        |
-| `isRefreshing`         | `boolean`                        | 必須 | 目次再取得（更新）通信中フラグ                    |
-| `isDeleteDialogOpen`   | `boolean`                        | 必須 | 作品削除確認ダイアログの開閉状態                  |
-| `isDeleting`           | `boolean`                        | 必須 | 作品削除実行中フラグ                              |
-| `refreshMessage`       | `string \| null`                 | 任意 | 目次再取得完了時のインライン通知文字列            |
-| `error`                | `string \| null`                 | 任意 | エラーメッセージ文字列                            |
-| `onBackToBookshelf`    | `() => void`                     | 必須 | 「本棚へ戻る」押下時（`TR-07`）                   |
-| `onStartFromBeginning` | `() => void`                     | 必須 | 「最初から読む（第1話）」押下時（`TR-04`）        |
-| `onResumeBookmark`     | `(chapterIndex: number) => void` | 必須 | 「続きから読む（第N話）」押下時（`TR-04`）        |
-| `onSelectEpisode`      | `(chapterIndex: number) => void` | 必須 | 個別エピソード行タップ時（`TR-04`）               |
-| `onRefreshToc`         | () => void \| Promise<void>      | 必須 | 「目次を更新」押下時                              |
-| `onOpenDeleteDialog`   | `() => void`                     | 必須 | 「作品を削除」押下時                              |
-| `onCloseDeleteDialog`  | `() => void`                     | 必須 | 削除確認ダイアログのキャンセル時                  |
-| `onConfirmDelete`      | () => void \| Promise<void>      | 必須 | 削除確認ダイアログの「削除する」確定時（`TR-07`） |
+| プロパティ名           | 型                               | 必須 | 説明                                               |
+| :--------------------- | :------------------------------- | :--- | :------------------------------------------------- |
+| `novel`                | `NovelRecord \| null`            | 必須 | 作品レコード（未取得・存在しない場合は `null`）    |
+| `chapters`             | `ChapterSummary[]`               | 必須 | エピソード目次一覧                                 |
+| `isLoading`            | `boolean`                        | 必須 | 初回データ読み込み中フラグ                         |
+| `isRefreshing`         | `boolean`                        | 必須 | 目次再取得（更新）通信中フラグ                     |
+| `isDeleteDialogOpen`   | `boolean`                        | 必須 | 作品削除確認ダイアログの開閉状態                   |
+| `isDeleting`           | `boolean`                        | 必須 | 作品削除実行中フラグ                               |
+| `refreshMessage`       | `string \| null`                 | 任意 | 目次再取得完了時のインライン通知文字列             |
+| `error`                | `string \| null`                 | 任意 | エラーメッセージ文字列                             |
+| `onBackToBookshelf`    | `() => void`                     | 必須 | 「本棚へ戻る」押下時（未検出エラー画面での復帰用） |
+| `onStartFromBeginning` | `() => void`                     | 必須 | 「最初から読む（第1話）」押下時（`TR-04`）         |
+| `onResumeBookmark`     | `(chapterIndex: number) => void` | 必須 | 「続きから読む（第N話）」押下時（`TR-04`）         |
+| `onSelectEpisode`      | `(chapterIndex: number) => void` | 必須 | 個別エピソード行タップ時（`TR-04`）                |
+| `onRefreshToc`         | () => void \| Promise<void>      | 必須 | 「目次を更新」押下時                               |
+| `onOpenDeleteDialog`   | `() => void`                     | 必須 | 「作品を削除」押下時                               |
+| `onCloseDeleteDialog`  | `() => void`                     | 必須 | 削除確認ダイアログのキャンセル時                   |
+| `onConfirmDelete`      | () => void \| Promise<void>      | 必須 | 削除確認ダイアログの「削除する」確定時（`TR-07`）  |
 
-#### セマンティック属性と排他描画ルール
+#### セマンティック属性とレイアウト・排他描画ルール
 
 - **画面ルート**: `data-testid="novel-detail-page"`
+  - 画面全体の高さを占有し（`h-full flex flex-col overflow-hidden`）、ウィンドウ自体のスクロールを防止する。
+- **レイアウト構造**:
+  - **上部固定ヘッダー**: `NovelDetailHeader` を `shrink-0` で上部に固定する。
+  - **中央スクロール領域**: `<main data-testid="episode-list-container" className="flex-1 min-h-0 overflow-y-auto ...">` 内に `EpisodeList` を配置し、各話リストのみが内部スクロールする。
+- **しおり話数（`bookmarkChapterIndex`）への初期スクロール位置自動調整**:
+  - 初回データ読み込み完了時（`isLoading` が `false` に切り替わり `novel !== null` かつ `chapters.length > 0` となった初回）、作品にしおり（`novel.bookmarkChapterIndex !== null`）が設定されている場合は、該当話（`[data-chapter-index="${novel.bookmarkChapterIndex}"]`）の要素が各話リストスクロール領域の先頭（上端）に来るよう自動スクロール位置を調整する。
+  - しおり未設定時（`novel.bookmarkChapterIndex === null`）はスクロール調整を行わず、先頭（`scrollTop = 0`）のままとする。
+  - 初回スクロール完了フラグを管理し、同一画面内での「目次を更新」（`refreshToc`、`isRefreshing` の変化）実行時には自動スクロールを再実行せず、ユーザーの現在スクロール位置を維持する。
+  - 作品 ID（`novelId`）が変化した際（別作品へ遷移時）はフラグをリセットし、新作品の初回表示時に再度しおりスクロールを行う。
 - **メイン領域の排他描画ルール**:
   1. `isLoading === true` の場合: ローディング表示要素 `data-testid="novel-detail-loading"` を描画し、ヘッダー・目次一覧・未存在表示は描画しない。
   2. `isLoading === false` かつ `novel === null` の場合: 未存在・エラー案内領域 `data-testid="novel-detail-not-found"`（`error ?? "指定された作品が見つかりません。"`）および「本棚へ戻る」ボタン `data-testid="back-to-bookshelf-button"` を描画する。
-  3. `isLoading === false` かつ `novel !== null` の場合: `NovelDetailHeader`、`EpisodeList`、および `DeleteConfirmDialog` を描画する。
+  3. `isLoading === false` かつ `novel !== null` の場合: `NovelDetailHeader`（上部固定）、各話リスト内部スクロール領域（中央）、および `DeleteConfirmDialog` を描画する。
 
 ---
 
@@ -316,12 +333,13 @@ export interface UseNovelDetailResult {
 
 ## 5. 受入条件一覧（Acceptance Criteria: `AC-ND-xx`）
 
-| AC ID          | 対象機能                                 | 検証条件                                                                                                                                                                                                                                                          | 関連要件 / 遷移                 |
-| :------------- | :--------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------ |
-| **`AC-ND-01`** | 作品ヘッダー情報・統計表示               | 作品詳細画面（`/novels/:novelId`）に作品タイトル、著者名、あらすじ、および全話数・取得済み話数（`全 N 話（取得済み M 話）`）が正確に表示されること。                                                                                                              | `SYS-REQ-01` / `TR-02`          |
-| **`AC-ND-02`** | 章見出しとエピソード一覧・状態表示       | エピソード一覧が `chapterIndex` 昇順で表示され、`partTitle` の変化箇所に章見出しヘッダー（`chapter-section-header`）が挿入されること。また各話の本文キャッシュ状態（`取得済み` / `未取得`）、既読状態（`既読`）、しおり位置（`しおり`）が正確に表示されること。   | `SYS-REQ-01`, `02`, `12`        |
-| **`AC-ND-03`** | 読書開始ボタンの表示制御と遷移           | しおり未設定時は「最初から読む（第1話）」の1ボタンのみが表示され、しおり設定時は「続きから読む（第N話）」と「最初から読む（第1話）」の2ボタンが表示され、それぞれ該当話のリーダー画面（`/novels/:novelId/chapters/:chapterIndex`）へ遷移（`TR-04`）すること。     | `SYS-REQ-02`, `12` / `TR-04`    |
-| **`AC-ND-04`** | 未キャッシュ話選択とオンデマンド取得     | 目次一覧で未キャッシュ話をタップすると即座にリーダー画面（`SCR-03`）へ遷移（`TR-04`）して本文がオンデマンド取得・DB保存され、「作品詳細へ」（`TR-06`）で戻ると該当話が `取得済み` バッジ・取得済み話数 `+1` に更新されていること。                                | `SYS-REQ-02` / `TR-04`, `TR-06` |
-| **`AC-ND-05`** | 目次再取得（更新）とフィードバック表示   | 「目次を更新」ボタンを押下すると作品トップ HTML を再取得して `upsertNovelWithToc` で既存キャッシュを保持したまま目次を更新し、完了時に新着話数に応じたインライン通知（`目次を更新しました（+N話）` / `最新の状態です`）、失敗時にエラーメッセージを表示すること。 | `SYS-REQ-01`, `04`              |
-| **`AC-ND-06`** | 確認ダイアログ付き作品削除と本棚復帰     | 「作品を削除」ボタンから確認ダイアログを開き、「削除する」を確定すると `deleteNovel` により作品および関連 `chapters` がカスケード削除され、本棚画面（`/`）へ遷移（`TR-07`）して一覧から消えていること。                                                           | `SYS-REQ-05` / `TR-07`          |
-| **`AC-ND-07`** | 本棚へ戻る導線と未存在作品フォールバック | ヘッダーの「本棚へ戻る」ボタン押下時に本棚画面（`/`）へ遷移（`TR-07`）すること。また存在しない `novelId` が指定された場合はクラッシュせず `novel-detail-not-found` と「本棚へ戻る」導線を表示すること。                                                           | `SYS-REQ-01` / `TR-07`          |
+| AC ID          | 対象機能                                   | 検証条件                                                                                                                                                                                                                                                                                                                                                                                                                                            | 関連要件 / 遷移                 |
+| :------------- | :----------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------ |
+| **`AC-ND-01`** | 作品ヘッダー情報・あらすじトグル表示       | 作品詳細画面（`/novels/:novelId`）上部に `NovelDetailHeader` が固定配置（`shrink-0`）され、タイトル・著者・統計がコンパクトに表示されること。またあらすじは初期状態で折りたたまれ（2〜3行 clamp）、トグルボタン（`synopsis-toggle-button`）で全文展開／折りたたみが可能であり、展開時は最大高さ制限と内部スクロール（`max-h` ＋ `overflow-y-auto`）が適用されること。あらすじ空文字時は「あらすじはありません。」を表示しトグルは非表示であること。 | `SYS-REQ-01` / `TR-02`          |
+| **`AC-ND-02`** | 章見出しとエピソード一覧・内部スクロール   | エピソード一覧が固定ヘッダー下の独立スクロール領域（`flex-1 min-h-0 overflow-y-auto`）として描画され、`chapterIndex` 昇順で章見出し（`chapter-section-header`）、本文キャッシュ状態（`取得済み` / `未取得`）、既読状態（`既読`）、しおり位置（`しおり`）が正確に表示されること。                                                                                                                                                                    | `SYS-REQ-01`, `02`, `12`        |
+| **`AC-ND-03`** | 読書開始ボタンの表示制御と遷移             | しおり未設定時は「最初から読む（第1話）」の1ボタンのみが表示され、しおり設定時は「続きから読む（第N話）」と「最初から読む（第1話）」の2ボタンが表示され、それぞれ該当話のリーダー画面（`/novels/:novelId/chapters/:chapterIndex`）へ遷移（`TR-04`）すること。                                                                                                                                                                                       | `SYS-REQ-02`, `12` / `TR-04`    |
+| **`AC-ND-04`** | 未キャッシュ話選択とオンデマンド取得       | 目次一覧で未キャッシュ話をタップすると即座にリーダー画面（`SCR-03`）へ遷移（`TR-04`）して本文がオンデマンド取得・DB保存され、「作品詳細へ」（`TR-06`）で戻ると該当話が `取得済み` バッジ・取得済み話数 `+1` に更新されていること。                                                                                                                                                                                                                  | `SYS-REQ-02` / `TR-04`, `TR-06` |
+| **`AC-ND-05`** | 目次再取得（更新）とフィードバック表示     | 「目次を更新」ボタンを押下すると作品トップ HTML を再取得して `upsertNovelWithToc` で既存キャッシュを保持したまま目次を更新し、完了時に新着話数に応じたインライン通知（`目次を更新しました（+N話）` / `最新の状態です`）、失敗時にエラーメッセージを表示すること。                                                                                                                                                                                   | `SYS-REQ-01`, `04`              |
+| **`AC-ND-06`** | 確認ダイアログ付き作品削除と本棚復帰       | 「作品を削除」ボタンから確認ダイアログを開き、「削除する」を確定すると `deleteNovel` により作品および関連 `chapters` がカスケード削除され、本棚画面（`/`）へ遷移（`TR-07`）して一覧から消えていること。                                                                                                                                                                                                                                             | `SYS-REQ-05` / `TR-07`          |
+| **`AC-ND-07`** | 本棚へ戻る導線の整理と未存在フォールバック | `NovelDetailHeader` 内の「← 本棚へ戻る」ボタンは廃止されていること。また存在しない `novelId` が指定された場合はクラッシュせず `novel-detail-not-found` と「本棚へ戻る」導線（`back-to-bookshelf-button`）を表示し、タップ時に本棚画面（`/`）へ戻れること（`TR-07`）。                                                                                                                                                                               | `SYS-REQ-01` / `TR-07`          |
+| **`AC-ND-08`** | しおり位置への初期スクロール自動調整       | 対象作品に `bookmarkChapterIndex` が設定されている場合、初回データ読み込み完了時に該当話（`data-chapter-index`）の要素が各話リストスクロール領域の先頭（上端）に来るよう自動スクロールされること。また、「目次を更新」実行時には自動スクロールが再発火せず、ユーザーの現在スクロール位置が維持されること。                                                                                                                                          | `SYS-REQ-12`                    |
