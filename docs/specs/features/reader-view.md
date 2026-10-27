@@ -51,7 +51,7 @@ related_tests:
   - `TR-03`（本棚画面 `SCR-01` の「続きから読む」から `SCR-03` への直接遷移）
   - `TR-04`（作品詳細・目次画面 `SCR-02` のエピソード選択または読書開始ボタンから `SCR-03` への遷移）
   - `TR-05`（`SCR-03` 内の下部オーバーレイ「前の話へ」「次の話へ」操作による同一作品の前後エピソード `chapterIndex ± 1` への遷移）
-  - `TR-06`（OS バックキーまたは下部オーバーレイの「本棚」タブ遷移によりスクロール進捗率を保存して `SCR-02` `/novels/:novelId` または `SCR-01` `/` へ戻る遷移）
+  - `TR-06`（OS バックキーまたは下部オーバーレイの「本棚」「設定」タブ遷移によりスクロール進捗率を保存して `SCR-02` `/novels/:novelId`、`SCR-01` `/`、または `SCR-05` `/settings` へ戻る・遷移）
 - **対象外スコープ（後続 Milestone）**:
   - 画面左右タップ（`enableTapPaging`）およびハードウェア音量キー（`enableVolumeKeyPaging`）による1画面ジャンプ送り（Milestone `v0.3`：`SYS-REQ-11` 拡張）
   - 画面余白（`pageMarginPx`）・フォント種別（`fontFamily`）の UI カスタマイズ（Milestone `v0.3`：`SYS-REQ-09` 拡張）
@@ -226,6 +226,7 @@ src/features/reader/
 | `onNextChapter`          | `() => void`                               | 必須 | 「次の話へ」押下時（`TR-05`）                |
 | `onScrollProgressChange` | `(progress: number) => void`               | 必須 | 本文スクロール進捗変化時                     |
 | `onSelectTab`            | `(tab: 'bookshelf' \| 'settings') => void` | 任意 | 下部タブ押下時                               |
+| `initialOverlayOpen`     | `boolean`                                  | 任意 | `false`（エラー/空状態時は `true`）          | オーバーレイ初期展開状態制御用 |
 
 #### セマンティック属性とレイアウト・排他描画ルール
 
