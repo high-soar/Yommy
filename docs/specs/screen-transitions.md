@@ -2,7 +2,7 @@
 type: spec-screen-transition
 title: 全体画面一覧・画面遷移の骨格（App 全体正本）
 description: 主要5画面（SCR-01〜SCR-05）の役割・ルート定義と、画面間遷移（TR-01〜TR-11）の全体マップ正本。
-status: Approved
+status: "Review (#51)"
 updated: "2026-10-27"
 tags: [screens, transitions, routing, ui]
 related_specs:
@@ -12,6 +12,7 @@ related_specs:
   - docs/specs/features/bookshelf.md
   - docs/specs/features/novel-detail.md
   - docs/specs/features/reader-view.md
+  - docs/specs/changes/issue-51-novel-detail-layout-and-scroll.md
   - docs/specs/changes/archive/issue-12-bookshelf-and-routing.md
   - docs/specs/changes/archive/issue-13-novel-detail-and-toc.md
   - docs/specs/changes/archive/issue-14-reader-navigation-bookmark-settings.md
@@ -80,7 +81,7 @@ flowchart TD
 | **`TR-04`** | `SCR-02` |      `SCR-03`       | 目次リストのエピソードをタップしたとき、または「最初から読む／続きから読む」ボタンをタップしたときにリーダー画面（`/novels/:novelId/chapters/:chapterIndex`）へ遷移し、未キャッシュ時はリーダー画面側で本文をオンデマンド取得して表示する。                                                                                                        | `SYS-REQ-02, 12`     |
 | **`TR-05`** | `SCR-03` |      `SCR-03`       | 前後話ナビゲーションバー（`ReaderChapterNav`）の「前の話へ」「次の話へ」操作により、同一作品の前後エピソード（`chapterIndex ± 1`）へ遷移する（第1話では前話無効、最終話では次話無効）。未キャッシュ話はオンデマンド取得し、表示完了時および次話遷移時に `is_read = 1` と新エピソードへのしおり位置（先頭 `0`）を更新する。                         | `SYS-REQ-02, 11, 12` |
 | **`TR-06`** | `SCR-03` | `SCR-02` / `SCR-01` | リーダー上部ツールバー（`ReaderToolbar`）の「作品詳細へ（目次へ戻る）」ボタン（`reader-back-to-detail`）または「本棚へ戻る」ボタン（`reader-back-to-bookshelf`）により、現在のエピソード番号とスクロール進捗率（`bookmark_scroll_progress`）を自動保存（`flushBookmark`）して作品詳細・目次画面（`/novels/:novelId`）または本棚画面（`/`）へ戻る。 | `SYS-REQ-02, 12`     |
-| **`TR-07`** | `SCR-02` |      `SCR-01`       | 作品詳細ヘッダーの「本棚へ戻る」ボタン、または作品削除確認ダイアログでの削除実行完了時に本棚画面へ戻る。                                                                                                                                                                                                                                           | `SYS-REQ-01, 05`     |
+| **`TR-07`** | `SCR-02` |      `SCR-01`       | 作品削除確認ダイアログでの削除実行完了、下部タブバーの「本棚」タップ、OS バックキー操作、または作品未検出画面（`novel-detail-not-found`）の「本棚へ戻る」ボタン押下時に本棚画面へ戻る（ヘッダー内の「本棚へ戻る」ボタンは廃止）。                                                                                                                  | `SYS-REQ-01, 05`     |
 | **`TR-08`** | `SCR-02` |      `SCR-05`       | 未取得エピソードの一括ダウンロード登録時、通知トーストまたはヘッダーのキューアイコンから DL キュー管理画面へ遷移する。                                                                                                                                                                                                                             | `SYS-REQ-03`         |
 | **`TR-09`** | `SCR-02` |      `SCR-04`       | 作品詳細メニューの「内蔵ブラウザで開く（手動インポート）」を選択したとき、作品 URL を指定して内蔵ブラウザ画面を開く（`v0.3`）。                                                                                                                                                                                                                    | `SYS-REQ-13`         |
 | **`TR-10`** | `SCR-03` |      `SCR-04`       | バックグラウンド通信での本文取得がエラー（403 Bot対策・ログイン必須・パース失敗等）となった際、エラー画面の「内蔵ブラウザで開いて取り込む」ボタンから該当話 URL で内蔵ブラウザ画面へ遷移する（`v0.3`）。                                                                                                                                           | `SYS-REQ-13`         |
