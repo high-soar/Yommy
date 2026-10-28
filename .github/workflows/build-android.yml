@@ -48,6 +48,8 @@ jobs:
 
       - name: Build Android Debug APK
         working-directory: android
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
