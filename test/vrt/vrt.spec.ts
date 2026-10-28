@@ -35,6 +35,27 @@ test.describe("Storybook VRT (1280px / 375px)", () => {
     expect(stories.length).toBeGreaterThan(0);
   });
 
+  test("VRT スナップショットディレクトリに孤児ファイルが存在しないこと（1対1対応の保証 / R1-12）", () => {
+    const snapshotsDir = path.resolve(process.cwd(), "test/vrt/snapshots");
+    if (!fs.existsSync(snapshotsDir)) return;
+    const actualFiles = fs
+      .readdirSync(snapshotsDir)
+      .filter((file) => file.endsWith(".png"));
+    const expectedFiles = new Set<string>();
+    for (const story of stories) {
+      for (const viewport of viewports) {
+        expectedFiles.add(`${story.id}-${viewport.name}.png`);
+      }
+    }
+    const orphanedFiles = actualFiles.filter(
+      (file) => !expectedFiles.has(file),
+    );
+    expect(
+      orphanedFiles,
+      `Orphaned VRT snapshots found: ${orphanedFiles.join(", ")}`,
+    ).toEqual([]);
+  });
+
   for (const story of stories) {
     for (const viewport of viewports) {
       test(`${story.id} [${viewport.name}]`, async ({ page }) => {
