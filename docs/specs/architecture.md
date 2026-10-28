@@ -38,6 +38,7 @@ related_tests:
   - src/shared/ui/BottomTabBar.test.tsx
   - src/storage/schema.test.ts
   - scripts/generate-icons.test.ts
+  - scripts/android-build-config.test.ts
 ---
 
 # 3層アーキテクチャと共通インターフェース契約（App 全体正本）
