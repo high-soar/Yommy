@@ -51,7 +51,7 @@ related_tests:
   - `TR-01b`（下部タブバーの「本棚」タブタップによる本棚画面 `SCR-01` `/` へのダイレクト遷移）
   - `TR-02`（本棚画面 `SCR-01` の作品カード本体タップによる `SCR-02` `/novels/:novelId` への遷移）
   - `TR-04`（目次リストのエピソード行タップ、または「最初から読む／続きから読む」ボタンタップによる小説リーダー画面 `SCR-03` `/novels/:novelId/chapters/:chapterIndex` への遷移）
-  - `TR-06`（小説リーダー画面 `SCR-03` の OS バックキー、または「作品詳細へ」ボタンによる `SCR-02` `/novels/:novelId` への復帰）
+  - `TR-06`（小説リーダー画面 `SCR-03` の OS バックキー操作による `SCR-02` `/novels/:novelId` への復帰）
   - `TR-07`（作品詳細画面からの本棚復帰導線：作品未検出画面 `novel-detail-not-found` の「本棚へ戻る」ボタン、作品削除確認ダイアログでの削除実行完了、または OS バックキー操作による本棚画面 `SCR-01` `/` への遷移。※`NovelDetailHeader` 内の「← 本棚へ戻る」ボタンは廃止。なお下部タブバー「本棚」タップ時は `TR-01b` が適用される）
 - **対象外スコープ（後続 Issue / Milestone）**:
   - エピソード閲覧に伴うしおり位置（`bookmarkChapterIndex`, `bookmarkScrollProgress`）および既読フラグ（`isRead`）の自動更新ロジック本体（Issue #14 の `SCR-03` リーダー画面拡張で一括実装）
@@ -256,7 +256,7 @@ src/features/novel-detail/
 
 #### セマンティック属性とレイアウト・排他描画ルール
 
-- **画面ルート**: `data-testid="novel-detail-page"`（スタイル: `h-full flex flex-col overflow-hidden bg-base-100 text-base-content`）
+- **画面ルート**: `data-testid="novel-detail-page"`（スタイル: `h-full flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100`）
   - 画面全体の高さを占有し（100dvh 全画面シェル）、ウィンドウ自体のスクロールを防止する。
 - **レイアウト構造**:
   - **上部固定ヘッダー**: `NovelDetailHeader` を `shrink-0` で上部に固定する。
@@ -335,7 +335,7 @@ export interface UseNovelDetailResult {
 4. **エピソード選択と未キャッシュ話オンデマンド本文取得（`TR-04` → `SCR-03`）**:
    - 目次一覧のエピソード行タップ、またはヘッダーの「最初から読む（第1話）」「続きから読む（第N話）」ボタンタップ時は、即座にリーダー画面ルート `/novels/:novelId/chapters/:chapterIndex`（`SCR-03`）へ遷移する。
    - 遷移先の `ReaderContainer`（`useReader`、`SCR-03`）にて、対象話の `bodyHtml === null`（未キャッシュ）の場合は自動的に `httpClient.getHtml` → `parser.parseChapterContent` → `chapterRepository.saveChapterBody`（＋ `recalculateNovelStats` による `cached_chapters` 更新）が実行され、併せて `markChapterRead` による既読化（`is_read = 1`）および `updateBookmark` によるしおり・スクロール進捗率更新が行われる。
-   - リーダー画面の「作品詳細へ」（`reader-back-to-detail`、`TR-06`）で `SCR-02` へ戻ると、`useNovelDetail` のマウント時ロードにより該当エピソードのバッジが `取得済み`（`episode-cached-badge`）・`既読`（`episode-read-badge`）・`しおり`（`episode-bookmark-badge`）に、ヘッダーの取得済み話数・読書再開ボタンが最新値に反映される。
+   - リーダー画面からの OS バックキー（`TR-06`）で `SCR-02` へ戻ると、`useNovelDetail` のマウント時ロードにより該当エピソードのバッジが `取得済み`（`episode-cached-badge`）・`既読`（`episode-read-badge`）・`しおり`（`episode-bookmark-badge`）に、ヘッダーの取得済み話数・読書再開ボタンが最新値に反映される。
 
 ---
 
@@ -346,9 +346,9 @@ export interface UseNovelDetailResult {
 | **`AC-ND-01`** | 作品ヘッダー情報・あらすじトグル表示       | 作品詳細画面（`/novels/:novelId`）上部に `NovelDetailHeader` が固定配置（`shrink-0`）され、タイトル・著者・統計がコンパクトに表示されること。またあらすじは初期状態で折りたたまれ（2〜3行 clamp）、トグルボタン（`synopsis-toggle-button`）で全文展開／折りたたみが可能であり、展開時は最大高さ制限と内部スクロール（`max-h` ＋ `overflow-y-auto`）が適用されること。あらすじ空文字時は「あらすじはありません。」を表示しトグルは非表示であること。 | `SYS-REQ-01` / `TR-02`                    |
 | **`AC-ND-02`** | 章見出しとエピソード一覧・内部スクロール   | エピソード一覧が固定ヘッダー下の独立スクロール領域（`flex-1 min-h-0 overflow-y-auto`）として描画され、`chapterIndex` 昇順で章見出し（`chapter-section-header`）、本文キャッシュ状態（`取得済み` / `未取得`）、既読状態（`既読`）、しおり位置（`しおり`）が正確に表示されること。                                                                                                                                                                    | `SYS-REQ-01`, `02`, `12`                  |
 | **`AC-ND-03`** | 読書開始ボタンの表示制御と遷移             | しおり未設定時は「最初から読む（第1話）」の1ボタンのみが表示され、しおり設定時は「続きから読む（第N話）」と「最初から読む（第1話）」の2ボタンが表示され、それぞれ該当話のリーダー画面（`/novels/:novelId/chapters/:chapterIndex`）へ遷移（`TR-04`）すること。                                                                                                                                                                                       | `SYS-REQ-02`, `12` / `TR-04`              |
-| **`AC-ND-04`** | 未キャッシュ話選択とオンデマンド取得       | 目次一覧で未キャッシュ話をタップすると即座にリーダー画面（`SCR-03`）へ遷移（`TR-04`）して本文がオンデマンド取得・DB保存され、「作品詳細へ」（`TR-06`）で戻ると該当話が `取得済み` バッジ・取得済み話数 `+1` に更新されていること。                                                                                                                                                                                                                  | `SYS-REQ-02` / `TR-04`, `TR-06`           |
+| **`AC-ND-04`** | 未キャッシュ話選択とオンデマンド取得       | 目次一覧で未キャッシュ話をタップすると即座にリーダー画面（`SCR-03`）へ遷移（`TR-04`）して本文がオンデマンド取得・DB保存され、OS バックキー（`TR-06`）で戻ると該当話が `取得済み` バッジ・取得済み話数 `+1` に更新されていること。                                                                                                                                                                                                                   | `SYS-REQ-02` / `TR-04`, `TR-06`           |
 | **`AC-ND-05`** | 目次再取得（更新）とフィードバック表示     | 「目次を更新」ボタンを押下すると作品トップ HTML を再取得して `upsertNovelWithToc` で既存キャッシュを保持したまま目次を更新し、完了時に新着話数に応じたインライン通知（`目次を更新しました（+N話）` / `最新の状態です`）、失敗時にエラーメッセージを表示すること。                                                                                                                                                                                   | `SYS-REQ-01`, `04`                        |
 | **`AC-ND-06`** | 確認ダイアログ付き作品削除と本棚復帰       | 「作品を削除」ボタンから確認ダイアログを開き、「削除する」を確定すると `deleteNovel` により作品および関連 `chapters` がカスケード削除され、本棚画面（`/`）へ遷移（`TR-07`）して一覧から消えていること。                                                                                                                                                                                                                                             | `SYS-REQ-05` / `TR-07`                    |
 | **`AC-ND-07`** | 本棚へ戻る導線の整理と未存在フォールバック | `NovelDetailHeader` 内の「← 本棚へ戻る」ボタンは廃止されていること。また存在しない `novelId` が指定された場合はクラッシュせず `novel-detail-not-found` と「本棚へ戻る」導線（`back-to-bookshelf-button`）を表示し、タップ時に本棚画面（`/`）へ戻れること（`TR-07`）。                                                                                                                                                                               | `SYS-REQ-01` / `TR-07`                    |
-| **`AC-ND-08`** | しおり位置への初期スクロール自動調整       | 対象作品に `bookmarkChapterIndex` が設定されている場合、初回データ読み込み完了時に該当話（`data-chapter-index`）の要素が各話リストスクロール領域の先頭（上端）に来るよう自動スクロールされること。また、「目次を更新」実行時には自動スクロールが再発火せず、ユーザーの現在スクロール位置が維持されること。                                                                                                                                          | `SYS-REQ-12`                              |
+| **`AC-ND-08`** | しおり位置への初期スクロール自動調整       | 対象作品に `bookmarkChapterIndex` が設定されている場合、初回データ読み込み完了時に該当話（`data-chapter-index`）の要素が各話リストスクロール領域の先頭（上端）に来るよう自動スクロールされること。また、「目次を更新」実行時には自動スクロールが再発火せず、ユーザーの現在スクロール位置が維持されること。                                                                                                                                          | `SYS-REQ-01, 12`                          |
 | **`AC-ND-09`** | 100dvh 全画面シェル・下部タブ・階層復帰    | 作品詳細画面が `h-full flex flex-col overflow-hidden` の全画面シェル内に配置され、中間コンテンツ領域（`flex-1 min-h-0 overflow-y-auto`）のみがスクロール可能であること。画面下部に共通 `BottomTabBar`（`bottom-tab-bar`）が表示され、「本棚」タブタップ（`TR-01b`）または OS バックキー（`TR-07`）により本棚画面（`SCR-01`）へ復帰し、「設定」タブタップ（`TR-01`）により設定画面（`SCR-05`）へ遷移できること。                                     | `SYS-REQ-16` / `TR-01`, `TR-01b`, `TR-07` |
