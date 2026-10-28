@@ -244,7 +244,6 @@ describe("App コンポーネント", () => {
     it("カスタム initialWorkUrl および props 省略時にも正常に動作する", async () => {
       render(
         <App
-          title="Custom Yommy"
           initialPath="/novels/kakuyomu:16817330658027210412/chapters/1"
           initialWorkUrl="https://kakuyomu.jp/works/16817330658027210412"
         />,

@@ -1,14 +1,7 @@
 import React, { useEffect, useCallback } from "react";
+import type { WritingMode, ReaderTheme } from "../../../storage/types";
 
-/**
- * 小説リーダーの組版方向（縦書き/横書き）
- */
-export type WritingMode = "vertical-rl" | "horizontal-tb";
-
-/**
- * リーダーの背景・文字色テーマ
- */
-export type ReaderTheme = "light" | "sepia" | "dark" | "black";
+export type { WritingMode, ReaderTheme };
 
 export interface ReaderViewProps {
   title?: string;

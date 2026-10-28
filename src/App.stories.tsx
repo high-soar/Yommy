@@ -23,9 +23,6 @@ type Story = StoryObj<typeof App>;
  */
 export const Default: Story = {
   name: "デフォルト（本棚画面・初期表示）",
-  args: {
-    title: "Yommy",
-  },
 };
 
 /**
@@ -35,7 +32,6 @@ export const Default: Story = {
 export const SettingsRoute: Story = {
   name: "設定画面ルート表示",
   args: {
-    title: "Yommy",
     initialPath: "/settings",
   },
 };
@@ -47,7 +43,6 @@ export const SettingsRoute: Story = {
 export const NovelDetailRoute: Story = {
   name: "作品詳細ルート表示",
   args: {
-    title: "Yommy",
     initialPath: "/novels/kakuyomu:16817330658027210412",
   },
 };
@@ -59,7 +54,6 @@ export const NovelDetailRoute: Story = {
 export const ReaderRoute: Story = {
   name: "リーダー画面ルート表示",
   args: {
-    title: "Yommy",
     initialPath: "/novels/kakuyomu:16817330658027210412/chapters/1",
   },
 };
