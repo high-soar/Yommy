@@ -2,7 +2,7 @@
 type: spec-requirements
 title: 全体要件定義・機能一覧・ロードマップ（App 全体正本）
 description: Yommyのターゲット環境、小説サイト対応優先順位（カクヨム最優先）、全機能要件（SYS-REQ-01〜16）、およびミニMilestoneロードマップの正本。
-status: "Review (#78)"
+status: Approved
 updated: "2026-10-29"
 tags:
   - requirements
@@ -22,7 +22,7 @@ related_specs:
   - docs/specs/features/novel-detail.md
   - docs/specs/features/reader-view.md
   - docs/specs/features/settings.md
-  - docs/specs/changes/issue-78-apk-signing-and-back-button.md
+  - docs/specs/changes/archive/issue-78-apk-signing-and-back-button.md
   - docs/specs/changes/archive/issue-50-fullscreen-shell-and-settings.md
   - docs/specs/changes/archive/issue-51-novel-detail-layout-and-scroll.md
   - docs/specs/changes/archive/issue-52-reader-fullscreen-and-bottom-overlay.md

@@ -3,7 +3,7 @@ type: spec-delta
 title: Android APK上書きインストール修正（署名鍵固定・versionCode更新）と実機システム戻るボタン論理階層遷移対応 (HO-14)
 description: Issue #78 に対する差分仕様、影響する全体正本、テスト計画、および実装Sub-issue分割計画。
 issue: "#78"
-status: "Review (#78)"
+status: "Completed (Archived)"
 updated: "2026-10-29"
 tags:
   - delta
