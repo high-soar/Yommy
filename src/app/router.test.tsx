@@ -341,6 +341,49 @@ describe("router", () => {
       );
     });
 
+    it("同一パスへの navigate は履歴 pushState および previousPath の上書きを行わないこと（R1-21）", () => {
+      const pushStateSpy = vi.spyOn(window.history, "pushState");
+
+      render(
+        <RouterProvider initialPath="/novels/kakuyomu%3A16817330658027210412">
+          <TestConsumer />
+        </RouterProvider>,
+      );
+
+      // 設定画面へ移動
+      act(() => {
+        screen.getByTestId("btn-settings").click();
+      });
+      expect(screen.getByTestId("path-display")).toHaveTextContent("/settings");
+      expect(screen.getByTestId("previous-path-display")).toHaveTextContent(
+        "/novels/kakuyomu%3A16817330658027210412",
+      );
+      const pushCountAfterFirstNavigate = pushStateSpy.mock.calls.length;
+
+      // すでに /settings にいる状態で再度設定ボタンを押下
+      act(() => {
+        screen.getByTestId("btn-settings").click();
+      });
+
+      // pushState が追加で呼ばれず、previousPath も元のまま保持されること
+      expect(pushStateSpy.mock.calls.length).toBe(pushCountAfterFirstNavigate);
+      expect(screen.getByTestId("path-display")).toHaveTextContent("/settings");
+      expect(screen.getByTestId("previous-path-display")).toHaveTextContent(
+        "/novels/kakuyomu%3A16817330658027210412",
+      );
+
+      // back() で直前の画面（作品詳細）へ1回で復帰できること（TR-12 整合）
+      act(() => {
+        screen.getByTestId("btn-back").click();
+      });
+      expect(screen.getByTestId("path-display")).toHaveTextContent(
+        "/novels/kakuyomu%3A16817330658027210412",
+      );
+      expect(screen.getByTestId("route-display")).toHaveTextContent(
+        "novel-detail",
+      );
+    });
+
     it("popstate イベント発火時にブラウザの pathname と同期すること", () => {
       render(
         <RouterProvider initialPath="/">

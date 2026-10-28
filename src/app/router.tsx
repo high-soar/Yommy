@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -152,12 +153,14 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
   const [currentPath, setCurrentPath] = useState<string>(() =>
     resolveInitialPath(initialPath, window.location.pathname),
   );
+  const currentPathRef = useRef<string>(currentPath);
   const [previousPath, setPreviousPath] = useState<string | undefined>(
     undefined,
   );
 
   useEffect(() => {
     if (initialPath !== undefined) {
+      currentPathRef.current = initialPath;
       setCurrentPath(initialPath);
     }
   }, [initialPath]);
@@ -165,6 +168,7 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
   useEffect(() => {
     const handlePopState = () => {
       const nextPath = window.location.pathname;
+      currentPathRef.current = nextPath;
       setCurrentPath((prev) => {
         setPreviousPath(prev);
         return nextPath;
@@ -178,7 +182,11 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
   }, []);
 
   const navigate = useCallback((to: string) => {
+    if (currentPathRef.current === to) {
+      return;
+    }
     window.history.pushState(null, "", to);
+    currentPathRef.current = to;
     setCurrentPath((prev) => {
       setPreviousPath(prev);
       return to;
@@ -208,10 +216,12 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
         const detailPath = `/novels/${encodeURIComponent(novelId)}`;
         window.history.pushState(null, "", detailPath);
         window.history.pushState(null, "", targetPath);
+        currentPathRef.current = targetPath;
         setPreviousPath(detailPath);
         setCurrentPath(targetPath);
       } else if (options?.replace) {
         window.history.replaceState(null, "", targetPath);
+        currentPathRef.current = targetPath;
         setCurrentPath(targetPath);
       } else {
         navigate(targetPath);
