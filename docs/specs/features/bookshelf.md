@@ -22,7 +22,7 @@ related_specs:
   - docs/specs/features/reader-view.md
   - docs/specs/features/settings.md
   - docs/specs/parsers/kakuyomu.md
-  - docs/specs/changes/issue-78-apk-signing-and-back-button.md
+  - docs/specs/changes/archive/issue-78-apk-signing-and-back-button.md
   - docs/specs/changes/issue-79-four-tabs-search-ranking.md
   - docs/specs/changes/archive/issue-50-fullscreen-shell-and-settings.md
   - docs/specs/changes/archive/issue-12-bookshelf-and-routing.md
@@ -61,7 +61,7 @@ related_tests:
   - `TR-01b`（下部タブ「本棚」タップによる本棚トップ `/` への直接復帰遷移）
   - `TR-02`（作品カード本体タップによる作品詳細・目次画面 `SCR-02` `/novels/:novelId` への遷移）
   - `TR-03`（「続きから読む」ボタンタップによる小説リーダー画面 `SCR-03` `/novels/:novelId/chapters/:chapterIndex` への直接遷移 ※目次介在）
-  - `TR-14`（空状態からの検索画面 `SCR-06` またはランキング画面 `SCR-07` への遷移）
+  - `TR-15`（空状態からの検索画面 `SCR-06` またはランキング画面 `SCR-07` への遷移）
 - **対象外スコープ（Milestone `v0.3` 以降）**:
   - お気に入りフィルタおよび新着一括更新チェック（`SYS-REQ-04`）
 
@@ -135,8 +135,8 @@ src/features/bookshelf/
 
 | プロパティ名        | 型           | 必須 | 説明                                                         |
 | :------------------ | :----------- | :--- | :----------------------------------------------------------- |
-| `onNavigateSearch`  | `() => void` | 必須 | 「小説を検索する」ボタン押下時のコールバック（`TR-14` 用）   |
-| `onNavigateRanking` | `() => void` | 必須 | 「ランキングを見る」ボタン押下時のコールバック（`TR-14` 用） |
+| `onNavigateSearch`  | `() => void` | 必須 | 「小説を検索する」ボタン押下時のコールバック（`TR-15` 用）   |
+| `onNavigateRanking` | `() => void` | 必須 | 「ランキングを見る」ボタン押下時のコールバック（`TR-15` 用） |
 
 #### セマンティック属性
 
@@ -208,7 +208,7 @@ export interface UseBookshelfResult {
 
 | AC ID          | 対象機能                         | 検証条件                                                                                                                                                                                                                                                       | 関連要件 / 遷移                                |
 | :------------- | :------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------- |
-| **`AC-BS-01`** | 空状態表示と検索・ランキング誘導 | 登録作品が 0 件のとき、`bookshelf-empty` が表示され、「小説を検索する」ボタン（`empty-search-button`）および「ランキングを見る」ボタン（`empty-ranking-button`）からそれぞれ `/search` および `/ranking` へ遷移できること。                                    | `SYS-REQ-01` / `TR-14`                         |
+| **`AC-BS-01`** | 空状態表示と検索・ランキング誘導 | 登録作品が 0 件のとき、`bookshelf-empty` が表示され、「小説を検索する」ボタン（`empty-search-button`）および「ランキングを見る」ボタン（`empty-ranking-button`）からそれぞれ `/search` および `/ranking` へ遷移できること。                                    | `SYS-REQ-01` / `TR-15`                         |
 | **`AC-BS-02`** | （廃止）                         | v0.3 にて直接 URL 入力機能は廃止され、検索・ランキングからの登録へ一本化。                                                                                                                                                                                     | -                                              |
 | **`AC-BS-03`** | （廃止）                         | v0.3 にて URL 入力ダイアログは廃止。                                                                                                                                                                                                                           | -                                              |
 | **`AC-BS-04`** | 作品カード情報表示               | 登録済み作品カードにタイトル、著者名、全話数・取得済み話数（`totalChapters` / `cachedChapters`）、およびしおり位置（`bookmarkChapterIndex` または `未読`）が正確に表示されること。                                                                             | `SYS-REQ-01`, `SYS-REQ-12`                     |

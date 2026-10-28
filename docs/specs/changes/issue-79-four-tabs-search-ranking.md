@@ -1,7 +1,7 @@
 ---
 type: spec-delta
-title: 下部4タブ化とカクヨム検索・ランキング画面新設（URL登録廃止・検索/ランキングからの登録への一本化）の設計
-description: Issue #79 に対する差分仕様、影響する全体正本、テスト計画、および実装Sub-issue分割計画。
+title: "下部4タブ化とカクヨム検索・ランキング画面新設（URL登録廃止・検索/ランキングからの登録への一本化）の設計"
+description: "Issue #79 に対する差分仕様、影響する全体正本、テスト計画、および実装Sub-issue分割計画。"
 issue: "#79"
 status: "Review (#79)"
 updated: "2026-10-29"
@@ -27,7 +27,7 @@ related_specs:
   - docs/specs/features/reader-view.md
   - docs/specs/features/settings.md
   - docs/specs/parsers/kakuyomu.md
-  - docs/specs/changes/issue-78-apk-signing-and-back-button.md
+  - docs/specs/changes/archive/issue-78-apk-signing-and-back-button.md
 related_tests:
   - src/parsers/kakuyomu/KakuyomuParser.test.ts
   - src/shared/ui/BottomTabBar.test.tsx
@@ -201,10 +201,10 @@ related_tests:
   - `ParsedSearchResult`: `{ items: NovelSearchResultItem[]; pageInfo: { currentPage: number; hasNextPage: boolean; totalCount?: number } }`
   - `ParsedRankingResult`: `{ items: NovelRankingResultItem[]; pageInfo: { currentPage: number; hasNextPage: boolean } }`
   - `NovelParser` インターフェースへのオプショナル拡張:
-    - `searchNovels?(query: string, options?: NovelSearchOptions): ParsedSearchResult`
-    - `getRanking?(options?: NovelRankingOptions): ParsedRankingResult`
     - `buildSearchUrl?(query: string, options?: NovelSearchOptions): string`
+    - `searchNovels?(html: string, pageUrl: string): ParsedSearchResult`
     - `buildRankingUrl?(options?: NovelRankingOptions): string`
+    - `getRanking?(html: string, pageUrl: string): ParsedRankingResult`
 - **`KakuyomuParser` での実装**:
   - Next.js Apollo State 解析を最優先とし、DOM フォールバックを完備。
   - 純粋関数設計を維持し、外部通信は行わない。
@@ -261,17 +261,19 @@ related_tests:
 
 ## 4. 変更対象の App 全体正本ファイル一覧（影響度マトリクス）
 
-| ファイルパス                           | 種別             | 変更内容概要                                                                                                      |
-| :------------------------------------- | :--------------- | :---------------------------------------------------------------------------------------------------------------- |
-| `docs/specs/requirements.md`           | App 全体正本     | `SYS-REQ-17`〜`20` 新設、`SYS-REQ-01` の URL 登録廃止反映、v0.3 要件追記                                          |
-| `docs/specs/screen-transitions.md`     | App 全体正本     | `SCR-06`, `SCR-07` 新設、Mermaid 図更新、`TR-01` 4タブ化、`TR-07`・`TR-12` Backキー更新、`TR-14`, `TR-15` 新設    |
-| `docs/specs/features/bookshelf.md`     | App 全体正本     | `AddNovelDialog` 廃止、ヘッダーURL追加ボタン削除、`BookshelfEmptyState` の検索・ランキング誘導化、`AC-BS-02` 更新 |
-| `docs/specs/features/search.md`        | 新規機能正本     | 検索画面（`SCR-06`）のコンポーネント構成、`useNovelSearch` 契約、受入条件 `AC-SE-01`〜`08` を定義                 |
-| `docs/specs/features/ranking.md`       | 新規機能正本     | ランキング画面（`SCR-07`）のコンポーネント構成、`useNovelRanking` 契約、受入条件 `AC-RK-01`〜`07` を定義          |
-| `docs/specs/parsers/kakuyomu.md`       | App 全体正本     | カクヨム検索・ランキングの URL 生成仕様、Apollo State（`searchWorks`, `rankedWorks`）および DOM 抽出仕様の追記    |
-| `docs/specs/architecture.md`           | App 全体正本     | UI 層（`features/search`, `features/ranking`）および Parser 層（検索/ランキング解析契約）の全体像反映             |
-| `docs/index.md`                        | ドキュメント目次 | 新設された `features/search.md`, `features/ranking.md` および本差分仕様書の登録                                   |
-| `docs/quality/bug-and-handover-log.md` | 品質正本         | 申し送り事項 `HO-16`（検索/ランキングからの追加とIT検証）、`HO-17`（4タブ・OS Backキー結合検証）の起票            |
+| ファイルパス                           | 種別             | 変更内容概要                                                                                                            |
+| :------------------------------------- | :--------------- | :---------------------------------------------------------------------------------------------------------------------- |
+| `docs/specs/requirements.md`           | App 全体正本     | `SYS-REQ-17`〜`20` 新設、`SYS-REQ-01` の URL 登録廃止反映、v0.3 要件追記                                                |
+| `docs/specs/screen-transitions.md`     | App 全体正本     | `SCR-06`, `SCR-07` 新設、Mermaid 図更新、`TR-01` 4タブ化、`TR-07`・`TR-12` Backキー更新、`TR-14`, `TR-15` 新設          |
+| `docs/specs/features/bookshelf.md`     | App 全体正本     | `AddNovelDialog` 廃止、ヘッダーURL追加ボタン削除、`BookshelfEmptyState` の検索・ランキング誘導化、`AC-BS-01`・`02` 更新 |
+| `docs/specs/features/novel-detail.md`  | App 全体正本     | `TR-07`・`AC-ND-07`・`AC-ND-09` を直前の探索元（本棚/検索/ランキング）への復帰に拡張、4タブ連携同期                     |
+| `docs/specs/features/reader-view.md`   | App 全体正本     | `ReaderBottomOverlayProps` の 4 タブ対応（`bookshelf` / `search` / `ranking` / `settings`）、`AC-RD-08` 同期            |
+| `docs/specs/features/search.md`        | 新規機能正本     | 検索画面（`SCR-06`）のコンポーネント構成、`useNovelSearch` 契約、受入条件 `AC-SE-01`〜`08` を定義                       |
+| `docs/specs/features/ranking.md`       | 新規機能正本     | ランキング画面（`SCR-07`）のコンポーネント構成、`useNovelRanking` 契約、受入条件 `AC-RK-01`〜`07` を定義                |
+| `docs/specs/parsers/kakuyomu.md`       | App 全体正本     | カクヨム検索・ランキングの URL 生成仕様、Apollo State（`searchWorks`, `rankedWorks`）および DOM 抽出仕様の追記          |
+| `docs/specs/architecture.md`           | App 全体正本     | UI 層（`features/search`, `features/ranking`）および Parser 層（検索/ランキング解析契約）の全体像反映                   |
+| `docs/index.md`                        | ドキュメント目次 | 新設された `features/search.md`, `features/ranking.md` および本差分仕様書の登録                                         |
+| `docs/quality/bug-and-handover-log.md` | 品質正本         | 申し送り事項 `HO-16`（検索/ランキングからの追加とIT検証）、`HO-17`（4タブ・OS Backキー結合検証）の起票                  |
 
 ---
 
