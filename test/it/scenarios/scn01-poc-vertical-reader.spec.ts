@@ -575,5 +575,26 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
 
     await expect(page).toHaveURL("/");
     await expect(page.getByTestId("bookshelf-empty")).toBeVisible();
+
+    // 15. 本棚画面（/）での実機システム戻るボタン押下時の一時トースト表示および自動消去の検証（AC-AB-05, TR-13）
+    await page.evaluate(() => {
+      const bridge = (
+        window as unknown as {
+          __yommyAppBridge?: { triggerBackButton: () => Promise<void> };
+        }
+      ).__yommyAppBridge;
+      if (bridge) {
+        void bridge.triggerBackButton();
+      }
+    });
+
+    const exitToast = page.getByTestId("exit-app-toast");
+    await expect(exitToast).toBeVisible();
+    await expect(exitToast).toHaveText(
+      "もう一度バックボタンを押すと終了します",
+    );
+
+    // 2秒後にトーストが自動消滅することを確認
+    await expect(exitToast).not.toBeVisible({ timeout: 4000 });
   });
 });
