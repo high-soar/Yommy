@@ -273,7 +273,6 @@ export const WithCustomCallbacks: Story = {
     novelId: sampleNovel.id,
     chapterIndex: 1,
     onBackToBookshelf: fn(),
-    onBackToDetail: fn(),
     onNavigateSettings: fn(),
     onNavigateChapter: fn(),
   },

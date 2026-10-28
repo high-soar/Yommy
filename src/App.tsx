@@ -11,8 +11,6 @@ import { BottomTabBar } from "./shared/ui/BottomTabBar";
  * App コンポーネントの Props
  */
 export interface AppProps {
-  /** アプリケーションのタイトル（省略時: "Yommy"） */
-  title?: string;
   /** 初期取得対象の作品 URL（省略時はデフォルトのカクヨム検証用作品URL） */
   initialWorkUrl?: string;
   /** 初期遷移パス（単体テスト・Storybook用、省略時は現在のURLまたは "/"） */
