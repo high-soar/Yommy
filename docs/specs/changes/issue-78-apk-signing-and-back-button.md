@@ -23,6 +23,7 @@ related_tests:
   - src/App.test.tsx
   - src/app/router.test.tsx
   - src/app/ServiceProvider.test.tsx
+  - scripts/android-build-config.test.ts
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
 ---
 
