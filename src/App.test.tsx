@@ -4,10 +4,16 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./App.stories";
 import { App } from "./App";
+import { MockAppBridge } from "./bridges/app/mockAppBridge";
 import { resetTestDb } from "./storage/adapter/inMemoryDb";
 
-const { Default, SettingsRoute, NovelDetailRoute, ReaderRoute } =
-  composeStories(stories);
+const {
+  Default,
+  SettingsRoute,
+  NovelDetailRoute,
+  ReaderRoute,
+  ExitToastRoute,
+} = composeStories(stories);
 
 describe("App コンポーネント", () => {
   beforeEach(async () => {
@@ -103,6 +109,20 @@ describe("App コンポーネント", () => {
 
       // リーダー画面では常駐 BottomTabBar は描画されない
       expect(screen.queryByTestId("bottom-tab-bar")).not.toBeInTheDocument();
+    });
+
+    it("ExitToastRoute ストーリー: 本棚画面で終了確認トーストが表示された状態を描画する", async () => {
+      render(<ExitToastRoute />);
+
+      expect(screen.getByTestId("app-root")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+      });
+
+      const toast = screen.getByTestId("exit-app-toast");
+      expect(toast).toBeInTheDocument();
+      expect(toast).toHaveTextContent("もう一度バックボタンを押すと終了します");
+      expect(toast).toHaveAttribute("role", "status");
     });
   });
 
@@ -255,6 +275,184 @@ describe("App コンポーネント", () => {
         },
         { timeout: 3000 },
       );
+    });
+  });
+
+  describe("実機システム戻るボタン（AppBridge）連携と論理階層遷移・終了UXの検証 (AC-AB-02〜06)", () => {
+    it("リーダー画面 (SCR-03) で戻るボタン押下時、目次画面 (SCR-02) へ論理階層遷移すること (AC-AB-02, TR-06)", async () => {
+      const mockAppBridge = new MockAppBridge();
+      render(
+        <App
+          initialPath="/novels/kakuyomu:16817330658027210412/chapters/1"
+          appBridge={mockAppBridge}
+        />,
+      );
+
+      await waitFor(
+        () => {
+          expect(screen.getByTestId("reader-page")).toBeInTheDocument();
+        },
+        { timeout: 3000 },
+      );
+
+      await act(async () => {
+        await mockAppBridge.triggerBackButton();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
+      });
+    });
+
+    it("作品詳細・目次画面 (SCR-02) で戻るボタン押下時、本棚画面 (SCR-01) へ復帰すること (AC-AB-03, TR-07)", async () => {
+      const mockAppBridge = new MockAppBridge();
+      render(
+        <App
+          initialPath="/novels/kakuyomu:16817330658027210412"
+          appBridge={mockAppBridge}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
+      });
+
+      await act(async () => {
+        await mockAppBridge.triggerBackButton();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+      });
+    });
+
+    it("設定画面 (SCR-05) で戻るボタン押下時、直前画面（未指定時は本棚）へ復帰すること (AC-AB-04, TR-12)", async () => {
+      const mockAppBridge = new MockAppBridge();
+      render(<App initialPath="/settings" appBridge={mockAppBridge} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+      });
+
+      await act(async () => {
+        await mockAppBridge.triggerBackButton();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+      });
+    });
+
+    it("本棚画面 (SCR-01) で戻るボタン1回目押下時、終了せず確認トーストが表示され2秒後に自動消去されること (AC-AB-05, TR-13)", async () => {
+      const mockAppBridge = new MockAppBridge();
+      render(<App initialPath="/" appBridge={mockAppBridge} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId("exit-app-toast")).not.toBeInTheDocument();
+
+      // 1回目の戻るボタン押下
+      await act(async () => {
+        await mockAppBridge.triggerBackButton();
+      });
+
+      const toast = screen.getByTestId("exit-app-toast");
+      expect(toast).toBeInTheDocument();
+      expect(toast).toHaveTextContent("もう一度バックボタンを押すと終了します");
+      expect(mockAppBridge.exitAppCalled).toBe(false);
+
+      // 2000ms 経過後、トーストが自動消去される
+      await waitFor(
+        () => {
+          expect(
+            screen.queryByTestId("exit-app-toast"),
+          ).not.toBeInTheDocument();
+        },
+        { timeout: 3000 },
+      );
+    });
+
+    it("本棚画面 (SCR-01) で2秒以内に連続2回戻るボタンを押下した際、exitApp が呼び出されること (AC-AB-06, TR-13)", async () => {
+      const mockAppBridge = new MockAppBridge();
+      render(<App initialPath="/" appBridge={mockAppBridge} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+      });
+
+      // 1回目の戻るボタン押下
+      await act(async () => {
+        await mockAppBridge.triggerBackButton();
+      });
+
+      expect(screen.getByTestId("exit-app-toast")).toBeInTheDocument();
+      expect(mockAppBridge.exitAppCalled).toBe(false);
+
+      // 2秒以内の2回目押下
+      await act(async () => {
+        await mockAppBridge.triggerBackButton();
+      });
+
+      expect(mockAppBridge.exitAppCalled).toBe(true);
+      expect(screen.queryByTestId("exit-app-toast")).not.toBeInTheDocument();
+    });
+
+    it("本棚画面 (SCR-01) で2秒以上経過後に再度戻るボタンを押下した場合は exitApp は呼ばれず再度トーストが表示されること (TR-13)", async () => {
+      const mockAppBridge = new MockAppBridge();
+      render(<App initialPath="/" appBridge={mockAppBridge} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+      });
+
+      // 1回目の戻るボタン押下
+      await act(async () => {
+        await mockAppBridge.triggerBackButton();
+      });
+      expect(screen.getByTestId("exit-app-toast")).toBeInTheDocument();
+
+      // 2000ms 経過してトーストが消えるのを待つ
+      await waitFor(
+        () => {
+          expect(
+            screen.queryByTestId("exit-app-toast"),
+          ).not.toBeInTheDocument();
+        },
+        { timeout: 3000 },
+      );
+
+      // 2秒以上経過後の2回目押下
+      await act(async () => {
+        await mockAppBridge.triggerBackButton();
+      });
+
+      expect(mockAppBridge.exitAppCalled).toBe(false);
+      expect(screen.getByTestId("exit-app-toast")).toBeInTheDocument();
+    });
+
+    it("コンポーネントがアンマウントされた際、バックボタンリスナーおよびトーストタイマーが破棄されること", async () => {
+      const mockAppBridge = new MockAppBridge();
+      const { unmount } = render(
+        <App initialPath="/" appBridge={mockAppBridge} />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+      });
+
+      await act(async () => {
+        await mockAppBridge.triggerBackButton();
+      });
+      expect(screen.getByTestId("exit-app-toast")).toBeInTheDocument();
+
+      unmount();
+
+      // アンマウント後は triggerBackButton を呼んでもエラーにならない
+      await act(async () => {
+        await mockAppBridge.triggerBackButton();
+      });
     });
   });
 });
