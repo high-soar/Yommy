@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("アプリケーションスモーク結合テスト", () => {
-  test("トップページが正常に読み込まれ、ヘッダーと本棚UI（空状態）が表示される", async ({
+  test("トップページが正常に読み込まれ、全画面シェル・下部タブバー・本棚UI（空状態）が表示される", async ({
     page,
   }) => {
     await page.goto("/");

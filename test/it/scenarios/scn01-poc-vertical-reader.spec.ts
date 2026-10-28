@@ -61,12 +61,17 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(samplePreview).toHaveAttribute("data-line-height", "1.8");
 
     // 組版設定の変更:
-    // (a) 組み方向を横書きへ切替
+    // (a) 組み方向を横書きへ切替し、プレビュー確認後に再度縦書きへ戻す（R1-01 / 縦書き負の scrollLeft 回帰保証のため）
     const toggleOrientation = page.getByTestId("toggle-orientation");
     await toggleOrientation.click();
     await expect(samplePreview).toHaveAttribute(
       "data-writing-mode",
       "horizontal-tb",
+    );
+    await toggleOrientation.click();
+    await expect(samplePreview).toHaveAttribute(
+      "data-writing-mode",
+      "vertical-rl",
     );
 
     // (b) カラーテーマをセピアに変更
@@ -85,6 +90,10 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await lineHeightIncrease.click();
     await expect(page.getByTestId("line-height-value")).toHaveText("2.0");
     await expect(samplePreview).toHaveAttribute("data-line-height", "2");
+
+    // 選択中の「設定」タブを再タップしても重複履歴が追加されず、戻り先が破壊されないことを確認（R1-21）
+    await tabSettings.click();
+    await expect(page).toHaveURL("/settings");
 
     // ブラウザ戻る操作（TR-12）で本棚画面（/）へ復帰することを確認
     await page.goBack();
@@ -172,6 +181,16 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       .getByTestId("episode-uncached-badge");
     await expect(firstUncachedBadge).toBeVisible();
 
+    // エピソード一覧コンテナをスクロールさせ、scrollTop を設定（R1-02 / AC-ND-08）
+    await episodeListContainer.evaluate((el) => {
+      el.scrollTop = 50;
+      el.dispatchEvent(new Event("scroll"));
+    });
+    const scrolledTop = await episodeListContainer.evaluate(
+      (el) => el.scrollTop,
+    );
+    expect(scrolledTop).toBeGreaterThanOrEqual(0);
+
     // 「目次を更新」ボタン押下で最新状態が通知され、スクロール位置が維持されることを確認（AC-ND-05, AC-ND-08）
     const refreshButton = page.getByTestId("refresh-toc-button");
     await expect(refreshButton).toBeVisible();
@@ -180,6 +199,12 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     const refreshNotice = page.getByTestId("novel-detail-notice");
     await expect(refreshNotice).toBeVisible();
     await expect(refreshNotice).toHaveText("最新の状態です");
+
+    // 目次更新後もスクロール位置（scrollTop）が維持されていることのアサーション（R1-02 / AC-ND-08）
+    const maintainedTop = await episodeListContainer.evaluate(
+      (el) => el.scrollTop,
+    );
+    expect(maintainedTop).toBe(scrolledTop);
 
     // 5. 目次一覧から第1話エピソード行を選択して /novels/:novelId/chapters/1（SCR-03）へ遷移（TR-04）
     await episodeItems.first().click();
@@ -203,10 +228,10 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     const readerView = page.getByTestId("reader-view");
     await expect(readerView).toBeVisible();
 
-    // 設定画面（/settings）で変更した組版設定（横書き・セピア・20px・2.0）がリーダー本文へ適用されていることの確認
+    // 設定画面（/settings）で変更した組版設定（縦書き・セピア・20px・2.0）がリーダー本文へ適用されていることの確認
     await expect(readerView).toHaveAttribute(
       "data-writing-mode",
-      "horizontal-tb",
+      "vertical-rl",
     );
     await expect(readerView).toHaveAttribute("data-theme", "sepia");
     await expect(readerView).toHaveAttribute("data-font-size", "20");
@@ -273,22 +298,29 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(boutenElement).toBeVisible();
     await expect(boutenElement).toHaveText("信じがたい光景");
 
-    // 横書き時に scrollHeight > clientHeight となっており、下方向（scrollTop）へスクロールして進捗を保存できることを確認
+    // 縦書き時に scrollWidth > clientWidth となっており、左方向（負の scrollLeft）へスクロールして進捗を保存できることを確認（AC-RD-08, R1-01）
     // スクロール操作によりオーバーレイが自動非表示（translate-y-full）になることを確認（AC-RD-10）
-    const horizontalMaxScroll = await page.evaluate(() => {
+    const verticalMaxScroll = await page.evaluate(() => {
       const el = document.querySelector('[data-testid="reader-view"]');
       if (!el) return 0;
-      const maxScroll = el.scrollHeight - el.clientHeight;
+      const maxScroll = el.scrollWidth - el.clientWidth;
       if (maxScroll > 0) {
-        el.scrollTop = maxScroll * 0.5;
+        el.scrollLeft = -maxScroll * 0.5;
         el.dispatchEvent(new Event("scroll"));
       }
       return maxScroll;
     });
-    expect(horizontalMaxScroll).toBeGreaterThan(0);
+    expect(verticalMaxScroll).toBeGreaterThan(0);
     await expect(overlay).toHaveClass(/translate-y-full/);
 
-    // ブラウザ戻る操作（TR-06: popstate）で作品詳細（SCR-02）へ戻り、「続きから読む（第1話）」で再開（TR-04）した際にスクロール位置が復元されることを確認
+    // 縦書きモードにおいて負の scrollLeft（scrollLeft < 0）が設定されていることを確認（R1-01）
+    const currentScrollLeft = await page.evaluate(() => {
+      const el = document.querySelector('[data-testid="reader-view"]');
+      return el ? el.scrollLeft : 0;
+    });
+    expect(currentScrollLeft).toBeLessThan(0);
+
+    // ブラウザ戻る操作（TR-06: popstate）で作品詳細（SCR-02）へ戻り、「続きから読む（第1話）」で再開（TR-04）した際に縦書きスクロール位置が復元されることを確認
     await page.goBack();
     await expect(page).toHaveURL(
       /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
@@ -303,16 +335,39 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     );
     await expect(readerView).toHaveAttribute(
       "data-writing-mode",
-      "horizontal-tb",
+      "vertical-rl",
     );
     await expect
       .poll(async () => {
         return page.evaluate(() => {
           const el = document.querySelector('[data-testid="reader-view"]');
-          return el ? el.scrollTop : 0;
+          return el ? el.scrollLeft : 0;
         });
       })
-      .toBeGreaterThan(0);
+      .toBeLessThan(0);
+
+    // リーダー画面下部オーバーレイから設定画面（SCR-05）への遷移導線（TR-12）および戻り先保証（R1-03, R1-21）
+    await touchZone.click();
+    await expect(overlay).toHaveClass(/translate-y-0/);
+    const readerSettingsTab = page.getByTestId("reader-bottom-tab-settings");
+    await expect(readerSettingsTab).toBeVisible();
+    await readerSettingsTab.click();
+
+    // 設定画面（/settings）へ遷移すること（TR-12）
+    await expect(page).toHaveURL("/settings");
+    await expect(settingsPage).toBeVisible();
+    await expect(tabSettings).toHaveAttribute("aria-selected", "true");
+
+    // 設定画面で選択中の「設定」タブを再タップしても重複履歴が追加されないことを確認（R1-21）
+    await tabSettings.click();
+    await expect(page).toHaveURL("/settings");
+
+    // ブラウザ戻る操作（TR-12）1回でリーダー画面（SCR-03）へ正しく復帰することを確認（R1-03, R1-21）
+    await page.goBack();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1/,
+    );
+    await expect(readerView).toBeVisible();
 
     // 8. 最下部タッチゾーンをタップしてオーバーレイを再表示し、「次の話へ」（reader-next-chapter）で第2話へ遷移（TR-05 / AC-RD-06）
     await touchZone.click();
@@ -354,13 +409,18 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/2/,
     );
 
-    // スクロール操作により進捗率を更新
+    // スクロール操作により進捗率を更新（縦書き時の負の scrollLeft または横書き時の scrollTop）
     await page.evaluate(() => {
       const el = document.querySelector('[data-testid="reader-view"]');
       if (el) {
-        const max = el.scrollHeight - el.clientHeight;
-        if (max > 0) {
-          el.scrollTop = max * 0.5;
+        const verticalMax = el.scrollWidth - el.clientWidth;
+        if (verticalMax > 0) {
+          el.scrollLeft = -verticalMax * 0.5;
+          el.dispatchEvent(new Event("scroll"));
+        }
+        const horizontalMax = el.scrollHeight - el.clientHeight;
+        if (horizontalMax > 0) {
+          el.scrollTop = horizontalMax * 0.5;
           el.dispatchEvent(new Event("scroll"));
         }
       }
@@ -396,6 +456,9 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       updatedEpisodeItems.nth(1).getByTestId("episode-bookmark-badge"),
     ).toBeVisible();
 
+    // しおり話数（第2話）への初期スクロール調整（AC-ND-08 / R1-02）により、第2話要素が可視領域内にあることを確認
+    await expect(updatedEpisodeItems.nth(1)).toBeInViewport();
+
     // ヘッダーの「続きから読む（第2話）」および「最初から読む（第1話）」の併存表示確認（AC-ND-03）
     const resumeButton = page.getByTestId("detail-resume-button");
     await expect(resumeButton).toBeVisible();
@@ -430,15 +493,15 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     );
     await expect(page.getByTestId("reader-view")).toBeVisible();
 
-    // 第2話のしおりスクロール位置が復元されることを確認
+    // 第2話の縦書きしおりスクロール位置が復元されることを確認（AC-RD-08 / R1-01）
     await expect
       .poll(async () => {
         return page.evaluate(() => {
           const el = document.querySelector('[data-testid="reader-view"]');
-          return el ? el.scrollTop : 0;
+          return el ? el.scrollLeft : 0;
         });
       })
-      .toBeGreaterThan(0);
+      .toBeLessThan(0);
 
     // 本棚から直行した場合でも、ブラウザ戻る（page.goBack()）で目次画面（SCR-02）へ遷移すること（整流化履歴の検証）
     await page.goBack();
