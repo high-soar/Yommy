@@ -96,6 +96,9 @@ flowchart TB
 - **小説組版 UI 単体テスト & VRT**:
   - 縦書き（`writing-mode: vertical-rl`）/ 横書き切り替え、ルビ（`<ruby>`）・傍点表示、フォント切り替え（Noto CJK / IPAex / BIZ UD明朝・ゴシック / Klee）、カラーテーマ（白 / セピア / ダーク / 純黒）、しおり位置復元などの UI 状態を Storybook の Story として網羅する。
   - **スクロール・Overflow（直交フロー）検証の必須化**: スクロール・Overflow を伴う表示コンポーネント（特に親 `horizontal-tb` 内で `writing-mode: vertical-rl` となる直交フロー要素）では、`w-full max-w-full`（および親コンテナの `min-w-0`）等の幅制約を明示するとともに、画面外にはみ出す長文データを含めた Story（1280px / 375px 双方で Overflow するケース）を必須とし、VRT と実ブラウザ IT（負の `scrollLeft` 検証）の双方でスクロール可能性を保証すること。
+  - **VRT 孤児スナップショット検知ガードの義務化**: Storybook のストーリー削除・置換時に古いスナップショット PNG が孤児アセットとして残存するのを防ぐため、`test/vrt/vrt.spec.ts` において `storybook-static/index.json` の対象ストーリー一覧と `test/vrt/snapshots/` 内 PNG のファイル一覧が 1 対 1 で完全一致すること（孤児スナップショット 0 件）を機械検証すること。
+  - **非同期永続化におけるロールバック ＆ `role="alert"` エラー通知規律**: 設定画面等の非同期更新において、DB/ストレージ書き込み失敗時に直前の state へ状態をロールバックし、画面上部（ヘッダー直下等）に `role="alert"`（`data-testid="*-error-alert"`）でエラーメッセージを明示すること。
+  - **ルーティング同一パスガード（no-op 制御）**: 下部タブバー等のナビゲーション操作において、既に表示中の同一パスへの遷移要求は重複して `history.pushState` を行わず no-op とし、OS バックキーの直前画面復帰（`TR-12` 等）の履歴破壊を防止すること。
   - DevContainer と GitHub Actions で同一の日本語フォント環境を使用し、Storybook 全 Story に対して **1280px / 375px の VRT（視覚的回帰テスト）** を実行して組版崩れを機械的に検知する。
 
 ---

@@ -56,6 +56,8 @@ MK 作業はファイル編集数やテスト・VRT 実行ログが多く、メ�
 - **Viewer & Bridge Layer**:
   - `*.stories.tsx` に表示バリエーション（縦書き `vertical-rl`、横書き、ルビ・傍点、各カラーテーマ、Loading/Error/Empty、操作 `play` 関数）を定義する。
   - スクロール・Overflow を伴う表示コンポーネント（特に親 `horizontal-tb` 内で `writing-mode: vertical-rl` となる直交フロー要素）では、`w-full max-w-full` 等の幅制約を明示するとともに、画面外にはみ出す長文データを含めた Story（1280px / 375px 双方で Overflow するケース）を必須とし、VRT と実ブラウザ IT（負の `scrollLeft` 検証）の双方でスクロール可能性を保証する。
+  - 非同期永続化を伴う設定やフォームでは、保存失敗時の状態ロールバックおよびエラー通知（`role="alert"`）の Story / UT を必須とする。
+  - ルーティング・ナビゲーション機能では、同一ルート再タップ時の重複履歴ガード（no-op 制御）を考慮する。
   - `*.test.tsx` で `composeStories` による全 Story 実行＋内部ロジック補完テストを記述する。
 - **失敗確認とコミット**: `npx vitest run <対象テスト>` を実行し、未実装により期待通り失敗することを確認して `test(<scope>): ...（Red）` をコミットする。
 
@@ -73,7 +75,7 @@ MK 作業はファイル編集数やテスト・VRT 実行ログが多く、メ�
 
 1. `npm run test:coverage` を実行し、変更・追加した全ファイルの **C0 / C1 / Functions カバレッジが 100%** であることを確認する（不正な `v8 ignore` は使用禁止）。
 2. `npm run typecheck`, `npm run lint`, `npm run format:check` を実行し PASS を確認する。
-3. Story を追加・変更した場合は `npm run test:vrt:update` → `npm run test:vrt` を実行し、1280px / 375px のスナップショットが正しく生成・検証されることを確認する。
+3. Story を追加・変更した場合は `npm run test:vrt:update` → `npm run test:vrt` を実行し、1280px / 375px のスナップショットが正しく生成・検証されることを確認する（Story を削除・置換した場合は旧スナップショット PNG を削除し、孤児スナップショット検知ガードテストを通過させること）。
 4. 作業中に検出した不備や後続への申し送り（`HO-xx`）を [docs/quality/bug-and-handover-log.md](../../../docs/quality/bug-and-handover-log.md) に記録する（原因 `D` は設計書も同時修正）。
 
 ---
