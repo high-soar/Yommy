@@ -87,4 +87,12 @@ describe("MockAppBridge", () => {
     await bridge.triggerBackButton();
     expect(listener).not.toHaveBeenCalled();
   });
+
+  it("ブラウザ環境（window 定義時）において window.__yommyAppBridge に自身が設定されること", () => {
+    const bridge = new MockAppBridge();
+    expect(
+      (window as unknown as { __yommyAppBridge?: MockAppBridge })
+        .__yommyAppBridge,
+    ).toBe(bridge);
+  });
 });
