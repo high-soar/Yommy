@@ -16,6 +16,7 @@ import type { SQLiteDBConnection } from "@capacitor-community/sqlite";
 import { Capacitor } from "@capacitor/core";
 import { SQLiteConnection } from "@capacitor-community/sqlite";
 import { resetTestDb } from "../storage/adapter/inMemoryDb";
+import { CapacitorAppBridge, MockAppBridge } from "../bridges/app";
 
 const { Default, CustomMockServices } = composeStories(stories);
 
@@ -472,9 +473,59 @@ describe("ServiceProvider", () => {
       expect(
         (serviceValue as ServiceContextValue | null)?.databaseAdapter,
       ).toBeDefined();
+      expect(
+        (serviceValue as ServiceContextValue | null)?.appBridge,
+      ).toBeInstanceOf(CapacitorAppBridge);
 
       createConnectionSpy.mockRestore();
       isNativeSpy.mockRestore();
+    });
+
+    it("Web 環境（isNativePlatform === false）でデフォルトの MockAppBridge が初期化されること (AC-AB-01)", async () => {
+      let serviceValue: ServiceContextValue | null = null;
+      const TestConsumer: React.FC = () => {
+        serviceValue = useServices();
+        return <div>Web 実行テスト</div>;
+      };
+
+      render(
+        <ServiceProvider>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect((serviceValue as ServiceContextValue | null)?.isReady).toBe(
+          true,
+        );
+      });
+      expect(
+        (serviceValue as ServiceContextValue | null)?.appBridge,
+      ).toBeInstanceOf(MockAppBridge);
+    });
+
+    it("外部からカスタム appBridge が提供された場合に優先して注入されること", async () => {
+      const customAppBridge = new MockAppBridge();
+      let serviceValue: ServiceContextValue | null = null;
+      const TestConsumer: React.FC = () => {
+        serviceValue = useServices();
+        return <div>DI 注入テスト</div>;
+      };
+
+      render(
+        <ServiceProvider services={{ appBridge: customAppBridge }}>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect((serviceValue as ServiceContextValue | null)?.isReady).toBe(
+          true,
+        );
+      });
+      expect((serviceValue as ServiceContextValue | null)?.appBridge).toBe(
+        customAppBridge,
+      );
     });
   });
 });

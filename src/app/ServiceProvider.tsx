@@ -4,6 +4,9 @@ import { CapacitorSQLite, SQLiteConnection } from "@capacitor-community/sqlite";
 import type { HttpClientBridge } from "../bridges/http/types";
 import { MockHttpClient } from "../bridges/http/mockHttpClient";
 import { CapacitorHttpClient } from "../bridges/http/capacitorHttpClient";
+import type { AppBridge } from "../bridges/app/types";
+import { MockAppBridge } from "../bridges/app/mockAppBridge";
+import { CapacitorAppBridge } from "../bridges/app/capacitorAppBridge";
 import type { ParserRegistry } from "../parsers/parserRegistry";
 import { createDefaultParserRegistry } from "../parsers/parserRegistry";
 import type { DatabaseAdapter } from "../storage/adapter/types";
@@ -36,6 +39,7 @@ export interface ServiceContextValue {
   novelRepository: NovelRepository;
   chapterRepository: ChapterRepository;
   settingsRepository: SettingsRepository;
+  appBridge: AppBridge;
   isReady: boolean;
   error: Error | null;
 }
@@ -194,6 +198,10 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           services?.settingsRepository ??
           new SqlSettingsRepository(databaseAdapter as DatabaseAdapter);
 
+        const appBridge =
+          services?.appBridge ??
+          (isNative ? new CapacitorAppBridge() : new MockAppBridge());
+
         if (isMounted) {
           setContextValue({
             httpClient,
@@ -202,6 +210,7 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
             novelRepository,
             chapterRepository,
             settingsRepository,
+            appBridge,
             isReady: true,
             error: null,
           });
@@ -216,6 +225,7 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
             novelRepository: null as unknown as NovelRepository,
             chapterRepository: null as unknown as ChapterRepository,
             settingsRepository: null as unknown as SettingsRepository,
+            appBridge: services?.appBridge ?? new MockAppBridge(),
             isReady: false,
             error,
           });
@@ -251,6 +261,7 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           chapterRepository: services?.chapterRepository as ChapterRepository,
           settingsRepository:
             services?.settingsRepository as SettingsRepository,
+          appBridge: services?.appBridge ?? new MockAppBridge(),
           isReady: false,
           error: null,
         }

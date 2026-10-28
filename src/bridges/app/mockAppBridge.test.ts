@@ -1,7 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
-import { MockAppBridge } from "./mockAppBridge";
+import { MockAppBridge, type AppBridge } from "./index";
 
 describe("MockAppBridge", () => {
+  it("AppBridge インターフェースを満たしていること", () => {
+    const bridge: AppBridge = new MockAppBridge();
+    expect(typeof bridge.addBackButtonListener).toBe("function");
+    expect(typeof bridge.exitApp).toBe("function");
+  });
+
   it("リスナーを登録し、triggerBackButton でイベントが配信されること", async () => {
     const bridge = new MockAppBridge();
     const listener = vi.fn();
