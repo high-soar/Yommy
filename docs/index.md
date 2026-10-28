@@ -41,7 +41,8 @@ docs/
     ├── bug-and-handover-log.md        # バグ記録票（製品/支援分離、原因5分類 L/S/D/B/A）＆ 申し送り事項（HO-xx）追跡シート（作業中Milestone＋未解決HO）
     ├── archive/                       # 完了した各マイルストーンのバグ記録・解決済み申し送りアーカイブ（Step 3 で移動）
     │   ├── phase3-poc-log.md          # Phase 3 PoC バグ記録（No. 1〜31）＆ 申し送りアーカイブ
-    │   └── v0.1-mvp-log.md            # Milestone v0.1 MVP バグ記録（No. 32〜70）＆ 申し送りアーカイブ
+    │   ├── v0.1-mvp-log.md            # Milestone v0.1 MVP バグ記録（No. 32〜70）＆ 申し送りアーカイブ
+    │   └── v0.2-ui-ux-log.md          # Milestone v0.2 UI/UX バグ記録（No. 71〜99）＆ 申し送りアーカイブ
     └── reports/                       # ミニリリース Milestone ごとの品質分析・改善（Kaizen）レポート格納先
         ├── phase3-poc.md              # Phase 3 PoC 品質分析・改善レポート
         ├── v0.1-mvp.md                # Milestone v0.1（カクヨム MVP）品質分析・改善レポート
