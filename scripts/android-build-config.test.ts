@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
@@ -16,6 +17,25 @@ describe("Android ビルド設定および署名・バージョン管理検証 (
       expect(fs.existsSync(keystorePath)).toBe(true);
       const stat = fs.statSync(keystorePath);
       expect(stat.size).toBeGreaterThan(0);
+    });
+
+    it("openssl が利用可能な場合、キーストアのエイリアスとパスワードが正常に読めること", () => {
+      let opensslAvailable = false;
+      try {
+        execSync("which openssl", { stdio: "ignore" });
+        opensslAvailable = true;
+      } catch {
+        opensslAvailable = false;
+      }
+
+      if (opensslAvailable) {
+        const output = execSync(
+          `openssl pkcs12 -info -in "${keystorePath}" -nodes -passin pass:android`,
+          { encoding: "utf-8" },
+        );
+        expect(output).toContain("friendlyName: androiddebugkey");
+        expect(output).toContain("CN=Android Debug");
+      }
     });
   });
 
