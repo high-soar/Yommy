@@ -454,5 +454,38 @@ describe("App コンポーネント", () => {
         await mockAppBridge.triggerBackButton();
       });
     });
+
+    it("本棚で戻るボタン押下後、トースト表示中に設定画面へ遷移して戻るボタンを押下した際、トーストタイマーが解除され直前画面へ復帰すること", async () => {
+      const user = userEvent.setup();
+      const mockAppBridge = new MockAppBridge();
+      render(<App initialPath="/" appBridge={mockAppBridge} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+      });
+
+      // 本棚で戻るボタン押下（トースト表示開始）
+      await act(async () => {
+        await mockAppBridge.triggerBackButton();
+      });
+      expect(screen.getByTestId("exit-app-toast")).toBeInTheDocument();
+
+      // トースト表示中に設定タブへ遷移
+      await user.click(screen.getByTestId("tab-settings"));
+      await waitFor(() => {
+        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+      });
+
+      // 設定画面で戻るボタンを押下
+      await act(async () => {
+        await mockAppBridge.triggerBackButton();
+      });
+
+      // 本棚画面に復帰し、トーストが消去されていること
+      await waitFor(() => {
+        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId("exit-app-toast")).not.toBeInTheDocument();
+    });
   });
 });

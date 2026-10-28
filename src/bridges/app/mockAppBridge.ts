@@ -7,6 +7,14 @@ export class MockAppBridge implements AppBridge {
   private listeners: Set<BackButtonListener> = new Set();
   exitAppCalled = false;
 
+  constructor() {
+    if (typeof window !== "undefined") {
+      (
+        window as unknown as { __yommyAppBridge?: MockAppBridge }
+      ).__yommyAppBridge = this;
+    }
+  }
+
   /**
    * システム戻るボタンのリスナーを登録する。
    *
