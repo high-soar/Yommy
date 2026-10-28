@@ -2,8 +2,8 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: Approved
-updated: "2026-10-27"
+status: "Review (#82)"
+updated: "2026-10-29"
 tags:
   - architecture
   - parser
@@ -117,7 +117,7 @@ Yommy/
     │   │   ├── capacitorHttpClient.ts # CapacitorHttp 実装（CORS回避・User-Agent・タイムアウト制御）
     │   │   └── mockHttpClient.ts      # UT / Storybook / IT 用フィクスチャ応答クライアント
     │   └── webview/
-    │       ├── types.ts               # WebViewDomBridge インターフェース定義（v0.3〜）
+    │       ├── types.ts               # WebViewDomBridge インターフェース定義（v0.4〜）
     │       └── webviewDomBridge.ts    # 内蔵WebView DOMキャプチャ実装
     ├── parsers/                       # 【1. Parser Layer（スクレイピング・DOM解析層）】
     │   ├── types.ts                   # NovelParser, ParsedNovelMetadata, ParsedChapterContent 等の型契約
@@ -127,7 +127,7 @@ Yommy/
     │   │   ├── KakuyomuParser.ts
     │   │   ├── KakuyomuParser.test.ts
     │   │   └── __fixtures__/
-    │   └── narou/                     # 小説家になろう用パーサーとローカル HTML フィクスチャ（v0.2〜）
+    │   └── narou/                     # 小説家になろう用パーサーとローカル HTML フィクスチャ（v0.4〜）
     │       ├── NarouParser.ts
     │       ├── NarouParser.test.ts
     │       └── __fixtures__/
@@ -142,7 +142,7 @@ Yommy/
     │   └── repositories/
     │       ├── novelRepository.ts     # novels テーブル操作
     │       ├── chapterRepository.ts   # chapters テーブル操作（本文キャッシュ保存・削除・容量集計）
-    │       ├── queueRepository.ts     # download_queue テーブル操作（v0.2〜）
+    │       ├── queueRepository.ts     # download_queue テーブル操作（v0.3〜）
     │       └── settingsRepository.ts  # reader_settings 操作
     ├── features/                      # 【3. Viewer & UI Layer（画面・機能別モジュール）】
     │   ├── bookshelf/                 # SCR-01: 本棚一覧・作品URL追加

@@ -2,8 +2,8 @@
 type: spec-db-schema
 title: ローカル DB スキーマ定義（App 全体正本）
 description: SQLite（novels, chapters, download_queue, reader_settings）のER図、テーブル構造、およびDDL定義の正本。
-status: Approved
-updated: "2026-10-27"
+status: "Review (#82)"
+updated: "2026-10-29"
 tags: [database, sqlite, schema, storage]
 related_specs:
   - docs/specs/requirements.md
@@ -159,7 +159,7 @@ CREATE TABLE IF NOT EXISTS chapters (
 CREATE INDEX IF NOT EXISTS idx_chapters_novel_index ON chapters(novel_id, chapter_index ASC);
 ```
 
-### 3.3 `download_queue` テーブル（バックグラウンド DL キュー：`v0.2`〜）
+### 3.3 `download_queue` テーブル（バックグラウンド DL キュー：`v0.3`〜）
 
 複数話一括取得時のレートリミット制御（1.5秒ウェイト）と中断・再開・リトライを管理します。
 
