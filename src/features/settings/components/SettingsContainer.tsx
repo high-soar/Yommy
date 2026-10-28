@@ -24,6 +24,7 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
     fontSizePx,
     lineHeight,
     isLoading,
+    error,
     toggleWritingMode,
     changeTheme,
     changeFontSize,
@@ -37,6 +38,7 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
       fontSizePx={fontSizePx}
       lineHeight={lineHeight}
       isLoading={isLoading}
+      error={error}
       onToggleWritingMode={toggleWritingMode}
       onChangeTheme={changeTheme}
       onChangeFontSize={changeFontSize}

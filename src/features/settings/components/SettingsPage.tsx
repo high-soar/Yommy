@@ -21,6 +21,8 @@ export interface SettingsPageProps {
   onChangeFontSize: (nextSizePx: number) => void;
   /** 行間変更ボタン押下時のコールバック */
   onChangeLineHeight: (nextHeight: number) => void;
+  /** エラーメッセージ（省略時: null） */
+  error?: string | null;
   /** 追加の CSS クラス（任意） */
   className?: string;
 }
@@ -98,6 +100,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   fontSizePx = 18,
   lineHeight = 1.8,
   isLoading = false,
+  error = null,
   onToggleWritingMode,
   onChangeTheme,
   onChangeFontSize,
@@ -142,6 +145,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             設定
           </h1>
         </header>
+
+        {error && (
+          <div
+            role="alert"
+            data-testid="settings-error-alert"
+            className="mb-6 p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-sm flex items-center gap-2"
+          >
+            <span aria-hidden="true">⚠️</span>
+            <span>{error}</span>
+          </div>
+        )}
 
         <section
           data-testid="typography-settings-section"

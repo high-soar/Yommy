@@ -286,7 +286,7 @@ describe("useSettings", () => {
   });
 
   describe("エラーハンドリング", () => {
-    it("設定保存時に settingsRepository が例外を投げた場合、error にエラーメッセージが設定されること", async () => {
+    it("設定保存時に settingsRepository が例外を投げた場合、error にエラーメッセージが設定され、直前の状態にロールバックされること（R1-20）", async () => {
       const updateReaderSettings = vi
         .fn()
         .mockRejectedValue(new Error("Storage write error"));
@@ -299,31 +299,50 @@ describe("useSettings", () => {
       });
 
       await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.writingMode).toBe("vertical-rl");
 
+      // 組み方向の切替失敗時: エラーが設定され、ロールバックされる
       await act(async () => {
         await result.current.toggleWritingMode();
       });
 
       expect(result.current.error).toBe("Storage write error");
+      expect(result.current.writingMode).toBe("vertical-rl");
 
-      // 未知のエラー型ハンドリング
+      // 未知のエラー型ハンドリング & テーマのロールバック
+      expect(result.current.theme).toBe("light");
       updateReaderSettings.mockRejectedValue("String error");
       await act(async () => {
         await result.current.changeTheme("dark");
       });
       expect(result.current.error).toBe("String error");
+      expect(result.current.theme).toBe("light");
 
+      // 文字サイズのロールバック
+      expect(result.current.fontSizePx).toBe(18);
       updateReaderSettings.mockRejectedValue(new Error("Font size error"));
       await act(async () => {
         await result.current.changeFontSize(20);
       });
       expect(result.current.error).toBe("Font size error");
+      expect(result.current.fontSizePx).toBe(18);
 
+      // 行間のロールバック
+      expect(result.current.lineHeight).toBe(1.8);
       updateReaderSettings.mockRejectedValue(new Error("Line height error"));
       await act(async () => {
         await result.current.changeLineHeight(2.0);
       });
       expect(result.current.error).toBe("Line height error");
+      expect(result.current.lineHeight).toBe(1.8);
+
+      // 成功時はエラーがクリアされること
+      updateReaderSettings.mockResolvedValue({});
+      await act(async () => {
+        await result.current.changeTheme("sepia");
+      });
+      expect(result.current.error).toBeNull();
+      expect(result.current.theme).toBe("sepia");
     });
   });
 });
