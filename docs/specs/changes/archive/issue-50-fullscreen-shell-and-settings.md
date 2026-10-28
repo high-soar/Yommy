@@ -17,6 +17,11 @@ related_specs:
 related_tests:
   - src/App.test.tsx
   - src/app/router.test.tsx
+  - src/shared/ui/BottomTabBar.test.tsx
+  - src/features/settings/hooks/useSettings.test.tsx
+  - src/features/settings/components/SampleTextPreview.test.tsx
+  - src/features/settings/components/SettingsPage.test.tsx
+  - src/features/settings/components/SettingsContainer.test.tsx
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
 ---
 

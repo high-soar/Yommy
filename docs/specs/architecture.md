@@ -23,6 +23,7 @@ related_specs:
   - docs/specs/features/reader-view.md
   - docs/specs/features/settings.md
   - docs/specs/changes/archive/issue-50-fullscreen-shell-and-settings.md
+  - docs/specs/changes/archive/issue-51-novel-detail-layout-and-scroll.md
   - docs/specs/changes/archive/issue-52-reader-fullscreen-and-bottom-overlay.md
   - docs/specs/changes/archive/issue-12-bookshelf-and-routing.md
   - docs/specs/changes/archive/issue-13-novel-detail-and-toc.md
@@ -33,6 +34,7 @@ related_tests:
   - src/app/ServiceProvider.test.tsx
   - src/app/router.test.tsx
   - src/App.test.tsx
+  - src/shared/ui/BottomTabBar.test.tsx
   - src/storage/schema.test.ts
   - scripts/generate-icons.test.ts
 ---
@@ -150,7 +152,7 @@ Yommy/
     │   └── settings/                  # SCR-05: 設定画面（組版・テーマ設定・サンプル文章プレビュー、v0.2〜）
     │       ├── hooks/
     │       │   ├── useSettings.ts
-    │       │   └── useSettings.test.ts
+    │       │   └── useSettings.test.tsx
     │       └── components/
     │           ├── SampleTextPreview.tsx
     │           ├── SampleTextPreview.stories.tsx
@@ -359,6 +361,11 @@ export type AppRoute =
   | { name: "reader"; path: string; novelId: string; chapterIndex: number }
   | { name: "settings"; path: "/settings" };
 
+export interface NavigateToReaderOptions {
+  replace?: boolean;
+  fromBookshelfResume?: boolean;
+}
+
 export interface RouterContextValue {
   currentPath: string;
   route: AppRoute;
@@ -366,7 +373,11 @@ export interface RouterContextValue {
   navigate: (path: string) => void;
   navigateToBookshelf: () => void;
   navigateToNovelDetail: (novelId: string) => void;
-  navigateToReader: (novelId: string, chapterIndex: number) => void;
+  navigateToReader: (
+    novelId: string,
+    chapterIndex: number,
+    options?: NavigateToReaderOptions,
+  ) => void;
   navigateToSettings: () => void;
   back: () => void;
 }
@@ -374,6 +385,7 @@ export interface RouterContextValue {
 
 - `novelId`（例: `"kakuyomu:16817330658027210412"`）を URL パスに含める際は `encodeURIComponent` でエンコードし、ルート解決（`matchRoute`）時に `decodeURIComponent` でデコードする。
 - `RouterProvider` は `initialPath?: string` プロパティを受け取り、Vitest 単体テストや Storybook において任意のルート状態を決定論的に再現できる。
+- `navigate` は同一パスへの遷移呼び出し時（例: `/settings` での「設定」タブ再タップ）は履歴追加（`pushState`）および `previousPath` の上書きを行わず no-op とする。
 - **OS バックキー（ブラウザ戻る）の論理階層遷移制御**:
   - ブラウザ履歴順に依存せず、常に論理階層順（**各話View `SCR-03` → 目次 `SCR-02` → 本棚 `SCR-01`**、**設定 `SCR-05` → 直前画面**）で戻るよう制御する。
   - 本棚の「続きから読む」から各話Viewへ直行した場合も、ルーターが履歴スタックに目次（`/novels/:novelId`）を介在させることで、バックキー 1 回で確実に目次画面へ戻る。
