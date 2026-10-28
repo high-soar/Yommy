@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Review (#82)"
+status: "Review (#78)"
 updated: "2026-10-29"
 tags:
   - architecture
@@ -22,6 +22,7 @@ related_specs:
   - docs/specs/features/novel-detail.md
   - docs/specs/features/reader-view.md
   - docs/specs/features/settings.md
+  - docs/specs/changes/issue-78-apk-signing-and-back-button.md
   - docs/specs/changes/archive/issue-50-fullscreen-shell-and-settings.md
   - docs/specs/changes/archive/issue-51-novel-detail-layout-and-scroll.md
   - docs/specs/changes/archive/issue-52-reader-fullscreen-and-bottom-overlay.md
@@ -78,12 +79,14 @@ flowchart TB
 
     subgraph BridgeLayer ["Capacitor Bridge Layer (src/bridges/*)"]
         HttpBridge["HttpClientBridge Interface<br>(CapacitorHttp 実通信 / テスト時 Fixture モック)"]
+        AppBridge["AppBridge Interface<br>(@capacitor/app システム戻るボタン・exitApp / テスト時モック)"]
         WebViewBridge["WebViewDomBridge Interface<br>(内蔵WebView DOM抽出 / テスト時モック)"]
     end
 
     Hooks --> Registry
     Hooks --> Repos
     Hooks --> HttpBridge
+    Hooks --> AppBridge
     Hooks --> WebViewBridge
 ```
 
@@ -98,20 +101,25 @@ Yommy/
 ├── assets/                            # 【マスターアセット】高解像度マスター画像（assets/icon.png 1024×1024）
 ├── public/                            # 【Web 静的アセット】favicon.ico, icon-192.png, icon-512.png, apple-touch-icon.png
 ├── android/                           # 【Android プロジェクト】Capacitor ネイティブコード＆リソース
+│   ├── debug.keystore                 # 【固定署名鍵】開発・検証用一貫デバッグキーストア（Issue #78）
 │   └── app/src/main/res/              # mipmap-* (ic_launcher*), values/ic_launcher_background.xml
 ├── scripts/                           # 【ビルド・補助スクリプト】generate-icons.mjs 等
 └── src/                               # 【アプリケーションソースコード】
-    ├── App.tsx                        # ルートコンポーネント（テーマ適用・ルーター配置）
+    ├── App.tsx                        # ルートコンポーネント（テーマ適用・ルーター配置・OS戻るボタン連携）
     ├── App.stories.tsx
     ├── App.test.tsx
     ├── app/                           # アプリケーション共通設定・DI Provider
     │   ├── router.tsx                 # 画面ルーティング定義（SCR-01〜SCR-05）
     │   ├── router.stories.tsx
     │   ├── router.test.tsx
-    │   ├── ServiceProvider.tsx        # Storage / HttpBridge / ParserRegistry の Context DI（実機・テスト差し替え点）
+    │   ├── ServiceProvider.tsx        # Storage / HttpBridge / AppBridge / ParserRegistry の Context DI（実機・テスト差し替え点）
     │   ├── ServiceProvider.stories.tsx
     │   └── ServiceProvider.test.tsx
     ├── bridges/                       # 【Capacitor Bridge 抽象層】
+    │   ├── app/                       # 【AppBridge】システム戻るボタン・アプリ終了制御（Issue #78）
+    │   │   ├── types.ts               # AppBridge, BackButtonEvent, BackButtonListener 定義
+    │   │   ├── capacitorAppBridge.ts  # @capacitor/app 実装
+    │   │   └── mockAppBridge.ts       # UT / Storybook / IT 用モック実装（triggerBackButton）
     │   ├── http/
     │   │   ├── types.ts               # HttpClientBridge インターフェース定義
     │   │   ├── capacitorHttpClient.ts # CapacitorHttp 実装（CORS回避・User-Agent・タイムアウト制御）
@@ -238,7 +246,33 @@ export interface HttpClientBridge {
 }
 ```
 
-### 3.2 Parser Layer 契約（`src/parsers/types.ts`）
+### 3.2 App / Native Bridge 契約（`src/bridges/app/types.ts`）
+
+```ts
+export interface BackButtonEvent {
+  canGoBack: boolean;
+}
+
+export type BackButtonListener = (
+  event: BackButtonEvent,
+) => void | Promise<void>;
+
+export interface AppBridge {
+  /**
+   * システム戻るボタン（またはテスト環境でのバックキー押下）のリスナーを登録する。
+   * @returns リスナー解除関数
+   */
+  addBackButtonListener(listener: BackButtonListener): () => void;
+
+  /**
+   * アプリケーションを終了する。
+   * Android 実機では @capacitor/app の App.exitApp() を実行し、モック環境では呼出フラグを記録する。
+   */
+  exitApp(): Promise<void>;
+}
+```
+
+### 3.3 Parser Layer 契約（`src/parsers/types.ts`）
 
 ```ts
 /** 対応サイト識別子 */
@@ -301,7 +335,7 @@ export interface NovelParser {
 - **許可する HTML 要素**:
   `<p>`, `<br>`, `<ruby>`, `<rb>`, `<rt>`, `<rp>`, `<em>`（傍点用のクラス `class="bouten"` のみ許可）に限定し、リーダー層が安全かつ一貫した CSS で縦書き・横書き・テーマ描画できるようにする。
 
-### 3.3 Storage Layer 契約（`src/storage/types.ts`）
+### 3.4 Storage Layer 契約（`src/storage/types.ts`）
 
 DB テーブル構造の詳細は [docs/specs/db-schema.md](db-schema.md) を正本とし、アプリケーション層は以下の Repository インターフェースを介してのみデータにアクセスします。
 
@@ -350,7 +384,7 @@ export interface SettingsRepository {
 }
 ```
 
-### 3.4 Application Router 契約（`src/app/router.tsx`）
+### 3.5 Application Router 契約（`src/app/router.tsx`）
 
 外部ルーティングライブラリへの依存を持たず、History API（`window.history.pushState` / `popstate` / `replaceState`）と React Context による軽量ルーターで画面遷移（[docs/specs/screen-transitions.md](screen-transitions.md)）を管理します。
 
@@ -386,18 +420,36 @@ export interface RouterContextValue {
 - `novelId`（例: `"kakuyomu:16817330658027210412"`）を URL パスに含める際は `encodeURIComponent` でエンコードし、ルート解決（`matchRoute`）時に `decodeURIComponent` でデコードする。
 - `RouterProvider` は `initialPath?: string` プロパティを受け取り、Vitest 単体テストや Storybook において任意のルート状態を決定論的に再現できる。
 - `navigate` は同一パスへの遷移呼び出し時（例: `/settings` での「設定」タブ再タップ）は履歴追加（`pushState`）および `previousPath` の上書きを行わず no-op とする。
-- **OS バックキー（ブラウザ戻る）の論理階層遷移制御**:
+- **OS バックキー（@capacitor/app の AppBridge 経由およびブラウザ戻る操作）の論理階層遷移制御**:
   - ブラウザ履歴順に依存せず、常に論理階層順（**各話View `SCR-03` → 目次 `SCR-02` → 本棚 `SCR-01`**、**設定 `SCR-05` → 直前画面**）で戻るよう制御する。
   - 本棚の「続きから読む」から各話Viewへ直行した場合も、ルーターが履歴スタックに目次（`/novels/:novelId`）を介在させることで、バックキー 1 回で確実に目次画面へ戻る。
   - リーダー画面内の前後話連続遷移（第1話 → 第2話）では `history.replaceState` を適用し、履歴の肥大化を防ぎつつバックキー 1 回で目次へ復帰できるようにする。
   - リーダー離脱時には最新の閲覧話数・スクロール進捗率を SQLite へ自動保存（`flushBookmark`）する。
   - 設定画面（`SCR-05`）からのバックキー操作時は、設定を開く直前の画面（本棚・目次・各話View）へ戻る。
+  - 本棚画面（`SCR-01: /`）でバックボタンが押された際は、2秒以内の連続2回押下で `AppBridge.exitApp()` を呼び出してアプリを終了し、1回目押下時は画面下部に「もう一度バックボタンを押すと終了します」の一時確認トースト（`role="status"`、2秒後に自動消去）を表示する（`TR-13`）。
 
 ---
 
 ## 4. テスト環境での DI（依存性注入）と決定論的初期化
 
-- `src/app/ServiceProvider.tsx` を介して `HttpClientBridge` と各 `Repository`（および基底の `DatabaseAdapter`）を React Context 経由で提供する。
-- **Android / iOS ネイティブ実行時**: `Capacitor.isNativePlatform()` によりネイティブ環境を自動検知し、`CapacitorHttpClient` および `createDefaultNativeSqliteAdapter`（`CapacitorSqliteAdapter` ＋ `src/storage/schema.ts` の DDL 初期化）を注入する。
-- **Web ブラウザ / Dev 実行時**: `createInMemoryDb`（`sql.js`）および `localStorage` への Base64 バイナリバックアップ（`yommy_sqlite_db_backup`）によるハイブリッド永続化を提供し、`createDefaultMockHttpClient` を使用する。なお `createDefaultMockHttpClient` は任意のカクヨム作品 URL（`/^https:\/\/kakuyomu\.jp\/works\/\d+$/`）およびエピソード URL（`/^https:\/\/kakuyomu\.jp\/works\/\d+\/episodes\/\d+$/`）に対してローカルフィクスチャ HTML を返却する。
-- **UT（Vitest）/ Storybook / Playwright IT 実行時**: `MockHttpClient`（`__fixtures__/*.html` を返却）＋ `InMemoryDatabaseAdapter` を注入し、各テストの開始前に `resetTestDb()` を呼び出して 100% 決定論的な状態で検証する。
+- `src/app/ServiceProvider.tsx` を介して `HttpClientBridge`、`AppBridge`、各 `Repository`（および基底の `DatabaseAdapter`）を React Context 経由で提供する。
+- **Android / iOS ネイティブ実行時**: `Capacitor.isNativePlatform()` によりネイティブ環境を自動検知し、`CapacitorHttpClient`、`CapacitorAppBridge`、および `createDefaultNativeSqliteAdapter`（`CapacitorSqliteAdapter` ＋ `src/storage/schema.ts` の DDL 初期化）を注入する。
+- **Web ブラウザ / Dev 実行時**: `createInMemoryDb`（`sql.js`）および `localStorage` への Base64 バイナリバックアップ（`yommy_sqlite_db_backup`）によるハイブリッド永続化を提供し、`createDefaultMockHttpClient` および `MockAppBridge` を使用する。なお `createDefaultMockHttpClient` は任意のカクヨム作品 URL（`/^https:\/\/kakuyomu\.jp\/works\/\d+$/`）およびエピソード URL（`/^https:\/\/kakuyomu\.jp\/works\/\d+\/episodes\/\d+$/`）に対してローカルフィクスチャ HTML を返却する。
+- **UT（Vitest）/ Storybook / Playwright IT 実行時**: `MockHttpClient`（`__fixtures__/*.html` を返却）＋ `MockAppBridge`（`triggerBackButton` により安全にイベント再現）＋ `InMemoryDatabaseAdapter` を注入し、各テストの開始前に `resetTestDb()` を呼び出して 100% 決定論的な状態で検証する。
+
+---
+
+## 5. Android ビルド署名およびバージョン管理規約
+
+Android Debug APK の継続的な検証と上書きインストール（`INSTALL_FAILED_UPDATE_INCOMPATIBLE` の抑止）を保証するため、以下のビルド署名・バージョン採番規約を適用します。
+
+### 5.1 Debug 署名キーストアの固定化（`android/debug.keystore`）
+
+- リポジトリ内 `android/debug.keystore` に開発・検証用共通デバッグキーストアを配置する。
+- `android/app/build.gradle` において `signingConfigs.debug` に上記キーストア（Alias: `androiddebugkey`、Password: `android`）を明示指定し、CI ランナー上でのランダムキーストア自動生成を防止する。
+
+### 5.2 `versionCode` / `versionName` の動的注入
+
+- `android/app/build.gradle` の `defaultConfig` において、CI 環境変数（`BUILD_NUMBER`）および Gradle プロパティ（`versionCode` / `versionName`）から動的にバージョンを解決する。
+- GitHub Actions（`.github/workflows/build-android.yml`）では `BUILD_NUMBER: ${{ github.run_number }}` を注入し、ビルドごとに `versionCode` を単調増加させる。
+- ローカルビルド時はフォールバック値（`versionCode 1`、`versionName "0.3.0"`）を採用し、開発作業の利便性を損なわない構成とする。
