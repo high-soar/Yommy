@@ -14,6 +14,7 @@ import {
 import { DatabaseAdapter } from "../../../storage/adapter/types";
 import { HttpClientBridge } from "../../../bridges/http/types";
 import { ParserRegistry } from "../../../parsers/parserRegistry";
+import { MockAppBridge } from "../../../bridges/app";
 import { useSettings } from "./useSettings";
 
 function createMockServices(
@@ -49,6 +50,7 @@ function createMockServices(
     novelRepository: {} as NovelRepository,
     chapterRepository: {} as ChapterRepository,
     settingsRepository: overrides?.settingsRepository ?? defaultSettingsRepo,
+    appBridge: overrides?.appBridge ?? new MockAppBridge(),
     isReady: overrides?.isReady ?? true,
     error: overrides?.error ?? null,
   };
