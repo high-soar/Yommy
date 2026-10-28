@@ -19,6 +19,7 @@ Use this workflow to author, update, and mechanically validate documentation in 
 3. **Apply OKF YAML Frontmatter (No Markdown Metadata Tables)**:
    - Every `.md` file under `docs/` (except the reserved bundle index `docs/index.md`) must begin with an OKF YAML frontmatter block as defined in [docs/index.md §4](../../../docs/index.md#4-okfopen-knowledge-formatyaml-フロントマター規約):
      - Required fields: `type`, `title`, `description`, `status`, `updated` (`"YYYY-MM-DD"`), `tags`, `related_specs`, `related_tests` (plus `issue: "#N"` for `spec-delta`).
+     - **Quote strings containing colons or symbols**: Always enclose values in double quotes (`"..."`) if they contain `: ` (e.g. `title: "本棚画面仕様書（SCR-01: Bookshelf）"`), `#` (e.g. `status: "Review (#50)"`), or YAML reserved characters to prevent YAML syntax parsing errors.
    - Never place legacy Markdown metadata tables at the top of the document body.
 4. **Describe observable behavior & contracts**:
    - Define verifiable Acceptance Criteria (`AC-xx`), Screen Transitions (`TR-xx`), interface/SQLite schema changes, component responsibilities (parent vs. child), and UT/VRT/IT test perspectives.

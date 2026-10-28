@@ -1,6 +1,6 @@
 ---
 type: spec-feature
-title: 作品詳細・目次画面仕様書（SCR-02: Novel Detail & TOC）
+title: "作品詳細・目次画面仕様書（SCR-02: Novel Detail & TOC）"
 description: 登録済み作品のヘッダー情報・あらすじ表示、章見出し付きエピソード一覧（キャッシュ済み・既読・しおり状態）、目次更新（再取得）、作品削除、およびリーダー画面への閲覧遷移を提供する作品詳細・目次画面（SCR-02）の正本仕様。
 status: "Review (#82)"
 updated: "2026-10-29"

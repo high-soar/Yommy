@@ -86,24 +86,85 @@ function stripYamlComment(rawLine) {
 }
 
 /**
- * Minimal YAML frontmatter parser for flat scalars and string arrays.
- * @param {string} yamlText
+ * Check if a scalar string is fully wrapped in single or double quotes.
+ * @param {string} str
  */
-function parseFrontmatter(yamlText) {
+function isQuotedScalar(str) {
+  return (
+    (str.startsWith('"') && str.endsWith('"') && str.length >= 2) ||
+    (str.startsWith("'") && str.endsWith("'") && str.length >= 2)
+  );
+}
+
+/**
+ * Minimal YAML frontmatter parser for flat scalars and string arrays,
+ * with strict checks for unquoted colons and YAML syntax hazards.
+ * @param {string} yamlText
+ * @param {string} filePath
+ */
+function parseFrontmatter(yamlText, filePath) {
   /** @type {Record<string, string | string[]>} */
   const data = {};
   const lines = yamlText.split(/\r?\n/);
   let currentListKey = null;
+  let inBracketKey = null;
+  let bracketBuffer = "";
 
-  for (const rawLine of lines) {
+  for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+    const rawLine = lines[lineIdx];
     const line = stripYamlComment(rawLine);
     if (!line.trim()) continue;
 
+    if (inBracketKey) {
+      bracketBuffer += " " + line.trim();
+      if (bracketBuffer.includes("]")) {
+        const inner = bracketBuffer
+          .slice(bracketBuffer.indexOf("[") + 1, bracketBuffer.lastIndexOf("]"))
+          .trim();
+        data[inBracketKey] = inner
+          ? inner
+              .split(",")
+              .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+              .filter(Boolean)
+          : [];
+        inBracketKey = null;
+        bracketBuffer = "";
+      }
+      continue;
+    }
+
     const listMatch = line.match(/^\s*-\s+(.+)$/);
     if (listMatch && currentListKey) {
-      const val = listMatch[1].trim().replace(/^["']|["']$/g, "");
+      const rawItem = listMatch[1].trim();
+      if (!isQuotedScalar(rawItem) && rawItem.includes(": ")) {
+        reportError(
+          filePath,
+          `List item under '${currentListKey}' contains ': ' in an unquoted string. Wrap it in double quotes to prevent YAML syntax errors.`,
+        );
+      }
+      const val = rawItem.replace(/^["']|["']$/g, "");
       if (Array.isArray(data[currentListKey])) {
         data[currentListKey].push(val);
+      }
+      continue;
+    }
+
+    if (currentListKey && line.trim().startsWith("[")) {
+      inBracketKey = currentListKey;
+      currentListKey = null;
+      bracketBuffer = line.trim();
+      if (bracketBuffer.includes("]")) {
+        const inner = bracketBuffer
+          .slice(bracketBuffer.indexOf("[") + 1, bracketBuffer.lastIndexOf("]"))
+          .trim();
+        data[inBracketKey] = inner
+          ? inner
+              .split(",")
+              .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+              .filter(Boolean)
+          : [];
+        inBracketKey = null;
+        bracketBuffer = "";
       }
       continue;
     }
@@ -120,9 +181,21 @@ function parseFrontmatter(yamlText) {
       } else if (rawVal.startsWith("[") && rawVal.endsWith("]")) {
         const inner = rawVal.slice(1, -1).trim();
         data[key] = inner
-          ? inner.split(",").map((s) => s.trim().replace(/^["']|["']$/g, ""))
+          ? inner
+              .split(",")
+              .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+              .filter(Boolean)
           : [];
+      } else if (rawVal.startsWith("[")) {
+        inBracketKey = key;
+        bracketBuffer = rawVal;
       } else {
+        if (!isQuotedScalar(rawVal) && rawVal.includes(": ")) {
+          reportError(
+            filePath,
+            `Frontmatter field '${key}' contains ': ' in an unquoted scalar. Wrap the value in double quotes to prevent YAML syntax errors.`,
+          );
+        }
         data[key] = rawVal.replace(/^["']|["']$/g, "");
       }
     }
@@ -196,7 +269,7 @@ for (const filePath of docsFiles) {
     continue;
   }
 
-  const fm = parseFrontmatter(fmMatch[1]);
+  const fm = parseFrontmatter(fmMatch[1], filePath);
   const body = content.slice(fmMatch[0].length);
 
   // Check for legacy markdown metadata table
