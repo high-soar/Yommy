@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: Approved
+status: "Review (#79)"
 updated: "2026-10-29"
 tags:
   - architecture
@@ -13,16 +13,22 @@ tags:
   - assets
   - settings
   - shell
+  - search
+  - ranking
+  - four-tabs
 related_specs:
   - docs/specs/requirements.md
   - docs/specs/db-schema.md
   - docs/specs/screen-transitions.md
   - docs/specs/parsers/kakuyomu.md
   - docs/specs/features/bookshelf.md
+  - docs/specs/features/search.md
+  - docs/specs/features/ranking.md
   - docs/specs/features/novel-detail.md
   - docs/specs/features/reader-view.md
   - docs/specs/features/settings.md
   - docs/specs/changes/archive/issue-78-apk-signing-and-back-button.md
+  - docs/specs/changes/issue-79-four-tabs-search-ranking.md
   - docs/specs/changes/archive/issue-50-fullscreen-shell-and-settings.md
   - docs/specs/changes/archive/issue-51-novel-detail-layout-and-scroll.md
   - docs/specs/changes/archive/issue-52-reader-fullscreen-and-bottom-overlay.md
@@ -50,16 +56,16 @@ AI による TDD 実装の確実性と保守性を最大化するため、Capaci
 ```mermaid
 flowchart TB
     subgraph UILayer ["3. Viewer & UI Layer (src/features/*, src/shared/ui/*)"]
-        Pages["Pages / Containers (SCR-01〜SCR-05)"]
-        Components["Presentational UI Components<br>(縦書き vertical-rl / ルビ / テーマ / 本棚カード / BottomTabBar / サンプルプレビュー)"]
-        Hooks["Application Hooks<br>(useBookshelf, useNovelDetail, useReader, useSettings, useDownloadQueue)"]
+        Pages["Pages / Containers (SCR-01〜SCR-07)"]
+        Components["Presentational UI Components<br>(縦書き vertical-rl / ルビ / テーマ / 本棚カード / 検索・ランキングカード / BottomTabBar 4タブ)"]
+        Hooks["Application Hooks<br>(useBookshelf, useNovelDetail, useReader, useSettings, useNovelSearch, useNovelRanking, useDownloadQueue)"]
         Pages --> Components
         Pages --> Hooks
     end
 
     subgraph ParserLayer ["1. Parser Layer (src/parsers/*)"]
         Registry["ParserRegistry<br>(URL から適切な NovelParser を解決)"]
-        Kakuyomu["KakuyomuParser<br>(kakuyomu.jp)"]
+        Kakuyomu["KakuyomuParser<br>(kakuyomu.jp: 目次・本文・検索・ランキング解析)"]
         Narou["NarouParser<br>(syosetu.com)"]
         Sanitizer["HtmlSanitizer / Formatter<br>(許可タグ <p>,<br>,<ruby>,<rb>,<rt>,<rp>,<em> のみ保持)"]
         Registry --> Kakuyomu
@@ -110,7 +116,7 @@ Yommy/
     ├── App.stories.tsx
     ├── App.test.tsx
     ├── app/                           # アプリケーション共通設定・DI Provider
-    │   ├── router.tsx                 # 画面ルーティング定義（SCR-01〜SCR-05）
+    │   ├── router.tsx                 # 画面ルーティング定義（SCR-01〜SCR-07）
     │   ├── router.stories.tsx
     │   ├── router.test.tsx
     │   ├── ServiceProvider.tsx        # Storage / HttpBridge / AppBridge / ParserRegistry の Context DI（実機・テスト差し替え点）
@@ -129,7 +135,7 @@ Yommy/
     │       ├── types.ts               # WebViewDomBridge インターフェース定義（v0.4〜）
     │       └── webviewDomBridge.ts    # 内蔵WebView DOMキャプチャ実装
     ├── parsers/                       # 【1. Parser Layer（スクレイピング・DOM解析層）】
-    │   ├── types.ts                   # NovelParser, ParsedNovelMetadata, ParsedChapterContent 等の型契約
+    │   ├── types.ts                   # NovelParser, ParsedNovelMetadata, ParsedChapterContent, ParsedSearchResult, ParsedRankingResult 等の型契約
     │   ├── parserRegistry.ts          # URL から対応サイト（kakuyomu / narou 等）を判定・ディスパッチ
     │   ├── sanitizer.ts               # 小説本文 HTML サニタイズ＆正規化（XSS防止・ルビ/傍点保持）
     │   ├── kakuyomu/                  # カクヨム用パーサーとローカル HTML フィクスチャ
@@ -154,68 +160,19 @@ Yommy/
     │       ├── queueRepository.ts     # download_queue テーブル操作（v0.3〜）
     │       └── settingsRepository.ts  # reader_settings 操作
     ├── features/                      # 【3. Viewer & UI Layer（画面・機能別モジュール）】
-    │   ├── bookshelf/                 # SCR-01: 本棚一覧・作品URL追加
+    │   ├── bookshelf/                 # SCR-01: 本棚一覧（空状態での検索/ランキング誘導）
     │   ├── novel-detail/              # SCR-02: 作品詳細・目次一覧・取得操作
     │   ├── reader/                    # SCR-03: 小説リーダー（全画面100dvh・最下部タッチオーバーレイ・ルビ・しおり保存）
     │   ├── webview-import/            # SCR-04: 内蔵ブラウザ表示・DOMインポート（v0.4〜）
-    │   └── settings/                  # SCR-05: 設定画面（組版・テーマ設定・サンプル文章プレビュー、v0.2〜）
-    │       ├── hooks/
-    │       │   ├── useSettings.ts
-    │       │   └── useSettings.test.tsx
-    │       └── components/
-    │           ├── SampleTextPreview.tsx
-    │           ├── SampleTextPreview.stories.tsx
-    │           ├── SampleTextPreview.test.tsx
-    │           ├── SettingsPage.tsx
-    │           ├── SettingsPage.stories.tsx
-    │           ├── SettingsPage.test.tsx
-    │           ├── SettingsContainer.tsx
-    │           ├── SettingsContainer.stories.tsx
-    │           └── SettingsContainer.test.tsx
+    │   ├── settings/                  # SCR-05: 設定画面（組版・テーマ設定・サンプル文章プレビュー、v0.2〜）
+    │   ├── search/                    # SCR-06: 検索画面（カクヨム作品検索・カードから本棚追加・SCR-02遷移、v0.3〜）
+    │   └── ranking/                   # SCR-07: ランキング画面（期間/ジャンル別ランキング・カードから本棚追加・SCR-02遷移、v0.3〜）
     └── shared/                        # 複数機能で共有する汎用 UI コンポーネント・ユーティリティ
         ├── ui/                        # BottomTabBar, Header, Button, Modal, Toast, Badge 等
         └── lib/                       # URL正規化、バイトサイズ整形、日時フォーマット等
+├── docs/                              # 【ドキュメント正本（OKF）】
+└── test/                              # 【統合・結合テスト】Playwright 実ブラウザ IT シナリオ
 ```
-
-### 2.2 アセット管理とアプリアイコン設計
-
-- **マスターアセット（`assets/`）**:
-  - `assets/icon.png`: 1024×1024 px（32bit RGBA PNG）のブランド正本マスター。将来の一時資料（`reference/`）削除後も恒久保持し、全プラットフォーム向けアイコンの生成元となる。
-- **Android ネイティブアセット（`android/app/src/main/res/`）**:
-  - Android 8.0+ Adaptive Icon: 背景 `#0D0E26`（`values/ic_launcher_background.xml`）＋ セーフゾーン（72dp / 108dp）前景イラスト（`mipmap-*/ic_launcher_foreground.png`、透過背景）。
-  - レガシー用: 角丸正方形（`ic_launcher.png`）および円形（`ic_launcher_round.png`）。
-- **Web 静的アセット（`public/` ＆ `index.html`）**:
-  - `favicon.ico`（16/32/48px マルチアイコン）、`icon-192.png`、`icon-512.png`、`apple-touch-icon.png`（180px）。Vite ビルド時に `dist/` 直下へ完全展開され、`index.html` の `<link rel="icon">` / `<link rel="apple-touch-icon">` から参照される。
-- **生成自動化（`scripts/generate-icons.mjs`）**:
-  - DevContainer の Playwright Chromium を用いて決定論的かつオフラインで全アセットを再生成する（`npm run generate:icons`）。
-
-#### Android アイコン解像度一覧表
-
-| 密度 (DPI)       | ディレクトリ                               | `ic_launcher.png` (正方形) | `ic_launcher_round.png` (円形) | `ic_launcher_foreground.png` (前景) |
-| :--------------- | :----------------------------------------- | :------------------------: | :----------------------------: | :---------------------------------: |
-| **mdpi** (1x)    | `android/app/src/main/res/mipmap-mdpi/`    |         48 × 48 px         |           48 × 48 px           |            108 × 108 px             |
-| **hdpi** (1.5x)  | `android/app/src/main/res/mipmap-hdpi/`    |         72 × 72 px         |           72 × 72 px           |            162 × 162 px             |
-| **xhdpi** (2x)   | `android/app/src/main/res/mipmap-xhdpi/`   |         96 × 96 px         |           96 × 96 px           |            216 × 216 px             |
-| **xxhdpi** (3x)  | `android/app/src/main/res/mipmap-xxhdpi/`  |        144 × 144 px        |          144 × 144 px          |            324 × 324 px             |
-| **xxxhdpi** (4x) | `android/app/src/main/res/mipmap-xxxhdpi/` |        192 × 192 px        |          192 × 192 px          |            432 × 432 px             |
-
-#### Web Favicon / Apple Touch Icon 仕様表
-
-| ファイルパス                  |       解像度        | 用途・形式                                                                       |
-| :---------------------------- | :-----------------: | :------------------------------------------------------------------------------- |
-| `public/favicon.ico`          | 16×16, 32×32, 48×48 | デスクトップブラウザのタブ・ブックマーク用マルチアイコン                         |
-| `public/icon-192.png`         |    192 × 192 px     | Web App / PWA マニフェスト用標準アイコン（濃紺背景＋角丸/全塗りイラスト）        |
-| `public/icon-512.png`         |    512 × 512 px     | 高解像度スプラッシュ・PWA 用アイコン                                             |
-| `public/apple-touch-icon.png` |    180 × 180 px     | iOS Safari「ホーム画面に追加」用（透過なし、濃紺背景 `#0D0E26` ＋ 中央イラスト） |
-
-#### アプリアイコン受入条件一覧（`AC-ICON-xx`）
-
-| 受入条件 ID      | 項目                       | 検証内容・合否判定基準                                                                                                                                               | 対応要件 ID  |
-| :--------------- | :------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------- |
-| **`AC-ICON-01`** | マスター正本配置           | `assets/icon.png`（1024×1024）が配置され、将来 `reference/` が削除されてもアセット再生成が可能であること。                                                           | `SYS-REQ-15` |
-| **`AC-ICON-02`** | Android アプリアイコン反映 | 各 DPI（mdpi〜xxxhdpi）の `ic_launcher.png`, `ic_launcher_round.png`, `ic_launcher_foreground.png` が生成され、Adaptive Icon 背景色 `#0D0E26` が設定されていること。 | `SYS-REQ-15` |
-| **`AC-ICON-03`** | Web Favicon 反映           | `public/favicon.ico`, `icon-192.png`, `apple-touch-icon.png` が配置され、`index.html` から正しくリンク参照されていること。                                           | `SYS-REQ-15` |
-| **`AC-ICON-04`** | 再現可能スクリプト         | `npm run generate:icons` を実行することで、全アイコンアセットがローカルで差分なく再生成できること。                                                                  | `SYS-REQ-15` |
 
 ---
 
@@ -311,6 +268,64 @@ export interface ParsedChapterContent {
   nextChapterUrl: string | null;
 }
 
+/** 検索・ランキング共通オプションおよび型 */
+export type NovelSearchOrder =
+  "weekly_ranking" | "popular" | "last_episode_published_at" | "published_at";
+export type NovelSerialStatus = "all" | "running" | "completed";
+
+export interface NovelSearchOptions {
+  order?: NovelSearchOrder;
+  serialStatus?: NovelSerialStatus;
+  genre?: string;
+  page?: number;
+}
+
+export type NovelRankingPeriod = "daily" | "weekly" | "monthly" | "entire";
+
+export interface NovelRankingOptions {
+  period?: NovelRankingPeriod;
+  genre?: string;
+  page?: number;
+}
+
+export interface NovelSearchResultItem {
+  remoteWorkId: string;
+  title: string;
+  author: string;
+  synopsis: string;
+  genre: string;
+  genreLabel: string;
+  serialStatus: "running" | "completed";
+  serialStatusLabel: string;
+  episodeCount: number;
+  characterCount: number;
+  tags: string[];
+  reviewPoints: number;
+  lastEpisodePublishedAt: string | null;
+  workUrl: string;
+}
+
+export interface NovelRankingResultItem extends NovelSearchResultItem {
+  rank: number; // 順位（1始まり）
+}
+
+export interface ParsedSearchResult {
+  items: NovelSearchResultItem[];
+  pageInfo: {
+    currentPage: number;
+    hasNextPage: boolean;
+    totalCount?: number;
+  };
+}
+
+export interface ParsedRankingResult {
+  items: NovelRankingResultItem[];
+  pageInfo: {
+    currentPage: number;
+    hasNextPage: boolean;
+  };
+}
+
 /** サイト別パーサーの共通インターフェース（Strategyパターン） */
 export interface NovelParser {
   readonly siteType: NovelSiteType;
@@ -326,15 +341,22 @@ export interface NovelParser {
 
   /** 各話HTMLから整形・サニタイズ済み本文HTMLを抽出する（純粋関数・通信なし） */
   parseChapterContent(html: string, pageUrl: string): ParsedChapterContent;
+
+  /** 検索クエリ・オプションに応じた検索 URL を生成する（任意実装） */
+  buildSearchUrl?(query: string, options?: NovelSearchOptions): string;
+
+  /** 検索結果 HTML から作品一覧をパースする（任意実装・純粋関数） */
+  searchNovels?(html: string, pageUrl: string): ParsedSearchResult;
+
+  /** ランキング条件に応じたランキング URL を生成する（任意実装） */
+  buildRankingUrl?(options?: NovelRankingOptions): string;
+
+  /** ランキング結果 HTML から順位付き作品一覧をパースする（任意実装・純粋関数） */
+  getRanking?(html: string, pageUrl: string): ParsedRankingResult;
 }
 ```
 
-#### 本文 HTML サニタイズ＆正規化規約（`src/parsers/sanitizer.ts`）
-
-- **XSS 防止（ホワイトリスト方式）**:
-  `<script>`, `<iframe>`, `<style>`, `<object>`, `<embed>`、およびすべての `on*` イベント属性・`javascript:` スキーム属性を完全に除去する。
-- **許可する HTML 要素**:
-  `<p>`, `<br>`, `<ruby>`, `<rb>`, `<rt>`, `<rp>`, `<em>`（傍点用のクラス `class="bouten"` のみ許可）に限定し、リーダー層が安全かつ一貫した CSS で縦書き・横書き・テーマ描画できるようにする。
+---
 
 ### 3.4 Storage Layer 契約（`src/storage/types.ts`）
 
@@ -392,9 +414,11 @@ export interface SettingsRepository {
 ```ts
 export type AppRoute =
   | { name: "bookshelf"; path: "/" }
+  | { name: "search"; path: "/search" }
+  | { name: "ranking"; path: "/ranking" }
+  | { name: "settings"; path: "/settings" }
   | { name: "novel-detail"; path: string; novelId: string }
-  | { name: "reader"; path: string; novelId: string; chapterIndex: number }
-  | { name: "settings"; path: "/settings" };
+  | { name: "reader"; path: string; novelId: string; chapterIndex: number };
 
 export interface NavigateToReaderOptions {
   replace?: boolean;
@@ -407,6 +431,8 @@ export interface RouterContextValue {
   previousPath?: string;
   navigate: (path: string) => void;
   navigateToBookshelf: () => void;
+  navigateToSearch: () => void;
+  navigateToRanking: () => void;
   navigateToNovelDetail: (novelId: string) => void;
   navigateToReader: (
     novelId: string,
@@ -420,13 +446,14 @@ export interface RouterContextValue {
 
 - `novelId`（例: `"kakuyomu:16817330658027210412"`）を URL パスに含める際は `encodeURIComponent` でエンコードし、ルート解決（`matchRoute`）時に `decodeURIComponent` でデコードする。
 - `RouterProvider` は `initialPath?: string` プロパティを受け取り、Vitest 単体テストや Storybook において任意のルート状態を決定論的に再現できる。
-- `navigate` は同一パスへの遷移呼び出し時（例: `/settings` での「設定」タブ再タップ）は履歴追加（`pushState`）および `previousPath` の上書きを行わず no-op とする。
+- `navigate` は同一パスへの遷移呼び出し時（例: `/settings` での「設定」タブ再タップ、`/search` での「検索」タブ再タップ）は履歴追加（`pushState`）および `previousPath` の上書きを行わず no-op とする。
 - **OS バックキー（@capacitor/app の AppBridge 経由およびブラウザ戻る操作）の論理階層遷移制御**:
-  - ブラウザ履歴順に依存せず、常に論理階層順（**各話View `SCR-03` → 目次 `SCR-02` → 本棚 `SCR-01`**、**設定 `SCR-05` → 直前画面**）で戻るよう制御する。
+  - ブラウザ履歴順に依存せず、常に論理階層順（**各話View `SCR-03` → 目次 `SCR-02` → 直前の遷移元（本棚 `SCR-01`、検索 `SCR-06`、ランキング `SCR-07`）**、**設定 `SCR-05` / 検索 `SCR-06` / ランキング `SCR-07` → 本棚 `SCR-01`**）で戻るよう制御する。
   - 本棚の「続きから読む」から各話Viewへ直行した場合も、ルーターが履歴スタックに目次（`/novels/:novelId`）を介在させることで、バックキー 1 回で確実に目次画面へ戻る。
   - リーダー画面内の前後話連続遷移（第1話 → 第2話）では `history.replaceState` を適用し、履歴の肥大化を防ぎつつバックキー 1 回で目次へ復帰できるようにする。
   - リーダー離脱時には最新の閲覧話数・スクロール進捗率を SQLite へ自動保存（`flushBookmark`）する。
-  - 設定画面（`SCR-05`）からのバックキー操作時は、設定を開く直前の画面（本棚・目次・各話View）へ戻る。
+  - 作品詳細・目次画面（`SCR-02`）からのバックキー操作時は、直前の呼び出し元画面（本棚 `SCR-01`、検索 `SCR-06`、またはランキング `SCR-07`）へ戻る（`TR-07`、直前履歴が存在しない場合は本棚 `/` へ復帰）。
+  - 設定画面（`SCR-05`）、検索画面（`SCR-06`）、ランキング画面（`SCR-07`）で OS バックキーを実行したとき、ホームである本棚画面（`/`）へ復帰する（`TR-12`）。
   - 本棚画面（`SCR-01: /`）でバックボタンが押された際は、2秒以内の連続2回押下で `AppBridge.exitApp()` を呼び出してアプリを終了し、1回目押下時は画面下部に「もう一度バックボタンを押すと終了します」の一時確認トースト（`role="status"`、2秒後に自動消去）を表示する（`TR-13`）。
 
 ---
