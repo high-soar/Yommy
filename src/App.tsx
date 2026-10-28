@@ -1,6 +1,7 @@
 import React from "react";
 import { ServiceProvider } from "./app/ServiceProvider";
 import { RouterProvider, useRouter } from "./app/router";
+import type { AppBridge } from "./bridges/app/types";
 import { BookshelfContainer } from "./features/bookshelf/components/BookshelfContainer";
 import { NovelDetailContainer } from "./features/novel-detail/components/NovelDetailContainer";
 import { ReaderContainer } from "./features/reader/components/ReaderContainer";
@@ -15,6 +16,10 @@ export interface AppProps {
   initialWorkUrl?: string;
   /** 初期遷移パス（単体テスト・Storybook用、省略時は現在のURLまたは "/"） */
   initialPath?: string;
+  /** 初期トースト表示フラグ（Storybook / テスト用、省略時は false） */
+  initialShowExitToast?: boolean;
+  /** テスト用のカスタム AppBridge（省略時は ServiceProvider のデフォルトを使用） */
+  appBridge?: AppBridge;
 }
 
 interface AppContentProps {

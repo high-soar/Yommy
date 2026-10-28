@@ -57,3 +57,15 @@ export const ReaderRoute: Story = {
     initialPath: "/novels/kakuyomu:16817330658027210412/chapters/1",
   },
 };
+
+/**
+ * 本棚画面終了確認トースト表示ストーリー。
+ * 本棚画面（/）でバックボタンを1回押下した際に表示される一時トーストを描画します。
+ */
+export const ExitToastRoute: Story = {
+  name: "本棚画面（終了確認トースト表示中）",
+  args: {
+    initialPath: "/",
+    initialShowExitToast: true,
+  },
+};
