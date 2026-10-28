@@ -2,8 +2,8 @@
 type: spec-feature
 title: 設定画面仕様書（SCR-05: Settings）
 description: 小説リーダーの組版設定（縦書き/横書き、4カラーテーマ、文字サイズ、行間）の一括カスタマイズ・永続化、ルビ・傍点を含むサンプル文章プレビュー、および下部タブ・OSバックキー連携を提供する設定画面（SCR-05）の正本仕様。
-status: Approved
-updated: "2026-10-27"
+status: "Review (#82)"
+updated: "2026-10-29"
 tags: [settings, scr-05, typography, theme, preview, bottom-nav, ui]
 related_specs:
   - docs/specs/requirements.md
@@ -36,7 +36,7 @@ related_tests:
 - **対応要件**:
   - `SYS-REQ-07`（ルビ・傍点の正確な描画：サンプル文章プレビュー枠内でのルビ・傍点レンダリング）
   - `SYS-REQ-08`（縦書き `vertical-rl` / 横書き `horizontal-tb` 切り替え）
-  - `SYS-REQ-09`（文字サイズ `12〜32px`、行間 `1.4〜2.4` のカスタマイズと永続化 ※フォント種別・余白は `v0.3`）
+  - `SYS-REQ-09`（文字サイズ `12〜32px`、行間 `1.4〜2.4` のカスタマイズと永続化 ※フォント種別・余白は `v0.4`）
   - `SYS-REQ-10`（4カラーテーマ `light` / `sepia` / `dark` / `black` 切り替え）
   - `SYS-REQ-16`（全画面シェル・下部タブバー・論理階層遷移：下部タブ「設定」からの直接遷移、および OS バックキーによる直前画面復帰）
 - **関連画面遷移**:
@@ -44,9 +44,8 @@ related_tests:
   - `TR-01b`（下部タブバー「本棚」タップによる `SCR-05` から本棚画面 `SCR-01` `/` への直接遷移）
   - `TR-12`（OS バックキー操作による `SCR-05` から設定を開く直前の画面［本棚 `SCR-01` / 目次 `SCR-02` / 各話View `SCR-03`］への復帰遷移）
 - **対象外スコープ（後続 Milestone）**:
-  - フォント種別（`fontFamily`）の選択および画面余白（`pageMarginPx`）の設定（Milestone `v0.3`：`SYS-REQ-09` 拡張）
-  - タップ送り（`enableTapPaging`）・音量キー送り（`enableVolumeKeyPaging`）のトグル設定（Milestone `v0.3`：`SYS-REQ-11` 拡張）
-  - バックグラウンド DL キュー管理およびレートリミット制御（Milestone `v0.3`：`SYS-REQ-03`）
+  - フォント種別（`fontFamily`）の選択および画面余白（`pageMarginPx`）の設定（Milestone `v0.4`：`SYS-REQ-09` 拡張）
+  - タップ送り（`enableTapPaging`）・音量キー送り（`enableVolumeKeyPaging`）のトグル設定（Milestone `v0.4`：`SYS-REQ-11` 拡張）
   - 全体および作品別キャッシュ使用量の可視化、既読キャッシュ一括削除（Milestone `v0.4`：`SYS-REQ-05`）
   - 設定データ・しおりのバックアップ（JSON エクスポート/インポート）（Milestone `v0.4`：`SYS-REQ-06`）
 

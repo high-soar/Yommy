@@ -2,8 +2,8 @@
 type: spec-feature
 title: 作品詳細・目次画面仕様書（SCR-02: Novel Detail & TOC）
 description: 登録済み作品のヘッダー情報・あらすじ表示、章見出し付きエピソード一覧（キャッシュ済み・既読・しおり状態）、目次更新（再取得）、作品削除、およびリーダー画面への閲覧遷移を提供する作品詳細・目次画面（SCR-02）の正本仕様。
-status: Approved
-updated: "2026-10-27"
+status: "Review (#82)"
+updated: "2026-10-29"
 tags: [novel-detail, scr-02, toc, routing, ui, shell, bottom-nav]
 related_specs:
   - docs/specs/requirements.md
@@ -55,7 +55,7 @@ related_tests:
   - `TR-07`（作品詳細画面からの本棚復帰導線：作品未検出画面 `novel-detail-not-found` の「本棚へ戻る」ボタン、作品削除確認ダイアログでの削除実行完了、または OS バックキー操作による本棚画面 `SCR-01` `/` への遷移。※`NovelDetailHeader` 内の「← 本棚へ戻る」ボタンは廃止。なお下部タブバー「本棚」タップ時は `TR-01b` が適用される）
 - **対象外スコープ（後続 Issue / Milestone）**:
   - エピソード閲覧に伴うしおり位置（`bookmarkChapterIndex`, `bookmarkScrollProgress`）および既読フラグ（`isRead`）の自動更新ロジック本体（Issue #14 の `SCR-03` リーダー画面拡張で一括実装）
-  - レートリミット付きバックグラウンド DL キューによる未取得全話の一括ダウンロード（Milestone `v0.3`：`SYS-REQ-03`, `TR-08`）
+  - レートリミット付きバックグラウンド処理による未取得話の一括キャッシュ（Milestone `v0.3` Issue #81：`SYS-REQ-02, 03`）
   - 内蔵 WebView（`SCR-04`）での手動インポート連携（Milestone `v0.4`：`SYS-REQ-13, 14`, `TR-09`）
   - 作品単位の「本文キャッシュのみ削除（目次は残す）」操作（Milestone `v0.4`：`SYS-REQ-05`）
 

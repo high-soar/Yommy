@@ -2,8 +2,8 @@
 type: spec-feature
 title: 小説リーダー画面仕様書（SCR-03: Novel Reader）
 description: 小説本文の全画面（100dvh）縦書き・横書き組版表示、最下部タッチによる下部オーバーレイ（ReaderBottomOverlay: 前後話ナビ＋下部タブ）、ルビ・傍点描画、4カラーテーマ・文字サイズ・行間設定の永続化、前後エピソード遷移、未キャッシュ話のオンデマンド取得、既読・しおり・スクロール進捗率の自動保存/復元、およびSCN-01統合シナリオの正本仕様。
-status: Approved
-updated: "2026-10-27"
+status: "Review (#82)"
+updated: "2026-10-29"
 tags: [reader, scr-03, vertical-writing, ruby, bouten, theme, typography, bookmark, scn01, fullscreen, bottom-overlay]
 related_specs:
   - docs/specs/architecture.md
@@ -45,9 +45,9 @@ related_tests:
   - `SYS-REQ-02`（本文取得・オフライン閲覧・未キャッシュ話オンデマンド取得）
   - `SYS-REQ-07`（ルビ `<ruby>`・傍点 `<em class="bouten">` のサニタイズ済み組版描画）
   - `SYS-REQ-08`（全画面 `100dvh` での縦書き `vertical-rl` / 横書き `horizontal-tb` 表示）
-  - `SYS-REQ-09`（文字サイズ `fontSizePx`・行間 `lineHeight` のカスタマイズと永続化 ※設定画面 `SCR-05` で変更、余白・フォント種別は `v0.3`）
+  - `SYS-REQ-09`（文字サイズ `fontSizePx`・行間 `lineHeight` のカスタマイズと永続化 ※設定画面 `SCR-05` で変更、余白・フォント種別は `v0.4`）
   - `SYS-REQ-10`（4カラーテーマ `light` / `sepia` / `dark` / `black` 切り替え ※設定画面 `SCR-05` で変更）
-  - `SYS-REQ-11`（全画面連続スクロール、最下部タッチによる `ReaderBottomOverlay` 開閉、および前後話ナビゲーションによる前話・次話への連続遷移 ※1画面タップ/音量キー送りは `v0.3`）
+  - `SYS-REQ-11`（全画面連続スクロール、最下部タッチによる `ReaderBottomOverlay` 開閉、および前後話ナビゲーションによる前話・次話への連続遷移 ※1画面タップ/音量キー送りは `v0.4`）
   - `SYS-REQ-12`（しおり話数 `bookmark_chapter_index`・本文スクロール進捗率 `bookmark_scroll_progress` の自動保存・復元、OSバックキー・下部タブ遷移時の `flushBookmark` 実行、および既読フラグ `is_read` の自動更新）
 - **関連画面遷移**:
   - `TR-03`（本棚画面 `SCR-01` の「続きから読む」から `SCR-03` への直接遷移）
@@ -55,8 +55,9 @@ related_tests:
   - `TR-05`（`SCR-03` 内の下部オーバーレイ「前の話へ」「次の話へ」操作による同一作品の前後エピソード `chapterIndex ± 1` への遷移）
   - `TR-06`（OS バックキーまたは下部オーバーレイの「本棚」「設定」タブ遷移によりスクロール進捗率を保存して `SCR-02` `/novels/:novelId`、`SCR-01` `/`、または `SCR-05` `/settings` へ戻る・遷移）
 - **対象外スコープ（後続 Milestone）**:
-  - 画面左右タップ（`enableTapPaging`）およびハードウェア音量キー（`enableVolumeKeyPaging`）による1画面ジャンプ送り（Milestone `v0.3`：`SYS-REQ-11` 拡張）
-  - 画面余白（`pageMarginPx`）・フォント種別（`fontFamily`）の UI カスタマイズ（Milestone `v0.3`：`SYS-REQ-09` 拡張）
+  - 読書中のバックグラウンド5話先読みおよびキャッシュ TTL 7日間制御（Milestone `v0.3` Issue #81：`SYS-REQ-02, 03`）
+  - 画面左右タップ（`enableTapPaging`）およびハードウェア音量キー（`enableVolumeKeyPaging`）による1画面ジャンプ送り（Milestone `v0.4`：`SYS-REQ-11` 拡張）
+  - 画面余白（`pageMarginPx`）・フォント種別（`fontFamily`）の UI カスタマイズ（Milestone `v0.4`：`SYS-REQ-09` 拡張）
   - 取得失敗時の内蔵 WebView フォールバック遷移 `TR-10`（Milestone `v0.4`：`SYS-REQ-13`）
 
 ---
