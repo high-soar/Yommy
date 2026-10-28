@@ -67,53 +67,65 @@ export function useSettings(): UseSettingsResult {
   }, [isReady, settingsRepository]);
 
   const toggleWritingMode = useCallback(async (): Promise<void> => {
+    const prevMode = writingMode;
     const nextMode: WritingMode =
-      writingMode === "vertical-rl" ? "horizontal-tb" : "vertical-rl";
+      prevMode === "vertical-rl" ? "horizontal-tb" : "vertical-rl";
     setWritingMode(nextMode);
     try {
       await settingsRepository.updateReaderSettings({ writingMode: nextMode });
+      setError(null);
     } catch (err: unknown) {
+      setWritingMode(prevMode);
       setError(toErrorMessage(err));
     }
   }, [writingMode, settingsRepository]);
 
   const changeTheme = useCallback(
     async (nextTheme: ReaderTheme): Promise<void> => {
+      const prevTheme = theme;
       setTheme(nextTheme);
       try {
         await settingsRepository.updateReaderSettings({ theme: nextTheme });
+        setError(null);
       } catch (err: unknown) {
+        setTheme(prevTheme);
         setError(toErrorMessage(err));
       }
     },
-    [settingsRepository],
+    [theme, settingsRepository],
   );
 
   const changeFontSize = useCallback(
     async (nextFontSizePx: number): Promise<void> => {
+      const prevFontSize = fontSizePx;
       const clamped = Math.max(12, Math.min(32, nextFontSizePx));
       setFontSizePx(clamped);
       try {
         await settingsRepository.updateReaderSettings({ fontSizePx: clamped });
+        setError(null);
       } catch (err: unknown) {
+        setFontSizePx(prevFontSize);
         setError(toErrorMessage(err));
       }
     },
-    [settingsRepository],
+    [fontSizePx, settingsRepository],
   );
 
   const changeLineHeight = useCallback(
     async (nextLineHeight: number): Promise<void> => {
+      const prevLineHeight = lineHeight;
       const clamped =
         Math.round(Math.max(1.4, Math.min(2.4, nextLineHeight)) * 10) / 10;
       setLineHeight(clamped);
       try {
         await settingsRepository.updateReaderSettings({ lineHeight: clamped });
+        setError(null);
       } catch (err: unknown) {
+        setLineHeight(prevLineHeight);
         setError(toErrorMessage(err));
       }
     },
-    [settingsRepository],
+    [lineHeight, settingsRepository],
   );
 
   return {

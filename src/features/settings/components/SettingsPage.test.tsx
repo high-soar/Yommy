@@ -5,8 +5,14 @@ import { composeStories } from "@storybook/react";
 import * as stories from "./SettingsPage.stories";
 import { SettingsPage } from "./SettingsPage";
 
-const { Default, HorizontalSepia, MinBoundaries, MaxBoundaries, Loading } =
-  composeStories(stories);
+const {
+  Default,
+  HorizontalSepia,
+  MinBoundaries,
+  MaxBoundaries,
+  Loading,
+  WithError,
+} = composeStories(stories);
 
 describe("SettingsPage", () => {
   describe("Storybook Stories 描画検証 (composeStories)", () => {
@@ -366,6 +372,36 @@ describe("SettingsPage", () => {
 
       const page = screen.getByTestId("settings-page");
       expect(page).toHaveClass("custom-test-class");
+    });
+
+    it("WithError ストーリーでエラーアラートが role='alert' として表示されること（R1-20）", () => {
+      render(<WithError />);
+
+      const alert = screen.getByRole("alert");
+      expect(alert).toBeInTheDocument();
+      expect(alert).toHaveAttribute("data-testid", "settings-error-alert");
+      expect(alert).toHaveTextContent(
+        "設定の保存に失敗しました。時間をおいて再試行してください。",
+      );
+    });
+
+    it("error が null または未指定の場合、エラーアラートが表示されないこと", () => {
+      render(
+        <SettingsPage
+          writingMode="vertical-rl"
+          theme="light"
+          error={null}
+          onToggleWritingMode={vi.fn()}
+          onChangeTheme={vi.fn()}
+          onChangeFontSize={vi.fn()}
+          onChangeLineHeight={vi.fn()}
+        />,
+      );
+
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("settings-error-alert"),
+      ).not.toBeInTheDocument();
     });
   });
 });

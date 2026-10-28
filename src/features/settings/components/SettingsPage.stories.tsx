@@ -93,3 +93,18 @@ export const Loading: Story = {
     isLoading: true,
   },
 };
+
+/**
+ * 設定保存エラー表示（error: "設定の保存に失敗しました。"）
+ */
+export const WithError: Story = {
+  name: "設定保存エラー表示",
+  args: {
+    writingMode: "vertical-rl",
+    theme: "light",
+    fontSizePx: 18,
+    lineHeight: 1.8,
+    isLoading: false,
+    error: "設定の保存に失敗しました。時間をおいて再試行してください。",
+  },
+};

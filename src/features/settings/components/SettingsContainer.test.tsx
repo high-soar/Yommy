@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./SettingsContainer.stories";
 import { SettingsContainer } from "./SettingsContainer";
@@ -202,6 +202,37 @@ describe("SettingsContainer", () => {
       expect(screen.getByTestId("settings-page")).toHaveClass(
         "h-full flex flex-col overflow-y-auto",
       );
+    });
+
+    it("設定保存が reject した場合、SettingsPage にエラーが伝播して role='alert' が表示されること（R1-20）", async () => {
+      const user = userEvent.setup();
+      const mockRepo = stories.createMockSettingsRepository();
+      mockRepo.updateReaderSettings = vi
+        .fn()
+        .mockRejectedValue(new Error("DB保存エラー"));
+
+      render(
+        <ServiceProvider
+          services={{
+            settingsRepository: mockRepo,
+          }}
+        >
+          <SettingsContainer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+      });
+
+      const toggleBtn = screen.getByTestId("toggle-orientation");
+      await user.click(toggleBtn);
+
+      await waitFor(() => {
+        const alert = screen.getByRole("alert");
+        expect(alert).toBeInTheDocument();
+        expect(alert).toHaveTextContent("DB保存エラー");
+      });
     });
   });
 });
