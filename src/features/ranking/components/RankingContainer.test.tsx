@@ -172,4 +172,54 @@ describe("RankingContainer コンポーネント", () => {
       expect(handleSelectNovel).toHaveBeenCalledTimes(1);
     });
   });
+
+  it("onSelectNovel が指定されていない場合、カード本体タップで内部の handleCardSelect が実行されること", async () => {
+    const user = userEvent.setup();
+    renderWithProviders();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("ranking-results-list")).toBeInTheDocument();
+    });
+
+    const cards = screen.getAllByRole("button");
+    const novelCards = cards.filter((el) =>
+      el.getAttribute("data-testid")?.startsWith("ranking-novel-card-"),
+    );
+
+    await user.click(novelCards[0]);
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByTestId("ranking-card-registered-button").length,
+      ).toBeGreaterThan(0);
+    });
+  });
+
+  it("onSelectNovel 指定時に未登録作品の追加が失敗した場合は onSelectNovel が呼ばれないこと", async () => {
+    mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/works\/\d+$/, () => {
+      throw new Error("TOC Fetch Failed");
+    });
+
+    const user = userEvent.setup();
+    const handleSelectNovel = vi.fn();
+
+    renderWithProviders({ onSelectNovel: handleSelectNovel });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("ranking-results-list")).toBeInTheDocument();
+    });
+
+    const cards = screen.getAllByRole("button");
+    const novelCards = cards.filter((el) =>
+      el.getAttribute("data-testid")?.startsWith("ranking-novel-card-"),
+    );
+
+    await user.click(novelCards[0]);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("ranking-error")).toBeInTheDocument();
+    });
+
+    expect(handleSelectNovel).not.toHaveBeenCalled();
+  });
 });

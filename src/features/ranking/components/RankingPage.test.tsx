@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
@@ -53,18 +53,15 @@ describe("RankingPage コンポーネント", () => {
 
     // 1位: 追加中
     const card1 = screen.getByTestId("ranking-novel-card-16817330658027210412");
-    expect(card1).toContainElement(
-      screen.getByTestId("ranking-card-add-button"),
-    );
-    expect(screen.getByTestId("ranking-card-add-button")).toHaveTextContent(
-      "追加中...",
-    );
+    const addButton1 = within(card1).getByTestId("ranking-card-add-button");
+    expect(addButton1).toHaveTextContent("追加中...");
+    expect(addButton1).toBeDisabled();
 
     // 2位: 登録済み
     const card2 = screen.getByTestId("ranking-novel-card-1177354054881162325");
-    expect(card2).toContainElement(
-      screen.getByTestId("ranking-card-registered-button"),
-    );
+    expect(
+      within(card2).getByTestId("ranking-card-registered-button"),
+    ).toBeInTheDocument();
   });
 
   it("Loading ストーリー: ローディングインジケーターが表示されること", () => {

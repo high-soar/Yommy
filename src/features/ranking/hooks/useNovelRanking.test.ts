@@ -1,6 +1,7 @@
 import { renderHook, act, waitFor } from "@testing-library/react";
 import React from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import * as ServiceProviderModule from "../../../app/ServiceProvider";
 import { ServiceProvider } from "../../../app/ServiceProvider";
 import { RouterProvider } from "../../../app/router";
 import { useNovelRanking } from "./useNovelRanking";
@@ -17,6 +18,7 @@ describe("useNovelRanking", () => {
   beforeEach(async () => {
     await resetTestDb();
     localStorage.clear();
+    window.history.replaceState(null, "", "/ranking");
     vi.clearAllMocks();
 
     mockHttpClient = new MockHttpClient();
@@ -245,6 +247,69 @@ describe("useNovelRanking", () => {
     expect(result.current.addingWorkId).toBeNull();
   });
 
+  it("ランキング取得で非Error例外がスローされた場合も文字列化されてエラー状態に保持されること", async () => {
+    mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/rankings\//, () => {
+      throw "String error";
+    });
+
+    const { result } = renderHook(() => useNovelRanking(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.error).toBe("String error");
+    });
+  });
+
+  it("本棚追加で非Error例外がスローされた場合も文字列化されてエラー状態に保持されること", async () => {
+    mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/works\/\d+$/, () => {
+      throw "String error on add";
+    });
+
+    const { result } = renderHook(() => useNovelRanking(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.items.length).toBeGreaterThan(0);
+    });
+
+    await act(async () => {
+      await result.current.addNovelToBookshelf(sampleRankingItem1);
+    });
+
+    expect(result.current.error).toBe("String error on add");
+  });
+
+  it("handleCardSelect: siteType を明示的に持つアイテムでも正しく詳細画面へ遷移すること", async () => {
+    const { result } = renderHook(() => useNovelRanking(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.items.length).toBeGreaterThan(0);
+    });
+
+    const targetItem = {
+      ...result.current.items[0],
+      siteType: "kakuyomu" as const,
+    };
+
+    // 登録
+    await act(async () => {
+      await result.current.addNovelToBookshelf(targetItem);
+    });
+
+    // 登録済みタップ
+    await act(async () => {
+      await result.current.handleCardSelect(targetItem);
+    });
+
+    expect(window.location.pathname).toBe(
+      `/novels/${encodeURIComponent(`kakuyomu:${targetItem.remoteWorkId}`)}`,
+    );
+  });
+
   it("handleCardSelect: 未登録時は本棚登録した上で作品詳細画面へ遷移すること (AC-RK-07)", async () => {
     const { result } = renderHook(() => useNovelRanking(), {
       wrapper: createWrapper(),
@@ -289,5 +354,159 @@ describe("useNovelRanking", () => {
     expect(result.current.registeredWorkIds.has(targetItem.remoteWorkId)).toBe(
       true,
     );
+  });
+
+  it("handleCardSelect で登録済みだが listNovels で見つからない場合もフォールバックIDで詳細画面へ遷移すること", async () => {
+    const { result } = renderHook(() => useNovelRanking(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.items.length).toBeGreaterThan(0);
+    });
+
+    const targetItem = result.current.items[0];
+
+    // 本棚へ登録
+    await act(async () => {
+      await result.current.addNovelToBookshelf(targetItem);
+    });
+
+    // Repository の listNovels を空配列にモックして found が undefined になるケースを検証
+    const repo = (
+      window as unknown as {
+        __yommyServices?: {
+          novelRepository: { listNovels: () => Promise<unknown[]> };
+        };
+      }
+    ).__yommyServices?.novelRepository;
+    if (repo) {
+      vi.spyOn(repo, "listNovels").mockResolvedValueOnce([]);
+    }
+
+    await act(async () => {
+      await result.current.handleCardSelect(targetItem);
+    });
+
+    expect(window.location.pathname).toBe(
+      `/novels/${encodeURIComponent(`kakuyomu:${targetItem.remoteWorkId}`)}`,
+    );
+  });
+
+  it("handleCardSelect で登録済み作品の listNovels 呼び出しが例外をスローしてもフォールバックIDで安全に遷移すること", async () => {
+    const { result } = renderHook(() => useNovelRanking(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.items.length).toBeGreaterThan(0);
+    });
+
+    const targetItem = result.current.items[0];
+
+    await act(async () => {
+      await result.current.addNovelToBookshelf(targetItem);
+    });
+
+    const repo = (
+      window as unknown as {
+        __yommyServices?: {
+          novelRepository: { listNovels: () => Promise<unknown[]> };
+        };
+      }
+    ).__yommyServices?.novelRepository;
+    if (repo) {
+      vi.spyOn(repo, "listNovels").mockRejectedValueOnce(
+        new Error("DB connection failure"),
+      );
+    }
+
+    await act(async () => {
+      await result.current.handleCardSelect(targetItem);
+    });
+
+    expect(window.location.pathname).toBe(
+      `/novels/${encodeURIComponent(`kakuyomu:${targetItem.remoteWorkId}`)}`,
+    );
+  });
+
+  it("handleCardSelect で未登録作品の追加が失敗した場合は詳細画面へ遷移しないこと", async () => {
+    mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/works\/\d+$/, () => {
+      throw new Error("Add Failed");
+    });
+
+    const { result } = renderHook(() => useNovelRanking(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.items.length).toBeGreaterThan(0);
+    });
+
+    const targetItem = result.current.items[0];
+    window.history.pushState(null, "", "/ranking");
+
+    await act(async () => {
+      await result.current.handleCardSelect(targetItem);
+    });
+
+    expect(window.location.pathname).toBe("/ranking");
+  });
+
+  it("refreshRegisteredIds で listNovels が例外をスローしても正常に処理が継続すること", async () => {
+    const failingRepo = {
+      listNovels: vi.fn().mockRejectedValue(new Error("DBエラー")),
+      upsertNovelWithToc: vi.fn(),
+    };
+
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(
+        ServiceProvider,
+        {
+          services: {
+            httpClient: mockHttpClient,
+            novelRepository: failingRepo as never,
+          },
+        },
+        React.createElement(
+          RouterProvider,
+          { initialPath: "/ranking" },
+          children,
+        ),
+      );
+
+    const { result } = renderHook(() => useNovelRanking(), { wrapper });
+
+    await waitFor(() => {
+      expect(failingRepo.listNovels).toHaveBeenCalled();
+    });
+    expect(result.current.registeredWorkIds.size).toBe(0);
+  });
+
+  it("novelRepository が存在しない場合も refreshRegisteredIds がクラッシュしないこと", async () => {
+    vi.spyOn(ServiceProviderModule, "useServices").mockReturnValue({
+      httpClient: mockHttpClient,
+      parserRegistry: {
+        getAll: () => [],
+      } as never,
+      databaseAdapter: {} as never,
+      novelRepository: undefined as never,
+      chapterRepository: {} as never,
+      settingsRepository: {} as never,
+      appBridge: {} as never,
+      isReady: true,
+      error: null,
+    });
+
+    const { result } = renderHook(() => useNovelRanking(), {
+      wrapper: ({ children }) =>
+        React.createElement(
+          RouterProvider,
+          { initialPath: "/ranking" },
+          children,
+        ),
+    });
+
+    expect(result.current.registeredWorkIds.size).toBe(0);
   });
 });

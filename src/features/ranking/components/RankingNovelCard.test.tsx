@@ -179,6 +179,25 @@ describe("RankingNovelCard コンポーネント", () => {
     expect(handleSelect).toHaveBeenCalledTimes(2);
   });
 
+  it("子要素（タイトル等）からのキーダウンイベント（target !== currentTarget）では onSelect が発火しないこと", () => {
+    const handleSelect = vi.fn();
+    render(
+      <RankingNovelCard
+        item={sampleRankingItem1}
+        isRegistered={false}
+        isAdding={false}
+        onAdd={vi.fn()}
+        onSelect={handleSelect}
+      />,
+    );
+
+    const title = screen.getByTestId("ranking-card-title");
+    title.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    );
+    expect(handleSelect).not.toHaveBeenCalled();
+  });
+
   it("キーボード操作（Enter / Space）で「＋ 本棚に追加」ボタンを押下した際、カードの onSelect が発火せず onAdd のみ呼ばれること", async () => {
     const user = userEvent.setup();
     const handleAdd = vi.fn();
