@@ -75,7 +75,7 @@ export const ReaderBottomOverlay: React.FC<ReaderBottomOverlayProps> = ({
         data-testid="reader-bottom-tabs"
         role="tablist"
         aria-label="リーダーナビゲーションタブ"
-        className="grid grid-cols-2 border-t border-zinc-200 dark:border-zinc-800 max-w-4xl mx-auto w-full"
+        className="grid grid-cols-4 border-t border-zinc-200 dark:border-zinc-800 max-w-4xl mx-auto w-full"
       >
         <button
           type="button"
@@ -91,6 +91,38 @@ export const ReaderBottomOverlay: React.FC<ReaderBottomOverlayProps> = ({
         >
           <span aria-hidden="true">📚</span>
           <span>本棚</span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          data-testid="reader-bottom-tab-search"
+          aria-selected={activeTab === "search"}
+          onClick={() => onSelectTab?.("search")}
+          className={`flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium transition-colors cursor-pointer ${
+            activeTab === "search"
+              ? "text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50/50 dark:bg-emerald-950/20"
+              : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+          }`}
+        >
+          <span aria-hidden="true">🔍</span>
+          <span>検索</span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          data-testid="reader-bottom-tab-ranking"
+          aria-selected={activeTab === "ranking"}
+          onClick={() => onSelectTab?.("ranking")}
+          className={`flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium transition-colors cursor-pointer ${
+            activeTab === "ranking"
+              ? "text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50/50 dark:bg-emerald-950/20"
+              : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+          }`}
+        >
+          <span aria-hidden="true">🏆</span>
+          <span>ランキング</span>
         </button>
 
         <button
