@@ -19,6 +19,9 @@ export class InMemoryDatabaseAdapter implements DatabaseAdapter {
       if (typeof p === "boolean") {
         return p ? 1 : 0;
       }
+      if (p === undefined) {
+        return null;
+      }
       return p as SqlValue;
     });
   }

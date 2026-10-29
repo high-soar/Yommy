@@ -39,10 +39,10 @@ export const BookshelfContainer: React.FC<BookshelfContainerProps> = ({
   } = useBookshelf();
 
   const handleSelectNovel = useCallback(
-    (novelId: string) => {
+    async (novelId: string) => {
       const targetNovel = novels.find((n) => n.id === novelId);
       if (targetNovel?.hasNewUpdate) {
-        void clearNovelUpdate(novelId);
+        await clearNovelUpdate(novelId);
       }
       if (onSelectNovel) {
         onSelectNovel(novelId);
@@ -54,10 +54,10 @@ export const BookshelfContainer: React.FC<BookshelfContainerProps> = ({
   );
 
   const handleResumeNovel = useCallback(
-    (novelId: string, chapterIndex: number) => {
+    async (novelId: string, chapterIndex: number) => {
       const targetNovel = novels.find((n) => n.id === novelId);
       if (targetNovel?.hasNewUpdate) {
-        void clearNovelUpdate(novelId);
+        await clearNovelUpdate(novelId);
       }
       if (onResumeNovel) {
         onResumeNovel(novelId, chapterIndex);

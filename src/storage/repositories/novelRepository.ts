@@ -256,10 +256,10 @@ export class SqlNovelRepository implements NovelRepository {
           id,
           chapter.chapterIndex,
           chapter.remoteChapterId,
-          chapter.partTitle,
+          chapter.partTitle ?? null,
           chapter.title,
           chapter.url,
-          chapter.publishedAt,
+          chapter.publishedAt ?? null,
         ]);
       }
 
