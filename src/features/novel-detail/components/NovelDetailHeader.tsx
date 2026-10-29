@@ -13,13 +13,24 @@ export type { NovelDetailHeaderProps } from "../types";
 export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
   novel,
   isRefreshing,
+  isBatchCaching,
+  batchCacheProgress,
+  isAllCached,
   refreshMessage,
   error,
   onStartFromBeginning,
   onResumeBookmark,
   onRefreshToc,
+  onStartBatchCache,
+  onCancelBatchCache,
   onOpenDeleteDialog,
 }) => {
+  void isBatchCaching;
+  void batchCacheProgress;
+  void isAllCached;
+  void onStartBatchCache;
+  void onCancelBatchCache;
+
   const [isSynopsisExpanded, setIsSynopsisExpanded] = useState(false);
 
   // メタ情報のフォールバックおよび空文字判定

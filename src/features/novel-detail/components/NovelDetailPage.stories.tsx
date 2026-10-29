@@ -73,6 +73,9 @@ const meta: Meta<typeof NovelDetailPage> = {
     chapters: sampleChapters,
     isLoading: false,
     isRefreshing: false,
+    isBatchCaching: false,
+    batchCacheProgress: null,
+    isAllCached: false,
     isDeleteDialogOpen: false,
     isDeleting: false,
     refreshMessage: null,
@@ -82,6 +85,8 @@ const meta: Meta<typeof NovelDetailPage> = {
     onResumeBookmark: fn(),
     onSelectEpisode: fn(),
     onRefreshToc: fn(),
+    onStartBatchCache: fn(),
+    onCancelBatchCache: fn(),
     onOpenDeleteDialog: fn(),
     onCloseDeleteDialog: fn(),
     onConfirmDelete: fn(),
@@ -140,6 +145,36 @@ export const WithDeleteDialog: Story = {
   name: "削除確認ダイアログ表示中",
   args: {
     isDeleteDialogOpen: true,
+  },
+};
+
+/**
+ * 一括キャッシュ実行中表示
+ */
+export const BatchCaching: Story = {
+  name: "一括キャッシュ中",
+  args: {
+    isBatchCaching: true,
+    batchCacheProgress: { current: 1, total: 2 },
+  },
+};
+
+/**
+ * 全話キャッシュ済み表示
+ */
+export const AllCached: Story = {
+  name: "全話キャッシュ済み",
+  args: {
+    isAllCached: true,
+    novel: {
+      ...sampleNovel,
+      cachedChapters: 3,
+    },
+    chapters: sampleChapters.map((ch) => ({
+      ...ch,
+      downloadedAt: "2026-10-25T10:00:00Z",
+      byteSize: 1024,
+    })),
   },
 };
 

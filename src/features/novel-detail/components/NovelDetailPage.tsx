@@ -16,6 +16,9 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
   chapters,
   isLoading,
   isRefreshing,
+  isBatchCaching,
+  batchCacheProgress,
+  isAllCached,
   isDeleteDialogOpen,
   isDeleting,
   refreshMessage,
@@ -25,6 +28,8 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
   onResumeBookmark,
   onSelectEpisode,
   onRefreshToc,
+  onStartBatchCache,
+  onCancelBatchCache,
   onOpenDeleteDialog,
   onCloseDeleteDialog,
   onConfirmDelete,
@@ -105,11 +110,16 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
             <NovelDetailHeader
               novel={novel}
               isRefreshing={isRefreshing}
+              isBatchCaching={isBatchCaching}
+              batchCacheProgress={batchCacheProgress}
+              isAllCached={isAllCached}
               refreshMessage={refreshMessage}
               error={error}
               onStartFromBeginning={onStartFromBeginning}
               onResumeBookmark={onResumeBookmark}
               onRefreshToc={onRefreshToc}
+              onStartBatchCache={onStartBatchCache}
+              onCancelBatchCache={onCancelBatchCache}
               onOpenDeleteDialog={onOpenDeleteDialog}
             />
           </div>

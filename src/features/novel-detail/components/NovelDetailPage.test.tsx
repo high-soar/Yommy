@@ -14,6 +14,8 @@ const {
   WithDeleteDialog,
   Refreshing,
   WithError,
+  BatchCaching,
+  AllCached,
 } = composeStories(stories);
 
 const sampleNovel: NovelRecord = {
@@ -166,24 +168,35 @@ describe("NovelDetailPage", () => {
   });
 
   describe("親子結合およびProps伝達・ユーザーインタラクションの検証（親子分離原則）", () => {
+    const defaultPageProps = {
+      novel: sampleNovel,
+      chapters: sampleChapters,
+      isLoading: false,
+      isRefreshing: false,
+      isBatchCaching: false,
+      batchCacheProgress: null,
+      isAllCached: false,
+      isDeleteDialogOpen: false,
+      isDeleting: false,
+      onBackToBookshelf: vi.fn(),
+      onStartFromBeginning: vi.fn(),
+      onResumeBookmark: vi.fn(),
+      onSelectEpisode: vi.fn(),
+      onRefreshToc: vi.fn(),
+      onStartBatchCache: vi.fn(),
+      onCancelBatchCache: vi.fn(),
+      onOpenDeleteDialog: vi.fn(),
+      onCloseDeleteDialog: vi.fn(),
+      onConfirmDelete: vi.fn(),
+    };
+
     it("NotFound 時にカスタム error が指定されている場合、そのエラー文字列が表示されること", () => {
       render(
         <NovelDetailPage
+          {...defaultPageProps}
           novel={null}
           chapters={[]}
-          isLoading={false}
-          isRefreshing={false}
-          isDeleteDialogOpen={false}
-          isDeleting={false}
           error="作品データの読み込みに失敗しました。"
-          onBackToBookshelf={vi.fn()}
-          onStartFromBeginning={vi.fn()}
-          onResumeBookmark={vi.fn()}
-          onSelectEpisode={vi.fn()}
-          onRefreshToc={vi.fn()}
-          onOpenDeleteDialog={vi.fn()}
-          onCloseDeleteDialog={vi.fn()}
-          onConfirmDelete={vi.fn()}
         />,
       );
 
@@ -199,20 +212,10 @@ describe("NovelDetailPage", () => {
 
       render(
         <NovelDetailPage
+          {...defaultPageProps}
           novel={null}
           chapters={[]}
-          isLoading={false}
-          isRefreshing={false}
-          isDeleteDialogOpen={false}
-          isDeleting={false}
           onBackToBookshelf={onBackToBookshelf}
-          onStartFromBeginning={vi.fn()}
-          onResumeBookmark={vi.fn()}
-          onSelectEpisode={vi.fn()}
-          onRefreshToc={vi.fn()}
-          onOpenDeleteDialog={vi.fn()}
-          onCloseDeleteDialog={vi.fn()}
-          onConfirmDelete={vi.fn()}
         />,
       );
 
@@ -229,20 +232,12 @@ describe("NovelDetailPage", () => {
 
       render(
         <NovelDetailPage
+          {...defaultPageProps}
           novel={{ ...sampleNovel, bookmarkChapterIndex: 2 }}
-          chapters={sampleChapters}
-          isLoading={false}
-          isRefreshing={false}
-          isDeleteDialogOpen={false}
-          isDeleting={false}
-          onBackToBookshelf={vi.fn()}
           onStartFromBeginning={onStartFromBeginning}
           onResumeBookmark={onResumeBookmark}
-          onSelectEpisode={vi.fn()}
           onRefreshToc={onRefreshToc}
           onOpenDeleteDialog={onOpenDeleteDialog}
-          onCloseDeleteDialog={vi.fn()}
-          onConfirmDelete={vi.fn()}
         />,
       );
 
@@ -265,20 +260,8 @@ describe("NovelDetailPage", () => {
 
       render(
         <NovelDetailPage
-          novel={sampleNovel}
-          chapters={sampleChapters}
-          isLoading={false}
-          isRefreshing={false}
-          isDeleteDialogOpen={false}
-          isDeleting={false}
-          onBackToBookshelf={vi.fn()}
-          onStartFromBeginning={vi.fn()}
-          onResumeBookmark={vi.fn()}
+          {...defaultPageProps}
           onSelectEpisode={onSelectEpisode}
-          onRefreshToc={vi.fn()}
-          onOpenDeleteDialog={vi.fn()}
-          onCloseDeleteDialog={vi.fn()}
-          onConfirmDelete={vi.fn()}
         />,
       );
 
@@ -293,20 +276,9 @@ describe("NovelDetailPage", () => {
 
       render(
         <NovelDetailPage
-          novel={sampleNovel}
-          chapters={sampleChapters}
-          isLoading={false}
-          isRefreshing={false}
+          {...defaultPageProps}
           isDeleteDialogOpen={true}
-          isDeleting={false}
-          onBackToBookshelf={vi.fn()}
-          onStartFromBeginning={vi.fn()}
-          onResumeBookmark={vi.fn()}
-          onSelectEpisode={vi.fn()}
-          onRefreshToc={vi.fn()}
-          onOpenDeleteDialog={vi.fn()}
           onCloseDeleteDialog={onCloseDeleteDialog}
-          onConfirmDelete={vi.fn()}
         />,
       );
 
@@ -320,19 +292,8 @@ describe("NovelDetailPage", () => {
 
       render(
         <NovelDetailPage
-          novel={sampleNovel}
-          chapters={sampleChapters}
-          isLoading={false}
-          isRefreshing={false}
+          {...defaultPageProps}
           isDeleteDialogOpen={true}
-          isDeleting={false}
-          onBackToBookshelf={vi.fn()}
-          onStartFromBeginning={vi.fn()}
-          onResumeBookmark={vi.fn()}
-          onSelectEpisode={vi.fn()}
-          onRefreshToc={vi.fn()}
-          onOpenDeleteDialog={vi.fn()}
-          onCloseDeleteDialog={vi.fn()}
           onConfirmDelete={onConfirmDelete}
         />,
       );
@@ -347,20 +308,10 @@ describe("NovelDetailPage", () => {
 
       const { rerender } = render(
         <NovelDetailPage
+          {...defaultPageProps}
           novel={null}
           chapters={[]}
           isLoading={true}
-          isRefreshing={false}
-          isDeleteDialogOpen={false}
-          isDeleting={false}
-          onBackToBookshelf={vi.fn()}
-          onStartFromBeginning={vi.fn()}
-          onResumeBookmark={vi.fn()}
-          onSelectEpisode={vi.fn()}
-          onRefreshToc={vi.fn()}
-          onOpenDeleteDialog={vi.fn()}
-          onCloseDeleteDialog={vi.fn()}
-          onConfirmDelete={vi.fn()}
         />,
       );
 
@@ -369,20 +320,8 @@ describe("NovelDetailPage", () => {
       // 初回ロード完了（しおりが第2話）
       rerender(
         <NovelDetailPage
+          {...defaultPageProps}
           novel={{ ...sampleNovel, bookmarkChapterIndex: 2 }}
-          chapters={sampleChapters}
-          isLoading={false}
-          isRefreshing={false}
-          isDeleteDialogOpen={false}
-          isDeleting={false}
-          onBackToBookshelf={vi.fn()}
-          onStartFromBeginning={vi.fn()}
-          onResumeBookmark={vi.fn()}
-          onSelectEpisode={vi.fn()}
-          onRefreshToc={vi.fn()}
-          onOpenDeleteDialog={vi.fn()}
-          onCloseDeleteDialog={vi.fn()}
-          onConfirmDelete={vi.fn()}
         />,
       );
 
@@ -399,20 +338,8 @@ describe("NovelDetailPage", () => {
 
       render(
         <NovelDetailPage
+          {...defaultPageProps}
           novel={{ ...sampleNovel, bookmarkChapterIndex: null }}
-          chapters={sampleChapters}
-          isLoading={false}
-          isRefreshing={false}
-          isDeleteDialogOpen={false}
-          isDeleting={false}
-          onBackToBookshelf={vi.fn()}
-          onStartFromBeginning={vi.fn()}
-          onResumeBookmark={vi.fn()}
-          onSelectEpisode={vi.fn()}
-          onRefreshToc={vi.fn()}
-          onOpenDeleteDialog={vi.fn()}
-          onCloseDeleteDialog={vi.fn()}
-          onConfirmDelete={vi.fn()}
         />,
       );
 
@@ -425,20 +352,8 @@ describe("NovelDetailPage", () => {
 
       const { rerender } = render(
         <NovelDetailPage
+          {...defaultPageProps}
           novel={{ ...sampleNovel, bookmarkChapterIndex: 2 }}
-          chapters={sampleChapters}
-          isLoading={false}
-          isRefreshing={false}
-          isDeleteDialogOpen={false}
-          isDeleting={false}
-          onBackToBookshelf={vi.fn()}
-          onStartFromBeginning={vi.fn()}
-          onResumeBookmark={vi.fn()}
-          onSelectEpisode={vi.fn()}
-          onRefreshToc={vi.fn()}
-          onOpenDeleteDialog={vi.fn()}
-          onCloseDeleteDialog={vi.fn()}
-          onConfirmDelete={vi.fn()}
         />,
       );
 
@@ -447,41 +362,18 @@ describe("NovelDetailPage", () => {
       // 目次更新開始
       rerender(
         <NovelDetailPage
+          {...defaultPageProps}
           novel={{ ...sampleNovel, bookmarkChapterIndex: 2 }}
-          chapters={sampleChapters}
-          isLoading={false}
           isRefreshing={true}
-          isDeleteDialogOpen={false}
-          isDeleting={false}
-          onBackToBookshelf={vi.fn()}
-          onStartFromBeginning={vi.fn()}
-          onResumeBookmark={vi.fn()}
-          onSelectEpisode={vi.fn()}
-          onRefreshToc={vi.fn()}
-          onOpenDeleteDialog={vi.fn()}
-          onCloseDeleteDialog={vi.fn()}
-          onConfirmDelete={vi.fn()}
         />,
       );
 
       // 目次更新完了
       rerender(
         <NovelDetailPage
+          {...defaultPageProps}
           novel={{ ...sampleNovel, bookmarkChapterIndex: 2 }}
-          chapters={sampleChapters}
-          isLoading={false}
-          isRefreshing={false}
-          isDeleteDialogOpen={false}
-          isDeleting={false}
           refreshMessage="最新の状態です"
-          onBackToBookshelf={vi.fn()}
-          onStartFromBeginning={vi.fn()}
-          onResumeBookmark={vi.fn()}
-          onSelectEpisode={vi.fn()}
-          onRefreshToc={vi.fn()}
-          onOpenDeleteDialog={vi.fn()}
-          onCloseDeleteDialog={vi.fn()}
-          onConfirmDelete={vi.fn()}
         />,
       );
 
@@ -495,20 +387,8 @@ describe("NovelDetailPage", () => {
 
       const { rerender } = render(
         <NovelDetailPage
+          {...defaultPageProps}
           novel={{ ...sampleNovel, id: "kakuyomu:1", bookmarkChapterIndex: 2 }}
-          chapters={sampleChapters}
-          isLoading={false}
-          isRefreshing={false}
-          isDeleteDialogOpen={false}
-          isDeleting={false}
-          onBackToBookshelf={vi.fn()}
-          onStartFromBeginning={vi.fn()}
-          onResumeBookmark={vi.fn()}
-          onSelectEpisode={vi.fn()}
-          onRefreshToc={vi.fn()}
-          onOpenDeleteDialog={vi.fn()}
-          onCloseDeleteDialog={vi.fn()}
-          onConfirmDelete={vi.fn()}
         />,
       );
 
@@ -517,24 +397,64 @@ describe("NovelDetailPage", () => {
       // 別作品（id: kakuyomu:2）へ遷移
       rerender(
         <NovelDetailPage
+          {...defaultPageProps}
           novel={{ ...sampleNovel, id: "kakuyomu:2", bookmarkChapterIndex: 1 }}
-          chapters={sampleChapters}
-          isLoading={false}
-          isRefreshing={false}
-          isDeleteDialogOpen={false}
-          isDeleting={false}
-          onBackToBookshelf={vi.fn()}
-          onStartFromBeginning={vi.fn()}
-          onResumeBookmark={vi.fn()}
-          onSelectEpisode={vi.fn()}
-          onRefreshToc={vi.fn()}
-          onOpenDeleteDialog={vi.fn()}
-          onCloseDeleteDialog={vi.fn()}
-          onConfirmDelete={vi.fn()}
         />,
       );
 
       expect(scrollIntoViewMock).toHaveBeenCalledTimes(2);
+    });
+
+    describe("未取得話一括キャッシュ関連の連携・操作ロック制御 (AC-ND-11, AC-ND-12, AC-ND-13)", () => {
+      it("BatchCaching ストーリーで一括キャッシュヘッダーが表示され、各話リストタップが無効化されること (AC-ND-12)", () => {
+        render(<BatchCaching />);
+
+        expect(screen.getByTestId("batch-cache-progress")).toBeInTheDocument();
+        const container = screen.getByTestId("episode-list-container");
+        expect(container.className).toContain("pointer-events-none");
+      });
+
+      it("AllCached ストーリーでヘッダーに全話キャッシュ済みが表示されること (AC-ND-13)", () => {
+        render(<AllCached />);
+
+        const batchButton = screen.getByTestId("batch-cache-button");
+        expect(batchButton).toBeInTheDocument();
+        expect(batchButton).toHaveTextContent("全話キャッシュ済み");
+        expect(batchButton).toBeDisabled();
+      });
+
+      it("isBatchCaching === true のとき、エピソード行をクリックしても onSelectEpisode が呼び出されないこと（no-op制御）(AC-ND-12)", async () => {
+        const user = userEvent.setup();
+        const onSelectEpisode = vi.fn();
+
+        render(
+          <NovelDetailPage
+            novel={sampleNovel}
+            chapters={sampleChapters}
+            isLoading={false}
+            isRefreshing={false}
+            isBatchCaching={true}
+            batchCacheProgress={{ current: 1, total: 3 }}
+            isAllCached={false}
+            isDeleteDialogOpen={false}
+            isDeleting={false}
+            onBackToBookshelf={vi.fn()}
+            onStartFromBeginning={vi.fn()}
+            onResumeBookmark={vi.fn()}
+            onSelectEpisode={onSelectEpisode}
+            onRefreshToc={vi.fn()}
+            onStartBatchCache={vi.fn()}
+            onCancelBatchCache={vi.fn()}
+            onOpenDeleteDialog={vi.fn()}
+            onCloseDeleteDialog={vi.fn()}
+            onConfirmDelete={vi.fn()}
+          />,
+        );
+
+        const episodeItems = screen.getAllByTestId("episode-item");
+        await user.click(episodeItems[0]);
+        expect(onSelectEpisode).not.toHaveBeenCalled();
+      });
     });
   });
 });
