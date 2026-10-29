@@ -96,7 +96,7 @@ describe("App コンポーネント", () => {
 
       expect(screen.getByTestId("app-root")).toBeInTheDocument();
       await waitFor(() => {
-        expect(screen.getByTestId("ranking-placeholder")).toBeInTheDocument();
+        expect(screen.getByTestId("ranking-page")).toBeInTheDocument();
       });
 
       const tabBar = screen.getByTestId("bottom-tab-bar");
@@ -235,7 +235,7 @@ describe("App コンポーネント", () => {
       await user.click(rankingTab);
 
       await waitFor(() => {
-        expect(screen.getByTestId("ranking-placeholder")).toBeInTheDocument();
+        expect(screen.getByTestId("ranking-page")).toBeInTheDocument();
       });
     });
 
@@ -276,7 +276,7 @@ describe("App コンポーネント", () => {
       render(<App initialPath="/ranking" />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("ranking-placeholder")).toBeInTheDocument();
+        expect(screen.getByTestId("ranking-page")).toBeInTheDocument();
       });
 
       const bookshelfTab = screen.getByTestId("tab-bookshelf");
@@ -435,7 +435,7 @@ describe("App コンポーネント", () => {
       await user.click(screen.getByTestId("reader-bottom-tab-ranking"));
 
       await waitFor(() => {
-        expect(screen.getByTestId("ranking-placeholder")).toBeInTheDocument();
+        expect(screen.getByTestId("ranking-page")).toBeInTheDocument();
       });
     });
 
@@ -569,7 +569,7 @@ describe("App コンポーネント", () => {
       render(<App initialPath="/ranking" appBridge={mockAppBridge} />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("ranking-placeholder")).toBeInTheDocument();
+        expect(screen.getByTestId("ranking-page")).toBeInTheDocument();
       });
 
       await act(async () => {
@@ -841,7 +841,7 @@ describe("App コンポーネント", () => {
         );
 
         await waitFor(() => {
-          expect(screen.getByTestId("ranking-placeholder")).toBeInTheDocument();
+          expect(screen.getByTestId("ranking-page")).toBeInTheDocument();
         });
         expect(screen.getByTestId("tab-ranking")).toHaveAttribute(
           "aria-selected",
