@@ -73,8 +73,9 @@ related_tests:
    - 先読み順序は昇順（$N+1 \to N+2 \to \dots \to N+5$）とする。
 2. **キャッシュ判定とスキップルール（TTL 7日間）**:
    - 各対象話について、SQLite（`chapters`）内に `body_html IS NOT NULL` かつ `downloaded_at` が現在時刻から 7日以内（$7 \times 24 \times 60 \times 60 \times 1000$ ms）のレコードが存在する場合、通信を行わず即座にスキップする。
-3. **レートリミット制御（1.5秒ウェイト）**:
-   - 取得が必要な話数（未キャッシュまたは 7日経過）が存在する場合、1話の取得完了ごとに **1.5秒（1500ms）** のウェイト間隔を空けて直列実行する。
+3. **レートリミット制御（1.5秒ウェイトと開始前インターバル）**:
+   - 第 $N$ 話自体の本文読み込み完了（初回表示または次話遷移完了）後、最初の先読み（第 $N+1$ 話）リクエストを開始する前に **1.5秒（1500ms）** の初期インターバルを設ける（第 $N$ 話自体が未キャッシュまたは 7日経過でネットワーク通信された直後の連続リクエストによるサーバー過負荷を防ぐ）。
+   - 取得が必要な話数（未キャッシュまたは 7日経過）が存在する場合、以降も 1話の取得完了ごとに **1.5秒（1500ms）** のウェイト間隔を空けて直列実行する。
 4. **中断・キャンセル制御（`AbortController`）**:
    - 先読み処理は `AbortController` のシグナル（`signal`）により制御する。
    - 以下のイベント発生時に即座に `abort()` を呼び出し、進行中の通信およびウェイトタイマーを停止する：
@@ -87,11 +88,12 @@ related_tests:
 
 1. **ヘッダーアクション・UI 要素**:
    - 作品詳細ヘッダー（`NovelDetailHeader`）の管理アクションバーに「未取得話を一括キャッシュ」ボタン（`data-testid="batch-cache-button"`）を設置する。
-   - 全話が有効キャッシュ済み（`novel.cachedChapters === novel.totalChapters` かつ全話 7日以内）の場合、ボタンを `disabled` 化しラベルを「全話キャッシュ済み」とする。
+   - 対象作品にエピソードが存在し（`chapters.length > 0`）かつ全話が有効キャッシュ済み（`novel.cachedChapters === novel.totalChapters` かつ全話 7日以内）の場合、ボタンを `disabled` 化しラベルを「全話キャッシュ済み」とする。
+   - 作品総話数が 0 話（`novel.totalChapters === 0` または `chapters.length === 0`）の場合、`isAllCached = false` となりボタンを `disabled`（「未取得話を一括キャッシュ」）とする。
 2. **実行中の進捗表示と操作ロック**:
    - ボタン押下により一括キャッシュ処理を開始（`isBatchCaching === true`）する。
    - 実行中は進行状況表示（`data-testid="batch-cache-progress"`、例: `キャッシュ中 (3/15)...`）を表示する。
-   - 整合性保護のため、実行中は「目次を更新」「作品を削除」等の他アクションボタンを `disabled` 化する。
+   - 整合性保護のため、実行中は読書開始ボタン（`detail-read-first-button`, `detail-resume-button`）、目次更新ボタン、作品削除ボタン、および各話リストの行タップ操作（`onSelectEpisode`）をすべて `disabled` / 無効化する。
 3. **手動中断（キャンセル）制御**:
    - 実行中は「中断」ボタン（`data-testid="batch-cache-cancel-button"`）を表示し、ユーザーが任意のタイミングで処理を停止できるようにする。
    - 画面離脱時（アンマウント時）にも `AbortController` により自動で安全に中断する。
@@ -105,7 +107,7 @@ related_tests:
 
 ### 2.3 キャッシュ更新・鮮度管理ルール（TTL 7日間 ＋ 短タイムアウトフォールバック）
 
-1. **主要定数**:
+1. **主要定数（共通モジュール: `src/shared/constants/cache.ts`）**:
    - `CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000`（7日間 = 604,800,000 ms）
    - `SHORT_TIMEOUT_MS = 3000`（既存キャッシュ存在時の短タイムアウト = 3秒）
    - `STANDARD_TIMEOUT_MS = 10000`（未キャッシュ話等の標準タイムアウト = 10秒）
@@ -134,16 +136,17 @@ related_tests:
 
 ### 3.1 全体要件定義書（`docs/specs/requirements.md`）
 
-- `SYS-REQ-02`（本文取得・先読み・オフライン閲覧）の受入条件 ID 欄に `AC-RD-12`, `AC-RD-13`, `AC-ND-11`〜`13` を追記。
-- `SYS-REQ-03`（レートリミット・バックグラウンド取得）の受入条件 ID 欄に `AC-RD-12`, `AC-ND-11`, `AC-ND-12` を追記。
+- `SYS-REQ-02`（本文取得・先読み・オフライン閲覧）の関連画面 / 遷移列に `TR-18` を、受入条件 ID 欄に `AC-RD-12`, `AC-RD-13`, `AC-ND-11`〜`13` を追記。
+- `SYS-REQ-03`（レートリミット・バックグラウンド取得）の関連画面 / 遷移列に `TR-05, TR-06, TR-18` を、受入条件 ID 欄に `AC-RD-12`, `AC-ND-11`, `AC-ND-12` を追記。
 - `SYS-REQ-05`（キャッシュ管理・容量整理）に作品詳細での一括キャッシュ（`AC-ND-11`〜`13`）を反映。
 - フロントマター `status: "Review (#81)"` および `related_specs` に本差分仕様を追加。
 
 ### 3.2 共通アーキテクチャ定義書（`docs/specs/architecture.md`）
 
-- キャッシュ鮮度・更新ポリシー（TTL 7日間、短タイムアウト 3秒、レートリミット 1.5秒、5話先読み）の定数および設計規律を追記。
+- キャッシュ鮮度・更新ポリシー（TTL 7日間、短タイムアウト 3秒、レートリミット 1.5秒、5話先読み）の定数および設計規律を追記（共通モジュール配置先: `src/shared/constants/cache.ts`）。
+- 第 $N$ 話本文ロード完了後、初回の先読み（第 $N+1$ 話）リクエスト前にも 1.5秒（1500ms）の初期インターバルを設ける規律を明記。
 - `useReader` フック契約にバックグラウンド先読みおよび短タイムアウトフォールバックの責務を明記。
-- `useNovelDetail` フック契約に一括キャッシュ（`isBatchCaching`, `batchCacheProgress`, `startBatchCache`, `cancelBatchCache`）を追加。
+- `useNovelDetail` フック契約に一括キャッシュ（`isBatchCaching`, `batchCacheProgress`, `isAllCached`, `startBatchCache`, `cancelBatchCache`）を追加。
 
 ### 3.3 ローカル DB スキーマ定義書（`docs/specs/db-schema.md`）
 
@@ -154,6 +157,7 @@ related_tests:
 - `SCR-02`（作品詳細・目次画面）の役割に「未取得話を一括キャッシュ」を追加。
 - `SCR-03`（小説リーダー画面）の役割に「読書中5話自動先読み」および「キャッシュTTL 7日間・短タイムアウトフォールバック」を追加。
 - 画面遷移 `TR-18`（未取得話の一括キャッシュ：`SCR-02` → `SCR-02`、1.5秒ウェイト順次取得・進捗・手動中断）を新設。
+- 画面遷移 `TR-05`, `TR-06` の対応要件 ID に `SYS-REQ-03` を追記して双方向トレーサビリティを整合。
 - Mermaid 状態遷移図を `TR-01`〜`TR-18` に拡張。
 
 ### 3.5 機能別仕様書：作品詳細・目次画面（`docs/specs/features/novel-detail.md`）
@@ -167,12 +171,13 @@ related_tests:
 - `useNovelDetail` フック戻り値に一括キャッシュ状態・操作を追加：
   - `isBatchCaching: boolean;`
   - `batchCacheProgress: { current: number; total: number } | null;`
+  - `isAllCached: boolean;`
   - `startBatchCache: () => Promise<void>;`
   - `cancelBatchCache: () => void;`
 - 新規受入条件を追加：
   - `AC-ND-11`: 未取得話の一括キャッシュ実行と進捗表示（レートリミット 1.5秒間隔、各話取得ごとの即時反映）
   - `AC-ND-12`: 一括キャッシュの中断（手動キャンセルおよび画面離脱時の中断安全性の保証）
-  - `AC-ND-13`: 全話取得済み時のボタン状態制御（全話キャッシュ済み時の disabled 表示）
+  - `AC-ND-13`: 全話取得済み時のボタン状態制御（エピソードが存在し全話キャッシュ済み時の disabled 表示、総話数 0 話時の disabled 境界値制御）
 
 ### 3.6 機能別仕様書：小説リーダー画面（`docs/specs/features/reader-view.md`）
 

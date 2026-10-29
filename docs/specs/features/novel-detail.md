@@ -166,8 +166,9 @@ src/features/novel-detail/
   - ※`novel.totalChapters === 0` または `isBatchCaching === true` の場合は読書開始ボタンを `disabled` とする。
 - **管理アクションボタン（右寄せ）**:
   - **未取得話一括キャッシュボタン（`v0.3`）**: `data-testid="batch-cache-button"`
-    - `isAllCached === true`（または `novel.cachedChapters === novel.totalChapters` かつ全話有効キャッシュ）の場合: ラベル `全話キャッシュ済み`、`disabled` 化。
-    - `isBatchCaching !== true` かつ未取得話がある場合: ラベル `未取得話を一括キャッシュ`、クリック時に `onStartBatchCache()` を呼び出す。`isRefreshing === true` の間は `disabled`。
+    - `novel.totalChapters === 0`（または `chapters.length === 0`）の場合: ラベル `未取得話を一括キャッシュ`、`disabled` 化（対象話が存在しないため）。
+    - `isAllCached === true`（エピソードが存在し `novel.cachedChapters === novel.totalChapters` かつ全話有効キャッシュ）の場合: ラベル `全話キャッシュ済み`、`disabled` 化。
+    - `isBatchCaching !== true` かつ未取得話（または 7日経過キャッシュ）がある場合: ラベル `未取得話を一括キャッシュ`、クリック時に `onStartBatchCache()` を呼び出す。`isRefreshing === true` の間は `disabled`。
   - **一括キャッシュ進行状況および中断ボタン（`v0.3`）**:
     - `isBatchCaching === true` の場合:
       - 進行表示要素 `data-testid="batch-cache-progress"`（表示例: `キャッシュ中 (3/15)...`）を表示。
@@ -197,6 +198,7 @@ src/features/novel-detail/
 
 - **ルート要素**: `data-testid="episode-item"`、`data-chapter-index={chapter.chapterIndex}`
   - クリック（タップ）時に `onSelectEpisode(chapter.chapterIndex)` を呼び出す（個別DLボタンは設けず、行全体のタップでリーダー遷移＆未キャッシュ時オンデマンド取得に統一）。
+  - ※一括キャッシュ実行中（`isBatchCaching === true`）は、非同期競合および不用意な中断を防ぐため読書開始ボタン同様にタップ操作を無効化（no-op / `pointer-events-none`）する。
 - **エピソード番号・サブタイトル**: `data-testid="episode-item-title"`（`第{chapter.chapterIndex}話 {chapter.title}` または連番バッジ＋`chapter.title`）
 - **公開・更新日時**: `chapter.publishedAt` が非 null の場合、`data-testid="episode-item-date"` に表示する。
 - **状態バッジ群**:
@@ -337,6 +339,7 @@ export interface UseNovelDetailResult {
   isRefreshing: boolean;
   isBatchCaching: boolean;
   batchCacheProgress: { current: number; total: number } | null;
+  isAllCached: boolean;
   isDeleteDialogOpen: boolean;
   isDeleting: boolean;
   refreshMessage: string | null;
@@ -379,8 +382,9 @@ export interface UseNovelDetailResult {
    - 遷移先の `ReaderContainer`（`useReader`、`SCR-03`）にて、対象話の `bodyHtml === null`（未キャッシュ）の場合は自動的に `httpClient.getHtml` → `parser.parseChapterContent` → `chapterRepository.saveChapterBody`（＋ `recalculateNovelStats` による `cached_chapters` 更新）が実行され、併せて `markChapterRead` による既読化（`is_read = 1`）および `updateBookmark` によるしおり・スクロール進捗率更新が行われる。
    - リーダー画面からの OS バックキー（`TR-06`）で `SCR-02` へ戻ると、`useNovelDetail` のマウント時ロードにより該当エピソードのバッジが `取得済み`（`episode-cached-badge`）・`既読`（`episode-read-badge`）・`しおり`（`episode-bookmark-badge`）に、ヘッダーの取得済み話数・読書再開ボタンが最新値に反映される。
 5. **未取得話の一括キャッシュパイプライン（`TR-18`）**:
-   - `isBatchCaching === true` の間は多重実行を防止する。
-   - 対象作品の全エピソード（`chapters`）から、未取得話（`downloadedAt === null`）または 7日経過した古いキャッシュ（`now - downloadedAt >= CACHE_TTL_MS`）を抽出する。
+   - `isBatchCaching === true` の間は多重実行を防止する（読書開始ボタン、各話行タップ、目次更新ボタン、作品削除ボタンも無効化される）。
+   - 全話キャッシュ済み判定（`isAllCached`）は、エピソードが存在し（`chapters.length > 0`）かつ全話が 7日以内の有効なキャッシュを持つ場合（`chapters.every(c => c.downloadedAt !== null && (now - new Date(c.downloadedAt).getTime() < CACHE_TTL_MS))`）に `true` となる。総話数が 0 話（`chapters.length === 0`）の場合は `isAllCached = false` となり、ボタンは disabled 化される。
+   - 対象作品の全エピソード（`chapters`）から、未取得話（`downloadedAt === null`）または 7日経過した古いキャッシュ（`now - new Date(downloadedAt).getTime() >= CACHE_TTL_MS`）を抽出する。
    - 対象が 0 件の場合は即座に通知メッセージ（`全話キャッシュ済みです`）を表示して終了する。
    - `isBatchCaching = true`, `batchCacheProgress = { current: 0, total: targets.length }`, `error = null` を設定する。
    - `AbortController` を生成し、1話ごとに `PREFETCH_INTERVAL_MS`（1.5秒）のウェイト間隔を空けながら直列に取得を実行する。
@@ -410,4 +414,4 @@ export interface UseNovelDetailResult {
 | **`AC-ND-10`** | 作品詳細表示による本棚「NEW」バッジ解除    | 本棚で「NEW」バッジが表示されていた作品の詳細画面（`SCR-02`）を開いた際（`TR-02` 等）、`clearNewUpdate` が実行されて作品の `has_new_update` が 0 に解除され、本棚へ戻った際（`TR-07`）に対象作品カードの「NEW」バッジが消去されていること。                                                                                                                                                                                                                | `SYS-REQ-04` / `TR-02`, `TR-07`               |
 | **`AC-ND-11`** | 未取得話の一括キャッシュ実行と進捗表示     | 「未取得話を一括キャッシュ」ボタンを押下すると、未キャッシュ話を対象に 1.5秒間隔のウェイト制御を挟んで順次本文を取得して SQLite に保存し、進行状況（`batch-cache-progress`）が表示され、各話取得ごとに取得済み話数・キャッシュバッジ（`取得済み`）が即時更新されること。                                                                                                                                                                                   | `SYS-REQ-02, 03, 05` / `TR-18`                |
 | **`AC-ND-12`** | 一括キャッシュの中断と安全性               | 一括キャッシュ実行中に「中断」ボタン（`batch-cache-cancel-button`）を押下した際、または画面離脱（アンマウント）時に `AbortController` により直ちに通信が停止し、それまでに保存された本文データが破損せず SQLite に保持されること。                                                                                                                                                                                                                         | `SYS-REQ-03, 05` / `TR-18`                    |
-| **`AC-ND-13`** | 全話取得済み時のボタン状態制御             | 対象作品の全エピソードがキャッシュ済みかつ有効期間内（7日以内）である場合、一括キャッシュボタンが disabled 化され「全話キャッシュ済み」と表示されること。                                                                                                                                                                                                                                                                                                  | `SYS-REQ-02, 05` / `TR-18`                    |
+| **`AC-ND-13`** | 全話取得済み時のボタン状態制御             | 対象作品にエピソードが存在し（`chapters.length > 0`）、かつ全エピソードがキャッシュ済みかつ有効期間内（7日以内）である場合、一括キャッシュボタンが disabled 化され「全話キャッシュ済み」と表示されること。エピソードが 0 話の場合は `isAllCached = false` かつ一括キャッシュボタンが disabled（「未取得話を一括キャッシュ」）となること。                                                                                                                  | `SYS-REQ-02, 05` / `TR-18`                    |
