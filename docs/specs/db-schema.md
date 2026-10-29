@@ -2,9 +2,9 @@
 type: spec-db-schema
 title: ローカル DB スキーマ定義（App 全体正本）
 description: SQLite（novels, chapters, download_queue, reader_settings, app_settings）のER図、テーブル構造、およびDDL定義の正本。
-status: "Review (#80)"
+status: "Review (#81)"
 updated: "2026-10-29"
-tags: [database, sqlite, schema, storage, settings]
+tags: [database, sqlite, schema, storage, settings, prefetch, cache-rules]
 related_specs:
   - docs/specs/requirements.md
   - docs/specs/architecture.md
@@ -14,6 +14,7 @@ related_specs:
   - docs/specs/features/reader-view.md
   - docs/specs/features/settings.md
   - docs/specs/changes/issue-80-bookshelf-update-check-and-sort.md
+  - docs/specs/changes/issue-81-prefetch-and-cache-rules.md
 related_tests:
   - src/storage/schema.test.ts
   - src/storage/repositories/novelRepository.test.ts
@@ -155,6 +156,8 @@ CREATE INDEX IF NOT EXISTS idx_novels_title ON novels(title COLLATE NOCASE ASC);
 ### 3.2 `chapters` テーブル（各話目次・本文 HTML キャッシュ）
 
 目次取得時は `body_html = NULL`, `byte_size = 0` でレコードを作成し、本文ダウンロード完了時にサニタイズ済み HTML と `byte_size`, `downloaded_at` を保存します。各話の一意性は `(novel_id, remote_chapter_id)` で保証されるため、連載途中でエピソードが挿入・削除されて `chapter_index` がずれた場合でも、本文キャッシュが別話へ誤って引き継がれることなく安全に維持されます。キャッシュ削除時は目次情報を残したまま `body_html = NULL`, `byte_size = 0`, `downloaded_at = NULL` に更新します（既読フラグ `is_read` は維持）。
+
+なお、`downloaded_at` はキャッシュ鮮度管理（TTL 7日間判定：`now - downloaded_at < 7 days` での通信スキップ、7日経過後の 3秒短タイムアウト再取得と既存キャッシュフォールバック）の判定基準日時として利用されます（`v0.3` Issue #81）。
 
 ```sql
 CREATE TABLE IF NOT EXISTS chapters (

@@ -2,7 +2,7 @@
 type: spec-feature
 title: "小説リーダー画面仕様書（SCR-03: Novel Reader）"
 description: "小説本文の全画面（100dvh）縦書き・横書き組版表示、最下部タッチによる下部オーバーレイ（ReaderBottomOverlay: 前後話ナビ＋下部タブ）、ルビ・傍点描画、4カラーテーマ・文字サイズ・行間設定の永続化、前後エピソード遷移、未キャッシュ話のオンデマンド取得、既読・しおり・スクロール進捗率の自動保存/復元、およびSCN-01統合シナリオの正本仕様。"
-status: "Review (#80)"
+status: "Review (#81)"
 updated: "2026-10-29"
 tags:
   - reader
@@ -17,6 +17,9 @@ tags:
   - fullscreen
   - bottom-overlay
   - four-tabs
+  - prefetch
+  - batch-cache
+  - cache-rules
 related_specs:
   - docs/specs/architecture.md
   - docs/specs/requirements.md
@@ -30,6 +33,7 @@ related_specs:
   - docs/specs/parsers/kakuyomu.md
   - docs/specs/changes/issue-79-four-tabs-search-ranking.md
   - docs/specs/changes/issue-80-bookshelf-update-check-and-sort.md
+  - docs/specs/changes/issue-81-prefetch-and-cache-rules.md
   - docs/specs/changes/archive/issue-50-fullscreen-shell-and-settings.md
   - docs/specs/changes/archive/issue-52-reader-fullscreen-and-bottom-overlay.md
   - docs/specs/changes/archive/issue-12-bookshelf-and-routing.md
@@ -58,7 +62,9 @@ related_tests:
 
 - **対象画面**: 小説リーダー画面（`SCR-03`、ルートパス `/novels/:novelId/chapters/:chapterIndex`）
 - **対応要件**:
-  - `SYS-REQ-02`（本文取得・オフライン閲覧・未キャッシュ話オンデマンド取得）
+  - `SYS-REQ-02`（本文取得・オフライン閲覧・未キャッシュ話オンデマンド取得、キャッシュTTL 7日間・短タイムアウトフォールバック）
+  - `SYS-REQ-03`（レートリミット・バックグラウンド取得：読書中の5話自動先読み、1.5秒間隔ウェイト、話数移動/離脱時の AbortController 中断）
+  - `SYS-REQ-04`（作品詳細・リーダー閲覧による本棚「NEW」バッジ自動解除）
   - `SYS-REQ-07`（ルビ `<ruby>`・傍点 `<em class="bouten">` のサニタイズ済み組版描画）
   - `SYS-REQ-08`（全画面 `100dvh` での縦書き `vertical-rl` / 横書き `horizontal-tb` 表示）
   - `SYS-REQ-09`（文字サイズ `fontSizePx`・行間 `lineHeight` のカスタマイズと永続化 ※設定画面 `SCR-05` で変更、余白・フォント種別は `v0.4`）
@@ -73,7 +79,6 @@ related_tests:
   - `TR-05`（`SCR-03` 内の下部オーバーレイ「前の話へ」「次の話へ」操作による同一作品の前後エピソード `chapterIndex ± 1` への遷移）
   - `TR-06`（OS バックキーまたは下部オーバーレイの4タブ遷移によりスクロール進捗率を保存して `SCR-02` `/novels/:novelId`、または各タブへ遷移）
 - **対象外スコープ（後続 Milestone）**:
-  - 読書中のバックグラウンド5話先読みおよびキャッシュ TTL 7日間制御（Milestone `v0.3` Issue #81：`SYS-REQ-02, 03`）
   - 画面左右タップ（`enableTapPaging`）およびハードウェア音量キー（`enableVolumeKeyPaging`）による1画面ジャンプ送り（Milestone `v0.4`：`SYS-REQ-11` 拡張）
   - 画面余白（`pageMarginPx`）・フォント種別（`fontFamily`）の UI カスタマイズ（Milestone `v0.4`：`SYS-REQ-09` 拡張）
   - 取得失敗時の内蔵 WebView フォールバック遷移 `TR-10`（Milestone `v0.4`：`SYS-REQ-13`）
@@ -325,10 +330,13 @@ export interface UseReaderResult {
 1. **設定の初期読み出しと変更永続化**:
    - マウント時に `settingsRepository.getReaderSettings()` を呼び出し、保存済みの `writingMode`, `theme`, `fontSizePx`（初期値 `18`）, `lineHeight`（初期値 `1.8`）を復元する。
    - `toggleWritingMode`, `changeTheme`, `changeFontSize`（`12〜32` にクランプ）, `changeLineHeight`（`1.4〜2.4` にクランプ・小数第1位丸め）実行時は、即座に State を更新するとともに `settingsRepository.updateReaderSettings(patch)` で非同期保存する。
-2. **エピソード読み込みと未キャッシュ話オンデマンド取得（`TR-03`, `TR-04`, `TR-05`）**:
-   - `novelId` 指定時は `novelRepository.getNovelById(novelId)`、` novelId` 未指定時は `novelRepository.listNovels()` の先頭作品を取得する（未登録時は空状態 `novel = null, chapter = null`）。
+2. **エピソード読み込みとキャッシュ鮮度・オンデマンド取得（`TR-03`, `TR-04`, `TR-05`）**:
+   - `novelId` 指定時は `novelRepository.getNovelById(novelId)`、`novelId` 未指定時は `novelRepository.listNovels()` の先頭作品を取得する（未登録時は空状態 `novel = null, chapter = null`）。
    - 対象エピソード `chapterRepository.getChapter(targetNovel.id, targetChapterIndex)` を取得する。
-   - `chapter.bodyHtml === null`（未キャッシュ状態）の場合、自動的に `parserRegistry.requireParser(chapter.url)` → `httpClient.getHtml({ url: chapter.url })` → `parser.parseChapterContent(res.html, chapter.url)` → `chapterRepository.saveChapterBody(targetNovel.id, targetChapterIndex, parsed, new Date().toISOString())` を実行して DB に保存し、最新の `novel` と `chapter` を再取得する。
+   - **キャッシュ鮮度と取得分岐**:
+     - `chapter.bodyHtml !== null` かつ `now - chapter.downloadedAt < CACHE_TTL_MS`（7日以内）の場合: 有効キャッシュとみなし通信を行わず即座に本文を描画する。
+     - `chapter.bodyHtml !== null` かつ `now - chapter.downloadedAt >= CACHE_TTL_MS`（7日経過）の場合: 既存キャッシュを保持したまま、タイムアウト `SHORT_TIMEOUT_MS`（3秒）で `httpClient.getHtml` を試みる。3秒以内に取得成功した場合は新本文で更新保存し表示する。タイムアウトまたは通信エラー時は **即座に既存キャッシュ本文（`bodyHtml`）を表示へフォールバック** させ、エラー画面を表示せずスムーズに読書を継続させる。
+     - `chapter.bodyHtml === null`（未キャッシュ状態）の場合: 標準タイムアウト（10秒）で自動的に `parserRegistry.requireParser(chapter.url)` → `httpClient.getHtml({ url: chapter.url, timeoutMs: STANDARD_TIMEOUT_MS })` → `parser.parseChapterContent(res.html, chapter.url)` → `chapterRepository.saveChapterBody(targetNovel.id, targetChapterIndex, parsed, new Date().toISOString())` を実行して DB に保存し、最新の `novel` と `chapter` を再取得する。通信失敗時はフォールバック先がないためエラー画面（`reader-error`）を表示する。
 3. **既読フラグ（`is_read = 1`）および本棚「NEW」バッジの自動更新・解除**:
    - エピソード本文（`bodyHtml !== null`）の表示準備が完了した時点で、`chapter.isRead === false` であれば直ちに `chapterRepository.markChapterRead(targetNovel.id, targetChapterIndex, true)` を実行する。
    - 対象作品の `targetNovel.hasNewUpdate === true` の場合、直ちに `novelRepository.clearNewUpdate(targetNovel.id)` を呼び出して `has_new_update = 0` に解除し、本棚（`SCR-01`）復帰時に「NEW」バッジが消去された状態とする。
@@ -347,6 +355,15 @@ export interface UseReaderResult {
    - 単体検証・手動取得トリガー時、対象 URL を `const targetUrl = novel?.canonicalUrl ?? initialWorkUrl` として解決した上で、**HTTP 通信を行う前に** `parserRegistry.requireParser(targetUrl)` および `parser.normalizeWorkUrl(targetUrl)` を呼び出す（未対応サイトや不正 URL の場合は通信を行わずに直ちに `error` をセットして終了する）。
    - 対応サイトの場合は `httpClient.getHtml({ url: normalizedWorkUrl })` で目次 HTML を取得し、`parser.parseNovelIndex(...)` → `novelRepository.upsertNovelWithToc(...)` で作品および目次を DB 保存する。
    - 対象話（`chapterIndex`）が存在する場合はエピソード本文を取得・サニタイズ解析して `chapterRepository.saveChapterBody(...)` で保存し、`markChapterRead` および `updateBookmark` を反映して表示を更新する。
+7. **読書中の自動バックグラウンド先読みパイプライン（`v0.3`）**:
+   - 現在話（第 $N$ 話）の本文読み込み完了後、自動的にバックグラウンド先読みを開始する。
+   - 先読み対象: $N+1 \sim \min(N+5, \text{totalChapters})$。
+   - 対象エピソードについて、SQLite 内のキャッシュが有効（`downloadedAt` から 7日以内）であれば通信をスキップする。
+   - 未キャッシュまたは 7日経過エピソードが存在する場合、1話ごとに `PREFETCH_INTERVAL_MS`（1.5秒）のウェイトを空けて順次直列に取得・保存する（7日経過キャッシュは 3秒短タイムアウト、未キャッシュ話は 10秒標準タイムアウト）。
+   - `AbortController` による制御:
+     - ユーザーが `goToChapter` で別エピソードへ移動した際は、直前の先読み処理を直ちに中断（`abort()`）し、新エピソードを起点とする 5話先読みを再開始する。
+     - リーダー画面離脱時（アンマウント、OS バックキー、タブ遷移）は直ちに処理を停止し、不要な通信を防止する。
+   - 先読み処理中の通信失敗・例外はコンソール警告等に留め、現在閲覧中の読書画面にはエラーを表示しない。
 
 ---
 
@@ -369,19 +386,21 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
 
 ## 6. 受入条件一覧（Acceptance Criteria: `AC-RD-xx`）
 
-| AC ID          | 対象機能                                 | 検証条件                                                                                                                                                                                                                                                                            | 関連要件 / 遷移                                                    |
-| :------------- | :--------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------- |
-| **`AC-RD-01`** | 本文表示と未キャッシュ話オンデマンド取得 | キャッシュ済み話は通信なしで即時表示され、未キャッシュ話（`bodyHtml === null`）を開いた場合は自動的に HTML 取得・サニタイズ解析・DB 保存（`saveChapterBody`）が行われて作品名・サブタイトル・本文が表示されること。                                                                 | `SYS-REQ-02` / `TR-03`, `TR-04`, `TR-05`                           |
-| **`AC-RD-02`** | ルビ・傍点の正確な描画とサニタイズ       | 本文中の `<ruby>`（`<rt>`, `<rp>`）および傍点 `<em class="bouten">` が XSS サニタイズを維持したまま組版崩れなく描画されること。                                                                                                                                                     | `SYS-REQ-07`                                                       |
-| **`AC-RD-03`** | 縦書き / 横書き切替と永続化              | 設定画面（`SCR-05`）等での組み方向変更により、`ReaderView` の `vertical-rl`（縦書き）と `horizontal-tb`（横書き）が即座に反映され、`reader_settings` テーブルへ永続化されてリロード後も維持されること。                                                                             | `SYS-REQ-08`                                                       |
-| **`AC-RD-04`** | 4カラーテーマ切替と永続化                | 設定画面（`SCR-05`）等でのカラーテーマ変更（light/sepia/dark/black）が `ReaderView` に即座に反映され、`reader_settings` テーブルへ永続化されてリロード後も維持されること。                                                                                                          | `SYS-REQ-10`                                                       |
-| **`AC-RD-05`** | 文字サイズ・行間設定と永続化             | 設定画面（`SCR-05`）等での文字サイズ（`12〜32px`）および行間（`1.4〜2.4`）変更が `ReaderView` に即座に反映され、`reader_settings` テーブルへ永続化されてリロード後も維持されること。                                                                                                | `SYS-REQ-09`                                                       |
-| **`AC-RD-06`** | 前後エピソード連続遷移とオーバーレイ連携 | `ReaderBottomOverlay` 内の「前の話へ」「次の話へ」ボタンで同一作品の `chapterIndex ± 1` へ遷移（`TR-05`）でき、第1話では「前の話へ」が `disabled`、最終話では「次の話へ」が `disabled` となること。遷移後はオーバーレイが自動的に隠れ、未キャッシュ話はオンデマンド取得されること。 | `SYS-REQ-11` / `TR-05`                                             |
-| **`AC-RD-07`** | 既読フラグ（`is_read`）の自動更新        | エピソード本文の表示完了時および次話遷移時（`TR-05`）に `markChapterRead(novelId, chapterIndex, true)` が実行され、作品詳細・目次画面（`SCR-02`）へ戻った際に閲覧済み話に `既読` バッジ（`episode-read-badge`）が表示されること。                                                   | `SYS-REQ-12` / `TR-05`, `TR-06`                                    |
-| **`AC-RD-08`** | しおり話数・スクロール進捗率の保存復元   | 現在閲覧中の `bookmark_chapter_index` とスクロール進捗率（`0.0〜1.0`）が自動保存され、下部オーバーレイの4タブ（本棚・検索・ランキング・設定）遷移時および OS バックキーによる目次復帰時にも `flushBookmark` が実行され、再開時に同じ話・スクロール位置が復元されること。            | `SYS-REQ-12, 16, 20` / `TR-01`, `TR-03`, `TR-04`, `TR-05`, `TR-06` |
-| **`AC-RD-09`** | 全画面テキスト表示化                     | 外枠パディング（`p-3 md:p-6`）、カード枠線・影（`rounded-lg border shadow-sm`）、および常時表示のバーが撤廃され、画面全体（`100dvh`）に本文が全画面でレンダリングされること。                                                                                                       | `SYS-REQ-08, 11, 16`                                               |
-| **`AC-RD-10`** | 最下部タッチによる下部オーバーレイ開閉   | 画面最下部ゾーン（下端約 72px または 15% 領域）のタップで `ReaderBottomOverlay` がスライドイン表示され、本文スクロール・本文エリア再タップ・前後話遷移で自動的に隠れること。またエラー時（`reader-error`）や空状態時は最初から表示されること。                                      | `SYS-REQ-11` / `TR-05`                                             |
-| **`AC-RD-11`** | リーダー表示による本棚「NEW」バッジ解除  | 本棚で「NEW」バッジが表示されていた作品のリーダー画面（`SCR-03`）を開いた際（「続きから読む」`TR-03` 等）、`clearNewUpdate` が実行されて作品の `has_new_update` が 0 に解除され、本棚へ戻った際（`TR-01b` 等）に対象作品カードの「NEW」バッジが消去されていること。                 | `SYS-REQ-04` / `TR-03`, `TR-01b`                                   |
+| AC ID          | 対象機能                                 | 検証条件                                                                                                                                                                                                                                                                                           | 関連要件 / 遷移                                                    |
+| :------------- | :--------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------- |
+| **`AC-RD-01`** | 本文表示と未キャッシュ話オンデマンド取得 | キャッシュ済み話は通信なしで即時表示され、未キャッシュ話（`bodyHtml === null`）を開いた場合は自動的に HTML 取得・サニタイズ解析・DB 保存（`saveChapterBody`）が行われて作品名・サブタイトル・本文が表示されること。                                                                                | `SYS-REQ-02` / `TR-03`, `TR-04`, `TR-05`                           |
+| **`AC-RD-02`** | ルビ・傍点の正確な描画とサニタイズ       | 本文中の `<ruby>`（`<rt>`, `<rp>`）および傍点 `<em class="bouten">` が XSS サニタイズを維持したまま組版崩れなく描画されること。                                                                                                                                                                    | `SYS-REQ-07`                                                       |
+| **`AC-RD-03`** | 縦書き / 横書き切替と永続化              | 設定画面（`SCR-05`）等での組み方向変更により、`ReaderView` の `vertical-rl`（縦書き）と `horizontal-tb`（横書き）が即座に反映され、`reader_settings` テーブルへ永続化されてリロード後も維持されること。                                                                                            | `SYS-REQ-08`                                                       |
+| **`AC-RD-04`** | 4カラーテーマ切替と永続化                | 設定画面（`SCR-05`）等でのカラーテーマ変更（light/sepia/dark/black）が `ReaderView` に即座に反映され、`reader_settings` テーブルへ永続化されてリロード後も維持されること。                                                                                                                         | `SYS-REQ-10`                                                       |
+| **`AC-RD-05`** | 文字サイズ・行間設定と永続化             | 設定画面（`SCR-05`）等での文字サイズ（`12〜32px`）および行間（`1.4〜2.4`）変更が `ReaderView` に即座に反映され、`reader_settings` テーブルへ永続化されてリロード後も維持されること。                                                                                                               | `SYS-REQ-09`                                                       |
+| **`AC-RD-06`** | 前後エピソード連続遷移とオーバーレイ連携 | `ReaderBottomOverlay` 内の「前の話へ」「次の話へ」ボタンで同一作品の `chapterIndex ± 1` へ遷移（`TR-05`）でき、第1話では「前の話へ」が `disabled`、最終話では「次の話へ」が `disabled` となること。遷移後はオーバーレイが自動的に隠れ、未キャッシュ話はオンデマンド取得されること。                | `SYS-REQ-11` / `TR-05`                                             |
+| **`AC-RD-07`** | 既読フラグ（`is_read`）の自動更新        | エピソード本文の表示完了時および次話遷移時（`TR-05`）に `markChapterRead(novelId, chapterIndex, true)` が実行され、作品詳細・目次画面（`SCR-02`）へ戻った際に閲覧済み話に `既読` バッジ（`episode-read-badge`）が表示されること。                                                                  | `SYS-REQ-12` / `TR-05`, `TR-06`                                    |
+| **`AC-RD-08`** | しおり話数・スクロール進捗率の保存復元   | 現在閲覧中の `bookmark_chapter_index` とスクロール進捗率（`0.0〜1.0`）が自動保存され、下部オーバーレイの4タブ（本棚・検索・ランキング・設定）遷移時および OS バックキーによる目次復帰時にも `flushBookmark` が実行され、再開時に同じ話・スクロール位置が復元されること。                           | `SYS-REQ-12, 16, 20` / `TR-01`, `TR-03`, `TR-04`, `TR-05`, `TR-06` |
+| **`AC-RD-09`** | 全画面テキスト表示化                     | 外枠パディング（`p-3 md:p-6`）、カード枠線・影（`rounded-lg border shadow-sm`）、および常時表示のバーが撤廃され、画面全体（`100dvh`）に本文が全画面でレンダリングされること。                                                                                                                      | `SYS-REQ-08, 11, 16`                                               |
+| **`AC-RD-10`** | 最下部タッチによる下部オーバーレイ開閉   | 画面最下部ゾーン（下端約 72px または 15% 領域）のタップで `ReaderBottomOverlay` がスライドイン表示され、本文スクロール・本文エリア再タップ・前後話遷移で自動的に隠れること。またエラー時（`reader-error`）や空状態時は最初から表示されること。                                                     | `SYS-REQ-11` / `TR-05`                                             |
+| **`AC-RD-11`** | リーダー表示による本棚「NEW」バッジ解除  | 本棚で「NEW」バッジが表示されていた作品のリーダー画面（`SCR-03`）を開いた際（「続きから読む」`TR-03` 等）、`clearNewUpdate` が実行されて作品の `has_new_update` が 0 に解除され、本棚へ戻った際（`TR-01b` 等）に対象作品カードの「NEW」バッジが消去されていること。                                | `SYS-REQ-04` / `TR-03`, `TR-01b`                                   |
+| **`AC-RD-12`** | 読書中の 5 話自動先読み                  | リーダーで第 $N$ 話を表示完了後、バックグラウンドで $N+1 \sim N+5$ 話が 1.5秒間隔のウェイト制御を挟んで順次キャッシュ取得され、`goToChapter` での移動時やリーダー離脱時に `AbortController` で安全に処理が中断・切り替えられること。また先読み中の通信失敗が現在読書画面にエラーを表示しないこと。 | `SYS-REQ-02, 03` / `TR-05`, `TR-06`                                |
+| **`AC-RD-13`** | キャッシュ鮮度管理とフォールバック       | 取得から 7日以内のキャッシュは通信を行わず即座に本文が表示され、7日以上経過したキャッシュは 3秒短タイムアウトで再取得を試行し、通信タイムアウト・オフライン時には即座に既存キャッシュ本文（`bodyHtml`）を表示へフォールバックしてエラー画面を出さないこと。                                        | `SYS-REQ-02` / `TR-03`, `TR-04`, `TR-05`                           |
 
 ---
 

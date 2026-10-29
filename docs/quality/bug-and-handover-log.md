@@ -84,6 +84,8 @@ related_tests: []
 | `HO-17` |        #79        | 下部4タブ（本棚・検索・ランキング・設定）およびリーダー下部オーバーレイ4タブ、ならびにOSバックキー論理階層遷移（SCR-02戻り元復帰、4タブ本棚復帰）の Playwright IT（`SCN-01`/`SCN-02`）および実機での検証                                                                                        | Issue #79 Sub-issue ⑤ (IT PR)                   | Issue #79 PR マージ    |           `Open`           |
 | `HO-18` |        #80        | 本棚表示時の自動更新チェック（1時間経過判定・ウェイト間隔順次実行）および「NEW（更新あり）」バッジ表示・作品閲覧（SCR-02/SCR-03）による解除の一連導線に関する Playwright 実ブラウザ IT シナリオ検証                                                                                             | Issue #80 Sub-issue ④ (IT PR)                   | Issue #80 PR マージ    |           `Open`           |
 | `HO-19` |        #80        | 本棚ヘッダーでの 5 種類ソート順切り替え（更新あり優先・最近読んだ順・作品更新日順・登録日順・タイトル順）およびアプリ再表示時のソート順永続化・復元に関する Playwright 実ブラウザ IT シナリオ検証                                                                                               | Issue #80 Sub-issue ④ (IT PR)                   | Issue #80 PR マージ    |           `Open`           |
+| `HO-20` |        #81        | 読書中の 5 話自動先読み（1.5秒レートリミット、SQLite 直列キャッシュ、話数移動/離脱時の AbortController キャンセル）に関する Playwright 実ブラウザ IT シナリオ検証                                                                                                                               | Issue #81 Sub-issue ③ (IT PR)                   | Issue #81 PR マージ    |           `Open`           |
+| `HO-21` |        #81        | 作品詳細での未取得話一括キャッシュ（1.5秒レートリミット・進捗表示・手動中断）およびキャッシュ TTL 7日間/短タイムアウトフォールバックに関する Playwright 実ブラウザ IT シナリオ検証                                                                                                              | Issue #81 Sub-issue ③ (IT PR)                   | Issue #81 PR マージ    |           `Open`           |
 
 ---
 
