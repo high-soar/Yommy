@@ -74,10 +74,11 @@ related_tests:
    - 対象作品が存在する場合、画面描画をブロックせず非同期バックグラウンドで順次目次再取得を実行する。
 2. **レートリミット制御**:
    - 対象小説サーバー（カクヨム等）への過剰アクセス・503 BAN を防止するため、1作品の目次取得ごとに 1.0秒（`1000ms`）のウェイト間隔を挟んで順次実行する。
-3. **新着話検知ロジック**:
+3. **新着話検知および最新話公開日時導出ロジック**:
    - 目次再取得結果の `index.chapters.length > existing.totalChapters`（または既存にない新規チャプター）を検知した場合に新着と判定する。
    - 新着検知時は `has_new_update = 1` を記録し、`last_checked_at` を更新する。
    - 新着なしの場合は既存の `has_new_update` 値を維持（未読 NEW が残っている場合は維持）し、`last_checked_at` のみ現在時刻に更新する。
+   - `upsertNovelWithToc` 実行時、`index.chapters` 内のエピソード（`ParsedTocItem[]`）のうち有効な `publishedAt` の最大値（最新公開/更新日時）を算出し、`novels.latest_episode_published_at` に保存する（全エピソード未設定時は `NULL`）。
    - 各作品の更新完了時、本棚一覧の `novels` ステートへ反映する。
 4. **「NEW」バッジ描画仕様**:
    - `NovelCard` において `novel.hasNewUpdate === true` のとき、目立つタグ調バッジ `data-testid="novel-card-new-badge"`（表示文字列: `NEW`）を描画する。
@@ -188,7 +189,10 @@ related_tests:
 
 ### 3.6 作品詳細・リーダー仕様書（`novel-detail.md`, `reader-view.md`）
 
-- 作品詳細画面（`SCR-02`）およびリーダー画面（`SCR-03`）表示時の本棚「NEW」バッジ自動解除連携を追記。
+- **作品詳細画面（`SCR-02`）**:
+  - `useNovelDetail` の初回ロード完了時、対象作品の `novel.hasNewUpdate === true` の場合に `novelRepository.clearNewUpdate(novelId)` を自動実行して `has_new_update = 0` に解除する連携を追記（受入条件 `AC-ND-10`）。
+- **小説リーダー画面（`SCR-03`）**:
+  - `useReader` の初回エピソード表示開始時、対象作品の `targetNovel.hasNewUpdate === true` の場合に `novelRepository.clearNewUpdate(targetNovel.id)` を自動実行して `has_new_update = 0` に解除する連携を追記（受入条件 `AC-RD-11`）。
 - 各フロントマター `status: "Review (#80)"` および `related_specs` を更新。
 
 ---

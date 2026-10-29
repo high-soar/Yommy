@@ -329,8 +329,9 @@ export interface UseReaderResult {
    - `novelId` 指定時は `novelRepository.getNovelById(novelId)`、` novelId` 未指定時は `novelRepository.listNovels()` の先頭作品を取得する（未登録時は空状態 `novel = null, chapter = null`）。
    - 対象エピソード `chapterRepository.getChapter(targetNovel.id, targetChapterIndex)` を取得する。
    - `chapter.bodyHtml === null`（未キャッシュ状態）の場合、自動的に `parserRegistry.requireParser(chapter.url)` → `httpClient.getHtml({ url: chapter.url })` → `parser.parseChapterContent(res.html, chapter.url)` → `chapterRepository.saveChapterBody(targetNovel.id, targetChapterIndex, parsed, new Date().toISOString())` を実行して DB に保存し、最新の `novel` と `chapter` を再取得する。
-3. **既読フラグ（`is_read = 1`）の自動更新**:
+3. **既読フラグ（`is_read = 1`）および本棚「NEW」バッジの自動更新・解除**:
    - エピソード本文（`bodyHtml !== null`）の表示準備が完了した時点で、`chapter.isRead === false` であれば直ちに `chapterRepository.markChapterRead(targetNovel.id, targetChapterIndex, true)` を実行する。
+   - 対象作品の `targetNovel.hasNewUpdate === true` の場合、直ちに `novelRepository.clearNewUpdate(targetNovel.id)` を呼び出して `has_new_update = 0` に解除し、本棚（`SCR-01`）復帰時に「NEW」バッジが消去された状態とする。
    - また「次の話へ」遷移（`TR-05`）実行時にも、現在話に対して `chapterRepository.markChapterRead(targetNovel.id, currentChapterIndex, true)` を確実に実行する。
 4. **しおり（`bookmark_chapter_index`）とスクロール進捗率（`bookmark_scroll_progress`）の復元・自動保存（`SYS-REQ-12`, `TR-06`）**:
    - **エピソード表示開始時**:
@@ -380,6 +381,7 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
 | **`AC-RD-08`** | しおり話数・スクロール進捗率の保存復元   | 現在閲覧中の `bookmark_chapter_index` とスクロール進捗率（`0.0〜1.0`）が自動保存され、下部オーバーレイの4タブ（本棚・検索・ランキング・設定）遷移時および OS バックキーによる目次復帰時にも `flushBookmark` が実行され、再開時に同じ話・スクロール位置が復元されること。            | `SYS-REQ-12, 16, 20` / `TR-01`, `TR-03`, `TR-04`, `TR-05`, `TR-06` |
 | **`AC-RD-09`** | 全画面テキスト表示化                     | 外枠パディング（`p-3 md:p-6`）、カード枠線・影（`rounded-lg border shadow-sm`）、および常時表示のバーが撤廃され、画面全体（`100dvh`）に本文が全画面でレンダリングされること。                                                                                                       | `SYS-REQ-08, 11, 16`                                               |
 | **`AC-RD-10`** | 最下部タッチによる下部オーバーレイ開閉   | 画面最下部ゾーン（下端約 72px または 15% 領域）のタップで `ReaderBottomOverlay` がスライドイン表示され、本文スクロール・本文エリア再タップ・前後話遷移で自動的に隠れること。またエラー時（`reader-error`）や空状態時は最初から表示されること。                                      | `SYS-REQ-11` / `TR-05`                                             |
+| **`AC-RD-11`** | リーダー表示による本棚「NEW」バッジ解除  | 本棚で「NEW」バッジが表示されていた作品のリーダー画面（`SCR-03`）を開いた際（「続きから読む」`TR-03` 等）、`clearNewUpdate` が実行されて作品の `has_new_update` が 0 に解除され、本棚へ戻った際（`TR-01b` 等）に対象作品カードの「NEW」バッジが消去されていること。                 | `SYS-REQ-04` / `TR-03`, `TR-01b`                                   |
 
 ---
 

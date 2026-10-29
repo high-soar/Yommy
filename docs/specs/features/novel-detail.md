@@ -317,8 +317,9 @@ export interface UseNovelDetailResult {
 
 ### 4.2 パイプライン仕様
 
-1. **初回ロード（`reloadDetail`）**:
+1. **初回ロード（`reloadDetail`）と本棚「NEW」バッジ解除**:
    - `ServiceProvider` の `isReady === true` 後、`novelRepository.getNovelById(novelId)` および `chapterRepository.listChaptersByNovelId(novelId)` を並行取得する。
+   - 読み込み完了時、対象作品の `novel.hasNewUpdate === true` の場合は `novelRepository.clearNewUpdate(novelId)` を呼び出して `has_new_update = 0` に解除し、本棚画面（`SCR-01`）復帰時にも「NEW」バッジが消去された状態を維持する。
    - 読み込み中は `isLoading = true` とし、完了後に `isLoading = false` とする。
 2. **目次再取得・差分更新（`refreshToc`）**:
    - `novel === null` の場合は何もせず `false` を返す。
@@ -357,3 +358,4 @@ export interface UseNovelDetailResult {
 | **`AC-ND-07`** | 戻り元復帰導線の整理と未存在フォールバック | `NovelDetailHeader` 内の「← 本棚へ戻る」ボタンは廃止されていること。また存在しない `novelId` が指定された場合はクラッシュせず `novel-detail-not-found` と「戻る」導線（`back-to-bookshelf-button`）を表示し、タップ時に直前の遷移元画面（本棚 `/`、検索 `/search`、ランキング `/ranking`、履歴なし時は本棚 `/`）へ復帰できること（`TR-07`）。                                                                                                              | `SYS-REQ-01, 16, 20` / `TR-07`                |
 | **`AC-ND-08`** | しおり位置への初期スクロール自動調整       | 対象作品に `bookmarkChapterIndex` が設定されている場合、初回データ読み込み完了時に該当話（`data-chapter-index`）の要素が各話リストスクロール領域の先頭（上端）に来るよう自動スクロールされること。また、「目次を更新」実行時には自動スクロールが再発火せず、ユーザーの現在スクロール位置が維持されること。                                                                                                                                                 | `SYS-REQ-01, 12`                              |
 | **`AC-ND-09`** | 100dvh 全画面シェル・下部タブ・階層復帰    | 作品詳細画面が `h-full flex flex-col overflow-hidden` の全画面シェル内に配置され、中間コンテンツ領域（`flex-1 min-h-0 overflow-y-auto`）のみがスクロール可能であること。画面下部に共通 `BottomTabBar`（`bottom-tab-bar`）が 4 タブ構成で表示され、各タブタップ（`TR-01`, `TR-01b`）により各画面へ遷移でき、OS バックキー（`TR-07`）により直前の遷移元画面（本棚 `SCR-01`、検索 `SCR-06`、ランキング `SCR-07`、履歴なし時は本棚 `/`）へ論理復帰できること。 | `SYS-REQ-16, 20` / `TR-01`, `TR-01b`, `TR-07` |
+| **`AC-ND-10`** | 作品詳細表示による本棚「NEW」バッジ解除    | 本棚で「NEW」バッジが表示されていた作品の詳細画面（`SCR-02`）を開いた際（`TR-02` 等）、`clearNewUpdate` が実行されて作品の `has_new_update` が 0 に解除され、本棚へ戻った際（`TR-07`）に対象作品カードの「NEW」バッジが消去されていること。                                                                                                                                                                                                                | `SYS-REQ-04` / `TR-02`, `TR-07`               |
