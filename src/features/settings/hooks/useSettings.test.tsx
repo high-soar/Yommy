@@ -9,6 +9,7 @@ import {
   NovelRepository,
   ChapterRepository,
   SettingsRepository,
+  AppSettingsRepository,
   ReaderSettings,
 } from "../../../storage/types";
 import { DatabaseAdapter } from "../../../storage/adapter/types";
@@ -50,6 +51,8 @@ function createMockServices(
     novelRepository: {} as NovelRepository,
     chapterRepository: {} as ChapterRepository,
     settingsRepository: overrides?.settingsRepository ?? defaultSettingsRepo,
+    appSettingsRepository:
+      overrides?.appSettingsRepository ?? ({} as AppSettingsRepository),
     appBridge: overrides?.appBridge ?? new MockAppBridge(),
     isReady: overrides?.isReady ?? true,
     error: overrides?.error ?? null,
