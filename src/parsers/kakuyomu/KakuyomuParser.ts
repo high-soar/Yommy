@@ -1,7 +1,9 @@
 import type {
   NovelParser,
   NovelRankingOptions,
+  NovelRankingResultItem,
   NovelSearchOptions,
+  NovelSearchResultItem,
   NovelSiteType,
   ParsedChapterContent,
   ParsedNovelIndex,
@@ -46,6 +48,95 @@ const SELECTORS = {
   prevEpisode: ["a#contentMain-previousEpisode", 'a[rel="prev"]'],
   nextEpisode: ["a#contentMain-nextEpisode", 'a[rel="next"]'],
 } as const;
+
+/**
+ * カクヨム ジャンルスラッグ・表示名マップ
+ */
+const GENRE_MAP: Record<string, { genre: string; genreLabel: string }> = {
+  fantasy: { genre: "fantasy", genreLabel: "異世界ファンタジー" },
+  異世界ファンタジー: { genre: "fantasy", genreLabel: "異世界ファンタジー" },
+  action: { genre: "action", genreLabel: "現代ファンタジー" },
+  現代ファンタジー: { genre: "action", genreLabel: "現代ファンタジー" },
+  sf: { genre: "sf", genreLabel: "SF" },
+  love_story: { genre: "love_story", genreLabel: "恋愛" },
+  恋愛: { genre: "love_story", genreLabel: "恋愛" },
+  romance: { genre: "romance", genreLabel: "ラブコメ" },
+  ラブコメ: { genre: "romance", genreLabel: "ラブコメ" },
+  drama: { genre: "drama", genreLabel: "現代ドラマ" },
+  現代ドラマ: { genre: "drama", genreLabel: "現代ドラマ" },
+  horror: { genre: "horror", genreLabel: "ホラー" },
+  ホラー: { genre: "horror", genreLabel: "ホラー" },
+  mystery: { genre: "mystery", genreLabel: "ミステリー" },
+  ミステリー: { genre: "mystery", genreLabel: "ミステリー" },
+  nonfiction: { genre: "nonfiction", genreLabel: "エッセイ・ノンフィクション" },
+  "エッセイ・ノンフィクション": {
+    genre: "nonfiction",
+    genreLabel: "エッセイ・ノンフィクション",
+  },
+  history: { genre: "history", genreLabel: "歴史・時代・伝奇" },
+  "歴史・時代・伝奇": { genre: "history", genreLabel: "歴史・時代・伝奇" },
+  criticism: { genre: "criticism", genreLabel: "創作論・評論" },
+  "創作論・評論": { genre: "criticism", genreLabel: "創作論・評論" },
+  others: { genre: "others", genreLabel: "詩・童話・その他" },
+  "詩・童話・その他": { genre: "others", genreLabel: "詩・童話・その他" },
+};
+
+/**
+ * ジャンル文字列を正規化しスラッグと日本語ラベルを返却する
+ */
+function parseGenre(raw?: string | null): {
+  genre: string;
+  genreLabel: string;
+} {
+  if (!raw) {
+    return { genre: "", genreLabel: "" };
+  }
+  const trimmed = raw.trim();
+  const lower = trimmed.toLowerCase();
+  if (GENRE_MAP[lower]) {
+    return GENRE_MAP[lower];
+  }
+  if (GENRE_MAP[trimmed]) {
+    return GENRE_MAP[trimmed];
+  }
+  return { genre: lower, genreLabel: trimmed };
+}
+
+/**
+ * 連載状況文字列を正規化する
+ */
+function parseSerialStatus(raw?: string | null): {
+  serialStatus: "running" | "completed";
+  serialStatusLabel: string;
+} {
+  if (!raw) {
+    return { serialStatus: "running", serialStatusLabel: "連載中" };
+  }
+  const trimmed = raw.trim().toLowerCase();
+  if (trimmed === "completed" || trimmed.includes("完結")) {
+    return { serialStatus: "completed", serialStatusLabel: "完結済" };
+  }
+  return { serialStatus: "running", serialStatusLabel: "連載中" };
+}
+
+/**
+ * ページ URL のクエリパラメータから現在のページ番号を抽出する
+ */
+function extractCurrentPage(pageUrl: string): number {
+  try {
+    const url = new URL(pageUrl, "https://kakuyomu.jp");
+    const pageStr = url.searchParams.get("page");
+    if (pageStr) {
+      const p = parseInt(pageStr, 10);
+      if (!isNaN(p) && p >= 1) {
+        return p;
+      }
+    }
+  } catch {
+    // URL 解析失敗時はデフォルト 1
+  }
+  return 1;
+}
 
 /**
  * 優先順位リスト順に DOM を探索し、最初に見つかった要素を返却する
@@ -103,7 +194,174 @@ interface ApolloEpisode {
   publishedAt?: unknown;
 }
 
+interface ApolloSearchResultWork {
+  id?: string;
+  title?: string;
+  author?: ApolloRef;
+  alternateAuthorName?: string;
+  introduction?: string;
+  catchphrase?: string;
+  genre?: string;
+  serialStatus?: string;
+  publicEpisodeCount?: number;
+  totalCharacterCount?: number;
+  tagLabels?: string[];
+  totalReviewPoint?: number;
+  lastEpisodePublishedAt?: string | null;
+}
+
+interface ApolloConnection {
+  nodes?: Array<ApolloRef | ApolloSearchResultWork>;
+  pageInfo?: {
+    hasNextPage?: boolean;
+  };
+  totalCount?: number;
+}
+
 type ApolloState = Record<string, unknown>;
+
+/**
+ * Apollo State から検索・ランキング用の作品エンティティを抽出する
+ */
+function extractWorkFromApollo(
+  apolloState: ApolloState,
+  work: ApolloSearchResultWork,
+): NovelSearchResultItem | null {
+  if (!work || !work.id) {
+    return null;
+  }
+  const remoteWorkId = String(work.id);
+  const title = typeof work.title === "string" ? work.title.trim() : "";
+
+  let author = "";
+  if (work.author?.__ref) {
+    const user = apolloState[work.author.__ref] as
+      ApolloUserAccount | undefined;
+    author = user?.activityName || work.alternateAuthorName || user?.name || "";
+  } else if (work.alternateAuthorName) {
+    author = work.alternateAuthorName;
+  }
+  author = author.trim();
+
+  const synopsis = (work.introduction || work.catchphrase || "").trim();
+  const { genre, genreLabel } = parseGenre(work.genre);
+  const { serialStatus, serialStatusLabel } = parseSerialStatus(
+    work.serialStatus,
+  );
+  const episodeCount =
+    typeof work.publicEpisodeCount === "number" ? work.publicEpisodeCount : 0;
+  const characterCount =
+    typeof work.totalCharacterCount === "number" ? work.totalCharacterCount : 0;
+  const tags = Array.isArray(work.tagLabels) ? work.tagLabels.map(String) : [];
+  const reviewPoints =
+    typeof work.totalReviewPoint === "number" ? work.totalReviewPoint : 0;
+  const lastEpisodePublishedAt =
+    typeof work.lastEpisodePublishedAt === "string"
+      ? work.lastEpisodePublishedAt
+      : null;
+  const workUrl = `https://kakuyomu.jp/works/${remoteWorkId}`;
+
+  return {
+    remoteWorkId,
+    title,
+    author,
+    synopsis,
+    genre,
+    genreLabel,
+    serialStatus,
+    serialStatusLabel,
+    episodeCount,
+    characterCount,
+    tags,
+    reviewPoints,
+    lastEpisodePublishedAt,
+    workUrl,
+  };
+}
+
+/**
+ * 静的 DOM カード要素から作品エンティティを抽出する（フォールバック用）
+ */
+function extractWorkFromDomCard(card: Element): NovelSearchResultItem | null {
+  const link = card.querySelector<HTMLAnchorElement>('a[href*="/works/"]');
+  if (!link) {
+    return null;
+  }
+  const href = link.getAttribute("href") || "";
+  const match = href.match(WORK_ID_REGEX);
+  if (!match) {
+    return null;
+  }
+  const remoteWorkId = match[1];
+  const title = link.textContent?.trim() || "";
+
+  const authorEl = card.querySelector(
+    'a[href*="/users/"], [class*="author"], [class*="activityName"]',
+  );
+  const author = authorEl?.textContent?.trim() || "";
+
+  const synopsisEl = card.querySelector(
+    '[class*="introduction"], [class*="synopsis"], [class*="description"], p',
+  );
+  const synopsis = synopsisEl?.textContent?.trim() || "";
+
+  const genreEl = card.querySelector('[class*="genre"]');
+  const { genre, genreLabel } = parseGenre(genreEl?.textContent);
+
+  const statusEl = card.querySelector('[class*="serial"], [class*="status"]');
+  const { serialStatus, serialStatusLabel } = parseSerialStatus(
+    statusEl?.textContent,
+  );
+
+  const cardText = card.textContent || "";
+  const epMatch = cardText.match(/(\d+)話/);
+  const episodeCount = epMatch ? parseInt(epMatch[1], 10) : 0;
+
+  const charMatch = cardText.match(/([\d,]+)文字/);
+  const characterCount = charMatch
+    ? parseInt(charMatch[1].replace(/,/g, ""), 10)
+    : 0;
+
+  const reviewMatch = cardText.match(/★\s*([\d,]+)/);
+  const reviewPoints = reviewMatch
+    ? parseInt(reviewMatch[1].replace(/,/g, ""), 10)
+    : 0;
+
+  let tagElements = card.querySelectorAll(
+    'a[href*="/tags/"], [class*="tag"] a, [class*="tag"] li, [class*="tag"] span',
+  );
+  if (tagElements.length === 0) {
+    tagElements = card.querySelectorAll('[class*="tag"]');
+  }
+  const tags: string[] = [];
+  for (const tagEl of Array.from(tagElements)) {
+    const text = tagEl.textContent?.trim();
+    if (text && !tags.includes(text)) {
+      tags.push(text);
+    }
+  }
+
+  const timeEl = card.querySelector("time");
+  const lastEpisodePublishedAt = timeEl?.getAttribute("datetime") || null;
+  const workUrl = `https://kakuyomu.jp/works/${remoteWorkId}`;
+
+  return {
+    remoteWorkId,
+    title,
+    author,
+    synopsis,
+    genre,
+    genreLabel,
+    serialStatus,
+    serialStatusLabel,
+    episodeCount,
+    characterCount,
+    tags,
+    reviewPoints,
+    lastEpisodePublishedAt,
+    workUrl,
+  };
+}
 
 /**
  * Next.js の <script id="__NEXT_DATA__"> から __APOLLO_STATE__ 辞書を安全に取得する
@@ -439,28 +697,218 @@ export class KakuyomuParser implements NovelParser {
   /**
    * 検索 URL を構築する（純粋関数）
    */
-  buildSearchUrl(_query: string, _options?: NovelSearchOptions): string {
-    throw new Error("Method not implemented.");
+  buildSearchUrl(query: string, options?: NovelSearchOptions): string {
+    const url = new URL("https://kakuyomu.jp/search");
+    url.searchParams.set("q", query.trim());
+    url.searchParams.set("order", options?.order ?? "weekly_ranking");
+    if (
+      options?.serialStatus === "running" ||
+      options?.serialStatus === "completed"
+    ) {
+      url.searchParams.set("serial_status", options.serialStatus);
+    }
+    if (options?.genre) {
+      url.searchParams.set("genre_name", options.genre.toLowerCase());
+    }
+    if (options?.page !== undefined && options.page >= 2) {
+      url.searchParams.set("page", String(options.page));
+    }
+    return url.toString();
   }
 
   /**
    * 検索結果 HTML から作品一覧とページ情報を抽出する（純粋関数）
    */
-  searchNovels(_html: string, _pageUrl: string): ParsedSearchResult {
-    throw new Error("Method not implemented.");
+  searchNovels(html: string, pageUrl: string): ParsedSearchResult {
+    const currentPage = extractCurrentPage(pageUrl);
+    const doc = new DOMParser().parseFromString(html, "text/html");
+
+    // 1. Apollo State からの優先抽出
+    const apolloState = parseApolloState(doc);
+    if (apolloState) {
+      const rootQuery = apolloState["ROOT_QUERY"] as
+        Record<string, unknown> | undefined;
+      if (rootQuery) {
+        const searchKey = Object.keys(rootQuery).find((k) =>
+          k.startsWith("searchWorks"),
+        );
+        if (searchKey) {
+          let conn = rootQuery[searchKey] as
+            ApolloConnection | ApolloRef | undefined;
+          if (conn && "__ref" in conn) {
+            conn = apolloState[(conn as ApolloRef).__ref] as
+              ApolloConnection | undefined;
+          }
+          if (conn) {
+            const items: NovelSearchResultItem[] = [];
+            const nodes = conn.nodes ?? [];
+            for (const node of nodes) {
+              const workObj =
+                "__ref" in node
+                  ? (apolloState[(node as ApolloRef).__ref] as
+                      ApolloSearchResultWork | undefined)
+                  : node;
+              if (workObj) {
+                const item = extractWorkFromApollo(apolloState, workObj);
+                if (item) {
+                  items.push(item);
+                }
+              }
+            }
+            const hasNextPage = Boolean(conn.pageInfo?.hasNextPage);
+            const totalCount =
+              typeof conn.totalCount === "number" ? conn.totalCount : undefined;
+            return {
+              items,
+              pageInfo: {
+                currentPage,
+                hasNextPage,
+                totalCount,
+              },
+            };
+          }
+        }
+      }
+    }
+
+    // 2. DOM フォールバック抽出
+    const cards = doc.querySelectorAll(
+      '.widget-work, [class*="WorkBox"], [class*="searchResult"], [class*="SearchResult"], [class*="workCard"], article',
+    );
+    const items: NovelSearchResultItem[] = [];
+    const seenIds = new Set<string>();
+
+    for (const card of Array.from(cards)) {
+      const item = extractWorkFromDomCard(card);
+      if (item && !seenIds.has(item.remoteWorkId)) {
+        seenIds.add(item.remoteWorkId);
+        items.push(item);
+      }
+    }
+
+    const hasNextPage = Boolean(
+      doc.querySelector(
+        'a[rel="next"], [class*="pager"] a, [class*="pagination"] [class*="next"]',
+      ),
+    );
+
+    return {
+      items,
+      pageInfo: {
+        currentPage,
+        hasNextPage,
+      },
+    };
   }
 
   /**
    * ランキング URL を構築する（純粋関数）
    */
-  buildRankingUrl(_options?: NovelRankingOptions): string {
-    throw new Error("Method not implemented.");
+  buildRankingUrl(options?: NovelRankingOptions): string {
+    const genre =
+      options?.genre && options.genre !== "all"
+        ? options.genre.toLowerCase()
+        : "all";
+    const period = options?.period ?? "weekly";
+    const url = new URL(`https://kakuyomu.jp/rankings/${genre}/${period}`);
+    url.searchParams.set("work_variation", "long");
+    if (options?.page !== undefined && options.page >= 2) {
+      url.searchParams.set("page", String(options.page));
+    }
+    return url.toString();
   }
 
   /**
    * ランキング HTML から作品一覧と順位を抽出する（純粋関数）
    */
-  getRanking(_html: string, _pageUrl: string): ParsedRankingResult {
-    throw new Error("Method not implemented.");
+  getRanking(html: string, pageUrl: string): ParsedRankingResult {
+    const currentPage = extractCurrentPage(pageUrl);
+    const doc = new DOMParser().parseFromString(html, "text/html");
+
+    // 1. Apollo State からの優先抽出
+    const apolloState = parseApolloState(doc);
+    if (apolloState) {
+      const rootQuery = apolloState["ROOT_QUERY"] as
+        Record<string, unknown> | undefined;
+      if (rootQuery) {
+        const rankingKey = Object.keys(rootQuery).find((k) =>
+          k.startsWith("rankedWorks"),
+        );
+        if (rankingKey) {
+          let conn = rootQuery[rankingKey] as
+            ApolloConnection | ApolloRef | undefined;
+          if (conn && "__ref" in conn) {
+            conn = apolloState[(conn as ApolloRef).__ref] as
+              ApolloConnection | undefined;
+          }
+          if (conn) {
+            const items: NovelRankingResultItem[] = [];
+            const nodes = conn.nodes ?? [];
+            let idx = 0;
+            for (const node of nodes) {
+              const workObj =
+                "__ref" in node
+                  ? (apolloState[(node as ApolloRef).__ref] as
+                      ApolloSearchResultWork | undefined)
+                  : node;
+              if (workObj) {
+                const baseItem = extractWorkFromApollo(apolloState, workObj);
+                if (baseItem) {
+                  const rank = (currentPage - 1) * 100 + (idx + 1);
+                  items.push({ ...baseItem, rank });
+                  idx++;
+                }
+              }
+            }
+            const hasNextPage = Boolean(conn.pageInfo?.hasNextPage);
+            return {
+              items,
+              pageInfo: {
+                currentPage,
+                hasNextPage,
+              },
+            };
+          }
+        }
+      }
+    }
+
+    // 2. DOM フォールバック抽出
+    const cards = doc.querySelectorAll(
+      '.RankingWorkBox, [class*="RankingWork"], [class*="rankingWork"], .widget-work, article',
+    );
+    const items: NovelRankingResultItem[] = [];
+    const seenIds = new Set<string>();
+    let idx = 0;
+
+    for (const card of Array.from(cards)) {
+      const baseItem = extractWorkFromDomCard(card);
+      if (baseItem && !seenIds.has(baseItem.remoteWorkId)) {
+        seenIds.add(baseItem.remoteWorkId);
+        const rankEl = card.querySelector('[class*="rank"], [class*="Rank"]');
+        const rankText = rankEl?.textContent?.replace(/[^0-9]/g, "");
+        const parsedRank = rankText ? parseInt(rankText, 10) : NaN;
+        const rank =
+          !isNaN(parsedRank) && parsedRank > 0
+            ? parsedRank
+            : (currentPage - 1) * 100 + (idx + 1);
+        items.push({ ...baseItem, rank });
+        idx++;
+      }
+    }
+
+    const hasNextPage = Boolean(
+      doc.querySelector(
+        'a[rel="next"], [class*="pager"] a, [class*="pagination"] [class*="next"]',
+      ),
+    );
+
+    return {
+      items,
+      pageInfo: {
+        currentPage,
+        hasNextPage,
+      },
+    };
   }
 }
