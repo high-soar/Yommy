@@ -248,6 +248,7 @@ describe("useBookshelf", () => {
       const db = await resetTestDb();
       const repo = new SqlNovelRepository(db);
 
+      const now = new Date().toISOString();
       // 2作品を登録
       await repo.upsertNovelWithToc(
         {
@@ -260,7 +261,7 @@ describe("useBookshelf", () => {
           chapters: [],
           nextTocPageUrl: null,
         },
-        "2026-01-01T00:00:00Z",
+        now,
       );
       await repo.upsertNovelWithToc(
         {
@@ -273,7 +274,7 @@ describe("useBookshelf", () => {
           chapters: [],
           nextTocPageUrl: null,
         },
-        "2026-01-02T00:00:00Z",
+        now,
       );
 
       const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
@@ -417,11 +418,13 @@ describe("useBookshelf", () => {
         listNovels: vi.fn().mockResolvedValue([
           {
             id: "kakuyomu:1",
+            canonicalUrl: "https://kakuyomu.jp/works/1",
             title: "テスト作品",
             hasNewUpdate: true,
           } as NovelSummary,
         ]),
         clearNewUpdate: vi.fn().mockRejectedValue(new Error("NEW解除エラー")),
+        upsertNovelWithToc: vi.fn(),
       } as unknown as SqlNovelRepository;
 
       const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
@@ -775,7 +778,7 @@ describe("useBookshelf", () => {
       const db = await resetTestDb();
       const repo = new SqlNovelRepository(db);
 
-      const now = new Date("2026-01-01T12:00:00Z").toISOString();
+      const now = new Date().toISOString();
       // 直近チェック済み作品（自動更新ではスキップされるはずの作品）
       await repo.upsertNovelWithToc(
         {
@@ -1008,11 +1011,10 @@ describe("useBookshelf", () => {
 
   describe("ウェイト間隔（デフォルト 1000ms）の検証 (fakeTimers)", () => {
     it("複数作品の更新チェックで 1000ms のウェイトが挟まれること", async () => {
-      vi.useFakeTimers();
-
       const db = await resetTestDb();
       const repo = new SqlNovelRepository(db);
 
+      const now = new Date().toISOString();
       await repo.upsertNovelWithToc(
         {
           siteType: "kakuyomu",
@@ -1024,7 +1026,7 @@ describe("useBookshelf", () => {
           chapters: [],
           nextTocPageUrl: null,
         },
-        "2026-01-01T00:00:00Z",
+        now,
       );
       await repo.upsertNovelWithToc(
         {
@@ -1037,10 +1039,7 @@ describe("useBookshelf", () => {
           chapters: [],
           nextTocPageUrl: null,
         },
-        "2026-01-01T00:00:00Z",
-      );
-      await db.execute(
-        "UPDATE novels SET last_checked_at = '2026-01-01T12:00:00Z';",
+        now,
       );
 
       const mockHttp = new MockHttpClient();
@@ -1067,26 +1066,34 @@ describe("useBookshelf", () => {
       });
 
       // 初期ロード完了まで待機
-      await vi.runAllTimersAsync();
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
 
-      expect(result.current.isLoading).toBe(false);
+      // 手動一括更新のウェイト検証のため fakeTimers を開始
+      vi.useFakeTimers();
 
-      // 手動一括更新を開始
       let checkPromise: Promise<void>;
       act(() => {
         checkPromise = result.current.checkUpdates(true);
       });
 
       // 1作品目は即時実行
-      await vi.advanceTimersByTimeAsync(10);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10);
+      });
       expect(checkTimestamps.length).toBe(1);
 
       // 990ms 経過時点ではまだ2作品目は実行されない（計 1000ms ウェイト）
-      await vi.advanceTimersByTimeAsync(980);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(980);
+      });
       expect(checkTimestamps.length).toBe(1);
 
       // 1000ms 到達で2作品目が実行される
-      await vi.advanceTimersByTimeAsync(20);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20);
+      });
       expect(checkTimestamps.length).toBe(2);
 
       await act(async () => {

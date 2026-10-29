@@ -25,6 +25,7 @@ import type {
 import { SqlNovelRepository } from "../storage/repositories/novelRepository";
 import { SqlChapterRepository } from "../storage/repositories/chapterRepository";
 import { SqlSettingsRepository } from "../storage/repositories/settingsRepository";
+import { SqlAppSettingsRepository } from "../storage/repositories/appSettingsRepository";
 import workIndexHtml from "../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 import episodeContentHtml from "../parsers/kakuyomu/__fixtures__/episode_content.html?raw";
 
@@ -205,6 +206,9 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
         const settingsRepository =
           services?.settingsRepository ??
           new SqlSettingsRepository(databaseAdapter as DatabaseAdapter);
+        const appSettingsRepository =
+          services?.appSettingsRepository ??
+          new SqlAppSettingsRepository(databaseAdapter as DatabaseAdapter);
 
         const appBridge =
           services?.appBridge ??
@@ -217,8 +221,7 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           novelRepository,
           chapterRepository,
           settingsRepository,
-          appSettingsRepository:
-            services?.appSettingsRepository as AppSettingsRepository,
+          appSettingsRepository,
           appBridge,
           isReady: true,
           error: null,
