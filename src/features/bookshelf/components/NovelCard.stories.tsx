@@ -46,6 +46,13 @@ const sampleNovelUnknownAuthor: NovelSummary = {
   lastReadAt: null,
 };
 
+const sampleNovelWithNewBadge: NovelSummary = {
+  ...sampleNovelWithBookmark,
+  id: "kakuyomu:new-update-novel",
+  title: "新着更新のある連載小説",
+  hasNewUpdate: true,
+};
+
 const meta: Meta<typeof NovelCard> = {
   title: "Bookshelf/NovelCard",
   component: NovelCard,
@@ -86,5 +93,15 @@ export const UnknownAuthor: Story = {
   name: "著者名未設定（著者不明表示）",
   args: {
     novel: sampleNovelUnknownAuthor,
+  },
+};
+
+/**
+ * 新着エピソード検知（NEWバッジ表示）状態の作品カード
+ */
+export const WithNewBadge: Story = {
+  name: "NEWバッジあり（新着検知）",
+  args: {
+    novel: sampleNovelWithNewBadge,
   },
 };

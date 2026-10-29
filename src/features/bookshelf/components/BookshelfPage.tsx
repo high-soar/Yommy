@@ -1,11 +1,16 @@
 import React from "react";
-import type { NovelSummary } from "../../../storage/types";
+import type { BookshelfSortOrder, NovelSummary } from "../../../storage/types";
 import { BookshelfEmptyState } from "./BookshelfEmptyState";
 import { NovelCard } from "./NovelCard";
 
 export interface BookshelfPageProps {
   novels: NovelSummary[];
   isLoading: boolean;
+  isCheckingUpdates?: boolean;
+  updateCheckProgress?: { current: number; total: number } | null;
+  sortOrder?: BookshelfSortOrder;
+  onSortChange?: (order: BookshelfSortOrder) => void;
+  onCheckUpdates?: () => void;
   onNavigateSearch?: () => void;
   onNavigateRanking?: () => void;
   onSelectNovel: (novelId: string) => void;

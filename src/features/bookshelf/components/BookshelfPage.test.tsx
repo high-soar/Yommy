@@ -6,7 +6,8 @@ import * as stories from "./BookshelfPage.stories";
 import { BookshelfPage } from "./BookshelfPage";
 import type { NovelSummary } from "../../../storage/types";
 
-const { WithNovels, Empty, Loading } = composeStories(stories);
+const { WithNovels, Empty, Loading, CheckingUpdates, SortedByLatestPublished } =
+  composeStories(stories);
 
 const sampleNovels: NovelSummary[] = [
   {
@@ -83,6 +84,22 @@ describe("BookshelfPage", () => {
       expect(screen.getByTestId("bookshelf-loading")).toBeInTheDocument();
       expect(screen.queryByTestId("novel-list")).not.toBeInTheDocument();
       expect(screen.queryByTestId("bookshelf-empty")).not.toBeInTheDocument();
+    });
+
+    it("CheckingUpdates ストーリーで更新中進捗表示および更新ボタンのdisabled状態が反映されること (AC-BS-10)", () => {
+      render(<CheckingUpdates />);
+      expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+      expect(screen.getByTestId("bookshelf-refresh-button")).toBeDisabled();
+      expect(
+        screen.getByTestId("bookshelf-refresh-progress"),
+      ).toHaveTextContent("更新中 (1/2)...");
+    });
+
+    it("SortedByLatestPublished ストーリーでソートセレクターの値が「作品更新日順」となっていること (AC-BS-11)", () => {
+      render(<SortedByLatestPublished />);
+      expect(screen.getByTestId("bookshelf-sort-select")).toHaveValue(
+        "latest_published",
+      );
     });
   });
 
@@ -176,6 +193,89 @@ describe("BookshelfPage", () => {
         sampleNovels[0].id,
         sampleNovels[0].bookmarkChapterIndex,
       );
+    });
+
+    it("ソートセレクターを変更したときに onSortChange が選択されたソート順で呼び出されること (AC-BS-11, TR-16)", async () => {
+      const user = userEvent.setup();
+      const onSortChange = vi.fn();
+
+      render(
+        <BookshelfPage
+          novels={sampleNovels}
+          isLoading={false}
+          sortOrder="unread_first"
+          onSortChange={onSortChange}
+          onSelectNovel={vi.fn()}
+          onResumeNovel={vi.fn()}
+        />,
+      );
+
+      const sortSelect = screen.getByTestId("bookshelf-sort-select");
+      expect(sortSelect).toHaveValue("unread_first");
+
+      // 5つの選択肢が存在すること
+      expect(
+        screen.getByRole("option", { name: "更新あり優先" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("option", { name: "最近読んだ順" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("option", { name: "作品更新日順" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("option", { name: "登録日順" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("option", { name: "タイトル順" }),
+      ).toBeInTheDocument();
+
+      await user.selectOptions(sortSelect, "title");
+      expect(onSortChange).toHaveBeenCalledWith("title");
+    });
+
+    it("更新ボタンをクリックしたときに onCheckUpdates が呼び出されること (AC-BS-10, TR-17)", async () => {
+      const user = userEvent.setup();
+      const onCheckUpdates = vi.fn();
+
+      render(
+        <BookshelfPage
+          novels={sampleNovels}
+          isLoading={false}
+          isCheckingUpdates={false}
+          onCheckUpdates={onCheckUpdates}
+          onSelectNovel={vi.fn()}
+          onResumeNovel={vi.fn()}
+        />,
+      );
+
+      const refreshBtn = screen.getByTestId("bookshelf-refresh-button");
+      expect(refreshBtn).not.toBeDisabled();
+      expect(
+        screen.queryByTestId("bookshelf-refresh-progress"),
+      ).not.toBeInTheDocument();
+
+      await user.click(refreshBtn);
+      expect(onCheckUpdates).toHaveBeenCalledTimes(1);
+    });
+
+    it("更新チェック実行中（isCheckingUpdates === true）のときはボタンが disabled になり進捗が表示されること (AC-BS-10)", () => {
+      render(
+        <BookshelfPage
+          novels={sampleNovels}
+          isLoading={false}
+          isCheckingUpdates={true}
+          updateCheckProgress={{ current: 2, total: 5 }}
+          onSelectNovel={vi.fn()}
+          onResumeNovel={vi.fn()}
+        />,
+      );
+
+      const refreshBtn = screen.getByTestId("bookshelf-refresh-button");
+      expect(refreshBtn).toBeDisabled();
+
+      const progress = screen.getByTestId("bookshelf-refresh-progress");
+      expect(progress).toHaveTextContent("更新中 (2/5)...");
     });
   });
 });
