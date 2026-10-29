@@ -15,19 +15,33 @@ test.describe("アプリケーションスモーク結合テスト", () => {
     await expect(bookshelfPage).toBeVisible();
     await expect(bookshelfPage.locator("h1")).toHaveText("本棚");
 
-    // 下部タブバーが表示されていることの確認
+    // 下部タブバーおよび4タブ（本棚・検索・ランキング・設定）が表示されていることの確認
     const bottomTabBar = page.getByTestId("bottom-tab-bar");
     await expect(bottomTabBar).toBeVisible();
 
-    // 「URLから作品を追加」ボタンが表示されていることの確認
-    const addNovelButton = page.getByTestId("open-add-novel-button");
-    await expect(addNovelButton).toBeVisible();
-    await expect(addNovelButton).toContainText("URLから作品を追加");
+    const tabBookshelf = page.getByTestId("tab-bookshelf");
+    const tabSearch = page.getByTestId("tab-search");
+    const tabRanking = page.getByTestId("tab-ranking");
+    const tabSettings = page.getByTestId("tab-settings");
 
-    // 初期状態（未登録状態）の案内メッセージ確認
+    await expect(tabBookshelf).toBeVisible();
+    await expect(tabSearch).toBeVisible();
+    await expect(tabRanking).toBeVisible();
+    await expect(tabSettings).toBeVisible();
+    await expect(tabBookshelf).toHaveAttribute("aria-selected", "true");
+
+    // 初期状態（未登録状態）の案内メッセージおよび誘導ボタン確認
     const emptyState = page.getByTestId("bookshelf-empty");
     await expect(emptyState).toBeVisible();
     await expect(emptyState).toContainText("本棚に作品が登録されていません");
+
+    const emptySearchButton = page.getByTestId("empty-search-button");
+    await expect(emptySearchButton).toBeVisible();
+    await expect(emptySearchButton).toContainText("小説を検索する");
+
+    const emptyRankingButton = page.getByTestId("empty-ranking-button");
+    await expect(emptyRankingButton).toBeVisible();
+    await expect(emptyRankingButton).toContainText("ランキングを見る");
   });
 
   test("Favicon および Web アイコンの link タグが存在し、各アセットが HTTP 200 で解決される", async ({

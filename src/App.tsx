@@ -9,15 +9,27 @@ import { SettingsContainer } from "./features/settings/components/SettingsContai
 import { BottomTabBar, type BottomTab } from "./shared/ui/BottomTabBar";
 
 /**
- * 現在のルート名からアクティブな下部タブを判定する
+ * 現在のルート名および探索元からアクティブな下部タブを判定する
  */
-function getActiveTab(routeName: string): BottomTab {
+export function getActiveTab(
+  routeName: string,
+  novelOrigin?: string | null,
+): BottomTab {
   if (
     routeName === "settings" ||
     routeName === "search" ||
     routeName === "ranking"
   ) {
     return routeName;
+  }
+  if (routeName === "novel-detail" || routeName === "reader") {
+    if (novelOrigin === "/search") {
+      return "search";
+    }
+    if (novelOrigin === "/ranking") {
+      return "ranking";
+    }
+    return "bookshelf";
   }
   return "bookshelf";
 }
@@ -46,13 +58,14 @@ interface AppContentProps {
  * および下部ナビゲーション（BottomTabBar）を描画する内部コンポーネント。
  * 実機システム戻るボタン（AppBridge）を購読し、論理階層遷移および本棚終了確認UXを提供する。
  */
-const AppContent: React.FC<AppContentProps> = ({
+export const AppContent: React.FC<AppContentProps> = ({
   initialWorkUrl,
   initialShowExitToast = false,
 }) => {
   const router = useRouter();
   const { appBridge } = useServices();
   const isReader = router.route.name === "reader";
+  const activeTab = getActiveTab(router.route.name, router.novelOrigin);
 
   const [showExitToast, setShowExitToast] = useState(initialShowExitToast);
   const lastBackPressTimeRef = useRef<number>(0);
@@ -140,6 +153,7 @@ const AppContent: React.FC<AppContentProps> = ({
             novelId={router.route.novelId}
             chapterIndex={router.route.chapterIndex}
             initialWorkUrl={initialWorkUrl}
+            activeTab={activeTab}
           />
         )}
         {router.route.name === "settings" && <SettingsContainer />}
@@ -158,7 +172,7 @@ const AppContent: React.FC<AppContentProps> = ({
 
       {!isReader && (
         <BottomTabBar
-          activeTab={getActiveTab(router.route.name)}
+          activeTab={activeTab}
           onSelectBookshelf={router.navigateToBookshelf}
           onSelectSearch={router.navigateToSearch}
           onSelectRanking={router.navigateToRanking}

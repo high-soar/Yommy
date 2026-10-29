@@ -21,6 +21,7 @@ export interface ReaderPageProps {
   initialScrollProgress: number;
   isLoading: boolean;
   error?: string | null;
+  activeTab?: BottomTab;
   onPrevChapter: () => void;
   onNextChapter: () => void;
   onScrollProgressChange: (progress: number) => void;
@@ -53,6 +54,7 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
   initialScrollProgress,
   isLoading,
   error,
+  activeTab = "bookshelf",
   onPrevChapter,
   onNextChapter,
   onScrollProgressChange,
@@ -239,7 +241,7 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
         chapterIndex={chapterIndex}
         totalChapters={totalChapters}
         isLoading={isLoading}
-        activeTab="bookshelf"
+        activeTab={activeTab}
         onPrevChapter={handlePrevChapter}
         onNextChapter={handleNextChapter}
         onSelectTab={onSelectTab}

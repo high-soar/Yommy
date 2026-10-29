@@ -300,7 +300,7 @@ src/features/novel-detail/
 - **レイアウト構造**:
   - **上部固定ヘッダー**: `NovelDetailHeader` を `shrink-0` で上部に固定する。
   - **中央スクロール領域**: `<main data-testid="episode-list-container" className="flex-1 min-h-0 overflow-y-auto ...">` 内に `EpisodeList` を配置し、各話リストのみが内部スクロールする。
-  - **最下部共通タブバー**: 画面最下部に `BottomTabBar` が「本棚」アクティブ状態で常時固定配置される。
+  - **最下部共通タブバー**: 画面最下部に `BottomTabBar` が直前の探索元（検索・ランキング・本棚）のアクティブ状態で常時固定配置される。
 - **しおり話数（`bookmarkChapterIndex`）への初期スクロール位置自動調整**:
   - 初回データ読み込み完了時（`isLoading` が `false` に切り替わり `novel !== null` かつ `chapters.length > 0` となった初回）、作品にしおり（`novel.bookmarkChapterIndex !== null`）が設定されている場合は、該当話（`[data-chapter-index="${novel.bookmarkChapterIndex}"]`）の要素が各話リストスクロール領域の先頭（上端）に来るよう自動スクロール位置を調整する。
   - しおり未設定時（`novel.bookmarkChapterIndex === null`）はスクロール調整を行わず、先頭（`scrollTop = 0`）のままとする。

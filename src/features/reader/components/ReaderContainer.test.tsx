@@ -889,5 +889,30 @@ describe("ReaderContainer", () => {
         );
       });
     });
+
+    it("activeTab props が指定された場合、直接の子 ReaderPage へ伝搬されること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
+      const { repo: chapterRepository } = createMockChapterRepo();
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          activeTab="search"
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            activeTab: "search",
+          }),
+          undefined,
+        );
+      });
+    });
   });
 });

@@ -15,6 +15,8 @@ export interface ReaderContainerProps {
   chapterIndex?: number;
   /** 単体検証・手動取得時の対象作品 URL（既定値: 検証用カクヨム作品 URL） */
   initialWorkUrl?: string;
+  /** リーダー画面のアクティブタブ（省略時: "bookshelf"） */
+  activeTab?: BottomTab;
   /** 「本棚へ戻る」タップ時のコールバック（省略時はルーターの navigateToBookshelf を使用） */
   onBackToBookshelf?: () => void;
   /** 「設定へ」タップ時のコールバック（省略時はルーターの navigate('/settings') を使用） */
@@ -37,6 +39,7 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
   novelId,
   chapterIndex,
   initialWorkUrl,
+  activeTab,
   onBackToBookshelf,
   onNavigateSettings,
   onNavigateChapter,
@@ -145,6 +148,7 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
       initialScrollProgress={initialScrollProgress}
       isLoading={isLoading}
       error={error}
+      activeTab={activeTab}
       onPrevChapter={handlePrevChapter}
       onNextChapter={handleNextChapter}
       onScrollProgressChange={handleScrollProgressChange}

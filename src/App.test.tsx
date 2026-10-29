@@ -3,9 +3,15 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, beforeEach } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./App.stories";
-import { App } from "./App";
+import { App, AppContent, getActiveTab } from "./App";
 import { MockAppBridge } from "./bridges/app/mockAppBridge";
 import { resetTestDb } from "./storage/adapter/inMemoryDb";
+import { ServiceProvider } from "./app/ServiceProvider";
+import {
+  RouterProvider,
+  useRouter,
+  type RouterContextValue,
+} from "./app/router";
 
 const {
   Default,
@@ -715,6 +721,182 @@ describe("App コンポーネント", () => {
         expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
       });
       expect(screen.queryByTestId("exit-app-toast")).not.toBeInTheDocument();
+    });
+
+    describe("探索元アクティブタブ判定 (getActiveTab / novelOrigin 連携)", () => {
+      it("getActiveTab が各ルート名および探索元に応じて適切なタブを返すこと", () => {
+        expect(getActiveTab("settings")).toBe("settings");
+        expect(getActiveTab("search")).toBe("search");
+        expect(getActiveTab("ranking")).toBe("ranking");
+
+        // novel-detail
+        expect(getActiveTab("novel-detail", "/search")).toBe("search");
+        expect(getActiveTab("novel-detail", "/ranking")).toBe("ranking");
+        expect(getActiveTab("novel-detail", "/")).toBe("bookshelf");
+        expect(getActiveTab("novel-detail", null)).toBe("bookshelf");
+        expect(getActiveTab("novel-detail", undefined)).toBe("bookshelf");
+
+        // reader
+        expect(getActiveTab("reader", "/search")).toBe("search");
+        expect(getActiveTab("reader", "/ranking")).toBe("ranking");
+        expect(getActiveTab("reader", "/")).toBe("bookshelf");
+        expect(getActiveTab("reader", null)).toBe("bookshelf");
+        expect(getActiveTab("reader", undefined)).toBe("bookshelf");
+
+        // bookshelf and others
+        expect(getActiveTab("bookshelf")).toBe("bookshelf");
+        expect(getActiveTab("unknown")).toBe("bookshelf");
+      });
+
+      it("検索画面 (/search) から作品詳細およびリーダーへ遷移した際、探索元のアクティブタブ（検索）が反映されること", async () => {
+        const user = userEvent.setup();
+        let routerRef: RouterContextValue | null = null;
+        const RouterCapture: React.FC = () => {
+          routerRef = useRouter();
+          return null;
+        };
+
+        render(
+          <ServiceProvider>
+            <RouterProvider initialPath="/search">
+              <AppContent />
+              <RouterCapture />
+            </RouterProvider>
+          </ServiceProvider>,
+        );
+
+        await waitFor(() => {
+          expect(screen.getByTestId("search-placeholder")).toBeInTheDocument();
+        });
+        expect(screen.getByTestId("tab-search")).toHaveAttribute(
+          "aria-selected",
+          "true",
+        );
+
+        // 検索画面から作品詳細へ遷移
+        act(() => {
+          routerRef?.navigateToNovelDetail("kakuyomu:16817330658027210412");
+        });
+
+        await waitFor(() => {
+          expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
+        });
+
+        // 目次画面でも探索元である「検索」タブがアクティブであること
+        expect(screen.getByTestId("tab-search")).toHaveAttribute(
+          "aria-selected",
+          "true",
+        );
+        expect(screen.getByTestId("tab-bookshelf")).toHaveAttribute(
+          "aria-selected",
+          "false",
+        );
+
+        // リーダー画面へ遷移
+        act(() => {
+          routerRef?.navigateToReader("kakuyomu:16817330658027210412", 1);
+        });
+
+        await waitFor(
+          () => {
+            expect(
+              screen.getByTestId("reader-bottom-touch-zone"),
+            ).toBeInTheDocument();
+          },
+          { timeout: 3000 },
+        );
+
+        // リーダー下部オーバーレイを開く
+        await user.click(screen.getByTestId("reader-bottom-touch-zone"));
+
+        await waitFor(() => {
+          expect(
+            screen.getByTestId("reader-bottom-tab-search"),
+          ).toBeInTheDocument();
+        });
+        expect(screen.getByTestId("reader-bottom-tab-search")).toHaveAttribute(
+          "aria-selected",
+          "true",
+        );
+        expect(
+          screen.getByTestId("reader-bottom-tab-bookshelf"),
+        ).toHaveAttribute("aria-selected", "false");
+      });
+
+      it("ランキング画面 (/ranking) から作品詳細およびリーダーへ遷移した際、探索元のアクティブタブ（ランキング）が反映されること", async () => {
+        const user = userEvent.setup();
+        let routerRef: RouterContextValue | null = null;
+        const RouterCapture: React.FC = () => {
+          routerRef = useRouter();
+          return null;
+        };
+
+        render(
+          <ServiceProvider>
+            <RouterProvider initialPath="/ranking">
+              <AppContent />
+              <RouterCapture />
+            </RouterProvider>
+          </ServiceProvider>,
+        );
+
+        await waitFor(() => {
+          expect(screen.getByTestId("ranking-placeholder")).toBeInTheDocument();
+        });
+        expect(screen.getByTestId("tab-ranking")).toHaveAttribute(
+          "aria-selected",
+          "true",
+        );
+
+        // ランキング画面から作品詳細へ遷移
+        act(() => {
+          routerRef?.navigateToNovelDetail("kakuyomu:16817330658027210412");
+        });
+
+        await waitFor(() => {
+          expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
+        });
+
+        // 目次画面でも探索元である「ランキング」タブがアクティブであること
+        expect(screen.getByTestId("tab-ranking")).toHaveAttribute(
+          "aria-selected",
+          "true",
+        );
+        expect(screen.getByTestId("tab-bookshelf")).toHaveAttribute(
+          "aria-selected",
+          "false",
+        );
+
+        // リーダー画面へ遷移
+        act(() => {
+          routerRef?.navigateToReader("kakuyomu:16817330658027210412", 1);
+        });
+
+        await waitFor(
+          () => {
+            expect(
+              screen.getByTestId("reader-bottom-touch-zone"),
+            ).toBeInTheDocument();
+          },
+          { timeout: 3000 },
+        );
+
+        // リーダー下部オーバーレイを開く
+        await user.click(screen.getByTestId("reader-bottom-touch-zone"));
+
+        await waitFor(() => {
+          expect(
+            screen.getByTestId("reader-bottom-tab-ranking"),
+          ).toBeInTheDocument();
+        });
+        expect(screen.getByTestId("reader-bottom-tab-ranking")).toHaveAttribute(
+          "aria-selected",
+          "true",
+        );
+        expect(
+          screen.getByTestId("reader-bottom-tab-bookshelf"),
+        ).toHaveAttribute("aria-selected", "false");
+      });
     });
   });
 });
