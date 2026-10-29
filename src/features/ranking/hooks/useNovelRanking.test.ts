@@ -640,6 +640,7 @@ describe("useNovelRanking", () => {
       novelRepository: undefined as never,
       chapterRepository: {} as never,
       settingsRepository: {} as never,
+      appSettingsRepository: {} as never,
       appBridge: {} as never,
       isReady: true,
       error: null,

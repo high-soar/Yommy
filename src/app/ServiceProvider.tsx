@@ -20,10 +20,12 @@ import type {
   NovelRepository,
   ChapterRepository,
   SettingsRepository,
+  AppSettingsRepository,
 } from "../storage/types";
 import { SqlNovelRepository } from "../storage/repositories/novelRepository";
 import { SqlChapterRepository } from "../storage/repositories/chapterRepository";
 import { SqlSettingsRepository } from "../storage/repositories/settingsRepository";
+import { SqlAppSettingsRepository } from "../storage/repositories/appSettingsRepository";
 import workIndexHtml from "../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 import episodeContentHtml from "../parsers/kakuyomu/__fixtures__/episode_content.html?raw";
 
@@ -39,6 +41,7 @@ export interface ServiceContextValue {
   novelRepository: NovelRepository;
   chapterRepository: ChapterRepository;
   settingsRepository: SettingsRepository;
+  appSettingsRepository: AppSettingsRepository;
   appBridge: AppBridge;
   isReady: boolean;
   error: Error | null;
@@ -203,6 +206,9 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
         const settingsRepository =
           services?.settingsRepository ??
           new SqlSettingsRepository(databaseAdapter as DatabaseAdapter);
+        const appSettingsRepository =
+          services?.appSettingsRepository ??
+          new SqlAppSettingsRepository(databaseAdapter as DatabaseAdapter);
 
         const appBridge =
           services?.appBridge ??
@@ -215,6 +221,7 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           novelRepository,
           chapterRepository,
           settingsRepository,
+          appSettingsRepository,
           appBridge,
           isReady: true,
           error: null,
@@ -237,6 +244,8 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
             novelRepository: null as unknown as NovelRepository,
             chapterRepository: null as unknown as ChapterRepository,
             settingsRepository: null as unknown as SettingsRepository,
+            appSettingsRepository:
+              services?.appSettingsRepository as AppSettingsRepository,
             appBridge: services?.appBridge ?? new MockAppBridge(),
             isReady: false,
             error,
@@ -277,6 +286,8 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           chapterRepository: services?.chapterRepository as ChapterRepository,
           settingsRepository:
             services?.settingsRepository as SettingsRepository,
+          appSettingsRepository:
+            services?.appSettingsRepository as AppSettingsRepository,
           appBridge: services?.appBridge ?? new MockAppBridge(),
           isReady: false,
           error: null,

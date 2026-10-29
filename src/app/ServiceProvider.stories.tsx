@@ -23,6 +23,10 @@ const MetaComponent: React.FC = () => {
       <div data-testid="service-novel-repo">
         NovelRepository: {services.novelRepository ? "present" : "missing"}
       </div>
+      <div data-testid="service-app-settings-repo">
+        AppSettingsRepository:{" "}
+        {services.appSettingsRepository ? "present" : "missing"}
+      </div>
     </div>
   );
 };

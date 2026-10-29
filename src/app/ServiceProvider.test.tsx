@@ -39,6 +39,9 @@ describe("ServiceProvider", () => {
       expect(screen.getByTestId("service-novel-repo")).toHaveTextContent(
         "present",
       );
+      expect(screen.getByTestId("service-app-settings-repo")).toHaveTextContent(
+        "present",
+      );
     });
 
     it("CustomMockServices ストーリーでカスタムモックが反映されること", async () => {
@@ -283,6 +286,10 @@ describe("ServiceProvider", () => {
       const customSettingsRepo = {
         getReaderSettings: vi.fn().mockResolvedValue({}),
       } as unknown as import("../storage/types").SettingsRepository;
+      const customAppSettingsRepo = {
+        getSetting: vi.fn().mockResolvedValue(null),
+        setSetting: vi.fn().mockResolvedValue(undefined),
+      } as unknown as import("../storage/types").AppSettingsRepository;
 
       render(
         <ServiceProvider
@@ -291,6 +298,7 @@ describe("ServiceProvider", () => {
             novelRepository: customNovelRepo,
             chapterRepository: customChapterRepo,
             settingsRepository: customSettingsRepo,
+            appSettingsRepository: customAppSettingsRepo,
           }}
         >
           <div>カスタムサービス注入</div>
@@ -543,6 +551,45 @@ describe("ServiceProvider", () => {
       expect(window.__yommyServices?.novelRepository).toBeDefined();
       expect(window.__yommyServices?.chapterRepository).toBeDefined();
       expect(window.__yommyServices?.settingsRepository).toBeDefined();
+      expect(window.__yommyServices?.appSettingsRepository).toBeDefined();
+    });
+
+    it("デフォルトで SqlAppSettingsRepository が初期化され設定値の保存・取得ができること", async () => {
+      let settingValue: string | null = null;
+      const TestConsumer: React.FC = () => {
+        const services = useServices();
+        return (
+          <button
+            onClick={async () => {
+              await services.appSettingsRepository.setSetting(
+                "bookshelf_sort_order",
+                "title",
+              );
+              settingValue = await services.appSettingsRepository.getSetting(
+                "bookshelf_sort_order",
+              );
+            }}
+          >
+            設定更新
+          </button>
+        );
+      };
+
+      render(
+        <ServiceProvider>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("設定更新")).toBeInTheDocument();
+      });
+
+      screen.getByText("設定更新").click();
+
+      await waitFor(() => {
+        expect(settingValue).toBe("title");
+      });
     });
   });
 });

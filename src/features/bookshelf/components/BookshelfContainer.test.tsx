@@ -46,7 +46,12 @@ function createMockNovelRepo(
     },
     upsertNovelWithToc: async () => {
       const novel = sampleNovels[0];
-      list = [novel, ...list];
+      const existingIndex = list.findIndex((n) => n.id === novel.id);
+      if (existingIndex >= 0) {
+        list[existingIndex] = novel;
+      } else {
+        list = [novel, ...list];
+      }
       return { ...novel, synopsis: "あらすじ" };
     },
     updateBookmark: async () => {},

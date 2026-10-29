@@ -60,7 +60,12 @@ function createMockNovelRepository(
     },
     upsertNovelWithToc: async () => {
       const newNovel = sampleNovels[0];
-      novels = [newNovel, ...novels];
+      const existingIndex = novels.findIndex((n) => n.id === newNovel.id);
+      if (existingIndex >= 0) {
+        novels[existingIndex] = newNovel;
+      } else {
+        novels = [newNovel, ...novels];
+      }
       return {
         ...newNovel,
         synopsis: "あらすじテキスト",
