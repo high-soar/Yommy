@@ -6,7 +6,8 @@ import * as stories from "./NovelCard.stories";
 import { NovelCard } from "./NovelCard";
 import type { NovelSummary } from "../../../storage/types";
 
-const { WithBookmark, Unread, UnknownAuthor } = composeStories(stories);
+const { WithBookmark, Unread, UnknownAuthor, WithNewBadge } =
+  composeStories(stories);
 
 const dummyNovelWithBookmark: NovelSummary = {
   id: "kakuyomu:16817330658027210412",
@@ -80,6 +81,13 @@ describe("NovelCard", () => {
         "著者不明",
       );
     });
+
+    it("WithNewBadge ストーリーで「NEW」バッジが表示されること (AC-BS-08)", () => {
+      render(<WithNewBadge />);
+      expect(screen.getByTestId("novel-card-new-badge")).toHaveTextContent(
+        "NEW",
+      );
+    });
   });
 
   describe("ユーザーインタラクションの検証", () => {
@@ -135,6 +143,42 @@ describe("NovelCard", () => {
       await user.click(screen.getByTestId("novel-card-resume"));
       expect(onResume).toHaveBeenCalledWith(dummyNovelUnread.id, 1);
       expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it("novel.hasNewUpdate === true のとき NEW バッジが表示され、false / undefined のときは表示されないこと (AC-BS-08)", () => {
+      const { rerender } = render(
+        <NovelCard
+          novel={{ ...dummyNovelWithBookmark, hasNewUpdate: true }}
+          onSelect={vi.fn()}
+          onResume={vi.fn()}
+        />,
+      );
+      expect(screen.getByTestId("novel-card-new-badge")).toBeInTheDocument();
+      expect(screen.getByTestId("novel-card-new-badge")).toHaveTextContent(
+        "NEW",
+      );
+
+      rerender(
+        <NovelCard
+          novel={{ ...dummyNovelWithBookmark, hasNewUpdate: false }}
+          onSelect={vi.fn()}
+          onResume={vi.fn()}
+        />,
+      );
+      expect(
+        screen.queryByTestId("novel-card-new-badge"),
+      ).not.toBeInTheDocument();
+
+      rerender(
+        <NovelCard
+          novel={{ ...dummyNovelWithBookmark, hasNewUpdate: undefined }}
+          onSelect={vi.fn()}
+          onResume={vi.fn()}
+        />,
+      );
+      expect(
+        screen.queryByTestId("novel-card-new-badge"),
+      ).not.toBeInTheDocument();
     });
   });
 });

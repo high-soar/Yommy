@@ -58,6 +58,11 @@ const meta: Meta<typeof BookshelfPage> = {
   args: {
     novels: sampleNovels,
     isLoading: false,
+    isCheckingUpdates: false,
+    updateCheckProgress: null,
+    sortOrder: "unread_first",
+    onSortChange: fn(),
+    onCheckUpdates: fn(),
     onNavigateSearch: fn(),
     onNavigateRanking: fn(),
     onSelectNovel: fn(),
@@ -98,5 +103,30 @@ export const Loading: Story = {
   args: {
     novels: [],
     isLoading: true,
+  },
+};
+
+/**
+ * 一括更新チェック実行中状態（進捗表示あり）
+ */
+export const CheckingUpdates: Story = {
+  name: "更新チェック実行中（進捗あり）",
+  args: {
+    novels: sampleNovels,
+    isLoading: false,
+    isCheckingUpdates: true,
+    updateCheckProgress: { current: 1, total: 2 },
+  },
+};
+
+/**
+ * ソート順変更状態（作品更新日順）
+ */
+export const SortedByLatestPublished: Story = {
+  name: "ソート順変更（作品更新日順）",
+  args: {
+    novels: sampleNovels,
+    isLoading: false,
+    sortOrder: "latest_published",
   },
 };
