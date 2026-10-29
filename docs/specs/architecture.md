@@ -32,7 +32,7 @@ related_specs:
   - docs/specs/features/settings.md
   - docs/specs/changes/archive/issue-78-apk-signing-and-back-button.md
   - docs/specs/changes/archive/issue-79-four-tabs-search-ranking.md
-  - docs/specs/changes/issue-80-bookshelf-update-check-and-sort.md
+  - docs/specs/changes/archive/issue-80-bookshelf-update-check-and-sort.md
   - docs/specs/changes/archive/issue-81-prefetch-and-cache-rules.md
   - docs/specs/changes/archive/issue-50-fullscreen-shell-and-settings.md
   - docs/specs/changes/archive/issue-51-novel-detail-layout-and-scroll.md

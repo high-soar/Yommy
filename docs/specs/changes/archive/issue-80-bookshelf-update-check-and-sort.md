@@ -3,7 +3,7 @@ type: spec-delta
 title: "作品の自動更新チェック（NEWバッジ表示・解除）と本棚ソート機能（5種切替）の設計"
 description: "Issue #80 に対する差分仕様、影響する全体正本、テスト計画、および実装Sub-issue分割計画。"
 issue: "#80"
-status: "Review (#80)"
+status: "Completed (Archived)"
 updated: "2026-10-30"
 tags:
   - delta
@@ -28,13 +28,17 @@ related_specs:
 related_tests:
   - src/storage/schema.test.ts
   - src/storage/repositories/novelRepository.test.ts
+  - src/storage/repositories/appSettingsRepository.test.ts
   - src/features/bookshelf/hooks/useBookshelf.test.ts
   - src/features/bookshelf/components/NovelCard.test.tsx
   - src/features/bookshelf/components/BookshelfPage.test.tsx
   - src/features/bookshelf/components/BookshelfContainer.test.tsx
+  - src/features/novel-detail/hooks/useNovelDetail.test.ts
+  - src/features/reader/hooks/useReader.test.ts
   - src/App.test.tsx
   - test/it/smoke.spec.ts
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
+  - test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts
 ---
 
 # 差分仕様書：作品の自動更新チェック（NEWバッジ表示・解除）と本棚ソート機能（5種切替）（Issue #80）
@@ -256,7 +260,7 @@ related_tests:
 
 ## 6. 申し送り事項（Handover Items: `HO-xx`）
 
-本設計 PR において以下の申し送り事項を起票し、[docs/quality/bug-and-handover-log.md](../../quality/bug-and-handover-log.md) に登録しました。
+本設計 PR において以下の申し送り事項を起票し、[docs/quality/bug-and-handover-log.md](../../../quality/bug-and-handover-log.md) に登録しました。
 
 |   ID    | 起票元 | 内容                                                                                                                                                                                                | 解決先（担当 Sub-issue）      | 完了ゲート          |  状態  |
 | :-----: | :----: | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------- | :------------------ | :----: |

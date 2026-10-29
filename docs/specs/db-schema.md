@@ -13,13 +13,14 @@ related_specs:
   - docs/specs/features/novel-detail.md
   - docs/specs/features/reader-view.md
   - docs/specs/features/settings.md
-  - docs/specs/changes/issue-80-bookshelf-update-check-and-sort.md
+  - docs/specs/changes/archive/issue-80-bookshelf-update-check-and-sort.md
   - docs/specs/changes/archive/issue-81-prefetch-and-cache-rules.md
 related_tests:
   - src/storage/schema.test.ts
   - src/storage/repositories/novelRepository.test.ts
   - src/storage/repositories/chapterRepository.test.ts
   - src/storage/repositories/settingsRepository.test.ts
+  - src/storage/repositories/appSettingsRepository.test.ts
 ---
 
 # ローカル DB スキーマ定義（App 全体正本）
