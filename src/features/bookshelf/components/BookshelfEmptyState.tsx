@@ -1,7 +1,9 @@
 import React from "react";
 
 export interface BookshelfEmptyStateProps {
-  onOpenAdd: () => void;
+  onOpenAdd?: () => void;
+  onNavigateSearch?: () => void;
+  onNavigateRanking?: () => void;
 }
 
 /**

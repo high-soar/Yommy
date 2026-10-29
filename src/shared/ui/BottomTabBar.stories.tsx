@@ -15,6 +15,8 @@ const meta: Meta<typeof BottomTabBar> = {
   args: {
     activeTab: "bookshelf",
     onSelectBookshelf: fn(),
+    onSelectSearch: fn(),
+    onSelectRanking: fn(),
     onSelectSettings: fn(),
   },
 };
@@ -29,6 +31,26 @@ export const BookshelfActive: Story = {
   name: "本棚タブアクティブ",
   args: {
     activeTab: "bookshelf",
+  },
+};
+
+/**
+ * 検索タブがアクティブな状態のストーリー
+ */
+export const SearchActive: Story = {
+  name: "検索タブアクティブ",
+  args: {
+    activeTab: "search",
+  },
+};
+
+/**
+ * ランキングタブがアクティブな状態のストーリー
+ */
+export const RankingActive: Story = {
+  name: "ランキングタブアクティブ",
+  args: {
+    activeTab: "ranking",
   },
 };
 

@@ -4,7 +4,7 @@ import { App } from "./App";
 /**
  * Yommy ルートアプリケーションコンポーネント。
  * ServiceProvider と RouterProvider を統合し、100dvh 全画面シェル内での画面ルーティング
- * （本棚 SCR-01、作品詳細 SCR-02、リーダー SCR-03、設定 SCR-05）および下部タブバー（BottomTabBar）を提供します。
+ * （本棚 SCR-01、作品詳細 SCR-02、リーダー SCR-03、設定 SCR-05、検索 SCR-06、ランキング SCR-07）および下部タブバー（BottomTabBar）を提供します。
  */
 const meta: Meta<typeof App> = {
   title: "App",
@@ -23,6 +23,28 @@ type Story = StoryObj<typeof App>;
  */
 export const Default: Story = {
   name: "デフォルト（本棚画面・初期表示）",
+};
+
+/**
+ * 検索画面ルートストーリー。
+ * /search へのアクセス時（検索画面・下部タブバー「検索」アクティブ）を描画します。
+ */
+export const SearchRoute: Story = {
+  name: "検索画面ルート表示",
+  args: {
+    initialPath: "/search",
+  },
+};
+
+/**
+ * ランキング画面ルートストーリー。
+ * /ranking へのアクセス時（ランキング画面・下部タブバー「ランキング」アクティブ）を描画します。
+ */
+export const RankingRoute: Story = {
+  name: "ランキング画面ルート表示",
+  args: {
+    initialPath: "/ranking",
+  },
 };
 
 /**

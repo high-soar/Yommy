@@ -1,12 +1,16 @@
 import React from "react";
 
-export type BottomTab = "bookshelf" | "settings";
+export type BottomTab = "bookshelf" | "search" | "ranking" | "settings";
 
 export interface BottomTabBarProps {
   /** 現在アクティブなタブ */
   activeTab: BottomTab;
   /** 「本棚」タブ選択時のコールバック */
   onSelectBookshelf: () => void;
+  /** 「検索」タブ選択時のコールバック */
+  onSelectSearch?: () => void;
+  /** 「ランキング」タブ選択時のコールバック */
+  onSelectRanking?: () => void;
   /** 「設定」タブ選択時のコールバック */
   onSelectSettings: () => void;
   /** 追加の CSS クラス（任意） */

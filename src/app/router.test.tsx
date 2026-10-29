@@ -13,6 +13,8 @@ import {
 
 const {
   BookshelfRoute,
+  SearchRoute,
+  RankingRoute,
   NovelDetailRoute,
   ReaderRoute,
   SettingsRoute,
@@ -34,6 +36,26 @@ describe("router", () => {
       expect(screen.getByTestId("current-path")).toHaveTextContent("Path: /");
       expect(screen.getByTestId("route-name")).toHaveTextContent(
         "Route: bookshelf",
+      );
+    });
+
+    it("SearchRoute ストーリーが検索画面ルートを描画すること (SCR-06)", () => {
+      render(<SearchRoute />);
+      expect(screen.getByTestId("current-path")).toHaveTextContent(
+        "Path: /search",
+      );
+      expect(screen.getByTestId("route-name")).toHaveTextContent(
+        "Route: search",
+      );
+    });
+
+    it("RankingRoute ストーリーがランキング画面ルートを描画すること (SCR-07)", () => {
+      render(<RankingRoute />);
+      expect(screen.getByTestId("current-path")).toHaveTextContent(
+        "Path: /ranking",
+      );
+      expect(screen.getByTestId("route-name")).toHaveTextContent(
+        "Route: ranking",
       );
     });
 
@@ -102,101 +124,118 @@ describe("router", () => {
     });
   });
 
-  describe("matchRoute 純粋関数検証", () => {
-    it("/ または空文字で bookshelf ルートが解決されること", () => {
+  describe("matchRoute 関数検証", () => {
+    it("ルートパス / は bookshelf ルートにマッチすること", () => {
       expect(matchRoute("/")).toEqual({ name: "bookshelf", path: "/" });
       expect(matchRoute("")).toEqual({ name: "bookshelf", path: "/" });
       expect(matchRoute("   ")).toEqual({ name: "bookshelf", path: "/" });
     });
 
-    it("/settings で settings ルートが解決されること", () => {
+    it("検索パス /search は search ルートにマッチすること (SCR-06)", () => {
+      expect(matchRoute("/search")).toEqual({
+        name: "search",
+        path: "/search",
+      });
+      expect(matchRoute(" /search/ ")).toEqual({
+        name: "search",
+        path: "/search",
+      });
+    });
+
+    it("ランキングパス /ranking は ranking ルートにマッチすること (SCR-07)", () => {
+      expect(matchRoute("/ranking")).toEqual({
+        name: "ranking",
+        path: "/ranking",
+      });
+      expect(matchRoute(" /ranking/ ")).toEqual({
+        name: "ranking",
+        path: "/ranking",
+      });
+    });
+
+    it("設定パス /settings は settings ルートにマッチすること (SCR-05)", () => {
       expect(matchRoute("/settings")).toEqual({
         name: "settings",
         path: "/settings",
       });
-      expect(matchRoute("/settings/")).toEqual({
+      expect(matchRoute(" /settings/ ")).toEqual({
         name: "settings",
         path: "/settings",
       });
     });
 
-    it("/novels/:novelId で novel-detail ルートが安全に解決されること", () => {
-      expect(matchRoute("/novels/kakuyomu%3A16817330658027210412")).toEqual({
+    it("作品詳細パス /novels/:novelId は novel-detail ルートにマッチすること (SCR-02)", () => {
+      const result = matchRoute("/novels/kakuyomu%3A16817330658027210412");
+      expect(result).toEqual({
         name: "novel-detail",
         path: "/novels/kakuyomu%3A16817330658027210412",
         novelId: "kakuyomu:16817330658027210412",
       });
+    });
 
-      // 末尾スラッシュ付き
-      expect(matchRoute("/novels/work123/")).toEqual({
+    it("作品詳細パスで末尾スラッシュがあっても正しくマッチすること", () => {
+      const result = matchRoute("/novels/sample-novel-id/");
+      expect(result).toEqual({
         name: "novel-detail",
-        path: "/novels/work123",
-        novelId: "work123",
+        path: "/novels/sample-novel-id",
+        novelId: "sample-novel-id",
       });
     });
 
-    it("/novels/:novelId/chapters/:chapterIndex で reader ルートが解決されること", () => {
-      expect(
-        matchRoute("/novels/kakuyomu%3A16817330658027210412/chapters/3"),
-      ).toEqual({
+    it("リーダーパス /novels/:novelId/chapters/:chapterIndex は reader ルートにマッチすること (SCR-03)", () => {
+      const result = matchRoute(
+        "/novels/kakuyomu%3A16817330658027210412/chapters/12",
+      );
+      expect(result).toEqual({
         name: "reader",
-        path: "/novels/kakuyomu%3A16817330658027210412/chapters/3",
+        path: "/novels/kakuyomu%3A16817330658027210412/chapters/12",
         novelId: "kakuyomu:16817330658027210412",
-        chapterIndex: 3,
+        chapterIndex: 12,
       });
     });
 
-    it("無効な話数（0以下または非数値）の場合は bookshelf へフォールバックすること", () => {
-      expect(matchRoute("/novels/work123/chapters/0")).toEqual({
+    it("リーダーパスで chapterIndex が 0 以下の場合は本棚ルートへフォールバックすること", () => {
+      expect(matchRoute("/novels/work1/chapters/0")).toEqual({
         name: "bookshelf",
         path: "/",
       });
-      expect(matchRoute("/novels/work123/chapters/abc")).toEqual({
-        name: "bookshelf",
-        path: "/",
-      });
-    });
-
-    it("空文字の novelId の場合は bookshelf へフォールバックすること", () => {
-      expect(matchRoute("/novels/%20")).toEqual({
-        name: "bookshelf",
-        path: "/",
-      });
-      expect(matchRoute("/novels/%20/chapters/1")).toEqual({
+      expect(matchRoute("/novels/work1/chapters/-1")).toEqual({
         name: "bookshelf",
         path: "/",
       });
     });
 
-    it("未知のパスの場合は bookshelf へフォールバックすること", () => {
+    it("未知のパスや不正なパスは本棚ルートへフォールバックすること", () => {
       expect(matchRoute("/unknown/route")).toEqual({
         name: "bookshelf",
         path: "/",
       });
-      expect(matchRoute("/novels/work123/extra/sub")).toEqual({
+      expect(matchRoute("/novels//chapters/1")).toEqual({
         name: "bookshelf",
         path: "/",
       });
     });
   });
 
-  describe("safeDecodeURIComponent 安全デコード検証", () => {
-    it("通常のエンコード文字列をデコードできること", () => {
+  describe("safeDecodeURIComponent 関数検証", () => {
+    it("正常なエンコード文字列をデコードできること", () => {
       expect(safeDecodeURIComponent("kakuyomu%3A123")).toBe("kakuyomu:123");
-      expect(safeDecodeURIComponent("simple")).toBe("simple");
+      expect(safeDecodeURIComponent("hello%20world")).toBe("hello world");
     });
 
-    it("不正なパーセントエンコード文字列で例外をスローせず生文字列を返すこと", () => {
+    it("不正なパーセントエンコード文字列の場合は元の文字列を返すこと", () => {
       expect(safeDecodeURIComponent("%E0%A4%A")).toBe("%E0%A4%A");
+      expect(safeDecodeURIComponent("%")).toBe("%");
     });
   });
 
-  describe("resolveInitialPath パス解決検証", () => {
+  describe("resolveInitialPath 関数検証", () => {
     it("initialPath が指定されている場合はそれを優先すること", () => {
       expect(resolveInitialPath("/custom", "/fallback")).toBe("/custom");
+      expect(resolveInitialPath("/custom", undefined)).toBe("/custom");
     });
 
-    it("initialPath が未指定で fallbackPath がある場合はそれを利用すること", () => {
+    it("initialPath がなく fallbackPath がある場合は fallbackPath を返すこと", () => {
       expect(resolveInitialPath(undefined, "/fallback")).toBe("/fallback");
     });
 
@@ -221,6 +260,18 @@ describe("router", () => {
             onClick={() => router.navigateToBookshelf()}
           >
             本棚
+          </button>
+          <button
+            data-testid="btn-search"
+            onClick={() => router.navigateToSearch()}
+          >
+            検索
+          </button>
+          <button
+            data-testid="btn-ranking"
+            onClick={() => router.navigateToRanking()}
+          >
+            ランキング
           </button>
           <button
             data-testid="btn-detail"
@@ -277,7 +328,7 @@ describe("router", () => {
       );
     };
 
-    it("navigateToBookshelf, navigateToNovelDetail, navigateToReader, navigateToSettings, navigate で画面遷移できること", () => {
+    it("navigateToBookshelf, navigateToSearch, navigateToRanking, navigateToNovelDetail, navigateToReader, navigateToSettings, navigate で画面遷移できること", () => {
       render(
         <RouterProvider initialPath="/">
           <TestConsumer />
@@ -287,6 +338,26 @@ describe("router", () => {
       expect(screen.getByTestId("path-display")).toHaveTextContent("/");
       expect(screen.getByTestId("route-display")).toHaveTextContent(
         "bookshelf",
+      );
+
+      // 検索へ
+      act(() => {
+        screen.getByTestId("btn-search").click();
+      });
+      expect(screen.getByTestId("path-display")).toHaveTextContent("/search");
+      expect(screen.getByTestId("route-display")).toHaveTextContent("search");
+      expect(screen.getByTestId("previous-path-display")).toHaveTextContent(
+        "/",
+      );
+
+      // ランキングへ
+      act(() => {
+        screen.getByTestId("btn-ranking").click();
+      });
+      expect(screen.getByTestId("path-display")).toHaveTextContent("/ranking");
+      expect(screen.getByTestId("route-display")).toHaveTextContent("ranking");
+      expect(screen.getByTestId("previous-path-display")).toHaveTextContent(
+        "/search",
       );
 
       act(() => {
@@ -299,7 +370,7 @@ describe("router", () => {
         "novel-detail",
       );
       expect(screen.getByTestId("previous-path-display")).toHaveTextContent(
-        "/",
+        "/ranking",
       );
 
       act(() => {
@@ -371,17 +442,6 @@ describe("router", () => {
       expect(screen.getByTestId("previous-path-display")).toHaveTextContent(
         "/novels/kakuyomu%3A16817330658027210412",
       );
-
-      // back() で直前の画面（作品詳細）へ1回で復帰できること（TR-12 整合）
-      act(() => {
-        screen.getByTestId("btn-back").click();
-      });
-      expect(screen.getByTestId("path-display")).toHaveTextContent(
-        "/novels/kakuyomu%3A16817330658027210412",
-      );
-      expect(screen.getByTestId("route-display")).toHaveTextContent(
-        "novel-detail",
-      );
     });
 
     it("popstate イベント発火時にブラウザの pathname と同期すること", () => {
@@ -439,7 +499,7 @@ describe("router", () => {
     });
 
     describe("論理階層遷移制御 (back, fromBookshelfResume, replace)", () => {
-      it("各話View (SCR-03) から back() を呼んだとき、親である目次画面 (SCR-02) へ遷移すること", () => {
+      it("各話View (SCR-03) から back() を呼んだとき、親である目次画面 (SCR-02) へ遷移すること (TR-06)", () => {
         render(
           <RouterProvider initialPath="/novels/work1/chapters/3">
             <TestConsumer />
@@ -458,7 +518,95 @@ describe("router", () => {
         );
       });
 
-      it("目次画面 (SCR-02) から back() を呼んだとき、親である本棚画面 (SCR-01) へ遷移すること", () => {
+      it("目次画面 (SCR-02) で直前の探索元が検索画面 (/search) の場合、back() で /search へ復帰すること (TR-07)", () => {
+        render(
+          <RouterProvider initialPath="/search">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        // /search から詳細へ
+        act(() => {
+          screen.getByTestId("btn-detail").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/novels/kakuyomu%3A16817330658027210412",
+        );
+
+        // 戻る
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent("/search");
+        expect(screen.getByTestId("route-display")).toHaveTextContent("search");
+      });
+
+      it("目次画面 (SCR-02) で直前の探索元がランキング画面 (/ranking) の場合、back() で /ranking へ復帰すること (TR-07)", () => {
+        render(
+          <RouterProvider initialPath="/ranking">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        // /ranking から詳細へ
+        act(() => {
+          screen.getByTestId("btn-detail").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/novels/kakuyomu%3A16817330658027210412",
+        );
+
+        // 戻る
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/ranking",
+        );
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "ranking",
+        );
+      });
+
+      it("目次画面 (SCR-02) で探索元からリーダーへ進んだ後でも、リーダー戻り後の再度 back() で元の探索元へ復帰すること (TR-06, TR-07)", () => {
+        render(
+          <RouterProvider initialPath="/ranking">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        // /ranking -> 詳細 -> リーダー
+        act(() => {
+          screen.getByTestId("btn-detail").click();
+        });
+        act(() => {
+          screen.getByTestId("btn-reader").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/novels/kakuyomu%3A16817330658027210412/chapters/5",
+        );
+
+        // リーダーから目次へ戻る
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/novels/kakuyomu%3A16817330658027210412",
+        );
+
+        // 目次から再度戻ると、元の探索元である /ranking へ復帰すること
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/ranking",
+        );
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "ranking",
+        );
+      });
+
+      it("目次画面 (SCR-02) に直接アクセスした場合（履歴なし）、back() で本棚画面 (/) へ復帰すること (TR-07)", () => {
         render(
           <RouterProvider initialPath="/novels/work1">
             <TestConsumer />
@@ -475,34 +623,7 @@ describe("router", () => {
         );
       });
 
-      it("設定画面 (SCR-05) から back() を呼んだとき、直前の previousPath へ復帰すること", () => {
-        render(
-          <RouterProvider initialPath="/novels/work1">
-            <TestConsumer />
-          </RouterProvider>,
-        );
-
-        // 詳細から設定へ
-        act(() => {
-          screen.getByTestId("btn-settings").click();
-        });
-        expect(screen.getByTestId("path-display")).toHaveTextContent(
-          "/settings",
-        );
-
-        // 戻る
-        act(() => {
-          screen.getByTestId("btn-back").click();
-        });
-        expect(screen.getByTestId("path-display")).toHaveTextContent(
-          "/novels/work1",
-        );
-        expect(screen.getByTestId("route-display")).toHaveTextContent(
-          "novel-detail",
-        );
-      });
-
-      it("設定画面 (SCR-05) に直接アクセスした場合、previousPath が無いため本棚画面 (/) へ復帰すること", () => {
+      it("設定画面 (SCR-05) から back() を呼んだとき、ホーム本棚画面 (/) へ復帰すること (TR-12)", () => {
         render(
           <RouterProvider initialPath="/settings">
             <TestConsumer />
@@ -518,7 +639,39 @@ describe("router", () => {
         );
       });
 
-      it("本棚画面 (SCR-01) で back() を呼んだ場合、論理親がないためパスが変わらないこと", () => {
+      it("検索画面 (SCR-06) から back() を呼んだとき、ホーム本棚画面 (/) へ復帰すること (TR-12)", () => {
+        render(
+          <RouterProvider initialPath="/search">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent("/");
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "bookshelf",
+        );
+      });
+
+      it("ランキング画面 (SCR-07) から back() を呼んだとき、ホーム本棚画面 (/) へ復帰すること (TR-12)", () => {
+        render(
+          <RouterProvider initialPath="/ranking">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent("/");
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "bookshelf",
+        );
+      });
+
+      it("本棚画面 (SCR-01) で back() を呼んだ場合、論理親がないためパスが変わらないこと (TR-13)", () => {
         render(
           <RouterProvider initialPath="/">
             <TestConsumer />

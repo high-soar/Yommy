@@ -12,7 +12,9 @@ export type AppRoute =
   | { name: "bookshelf"; path: "/" }
   | { name: "novel-detail"; path: string; novelId: string }
   | { name: "reader"; path: string; novelId: string; chapterIndex: number }
-  | { name: "settings"; path: "/settings" };
+  | { name: "settings"; path: "/settings" }
+  | { name: "search"; path: "/search" }
+  | { name: "ranking"; path: "/ranking" };
 
 export interface NavigateToReaderOptions {
   replace?: boolean;
@@ -25,6 +27,8 @@ export interface RouterContextValue {
   route: AppRoute;
   navigate: (path: string) => void;
   navigateToBookshelf: () => void;
+  navigateToSearch: () => void;
+  navigateToRanking: () => void;
   navigateToNovelDetail: (novelId: string) => void;
   navigateToReader: (
     novelId: string,
@@ -234,6 +238,9 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
     navigate("/settings");
   }, [navigate]);
 
+  const navigateToSearch = useCallback(() => {}, []);
+  const navigateToRanking = useCallback(() => {}, []);
+
   const route = useMemo(() => matchRoute(currentPath), [currentPath]);
 
   const back = useCallback(() => {
@@ -267,6 +274,8 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
       route,
       navigate,
       navigateToBookshelf,
+      navigateToSearch,
+      navigateToRanking,
       navigateToNovelDetail,
       navigateToReader,
       navigateToSettings,
@@ -278,6 +287,8 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
       route,
       navigate,
       navigateToBookshelf,
+      navigateToSearch,
+      navigateToRanking,
       navigateToNovelDetail,
       navigateToReader,
       navigateToSettings,

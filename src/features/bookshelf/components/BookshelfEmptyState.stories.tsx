@@ -6,7 +6,8 @@ const meta: Meta<typeof BookshelfEmptyState> = {
   title: "Bookshelf/BookshelfEmptyState",
   component: BookshelfEmptyState,
   args: {
-    onOpenAdd: fn(),
+    onNavigateSearch: fn(),
+    onNavigateRanking: fn(),
   },
 };
 

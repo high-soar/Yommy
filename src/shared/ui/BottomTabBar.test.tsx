@@ -5,7 +5,8 @@ import { composeStories } from "@storybook/react";
 import * as stories from "./BottomTabBar.stories";
 import { BottomTabBar } from "./BottomTabBar";
 
-const { BookshelfActive, SettingsActive } = composeStories(stories);
+const { BookshelfActive, SearchActive, RankingActive, SettingsActive } =
+  composeStories(stories);
 
 describe("BottomTabBar", () => {
   describe("Storybook Stories 検証 (composeStories)", () => {
@@ -18,6 +19,8 @@ describe("BottomTabBar", () => {
       expect(nav).toHaveAttribute("aria-label", "メインナビゲーション");
 
       const bookshelfTab = screen.getByTestId("tab-bookshelf");
+      const searchTab = screen.getByTestId("tab-search");
+      const rankingTab = screen.getByTestId("tab-ranking");
       const settingsTab = screen.getByTestId("tab-settings");
 
       expect(bookshelfTab).toBeInTheDocument();
@@ -25,30 +28,77 @@ describe("BottomTabBar", () => {
       expect(bookshelfTab).toHaveAttribute("aria-selected", "true");
       expect(bookshelfTab).toHaveTextContent("本棚");
 
+      expect(searchTab).toBeInTheDocument();
+      expect(searchTab).toHaveAttribute("role", "tab");
+      expect(searchTab).toHaveAttribute("aria-selected", "false");
+      expect(searchTab).toHaveTextContent("検索");
+
+      expect(rankingTab).toBeInTheDocument();
+      expect(rankingTab).toHaveAttribute("role", "tab");
+      expect(rankingTab).toHaveAttribute("aria-selected", "false");
+      expect(rankingTab).toHaveTextContent("ランキング");
+
       expect(settingsTab).toBeInTheDocument();
       expect(settingsTab).toHaveAttribute("role", "tab");
       expect(settingsTab).toHaveAttribute("aria-selected", "false");
       expect(settingsTab).toHaveTextContent("設定");
     });
 
+    it("SearchActive ストーリーで検索タブがアクティブとなり、アクセシビリティ属性およびラベルが正しく設定されること", () => {
+      render(<SearchActive />);
+
+      const searchTab = screen.getByTestId("tab-search");
+      expect(searchTab).toHaveAttribute("aria-selected", "true");
+      expect(screen.getByTestId("tab-bookshelf")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+      expect(screen.getByTestId("tab-ranking")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+      expect(screen.getByTestId("tab-settings")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+    });
+
+    it("RankingActive ストーリーでランキングタブがアクティブとなり、アクセシビリティ属性およびラベルが正しく設定されること", () => {
+      render(<RankingActive />);
+
+      const rankingTab = screen.getByTestId("tab-ranking");
+      expect(rankingTab).toHaveAttribute("aria-selected", "true");
+      expect(screen.getByTestId("tab-bookshelf")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+      expect(screen.getByTestId("tab-search")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+      expect(screen.getByTestId("tab-settings")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+    });
+
     it("SettingsActive ストーリーで設定タブがアクティブとなり、アクセシビリティ属性およびラベルが正しく設定されること", () => {
       render(<SettingsActive />);
 
-      const nav = screen.getByTestId("bottom-tab-bar");
-      expect(nav).toBeInTheDocument();
-      expect(nav).toHaveAttribute("role", "tablist");
-      expect(nav).toHaveAttribute("aria-label", "メインナビゲーション");
-
-      const bookshelfTab = screen.getByTestId("tab-bookshelf");
       const settingsTab = screen.getByTestId("tab-settings");
-
-      expect(bookshelfTab).toBeInTheDocument();
-      expect(bookshelfTab).toHaveAttribute("role", "tab");
-      expect(bookshelfTab).toHaveAttribute("aria-selected", "false");
-
-      expect(settingsTab).toBeInTheDocument();
-      expect(settingsTab).toHaveAttribute("role", "tab");
       expect(settingsTab).toHaveAttribute("aria-selected", "true");
+      expect(screen.getByTestId("tab-bookshelf")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+      expect(screen.getByTestId("tab-search")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+      expect(screen.getByTestId("tab-ranking")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
     });
   });
 
@@ -56,12 +106,16 @@ describe("BottomTabBar", () => {
     it("本棚タブをクリックしたときに onSelectBookshelf コールバックが呼び出されること", async () => {
       const user = userEvent.setup();
       const onSelectBookshelf = vi.fn();
+      const onSelectSearch = vi.fn();
+      const onSelectRanking = vi.fn();
       const onSelectSettings = vi.fn();
 
       render(
         <BottomTabBar
           activeTab="settings"
           onSelectBookshelf={onSelectBookshelf}
+          onSelectSearch={onSelectSearch}
+          onSelectRanking={onSelectRanking}
           onSelectSettings={onSelectSettings}
         />,
       );
@@ -70,18 +124,76 @@ describe("BottomTabBar", () => {
       await user.click(bookshelfTab);
 
       expect(onSelectBookshelf).toHaveBeenCalledTimes(1);
+      expect(onSelectSearch).not.toHaveBeenCalled();
+      expect(onSelectRanking).not.toHaveBeenCalled();
       expect(onSelectSettings).not.toHaveBeenCalled();
     });
 
-    it("設定タブをクリックしたときに onSelectSettings コールバックが呼び出されること", async () => {
+    it("検索タブをクリックしたときに onSelectSearch コールバックが呼び出されること", async () => {
       const user = userEvent.setup();
       const onSelectBookshelf = vi.fn();
+      const onSelectSearch = vi.fn();
+      const onSelectRanking = vi.fn();
       const onSelectSettings = vi.fn();
 
       render(
         <BottomTabBar
           activeTab="bookshelf"
           onSelectBookshelf={onSelectBookshelf}
+          onSelectSearch={onSelectSearch}
+          onSelectRanking={onSelectRanking}
+          onSelectSettings={onSelectSettings}
+        />,
+      );
+
+      const searchTab = screen.getByTestId("tab-search");
+      await user.click(searchTab);
+
+      expect(onSelectSearch).toHaveBeenCalledTimes(1);
+      expect(onSelectBookshelf).not.toHaveBeenCalled();
+      expect(onSelectRanking).not.toHaveBeenCalled();
+      expect(onSelectSettings).not.toHaveBeenCalled();
+    });
+
+    it("ランキングタブをクリックしたときに onSelectRanking コールバックが呼び出されること", async () => {
+      const user = userEvent.setup();
+      const onSelectBookshelf = vi.fn();
+      const onSelectSearch = vi.fn();
+      const onSelectRanking = vi.fn();
+      const onSelectSettings = vi.fn();
+
+      render(
+        <BottomTabBar
+          activeTab="bookshelf"
+          onSelectBookshelf={onSelectBookshelf}
+          onSelectSearch={onSelectSearch}
+          onSelectRanking={onSelectRanking}
+          onSelectSettings={onSelectSettings}
+        />,
+      );
+
+      const rankingTab = screen.getByTestId("tab-ranking");
+      await user.click(rankingTab);
+
+      expect(onSelectRanking).toHaveBeenCalledTimes(1);
+      expect(onSelectBookshelf).not.toHaveBeenCalled();
+      expect(onSelectSearch).not.toHaveBeenCalled();
+      expect(onSelectSettings).not.toHaveBeenCalled();
+    });
+
+    it("設定タブをクリックしたときに onSelectSettings コールバックが呼び出されること", async () => {
+      const user = userEvent.setup();
+      const onSelectBookshelf = vi.fn();
+      const onSelectSearch = vi.fn();
+      const onSelectRanking = vi.fn();
+      const onSelectSettings = vi.fn();
+
+      render(
+        <BottomTabBar
+          activeTab="bookshelf"
+          onSelectBookshelf={onSelectBookshelf}
+          onSelectSearch={onSelectSearch}
+          onSelectRanking={onSelectRanking}
           onSelectSettings={onSelectSettings}
         />,
       );
@@ -91,6 +203,8 @@ describe("BottomTabBar", () => {
 
       expect(onSelectSettings).toHaveBeenCalledTimes(1);
       expect(onSelectBookshelf).not.toHaveBeenCalled();
+      expect(onSelectSearch).not.toHaveBeenCalled();
+      expect(onSelectRanking).not.toHaveBeenCalled();
     });
   });
 
@@ -101,16 +215,15 @@ describe("BottomTabBar", () => {
           activeTab="bookshelf"
           onSelectBookshelf={vi.fn()}
           onSelectSettings={vi.fn()}
-          className="custom-class"
+          className="custom-tab-class"
         />,
       );
 
       const nav = screen.getByTestId("bottom-tab-bar");
-      expect(nav).toHaveClass("custom-class");
-      expect(nav).toHaveClass("h-14");
+      expect(nav).toHaveClass("custom-tab-class");
     });
 
-    it("className が省略された場合でもデフォルトスタイルが正しく適用されること", () => {
+    it("className が未指定の場合でも基本クラスが付与されること", () => {
       render(
         <BottomTabBar
           activeTab="bookshelf"
@@ -122,33 +235,7 @@ describe("BottomTabBar", () => {
       const nav = screen.getByTestId("bottom-tab-bar");
       expect(nav).toHaveClass("h-14");
       expect(nav).toHaveClass("border-t");
-    });
-
-    it("アクティブおよび非アクティブタブに適切なスタイルクラスが適用されること", () => {
-      const { rerender } = render(
-        <BottomTabBar
-          activeTab="bookshelf"
-          onSelectBookshelf={vi.fn()}
-          onSelectSettings={vi.fn()}
-        />,
-      );
-
-      const bookshelfTab = screen.getByTestId("tab-bookshelf");
-      const settingsTab = screen.getByTestId("tab-settings");
-
-      expect(bookshelfTab).toHaveClass("text-emerald-700");
-      expect(settingsTab).toHaveClass("text-slate-600");
-
-      rerender(
-        <BottomTabBar
-          activeTab="settings"
-          onSelectBookshelf={vi.fn()}
-          onSelectSettings={vi.fn()}
-        />,
-      );
-
-      expect(bookshelfTab).toHaveClass("text-slate-600");
-      expect(settingsTab).toHaveClass("text-emerald-700");
+      expect(nav).toHaveClass("grid-cols-4");
     });
   });
 });

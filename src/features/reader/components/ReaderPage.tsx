@@ -5,6 +5,7 @@ import type {
   WritingMode,
   ReaderTheme,
 } from "../../../storage/types";
+import type { BottomTab } from "../../../shared/ui/BottomTabBar";
 import { ReaderView } from "./ReaderView";
 import { ReaderBottomOverlay } from "./ReaderBottomOverlay";
 
@@ -23,7 +24,7 @@ export interface ReaderPageProps {
   onPrevChapter: () => void;
   onNextChapter: () => void;
   onScrollProgressChange: (progress: number) => void;
-  onSelectTab?: (tab: "bookshelf" | "settings") => void;
+  onSelectTab?: (tab: BottomTab) => void;
   initialOverlayOpen?: boolean;
 }
 

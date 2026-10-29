@@ -44,6 +44,22 @@ const RouterStateInspector: React.FC = () => {
         </button>
         <button
           type="button"
+          data-testid="nav-search-button"
+          onClick={() => router.navigateToSearch()}
+          className="px-3 py-1.5 bg-teal-600 text-white rounded text-xs font-medium hover:bg-teal-700"
+        >
+          検索へ
+        </button>
+        <button
+          type="button"
+          data-testid="nav-ranking-button"
+          onClick={() => router.navigateToRanking()}
+          className="px-3 py-1.5 bg-yellow-600 text-white rounded text-xs font-medium hover:bg-yellow-700"
+        >
+          ランキングへ
+        </button>
+        <button
+          type="button"
           data-testid="nav-detail-button"
           onClick={() =>
             router.navigateToNovelDetail("kakuyomu:16817330658027210412")
@@ -106,6 +122,30 @@ export const BookshelfRoute: Story = {
   name: "本棚画面ルート（/）",
   render: () => (
     <RouterProvider initialPath="/">
+      <RouterStateInspector />
+    </RouterProvider>
+  ),
+};
+
+/**
+ * 検索画面ルート（/search）の初期表示ストーリー
+ */
+export const SearchRoute: Story = {
+  name: "検索画面ルート（/search）",
+  render: () => (
+    <RouterProvider initialPath="/search">
+      <RouterStateInspector />
+    </RouterProvider>
+  ),
+};
+
+/**
+ * ランキング画面ルート（/ranking）の初期表示ストーリー
+ */
+export const RankingRoute: Story = {
+  name: "ランキング画面ルート（/ranking）",
+  render: () => (
+    <RouterProvider initialPath="/ranking">
       <RouterStateInspector />
     </RouterProvider>
   ),

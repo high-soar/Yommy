@@ -7,12 +7,14 @@ import { AddNovelDialog } from "./AddNovelDialog";
 export interface BookshelfPageProps {
   novels: NovelSummary[];
   isLoading: boolean;
-  isDialogOpen: boolean;
-  isSubmitting: boolean;
+  isDialogOpen?: boolean;
+  isSubmitting?: boolean;
   dialogError?: string | null;
-  onOpenDialog: () => void;
-  onCloseDialog: () => void;
-  onAddNovel: (url: string) => void | Promise<void>;
+  onOpenDialog?: () => void;
+  onCloseDialog?: () => void;
+  onAddNovel?: (url: string) => void | Promise<void>;
+  onNavigateSearch?: () => void;
+  onNavigateRanking?: () => void;
   onSelectNovel: (novelId: string) => void;
   onResumeNovel: (novelId: string, chapterIndex: number) => void;
 }
@@ -95,11 +97,11 @@ export const BookshelfPage: React.FC<BookshelfPageProps> = ({
       </main>
 
       <AddNovelDialog
-        isOpen={isDialogOpen}
-        isSubmitting={isSubmitting}
+        isOpen={isDialogOpen ?? false}
+        isSubmitting={isSubmitting ?? false}
         error={dialogError}
-        onClose={onCloseDialog}
-        onSubmit={onAddNovel}
+        onClose={onCloseDialog ?? (() => {})}
+        onSubmit={onAddNovel ?? (() => {})}
       />
     </div>
   );
