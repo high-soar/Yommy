@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS novels (
   bookmark_chapter_index INTEGER,
   bookmark_scroll_progress REAL NOT NULL DEFAULT 0,
   is_favorite INTEGER NOT NULL DEFAULT 0,
+  has_new_update INTEGER NOT NULL DEFAULT 0,
+  latest_episode_published_at TEXT,
   last_checked_at TEXT,
   last_read_at TEXT,
   created_at TEXT NOT NULL,
@@ -28,6 +30,10 @@ CREATE TABLE IF NOT EXISTS novels (
 );
 
 CREATE INDEX IF NOT EXISTS idx_novels_last_read_at ON novels(last_read_at DESC);
+CREATE INDEX IF NOT EXISTS idx_novels_has_new_update ON novels(has_new_update DESC);
+CREATE INDEX IF NOT EXISTS idx_novels_latest_published ON novels(latest_episode_published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_novels_created_at ON novels(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_novels_title ON novels(title COLLATE NOCASE ASC);
 
 CREATE TABLE IF NOT EXISTS chapters (
   id TEXT PRIMARY KEY,
@@ -81,6 +87,18 @@ INSERT OR IGNORE INTO reader_settings (
   id, writing_mode, theme, font_family, font_size_px, line_height, page_margin_px, enable_tap_paging, enable_volume_key_paging, updated_at
 ) VALUES (
   1, 'vertical-rl', 'light', 'biz-ud-mincho', 18, 1.8, 20, 1, 0, '2026-01-01T00:00:00.000Z'
+);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+INSERT OR IGNORE INTO app_settings (
+  key, value, updated_at
+) VALUES (
+  'bookshelf_sort_order', 'unread_first', '2026-01-01T00:00:00.000Z'
 );
 `;
 

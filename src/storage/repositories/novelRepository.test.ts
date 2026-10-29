@@ -513,6 +513,18 @@ describe("SqlNovelRepository", () => {
           "kakuyomu:D", // "delta"
         ]);
       });
+
+      it("未知のソート順が渡された場合はフォールバックとして 'unread_first' が適用されること", async () => {
+        const list = await repository.listNovels(
+          "unknown_sort" as unknown as import("../types").BookshelfSortOrder,
+        );
+        expect(list.map((n) => n.id)).toEqual([
+          "kakuyomu:A", // NEW = 1, read
+          "kakuyomu:D", // NEW = 1, unread
+          "kakuyomu:B", // NEW = 0, read
+          "kakuyomu:C", // NEW = 0, unread
+        ]);
+      });
     });
   });
 
