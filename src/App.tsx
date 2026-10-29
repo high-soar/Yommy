@@ -90,6 +90,34 @@ const AppContent: React.FC<AppContentProps> = ({
     >
       <main className="flex-1 min-h-0 w-full overflow-hidden relative">
         {router.route.name === "bookshelf" && <BookshelfContainer />}
+        {router.route.name === "search" && (
+          <div
+            data-testid="search-placeholder"
+            className="h-full flex flex-col items-center justify-center p-8 text-center text-slate-500 dark:text-slate-400"
+          >
+            <span className="text-4xl mb-2" aria-hidden="true">
+              🔍
+            </span>
+            <p className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-1">
+              作品検索
+            </p>
+            <p className="text-sm">検索機能は現在準備中です。</p>
+          </div>
+        )}
+        {router.route.name === "ranking" && (
+          <div
+            data-testid="ranking-placeholder"
+            className="h-full flex flex-col items-center justify-center p-8 text-center text-slate-500 dark:text-slate-400"
+          >
+            <span className="text-4xl mb-2" aria-hidden="true">
+              🏆
+            </span>
+            <p className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-1">
+              ランキング
+            </p>
+            <p className="text-sm">ランキング機能は現在準備中です。</p>
+          </div>
+        )}
         {router.route.name === "novel-detail" && (
           <NovelDetailContainer novelId={router.route.novelId} />
         )}
@@ -117,9 +145,17 @@ const AppContent: React.FC<AppContentProps> = ({
       {!isReader && (
         <BottomTabBar
           activeTab={
-            router.route.name === "settings" ? "settings" : "bookshelf"
+            router.route.name === "settings"
+              ? "settings"
+              : router.route.name === "search"
+                ? "search"
+                : router.route.name === "ranking"
+                  ? "ranking"
+                  : "bookshelf"
           }
           onSelectBookshelf={router.navigateToBookshelf}
+          onSelectSearch={router.navigateToSearch}
+          onSelectRanking={router.navigateToRanking}
           onSelectSettings={router.navigateToSettings}
         />
       )}

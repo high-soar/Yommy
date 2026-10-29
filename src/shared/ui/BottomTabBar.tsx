@@ -22,17 +22,19 @@ interface TabItem {
   label: string;
   icon: string;
   testId: string;
-  onSelect: () => void;
+  onSelect?: () => void;
 }
 
 /**
  * 画面最下部に固定表示される下部タブバー（Presentational）
  *
- * 「本棚」と「設定」の切り替えナビゲーションを提供する。
+ * 「本棚」「検索」「ランキング」「設定」の4タブナビゲーションを提供する。
  */
 export const BottomTabBar: React.FC<BottomTabBarProps> = ({
   activeTab,
   onSelectBookshelf,
+  onSelectSearch,
+  onSelectRanking,
   onSelectSettings,
   className,
 }) => {
@@ -43,6 +45,20 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({
       icon: "📚",
       testId: "tab-bookshelf",
       onSelect: onSelectBookshelf,
+    },
+    {
+      id: "search",
+      label: "検索",
+      icon: "🔍",
+      testId: "tab-search",
+      onSelect: onSelectSearch,
+    },
+    {
+      id: "ranking",
+      label: "ランキング",
+      icon: "🏆",
+      testId: "tab-ranking",
+      onSelect: onSelectRanking,
     },
     {
       id: "settings",
@@ -58,7 +74,7 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({
       data-testid="bottom-tab-bar"
       role="tablist"
       aria-label="メインナビゲーション"
-      className={`h-14 border-t bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 grid grid-cols-2 max-w-4xl mx-auto w-full ${className ?? ""}`.trim()}
+      className={`h-14 border-t bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 grid grid-cols-4 max-w-4xl mx-auto w-full ${className ?? ""}`.trim()}
     >
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;

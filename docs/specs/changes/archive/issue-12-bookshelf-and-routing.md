@@ -20,7 +20,6 @@ related_tests:
   - src/features/bookshelf/hooks/useBookshelf.test.ts
   - src/features/bookshelf/components/BookshelfEmptyState.test.tsx
   - src/features/bookshelf/components/NovelCard.test.tsx
-  - src/features/bookshelf/components/AddNovelDialog.test.tsx
   - src/features/bookshelf/components/BookshelfPage.test.tsx
   - src/features/bookshelf/components/BookshelfContainer.test.tsx
   - test/it/smoke.spec.ts

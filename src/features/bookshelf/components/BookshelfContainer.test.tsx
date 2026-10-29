@@ -64,7 +64,14 @@ function createMockNovelRepo(
 const RouteObserverWrapper: React.FC<{
   onSelectNovel?: (novelId: string) => void;
   onResumeNovel?: (novelId: string, chapterIndex: number) => void;
-}> = ({ onSelectNovel, onResumeNovel }) => {
+  onNavigateSearch?: () => void;
+  onNavigateRanking?: () => void;
+}> = ({
+  onSelectNovel,
+  onResumeNovel,
+  onNavigateSearch,
+  onNavigateRanking,
+}) => {
   const router = useRouter();
 
   return (
@@ -73,6 +80,8 @@ const RouteObserverWrapper: React.FC<{
       <BookshelfContainer
         onSelectNovel={onSelectNovel}
         onResumeNovel={onResumeNovel}
+        onNavigateSearch={onNavigateSearch}
+        onNavigateRanking={onNavigateRanking}
       />
     </div>
   );
@@ -273,6 +282,58 @@ describe("BookshelfContainer", () => {
           "/ranking",
         );
       });
+    });
+
+    it("onNavigateSearch 注入時は「小説を検索する」ボタン押下で注入されたコールバックが呼び出され、ルーター遷移しないこと", async () => {
+      const user = userEvent.setup();
+      const novelRepo = createMockNovelRepo([]);
+      const customSearch = vi.fn();
+
+      render(
+        <ServiceProvider services={{ novelRepository: novelRepo }}>
+          <RouterProvider initialPath="/">
+            <RouteObserverWrapper onNavigateSearch={customSearch} />
+          </RouterProvider>
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("bookshelf-empty")).toBeInTheDocument();
+      });
+
+      const searchBtn = screen.getByTestId("empty-search-button");
+      await user.click(searchBtn);
+
+      expect(customSearch).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+        "/",
+      );
+    });
+
+    it("onNavigateRanking 注入時は「ランキングを見る」ボタン押下で注入されたコールバックが呼び出され、ルーター遷移しないこと", async () => {
+      const user = userEvent.setup();
+      const novelRepo = createMockNovelRepo([]);
+      const customRanking = vi.fn();
+
+      render(
+        <ServiceProvider services={{ novelRepository: novelRepo }}>
+          <RouterProvider initialPath="/">
+            <RouteObserverWrapper onNavigateRanking={customRanking} />
+          </RouterProvider>
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("bookshelf-empty")).toBeInTheDocument();
+      });
+
+      const rankingBtn = screen.getByTestId("empty-ranking-button");
+      await user.click(rankingBtn);
+
+      expect(customRanking).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+        "/",
+      );
     });
   });
 });

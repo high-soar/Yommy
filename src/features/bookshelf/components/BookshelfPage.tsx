@@ -2,17 +2,10 @@ import React from "react";
 import type { NovelSummary } from "../../../storage/types";
 import { BookshelfEmptyState } from "./BookshelfEmptyState";
 import { NovelCard } from "./NovelCard";
-import { AddNovelDialog } from "./AddNovelDialog";
 
 export interface BookshelfPageProps {
   novels: NovelSummary[];
   isLoading: boolean;
-  isDialogOpen?: boolean;
-  isSubmitting?: boolean;
-  dialogError?: string | null;
-  onOpenDialog?: () => void;
-  onCloseDialog?: () => void;
-  onAddNovel?: (url: string) => void | Promise<void>;
   onNavigateSearch?: () => void;
   onNavigateRanking?: () => void;
   onSelectNovel: (novelId: string) => void;
@@ -28,12 +21,8 @@ export interface BookshelfPageProps {
 export const BookshelfPage: React.FC<BookshelfPageProps> = ({
   novels,
   isLoading,
-  isDialogOpen,
-  isSubmitting,
-  dialogError,
-  onOpenDialog,
-  onCloseDialog,
-  onAddNovel,
+  onNavigateSearch,
+  onNavigateRanking,
   onSelectNovel,
   onResumeNovel,
 }) => {
@@ -52,16 +41,6 @@ export const BookshelfPage: React.FC<BookshelfPageProps> = ({
               本棚
             </h1>
           </div>
-
-          <button
-            type="button"
-            data-testid="open-add-novel-button"
-            onClick={onOpenDialog}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs md:text-sm font-medium rounded-lg shadow-xs transition-colors cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-          >
-            <span aria-hidden="true">＋</span>
-            <span>URLから作品を追加</span>
-          </button>
         </div>
       </header>
 
@@ -78,7 +57,10 @@ export const BookshelfPage: React.FC<BookshelfPageProps> = ({
             <p className="text-sm font-medium">作品一覧を読み込み中...</p>
           </div>
         ) : novels.length === 0 ? (
-          <BookshelfEmptyState onOpenAdd={onOpenDialog} />
+          <BookshelfEmptyState
+            onNavigateSearch={onNavigateSearch}
+            onNavigateRanking={onNavigateRanking}
+          />
         ) : (
           <div
             data-testid="novel-list"
@@ -95,14 +77,6 @@ export const BookshelfPage: React.FC<BookshelfPageProps> = ({
           </div>
         )}
       </main>
-
-      <AddNovelDialog
-        isOpen={isDialogOpen ?? false}
-        isSubmitting={isSubmitting ?? false}
-        error={dialogError}
-        onClose={onCloseDialog ?? (() => {})}
-        onSubmit={onAddNovel ?? (() => {})}
-      />
     </div>
   );
 };
