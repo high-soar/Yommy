@@ -63,7 +63,7 @@ describe("SqlNovelRepository", () => {
       expect(created.bookmarkScrollProgress).toBe(0);
       expect(created.isFavorite).toBe(false);
       expect(created.hasNewUpdate).toBe(false);
-      expect(created.latestEpisodePublishedAt).toBe("2026-01-02T10:00:00Z");
+      expect(created.latestEpisodePublishedAt).toBe("2026-01-02T10:00:00.000Z");
       expect(created.lastCheckedAt).toBe(fetchedAt);
       expect(created.lastReadAt).toBeNull();
       expect(created.createdAt).toBe(fetchedAt);
@@ -167,7 +167,7 @@ describe("SqlNovelRepository", () => {
       expect(updatedNovel.updatedAt).toBe(fetchedAt2);
       expect(updatedNovel.hasNewUpdate).toBe(true); // 話数増加により NEW フラグが立つ
       expect(updatedNovel.latestEpisodePublishedAt).toBe(
-        "2026-01-12T10:00:00Z",
+        "2026-01-12T10:00:00.000Z",
       );
 
       // 第1話のキャッシュと既読フラグが維持されていることの確認
@@ -223,6 +223,45 @@ describe("SqlNovelRepository", () => {
         "2026-01-03T00:00:00Z",
       );
       expect(reUpsert2.hasNewUpdate).toBe(true);
+    });
+
+    it("話数は同じだが既存の remote_chapter_id と異なる新規エピソードが含まれる場合に hasNewUpdate = true と判定されること", async () => {
+      // 2話構成（ep1, ep2）で初期登録（hasNewUpdate = false）
+      await repository.upsertNovelWithToc(
+        sampleParsedIndex,
+        "2026-01-01T00:00:00Z",
+      );
+
+      // 話数は同じ2話だが、ep2 が削除され ep3 に置き換わった目次
+      const updatedSameCountWithNewChapter: ParsedNovelIndex = {
+        ...sampleParsedIndex,
+        chapters: [
+          {
+            chapterIndex: 1,
+            remoteChapterId: "ep1",
+            partTitle: "第1章",
+            title: "第1話 はじまり",
+            url: "https://kakuyomu.jp/works/1177354054881162325/episodes/ep1",
+            publishedAt: "2026-01-01T10:00:00Z",
+          },
+          {
+            chapterIndex: 2,
+            remoteChapterId: "ep3", // 新規チャプター ID
+            partTitle: "第1章",
+            title: "第2話 新たなる旅立ち",
+            url: "https://kakuyomu.jp/works/1177354054881162325/episodes/ep3",
+            publishedAt: "2026-01-03T10:00:00Z",
+          },
+        ],
+      };
+
+      const result = await repository.upsertNovelWithToc(
+        updatedSameCountWithNewChapter,
+        "2026-01-02T00:00:00Z",
+      );
+
+      expect(result.totalChapters).toBe(2);
+      expect(result.hasNewUpdate).toBe(true); // 新規チャプター ID 検知により true となること
     });
 
     it("話が途中に挿入されて chapter_index がずれた場合でも remote_chapter_id により本文キャッシュが正しく維持されること", async () => {
@@ -492,6 +531,66 @@ describe("SqlNovelRepository", () => {
           "kakuyomu:C", // 2026-01-02
           "kakuyomu:D", // NULL (末尾)
         ]);
+      });
+
+      it("'latest_published' でタイムゾーン表記揺れ（JSTとUTC）が実時刻順に正規化されてソートされること", async () => {
+        // 作品 X: JST 2026-01-02T05:00:00+09:00 (= UTC 2026-01-01T20:00:00.000Z)
+        await repository.upsertNovelWithToc(
+          {
+            ...sampleParsedIndex,
+            remoteWorkId: "timezone_X",
+            canonicalUrl: "https://kakuyomu.jp/works/timezone_X",
+            title: "Novel X",
+            chapters: [
+              {
+                chapterIndex: 1,
+                remoteChapterId: "x1",
+                partTitle: null,
+                title: "1話",
+                url: "https://kakuyomu.jp/works/timezone_X/1",
+                publishedAt: "2026-01-02T05:00:00+09:00",
+              },
+            ],
+          },
+          "2026-01-01T00:00:00Z",
+        );
+
+        // 作品 Y: UTC 2026-01-01T22:00:00Z (= UTC 2026-01-01T22:00:00.000Z。実時刻としては X より新しい)
+        await repository.upsertNovelWithToc(
+          {
+            ...sampleParsedIndex,
+            remoteWorkId: "timezone_Y",
+            canonicalUrl: "https://kakuyomu.jp/works/timezone_Y",
+            title: "Novel Y",
+            chapters: [
+              {
+                chapterIndex: 1,
+                remoteChapterId: "y1",
+                partTitle: null,
+                title: "1話",
+                url: "https://kakuyomu.jp/works/timezone_Y/1",
+                publishedAt: "2026-01-01T22:00:00Z",
+              },
+            ],
+          },
+          "2026-01-01T00:00:00Z",
+        );
+
+        const novelX = await repository.getNovelById("kakuyomu:timezone_X");
+        const novelY = await repository.getNovelById("kakuyomu:timezone_Y");
+        expect(novelX?.latestEpisodePublishedAt).toBe(
+          "2026-01-01T20:00:00.000Z",
+        );
+        expect(novelY?.latestEpisodePublishedAt).toBe(
+          "2026-01-01T22:00:00.000Z",
+        );
+
+        const list = await repository.listNovels("latest_published");
+        const ids = list.map((n) => n.id);
+        const indexY = ids.indexOf("kakuyomu:timezone_Y");
+        const indexX = ids.indexOf("kakuyomu:timezone_X");
+        // 実時刻で新しい Y の方が X より先（小さいインデックス）に来ること
+        expect(indexY).toBeLessThan(indexX);
       });
 
       it("'created_at' で作品登録日降順となること", async () => {
