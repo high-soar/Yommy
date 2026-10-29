@@ -3,8 +3,8 @@ type: spec-delta
 title: "下部4タブ化とカクヨム検索・ランキング画面新設（URL登録廃止・検索/ランキングからの登録への一本化）の設計"
 description: "Issue #79 に対する差分仕様、影響する全体正本、テスト計画、および実装Sub-issue分割計画。"
 issue: "#79"
-status: "Review (#79)"
-updated: "2026-10-29"
+status: "Completed (Archived)"
+updated: "2026-10-30"
 tags:
   - delta
   - four-tabs
@@ -38,6 +38,7 @@ related_tests:
   - src/features/bookshelf/components/BookshelfEmptyState.test.tsx
   - src/App.test.tsx
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
+  - test/it/scenarios/scn02-search-ranking-discovery.spec.ts
   - test/it/smoke.spec.ts
 ---
 
