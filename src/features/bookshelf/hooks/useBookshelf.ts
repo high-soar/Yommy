@@ -51,16 +51,8 @@ function isUpdateCheckTarget(novel: NovelSummary, now: number): boolean {
   return now - lastChecked >= UPDATE_CHECK_THRESHOLD_MS;
 }
 
-function sleep(ms: number, isMountedRef: { current: boolean }): Promise<void> {
-  return new Promise((resolve) => {
-    if (ms <= 0 || !isMountedRef.current) {
-      resolve();
-      return;
-    }
-    setTimeout(() => {
-      resolve();
-    }, ms);
-  });
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -123,12 +115,10 @@ export function useBookshelf(
 
       try {
         for (let i = 0; i < targets.length; i++) {
-          if (!isMountedRef.current) break;
-
           if (i > 0 && intervalMs > 0) {
-            await sleep(intervalMs, isMountedRef);
-            if (!isMountedRef.current) break;
+            await sleep(intervalMs);
           }
+          if (!isMountedRef.current) break;
 
           const target = targets[i];
           try {
@@ -187,10 +177,6 @@ export function useBookshelf(
             isUpdateCheckTarget(novel, Date.now()),
           );
 
-      if (targets.length === 0) {
-        return;
-      }
-
       await runSequentialUpdateCheck(targets);
     },
     [runSequentialUpdateCheck],
@@ -214,13 +200,12 @@ export function useBookshelf(
           ? savedOrder
           : DEFAULT_SORT_ORDER;
 
+        // 作品一覧を取得
+        const list = await novelRepository.listNovels(resolvedOrder);
+
         if (cancelled) return;
         setSortOrderState(resolvedOrder);
         sortOrderRef.current = resolvedOrder;
-
-        // 作品一覧を取得
-        const list = await novelRepository.listNovels(resolvedOrder);
-        if (cancelled) return;
         setNovels(list);
         novelsRef.current = list;
         setIsLoading(false);

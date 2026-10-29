@@ -375,6 +375,21 @@ describe("useBookshelf", () => {
         "2026-01-02T00:00:00Z",
       );
 
+      // 他の作品も登録（三項演算子の false 分岐カバー）
+      await repo.upsertNovelWithToc(
+        {
+          siteType: "kakuyomu",
+          remoteWorkId: "2",
+          canonicalUrl: "https://kakuyomu.jp/works/2",
+          title: "別作品",
+          author: "作者2",
+          synopsis: "あらすじ",
+          chapters: [],
+          nextTocPageUrl: null,
+        },
+        new Date().toISOString(),
+      );
+
       const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
         wrapper: createWrapper({ novelRepository: repo }),
       });
@@ -771,6 +786,76 @@ describe("useBookshelf", () => {
         resolveHttp?.();
       });
     });
+
+    it("更新チェックのウェイト待機中（sleep）にアンマウントされた場合、安全に中断されること", async () => {
+      const db = await resetTestDb();
+      const repo = new SqlNovelRepository(db);
+
+      await repo.upsertNovelWithToc(
+        {
+          siteType: "kakuyomu",
+          remoteWorkId: "1",
+          canonicalUrl: "https://kakuyomu.jp/works/1",
+          title: "作品1",
+          author: "作者1",
+          synopsis: "あらすじ1",
+          chapters: [],
+          nextTocPageUrl: null,
+        },
+        "2026-01-01T00:00:00Z",
+      );
+      await repo.upsertNovelWithToc(
+        {
+          siteType: "kakuyomu",
+          remoteWorkId: "2",
+          canonicalUrl: "https://kakuyomu.jp/works/2",
+          title: "作品2",
+          author: "作者2",
+          synopsis: "あらすじ2",
+          chapters: [],
+          nextTocPageUrl: null,
+        },
+        "2026-01-01T00:00:00Z",
+      );
+      await db.execute("UPDATE novels SET last_checked_at = NULL;");
+
+      const mockHttp = new MockHttpClient();
+      let callCount = 0;
+      mockHttp.setResponse(
+        /^https:\/\/kakuyomu\.jp\/works\/\d+$/,
+        (options) => {
+          callCount++;
+          return {
+            status: 200,
+            url: options.url,
+            headers: {},
+            html: workIndexHtml,
+          };
+        },
+      );
+
+      // 500ms ウェイト
+      const { unmount } = renderHook(() => useBookshelf({ intervalMs: 500 }), {
+        wrapper: createWrapper({
+          novelRepository: repo,
+          httpClient: mockHttp,
+        }),
+      });
+
+      // 1作品目が取得されるのを待機
+      await waitFor(() => {
+        expect(callCount).toBe(1);
+      });
+
+      // 作品2取得前の sleep 中にアンマウント
+      unmount();
+
+      // 待機時間を経過させる
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
+      // アンマウントにより2作品目は取得されず中断されたこと
+      expect(callCount).toBe(1);
+    });
   });
 
   describe("手動一括更新チェック (checkUpdates)", () => {
@@ -911,6 +996,86 @@ describe("useBookshelf", () => {
       });
 
       expect(result.current.isCheckingUpdates).toBe(false);
+    });
+
+    it("checkUpdates(false) 呼び出しで1時間経過作品のみが更新対象となること", async () => {
+      const db = await resetTestDb();
+      const repo = new SqlNovelRepository(db);
+
+      const now = Date.now();
+      vi.setSystemTime(now);
+
+      const twoHoursAgo = new Date(now - 2 * 60 * 60 * 1000).toISOString();
+      const tenMinutesAgo = new Date(now - 10 * 60 * 1000).toISOString();
+
+      await repo.upsertNovelWithToc(
+        {
+          siteType: "kakuyomu",
+          remoteWorkId: "1",
+          canonicalUrl: "https://kakuyomu.jp/works/1",
+          title: "作品1(2時間前)",
+          author: "作者1",
+          synopsis: "あらすじ1",
+          chapters: [],
+          nextTocPageUrl: null,
+        },
+        twoHoursAgo,
+      );
+      await repo.upsertNovelWithToc(
+        {
+          siteType: "kakuyomu",
+          remoteWorkId: "2",
+          canonicalUrl: "https://kakuyomu.jp/works/2",
+          title: "作品2(10分前)",
+          author: "作者2",
+          synopsis: "あらすじ2",
+          chapters: [],
+          nextTocPageUrl: null,
+        },
+        tenMinutesAgo,
+      );
+
+      const mockHttp = new MockHttpClient();
+      const requestedUrls: string[] = [];
+      mockHttp.setResponse(
+        /^https:\/\/kakuyomu\.jp\/works\/\d+$/,
+        (options) => {
+          requestedUrls.push(options.url);
+          return {
+            status: 200,
+            url: options.url,
+            headers: {},
+            html: workIndexHtml,
+          };
+        },
+      );
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          novelRepository: repo,
+          httpClient: mockHttp,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // 自動チェック完了を待機
+      await waitFor(() => {
+        expect(result.current.isCheckingUpdates).toBe(false);
+      });
+      requestedUrls.length = 0;
+
+      // checkUpdates(false) を実行
+      await act(async () => {
+        await result.current.checkUpdates(false);
+      });
+
+      // 作品1は前回の自動チェックで更新されたため、今回は1時間以内となり両方スキップされる
+      expect(requestedUrls).toHaveLength(0);
+
+      vi.useRealTimers();
     });
 
     it("作品が0件のときに checkUpdates を呼んでも安全に終了すること", async () => {
