@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS novels (
   bookmark_chapter_index INTEGER,
   bookmark_scroll_progress REAL NOT NULL DEFAULT 0,
   is_favorite INTEGER NOT NULL DEFAULT 0,
+  has_new_update INTEGER NOT NULL DEFAULT 0,
+  latest_episode_published_at TEXT,
   last_checked_at TEXT,
   last_read_at TEXT,
   created_at TEXT NOT NULL,
@@ -28,6 +30,10 @@ CREATE TABLE IF NOT EXISTS novels (
 );
 
 CREATE INDEX IF NOT EXISTS idx_novels_last_read_at ON novels(last_read_at DESC);
+CREATE INDEX IF NOT EXISTS idx_novels_has_new_update ON novels(has_new_update DESC);
+CREATE INDEX IF NOT EXISTS idx_novels_latest_published ON novels(latest_episode_published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_novels_created_at ON novels(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_novels_title ON novels(title COLLATE NOCASE ASC);
 
 CREATE TABLE IF NOT EXISTS chapters (
   id TEXT PRIMARY KEY,
@@ -82,19 +88,66 @@ INSERT OR IGNORE INTO reader_settings (
 ) VALUES (
   1, 'vertical-rl', 'light', 'biz-ud-mincho', 18, 1.8, 20, 1, 0, '2026-01-01T00:00:00.000Z'
 );
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+INSERT OR IGNORE INTO app_settings (
+  key, value, updated_at
+) VALUES (
+  'bookshelf_sort_order', 'unread_first', '2026-01-01T00:00:00.000Z'
+);
 `;
 
 /**
- * データベースアダプターに対してスキーマ初期化 DDL を実行する
+ * データベースアダプターに対してスキーマ初期化 DDL およびマイグレーションを実行する
+ * （docs/specs/db-schema.md §3.6 に準拠）
  */
 export async function initializeDatabaseSchema(
   db: DatabaseAdapter,
 ): Promise<void> {
+  // 既存データベース（v0.2 以前）が存在する場合、DDL 実行時の新インデックス作成失敗を防ぐため先にカラム移行を実行
+  await migrateDatabaseSchema(db);
+
   const statements = DDL_STATEMENTS.split(";")
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
 
   for (const statement of statements) {
     await db.execute(statement);
+  }
+}
+
+interface ColumnInfo {
+  name: string;
+}
+
+/**
+ * 既存テーブルに対するカラム追加などのスキーマ移行処理
+ */
+export async function migrateDatabaseSchema(
+  db: DatabaseAdapter,
+): Promise<void> {
+  const novelColumns = await db.query<ColumnInfo>("PRAGMA table_info(novels);");
+  if (novelColumns.length === 0) {
+    // テーブルが存在しない（新規 DB）場合はスキップ
+    return;
+  }
+
+  const columnNames = new Set(novelColumns.map((c) => c.name));
+
+  if (!columnNames.has("has_new_update")) {
+    await db.execute(
+      "ALTER TABLE novels ADD COLUMN has_new_update INTEGER NOT NULL DEFAULT 0;",
+    );
+  }
+
+  if (!columnNames.has("latest_episode_published_at")) {
+    await db.execute(
+      "ALTER TABLE novels ADD COLUMN latest_episode_published_at TEXT;",
+    );
   }
 }

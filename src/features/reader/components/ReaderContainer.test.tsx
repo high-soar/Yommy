@@ -120,6 +120,8 @@ function createMockNovelRepo(initialNovel: NovelRecord | null = sampleNovel): {
       currentNovel ?? ({} as unknown as NovelRecord),
     updateBookmark: updateBookmarkSpy,
     deleteNovel: async () => {},
+    clearNewUpdate: async () => {},
+    updateLastCheckedAt: async () => {},
   };
   return { repo, updateBookmarkSpy };
 }

@@ -70,6 +70,8 @@ function createMockNovelRepository(
     deleteNovel: async (id: string) => {
       novels = novels.filter((n) => n.id !== id);
     },
+    clearNewUpdate: async () => {},
+    updateLastCheckedAt: async () => {},
   };
 }
 

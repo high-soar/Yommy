@@ -53,6 +53,8 @@ function createMockNovelRepo(
     deleteNovel: async (id: string) => {
       list = list.filter((n) => n.id !== id);
     },
+    clearNewUpdate: async () => {},
+    updateLastCheckedAt: async () => {},
   };
 }
 

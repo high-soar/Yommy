@@ -3,7 +3,7 @@ type: spec-db-schema
 title: ローカル DB スキーマ定義（App 全体正本）
 description: SQLite（novels, chapters, download_queue, reader_settings, app_settings）のER図、テーブル構造、およびDDL定義の正本。
 status: "Review (#81)"
-updated: "2026-10-29"
+updated: "2026-10-30"
 tags: [database, sqlite, schema, storage, settings, prefetch, cache-rules]
 related_specs:
   - docs/specs/requirements.md
@@ -121,7 +121,7 @@ erDiagram
 作品のメタデータ、現在のしおり位置、および本棚画面（`SCR-01`）を高速描画するためのエピソード数・キャッシュ容量集計値を保持します。
 
 - **`has_new_update`**: 目次更新（自動更新チェックまたは手動更新）時に話数増加・新規エピソード追加が検知された場合に `1`（NEWバッジ表示）が記録され、作品閲覧時（`SCR-02` または `SCR-03` 表示時）に `0` へ解除されます。
-- **`latest_episode_published_at`**: `upsertNovelWithToc` 実行時に `index.chapters` 内の各エピソードのうち有効な `publishedAt` の最大値（最新公開/更新日時）を算出して保持します。全エピソード未設定時は `NULL` となります。本カラムにより、ソート順「作品更新日順（`latest_published`）」において `chapters` テーブルとの結合なしで高速にソートクエリを実行可能です。
+- **`latest_episode_published_at`**: `upsertNovelWithToc` 実行時に `index.chapters` 内の各エピソードのうち有効な `publishedAt` の最大値（最新公開/更新日時）を算出し、ISO 8601 UTC 文字列（例: `2026-01-01T20:00:00.000Z`）に正規化して保持します（サイトごとのタイムゾーン表記揺れによる文字列ソート誤差を防止）。全エピソード未設定時は `NULL` となります。本カラムにより、ソート順「作品更新日順（`latest_published`）」において `chapters` テーブルとの結合なしで高速にソートクエリを実行可能です。
 
 ```sql
 CREATE TABLE IF NOT EXISTS novels (
@@ -254,3 +254,10 @@ INSERT OR IGNORE INTO app_settings (
 | `latest_published` | 作品更新日順                         | `CASE WHEN novels.latest_episode_published_at IS NOT NULL THEN 0 ELSE 1 END, novels.latest_episode_published_at DESC, novels.updated_at DESC` |
 | `created_at`       | 登録日順                             | `novels.created_at DESC`                                                                                                                      |
 | `title`            | タイトル順                           | `novels.title COLLATE NOCASE ASC`                                                                                                             |
+
+---
+
+### 3.6 スキーママイグレーション方針（v0.2 からの移行）
+
+既存データベース（v0.2 以前）に対して `initializeDatabaseSchema` が呼び出された場合、`PRAGMA table_info(novels)` を参照し、`has_new_update` および `latest_episode_published_at` カラムが存在しない場合に `ALTER TABLE novels ADD COLUMN ...` を実行して既存データを保持したままカラムを追加します。その後、新規インデックスおよび `app_settings` テーブルを作成します。
+これにより、v0.2 からのバージョンアップ時でも既存の作品データ・キャッシュ・しおり位置を完全に維持したまま安全にスキーマ移行が完了します。
