@@ -9,6 +9,8 @@ import { resetTestDb } from "./storage/adapter/inMemoryDb";
 
 const {
   Default,
+  SearchRoute,
+  RankingRoute,
   SettingsRoute,
   NovelDetailRoute,
   ReaderRoute,
@@ -23,7 +25,7 @@ describe("App コンポーネント", () => {
   });
 
   describe("Storybook ストーリーのレンダリング検証 (composeStories)", () => {
-    it("Default ストーリー: 全画面シェル内に本棚画面と下部タブバー（本棚アクティブ）を描画する", async () => {
+    it("Default ストーリー: 全画面シェル内に本棚画面と4タブバー（本棚アクティブ）を描画する", async () => {
       render(<Default />);
 
       const appRoot = screen.getByTestId("app-root");
@@ -41,13 +43,77 @@ describe("App コンポーネント", () => {
         "aria-selected",
         "true",
       );
+      expect(screen.getByTestId("tab-search")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+      expect(screen.getByTestId("tab-ranking")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
       expect(screen.getByTestId("tab-settings")).toHaveAttribute(
         "aria-selected",
         "false",
       );
     });
 
-    it("SettingsRoute ストーリー: 設定画面と下部タブバー（設定アクティブ）を描画する", async () => {
+    it("SearchRoute ストーリー: 検索画面と下部4タブバー（検索アクティブ）を描画する", async () => {
+      render(<SearchRoute />);
+
+      expect(screen.getByTestId("app-root")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByTestId("search-placeholder")).toBeInTheDocument();
+      });
+
+      const tabBar = screen.getByTestId("bottom-tab-bar");
+      expect(tabBar).toBeInTheDocument();
+      expect(screen.getByTestId("tab-search")).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      expect(screen.getByTestId("tab-bookshelf")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+      expect(screen.getByTestId("tab-ranking")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+      expect(screen.getByTestId("tab-settings")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+    });
+
+    it("RankingRoute ストーリー: ランキング画面と下部4タブバー（ランキングアクティブ）を描画する", async () => {
+      render(<RankingRoute />);
+
+      expect(screen.getByTestId("app-root")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByTestId("ranking-placeholder")).toBeInTheDocument();
+      });
+
+      const tabBar = screen.getByTestId("bottom-tab-bar");
+      expect(tabBar).toBeInTheDocument();
+      expect(screen.getByTestId("tab-ranking")).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      expect(screen.getByTestId("tab-bookshelf")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+      expect(screen.getByTestId("tab-search")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+      expect(screen.getByTestId("tab-settings")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+    });
+
+    it("SettingsRoute ストーリー: 設定画面と下部4タブバー（設定アクティブ）を描画する", async () => {
       render(<SettingsRoute />);
 
       expect(screen.getByTestId("app-root")).toBeInTheDocument();
@@ -68,9 +134,17 @@ describe("App コンポーネント", () => {
         "aria-selected",
         "false",
       );
+      expect(screen.getByTestId("tab-search")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+      expect(screen.getByTestId("tab-ranking")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
     });
 
-    it("NovelDetailRoute ストーリー: 作品詳細・目次画面と下部タブバー（本棚アクティブ）を描画する", async () => {
+    it("NovelDetailRoute ストーリー: 作品詳細・目次画面と下部4タブバー（本棚アクティブ）を描画する", async () => {
       render(<NovelDetailRoute />);
 
       expect(screen.getByTestId("app-root")).toBeInTheDocument();
@@ -127,6 +201,38 @@ describe("App コンポーネント", () => {
   });
 
   describe("ルーティングと下部タブナビゲーション操作の検証", () => {
+    it("下部タブバーの「検索」をクリックすると検索画面へ遷移する (TR-01)", async () => {
+      const user = userEvent.setup();
+      render(<App initialPath="/" />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+      });
+
+      const searchTab = screen.getByTestId("tab-search");
+      await user.click(searchTab);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("search-placeholder")).toBeInTheDocument();
+      });
+    });
+
+    it("下部タブバーの「ランキング」をクリックするとランキング画面へ遷移する (TR-01)", async () => {
+      const user = userEvent.setup();
+      render(<App initialPath="/" />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+      });
+
+      const rankingTab = screen.getByTestId("tab-ranking");
+      await user.click(rankingTab);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("ranking-placeholder")).toBeInTheDocument();
+      });
+    });
+
     it("下部タブバーの「設定」をクリックすると設定画面へ遷移する (TR-01)", async () => {
       const user = userEvent.setup();
       render(<App initialPath="/" />);
@@ -140,6 +246,38 @@ describe("App コンポーネント", () => {
 
       await waitFor(() => {
         expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+      });
+    });
+
+    it("検索画面で下部タブバーの「本棚」をクリックすると本棚画面へ遷移する (TR-01b)", async () => {
+      const user = userEvent.setup();
+      render(<App initialPath="/search" />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("search-placeholder")).toBeInTheDocument();
+      });
+
+      const bookshelfTab = screen.getByTestId("tab-bookshelf");
+      await user.click(bookshelfTab);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+      });
+    });
+
+    it("ランキング画面で下部タブバーの「本棚」をクリックすると本棚画面へ遷移する (TR-01b)", async () => {
+      const user = userEvent.setup();
+      render(<App initialPath="/ranking" />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("ranking-placeholder")).toBeInTheDocument();
+      });
+
+      const bookshelfTab = screen.getByTestId("tab-bookshelf");
+      await user.click(bookshelfTab);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
       });
     });
 
@@ -235,6 +373,66 @@ describe("App コンポーネント", () => {
       });
     });
 
+    it("リーダー画面で下部オーバーレイの「検索」タブをクリックすると検索画面へ遷移する", async () => {
+      const user = userEvent.setup();
+      render(
+        <App initialPath="/novels/kakuyomu:16817330658027210412/chapters/1" />,
+      );
+
+      await waitFor(
+        () => {
+          expect(
+            screen.getByTestId("reader-bottom-touch-zone"),
+          ).toBeInTheDocument();
+        },
+        { timeout: 3000 },
+      );
+
+      await user.click(screen.getByTestId("reader-bottom-touch-zone"));
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("reader-bottom-tab-search"),
+        ).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId("reader-bottom-tab-search"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("search-placeholder")).toBeInTheDocument();
+      });
+    });
+
+    it("リーダー画面で下部オーバーレイの「ランキング」タブをクリックするとランキング画面へ遷移する", async () => {
+      const user = userEvent.setup();
+      render(
+        <App initialPath="/novels/kakuyomu:16817330658027210412/chapters/1" />,
+      );
+
+      await waitFor(
+        () => {
+          expect(
+            screen.getByTestId("reader-bottom-touch-zone"),
+          ).toBeInTheDocument();
+        },
+        { timeout: 3000 },
+      );
+
+      await user.click(screen.getByTestId("reader-bottom-touch-zone"));
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("reader-bottom-tab-ranking"),
+        ).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId("reader-bottom-tab-ranking"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("ranking-placeholder")).toBeInTheDocument();
+      });
+    });
+
     it("リーダー画面で OS 戻る操作（popstate）を行うと作品詳細画面へ戻る", async () => {
       render(
         <App initialPath="/novels/kakuyomu:16817330658027210412/chapters/1" />,
@@ -326,12 +524,46 @@ describe("App コンポーネント", () => {
       });
     });
 
-    it("設定画面 (SCR-05) で戻るボタン押下時、直前画面（未指定時は本棚）へ復帰すること (AC-AB-04, TR-12)", async () => {
+    it("設定画面 (SCR-05) で戻るボタン押下時、ホーム本棚画面 (SCR-01) へ復帰すること (AC-AB-04, TR-12)", async () => {
       const mockAppBridge = new MockAppBridge();
       render(<App initialPath="/settings" appBridge={mockAppBridge} />);
 
       await waitFor(() => {
         expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+      });
+
+      await act(async () => {
+        await mockAppBridge.triggerBackButton();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+      });
+    });
+
+    it("検索画面 (SCR-06) で戻るボタン押下時、ホーム本棚画面 (SCR-01) へ復帰すること (TR-12)", async () => {
+      const mockAppBridge = new MockAppBridge();
+      render(<App initialPath="/search" appBridge={mockAppBridge} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("search-placeholder")).toBeInTheDocument();
+      });
+
+      await act(async () => {
+        await mockAppBridge.triggerBackButton();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+      });
+    });
+
+    it("ランキング画面 (SCR-07) で戻るボタン押下時、ホーム本棚画面 (SCR-01) へ復帰すること (TR-12)", async () => {
+      const mockAppBridge = new MockAppBridge();
+      render(<App initialPath="/ranking" appBridge={mockAppBridge} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("ranking-placeholder")).toBeInTheDocument();
       });
 
       await act(async () => {
@@ -358,12 +590,12 @@ describe("App コンポーネント", () => {
         await mockAppBridge.triggerBackButton();
       });
 
+      expect(mockAppBridge.exitAppCalled).toBe(false);
       const toast = screen.getByTestId("exit-app-toast");
       expect(toast).toBeInTheDocument();
       expect(toast).toHaveTextContent("もう一度バックボタンを押すと終了します");
-      expect(mockAppBridge.exitAppCalled).toBe(false);
 
-      // 2000ms 経過後、トーストが自動消去される
+      // 2000ms 経過でトーストが消えること
       await waitFor(
         () => {
           expect(
@@ -374,7 +606,7 @@ describe("App コンポーネント", () => {
       );
     });
 
-    it("本棚画面 (SCR-01) で2秒以内に連続2回戻るボタンを押下した際、exitApp が呼び出されること (AC-AB-06, TR-13)", async () => {
+    it("本棚画面 (SCR-01) で2秒以内に連続2回戻るボタンを押下した場合は exitApp が呼ばれること (AC-AB-06, TR-13)", async () => {
       const mockAppBridge = new MockAppBridge();
       render(<App initialPath="/" appBridge={mockAppBridge} />);
 
@@ -382,19 +614,16 @@ describe("App コンポーネント", () => {
         expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
       });
 
-      // 1回目の戻るボタン押下
+      // 1回目の押下
       await act(async () => {
         await mockAppBridge.triggerBackButton();
       });
-
-      expect(screen.getByTestId("exit-app-toast")).toBeInTheDocument();
       expect(mockAppBridge.exitAppCalled).toBe(false);
 
       // 2秒以内の2回目押下
       await act(async () => {
         await mockAppBridge.triggerBackButton();
       });
-
       expect(mockAppBridge.exitAppCalled).toBe(true);
       expect(screen.queryByTestId("exit-app-toast")).not.toBeInTheDocument();
     });

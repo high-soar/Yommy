@@ -11,12 +11,14 @@ const {
   FirstChapter,
   LastChapter,
   Loading,
+  SearchTabActive,
+  RankingTabActive,
   SettingsTabActive,
 } = composeStories(stories);
 
 describe("ReaderBottomOverlay", () => {
   describe("Storybook Stories 検証 (composeStories)", () => {
-    it("Default ストーリーでオーバーレイが展開表示され、第2話インジケーターと各要素が表示されること", () => {
+    it("Default ストーリーでオーバーレイが展開表示され、第2話インジケーターと4タブが表示されること", () => {
       render(<Default />);
       const overlay = screen.getByTestId("reader-bottom-overlay");
       expect(overlay).toBeInTheDocument();
@@ -32,12 +34,27 @@ describe("ReaderBottomOverlay", () => {
       expect(screen.getByTestId("reader-prev-chapter")).not.toBeDisabled();
       expect(screen.getByTestId("reader-next-chapter")).not.toBeDisabled();
 
-      // 下部タブ
+      // 下部タブ (4タブ)
+      const tabs = screen.getByTestId("reader-bottom-tabs");
+      expect(tabs).toHaveClass("grid-cols-4");
+
       const bookshelfTab = screen.getByTestId("reader-bottom-tab-bookshelf");
+      const searchTab = screen.getByTestId("reader-bottom-tab-search");
+      const rankingTab = screen.getByTestId("reader-bottom-tab-ranking");
       const settingsTab = screen.getByTestId("reader-bottom-tab-settings");
+
       expect(bookshelfTab).toBeInTheDocument();
       expect(bookshelfTab).toHaveAttribute("role", "tab");
       expect(bookshelfTab).toHaveAttribute("aria-selected", "true");
+
+      expect(searchTab).toBeInTheDocument();
+      expect(searchTab).toHaveAttribute("role", "tab");
+      expect(searchTab).toHaveAttribute("aria-selected", "false");
+
+      expect(rankingTab).toBeInTheDocument();
+      expect(rankingTab).toHaveAttribute("role", "tab");
+      expect(rankingTab).toHaveAttribute("aria-selected", "false");
+
       expect(settingsTab).toBeInTheDocument();
       expect(settingsTab).toHaveAttribute("role", "tab");
       expect(settingsTab).toHaveAttribute("aria-selected", "false");
@@ -75,6 +92,46 @@ describe("ReaderBottomOverlay", () => {
       render(<Loading />);
       expect(screen.getByTestId("reader-prev-chapter")).toBeDisabled();
       expect(screen.getByTestId("reader-next-chapter")).toBeDisabled();
+    });
+
+    it("SearchTabActive ストーリーで検索タブが aria-selected=true となること", () => {
+      render(<SearchTabActive />);
+      expect(screen.getByTestId("reader-bottom-tab-search")).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      expect(screen.getByTestId("reader-bottom-tab-bookshelf")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+      expect(screen.getByTestId("reader-bottom-tab-ranking")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+      expect(screen.getByTestId("reader-bottom-tab-settings")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+    });
+
+    it("RankingTabActive ストーリーでランキングタブが aria-selected=true となること", () => {
+      render(<RankingTabActive />);
+      expect(screen.getByTestId("reader-bottom-tab-ranking")).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      expect(screen.getByTestId("reader-bottom-tab-bookshelf")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+      expect(screen.getByTestId("reader-bottom-tab-search")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+      expect(screen.getByTestId("reader-bottom-tab-settings")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
     });
 
     it("SettingsTabActive ストーリーで設定タブが aria-selected=true となること", () => {
@@ -138,6 +195,44 @@ describe("ReaderBottomOverlay", () => {
 
       await user.click(screen.getByTestId("reader-bottom-tab-bookshelf"));
       expect(onSelectTab).toHaveBeenCalledWith("bookshelf");
+    });
+
+    it("「検索」タブボタン押下で onSelectTab('search') が呼び出されること", async () => {
+      const user = userEvent.setup();
+      const onSelectTab = vi.fn();
+      render(
+        <ReaderBottomOverlay
+          isOpen={true}
+          chapterIndex={2}
+          totalChapters={5}
+          activeTab="bookshelf"
+          onPrevChapter={vi.fn()}
+          onNextChapter={vi.fn()}
+          onSelectTab={onSelectTab}
+        />,
+      );
+
+      await user.click(screen.getByTestId("reader-bottom-tab-search"));
+      expect(onSelectTab).toHaveBeenCalledWith("search");
+    });
+
+    it("「ランキング」タブボタン押下で onSelectTab('ranking') が呼び出されること", async () => {
+      const user = userEvent.setup();
+      const onSelectTab = vi.fn();
+      render(
+        <ReaderBottomOverlay
+          isOpen={true}
+          chapterIndex={2}
+          totalChapters={5}
+          activeTab="bookshelf"
+          onPrevChapter={vi.fn()}
+          onNextChapter={vi.fn()}
+          onSelectTab={onSelectTab}
+        />,
+      );
+
+      await user.click(screen.getByTestId("reader-bottom-tab-ranking"));
+      expect(onSelectTab).toHaveBeenCalledWith("ranking");
     });
 
     it("「設定」タブボタン押下で onSelectTab('settings') が呼び出されること", async () => {

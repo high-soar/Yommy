@@ -6,6 +6,8 @@ import { ReaderPage } from "./ReaderPage";
 /**
  * 小説リーダーコンテナ（ReaderContainer）のプロパティ定義
  */
+import type { BottomTab } from "../../../shared/ui/BottomTabBar";
+
 export interface ReaderContainerProps {
   /** 対象作品 ID（省略時は登録作品一覧の先頭） */
   novelId?: string;
@@ -69,9 +71,9 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
     };
   }, [flushBookmark]);
 
-  // 下部タブ選択（本棚 / 設定）および画面遷移前のしおり保存（AC-RD-08, TR-01）
+  // 下部タブ選択（本棚 / 検索 / ランキング / 設定）および画面遷移前のしおり保存（AC-RD-08, TR-01）
   const handleSelectTab = useCallback(
-    async (tab: "bookshelf" | "settings") => {
+    async (tab: BottomTab) => {
       await flushBookmark();
       if (tab === "bookshelf") {
         if (onBackToBookshelf) {
@@ -79,6 +81,10 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
         } else {
           router.navigateToBookshelf();
         }
+      } else if (tab === "search") {
+        router.navigateToSearch();
+      } else if (tab === "ranking") {
+        router.navigateToRanking();
       } else if (tab === "settings") {
         if (onNavigateSettings) {
           onNavigateSettings();

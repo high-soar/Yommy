@@ -93,12 +93,19 @@ describe("BookshelfContainer", () => {
       expect(screen.getAllByTestId("novel-card")).toHaveLength(2);
     });
 
-    it("Empty ストーリーで空状態コンポーネントが表示されること (AC-BS-01)", async () => {
+    it("Empty ストーリーで空状態コンポーネントが表示され、検索・ランキング誘導ボタンが含まれること (AC-BS-01, TR-15)", async () => {
       render(<Empty />);
       await waitFor(() => {
         expect(screen.getByTestId("bookshelf-empty")).toBeInTheDocument();
       });
-      expect(screen.getByTestId("empty-add-novel-button")).toBeInTheDocument();
+      expect(screen.getByTestId("empty-search-button")).toBeInTheDocument();
+      expect(screen.getByTestId("empty-ranking-button")).toBeInTheDocument();
+      expect(
+        screen.queryByTestId("open-add-novel-button"),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("empty-add-novel-button"),
+      ).not.toBeInTheDocument();
     });
 
     it("WithCustomCallbacks ストーリーで作品カードが表示されること", async () => {
@@ -215,15 +222,15 @@ describe("BookshelfContainer", () => {
     });
   });
 
-  describe("ダイアログ開閉および作品追加アクションの統合検証", () => {
-    it("作品追加ボタン押下でダイアログが開き、キャンセルでダイアログが閉じること", async () => {
+  describe("空状態からの検索・ランキング誘導ナビゲーション検証（TR-15, AC-BS-01）", () => {
+    it("空状態で「小説を検索する」ボタン押下時に router.navigateToSearch が実行され /search へ遷移すること (TR-15)", async () => {
       const user = userEvent.setup();
       const novelRepo = createMockNovelRepo([]);
 
       render(
         <ServiceProvider services={{ novelRepository: novelRepo }}>
           <RouterProvider initialPath="/">
-            <BookshelfContainer />
+            <RouteObserverWrapper />
           </RouterProvider>
         </ServiceProvider>,
       );
@@ -232,23 +239,24 @@ describe("BookshelfContainer", () => {
         expect(screen.getByTestId("bookshelf-empty")).toBeInTheDocument();
       });
 
-      // 追加ボタン押下
-      await user.click(screen.getByTestId("open-add-novel-button"));
-      expect(screen.getByTestId("add-novel-dialog")).toBeInTheDocument();
+      const searchBtn = screen.getByTestId("empty-search-button");
+      await user.click(searchBtn);
 
-      // キャンセルボタン押下
-      await user.click(screen.getByTestId("add-novel-cancel-button"));
-      expect(screen.queryByTestId("add-novel-dialog")).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+          "/search",
+        );
+      });
     });
 
-    it("作品追加ダイアログからURLを送信して作品が登録されること (AC-BS-02)", async () => {
+    it("空状態で「ランキングを見る」ボタン押下時に router.navigateToRanking が実行され /ranking へ遷移すること (TR-15)", async () => {
       const user = userEvent.setup();
       const novelRepo = createMockNovelRepo([]);
 
       render(
         <ServiceProvider services={{ novelRepository: novelRepo }}>
           <RouterProvider initialPath="/">
-            <BookshelfContainer />
+            <RouteObserverWrapper />
           </RouterProvider>
         </ServiceProvider>,
       );
@@ -257,23 +265,13 @@ describe("BookshelfContainer", () => {
         expect(screen.getByTestId("bookshelf-empty")).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId("empty-add-novel-button"));
-      expect(screen.getByTestId("add-novel-dialog")).toBeInTheDocument();
+      const rankingBtn = screen.getByTestId("empty-ranking-button");
+      await user.click(rankingBtn);
 
-      // サンプルURL自動入力
-      await user.click(screen.getByTestId("fill-sample-url-button"));
-
-      // 送信
-      await user.click(screen.getByTestId("add-novel-submit-button"));
-
-      // 登録完了後にダイアログが閉じ、作品一覧が表示されること
       await waitFor(() => {
-        expect(
-          screen.queryByTestId("add-novel-dialog"),
-        ).not.toBeInTheDocument();
-      });
-      await waitFor(() => {
-        expect(screen.getByTestId("novel-list")).toBeInTheDocument();
+        expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+          "/ranking",
+        );
       });
     });
   });

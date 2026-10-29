@@ -58,12 +58,8 @@ const meta: Meta<typeof BookshelfPage> = {
   args: {
     novels: sampleNovels,
     isLoading: false,
-    isDialogOpen: false,
-    isSubmitting: false,
-    dialogError: null,
-    onOpenDialog: fn(),
-    onCloseDialog: fn(),
-    onAddNovel: fn(),
+    onNavigateSearch: fn(),
+    onNavigateRanking: fn(),
     onSelectNovel: fn(),
     onResumeNovel: fn(),
   },
@@ -102,17 +98,5 @@ export const Loading: Story = {
   args: {
     novels: [],
     isLoading: true,
-  },
-};
-
-/**
- * 作品追加ダイアログが開いている状態
- */
-export const WithAddDialog: Story = {
-  name: "作品追加ダイアログ表示中",
-  args: {
-    novels: sampleNovels,
-    isLoading: false,
-    isDialogOpen: true,
   },
 };

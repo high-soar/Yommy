@@ -90,6 +90,32 @@ export const Loading: Story = {
 };
 
 /**
+ * 検索タブアクティブ状態
+ */
+export const SearchTabActive: Story = {
+  name: "検索タブアクティブ",
+  args: {
+    isOpen: true,
+    chapterIndex: 2,
+    totalChapters: 5,
+    activeTab: "search",
+  },
+};
+
+/**
+ * ランキングタブアクティブ状態
+ */
+export const RankingTabActive: Story = {
+  name: "ランキングタブアクティブ",
+  args: {
+    isOpen: true,
+    chapterIndex: 2,
+    totalChapters: 5,
+    activeTab: "ranking",
+  },
+};
+
+/**
  * 設定タブアクティブ状態
  */
 export const SettingsTabActive: Story = {
