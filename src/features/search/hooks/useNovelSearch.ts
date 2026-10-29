@@ -122,7 +122,7 @@ export function useNovelSearch(): UseNovelSearchResult {
       const targetOrder = params?.order !== undefined ? params.order : order;
       const targetSerial =
         params?.serialStatus !== undefined ? params.serialStatus : serialStatus;
-      const targetGenre = params?.genre !== undefined ? params.genre : genre;
+      const targetGenre = params && "genre" in params ? params.genre : genre;
 
       setIsLoading(true);
       setError(null);
@@ -294,12 +294,22 @@ export function useNovelSearch(): UseNovelSearchResult {
   const handleCardSelect = useCallback(
     async (item: NovelSearchResultItem): Promise<void> => {
       if (registeredWorkIds.has(item.remoteWorkId)) {
-        const novels = await novelRepository.listNovels();
-        const found = novels.find(
-          (n) =>
-            n.siteType === selectedSite && n.remoteWorkId === item.remoteWorkId,
-        );
-        const novelId = found?.id ?? `${selectedSite}:${item.remoteWorkId}`;
+        const fallbackSiteType =
+          (item as { siteType?: NovelSiteType }).siteType ?? selectedSite;
+        let novelId = `${fallbackSiteType}:${item.remoteWorkId}`;
+        try {
+          const novels = await novelRepository.listNovels();
+          const found = novels?.find(
+            (n) =>
+              n.siteType === fallbackSiteType &&
+              n.remoteWorkId === item.remoteWorkId,
+          );
+          if (found?.id) {
+            novelId = found.id;
+          }
+        } catch {
+          // listNovels 取得失敗時は決定論的 ID をフォールバックとして使用
+        }
         router.navigateToNovelDetail(novelId, "/search");
         return;
       }

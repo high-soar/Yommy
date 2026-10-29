@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
@@ -147,6 +147,32 @@ describe("SearchNovelCard コンポーネント", () => {
     expect(handleSelect).toHaveBeenCalledTimes(2);
   });
 
+  it("キーボード操作（Enter / Space）で「＋ 本棚に追加」ボタンを押下した際、カードの onSelect が発火せず onAdd のみ呼ばれること", async () => {
+    const user = userEvent.setup();
+    const handleAdd = vi.fn();
+    const handleSelect = vi.fn();
+
+    render(
+      <SearchNovelCard
+        item={sampleSearchItem}
+        isRegistered={false}
+        isAdding={false}
+        onAdd={handleAdd}
+        onSelect={handleSelect}
+      />,
+    );
+
+    const addButton = screen.getByTestId("search-card-add-button");
+    addButton.focus();
+    await user.keyboard("{Enter}");
+    expect(handleAdd).toHaveBeenCalledTimes(1);
+    expect(handleSelect).not.toHaveBeenCalled();
+
+    await user.keyboard(" ");
+    expect(handleAdd).toHaveBeenCalledTimes(2);
+    expect(handleSelect).not.toHaveBeenCalled();
+  });
+
   it("genreLabel が空の場合は genre がフォールバック表示されること", () => {
     render(
       <SearchNovelCard
@@ -165,6 +191,43 @@ describe("SearchNovelCard コンポーネント", () => {
     expect(screen.getByTestId("search-card-genre")).toHaveTextContent(
       "fantasy_raw",
     );
+  });
+
+  it("serialStatus が completed の場合に完結バッジのスタイルが適用されること", () => {
+    render(
+      <SearchNovelCard
+        item={{
+          ...sampleSearchItem,
+          serialStatus: "completed",
+          serialStatusLabel: "完結済",
+        }}
+        isRegistered={false}
+        isAdding={false}
+        onAdd={vi.fn()}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    const statusBadge = screen.getByTestId("search-card-serial-status");
+    expect(statusBadge).toHaveTextContent("完結済");
+    expect(statusBadge.className).toContain("text-emerald-700");
+  });
+
+  it("子要素（タイトル等）からのキーダウンイベント（target !== currentTarget）では onSelect が発火しないこと", () => {
+    const handleSelect = vi.fn();
+    render(
+      <SearchNovelCard
+        item={sampleSearchItem}
+        isRegistered={false}
+        isAdding={false}
+        onAdd={vi.fn()}
+        onSelect={handleSelect}
+      />,
+    );
+
+    const title = screen.getByTestId("search-card-title");
+    fireEvent.keyDown(title, { key: "Enter" });
+    expect(handleSelect).not.toHaveBeenCalled();
   });
 
   it("登録済みボタンの親ラッパーをクリックしてもカード本体の onSelect は発火しないこと（stopPropagation）", async () => {

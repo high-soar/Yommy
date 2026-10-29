@@ -24,6 +24,7 @@ export const SearchNovelCard: React.FC<SearchNovelCardProps> = ({
   onSelect,
 }) => {
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.target !== e.currentTarget) return;
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       onSelect();
@@ -88,6 +89,7 @@ export const SearchNovelCard: React.FC<SearchNovelCardProps> = ({
               disabled={isAdding}
               data-testid="search-card-add-button"
               onClick={handleAddClick}
+              onKeyDown={(e) => e.stopPropagation()}
               className={`px-3 py-1 rounded-xl text-xs font-medium transition-colors shadow-xs ${
                 isAdding
                   ? "bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed"

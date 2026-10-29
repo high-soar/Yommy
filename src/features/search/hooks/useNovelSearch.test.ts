@@ -255,6 +255,44 @@ describe("useNovelSearch", () => {
     expect(getHtmlSpy).toHaveBeenCalledTimes(2);
   });
 
+  it("ジャンル選択後に「すべて（undefined）」へ切り替えた際、genre パラメータが正しく解除されて再検索されること (AC-SE-04)", async () => {
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.setKeyword("異世界");
+    });
+
+    await act(async () => {
+      await result.current.search();
+    });
+
+    const getHtmlSpy = vi.spyOn(mockHttpClient, "getHtml");
+
+    // まず特定ジャンルを選択
+    await act(async () => {
+      result.current.setGenre("fantasy");
+    });
+    expect(result.current.genre).toBe("fantasy");
+    expect(getHtmlSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        url: expect.stringContaining("genre_name=fantasy"),
+      }),
+    );
+
+    // 次にジャンルを「すべて (undefined)」に切り替え
+    await act(async () => {
+      result.current.setGenre(undefined);
+    });
+    expect(result.current.genre).toBeUndefined();
+    expect(getHtmlSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        url: expect.not.stringContaining("genre_name"),
+      }),
+    );
+  });
+
   it("addNovelToBookshelf で作品トップHTMLを取得・パースして SQLite へ保存し、registeredWorkIds に反映すること (AC-SE-06)", async () => {
     const { result } = renderHook(() => useNovelSearch(), {
       wrapper: createWrapper(),
@@ -562,6 +600,50 @@ describe("useNovelSearch", () => {
     ).__yommyServices?.novelRepository;
     if (repo) {
       vi.spyOn(repo, "listNovels").mockResolvedValueOnce([]);
+    }
+
+    await act(async () => {
+      await result.current.handleCardSelect(targetItem);
+    });
+
+    expect(window.location.pathname).toBe(
+      `/novels/${encodeURIComponent(`kakuyomu:${targetItem.remoteWorkId}`)}`,
+    );
+  });
+
+  it("handleCardSelect で登録済み作品の listNovels 呼び出しが例外をスローしてもフォールバックIDで安全に遷移すること", async () => {
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.setKeyword("異世界");
+    });
+
+    await act(async () => {
+      await result.current.search();
+    });
+
+    const targetItem = {
+      ...result.current.items[0],
+      siteType: "kakuyomu" as const,
+    };
+
+    await act(async () => {
+      await result.current.addNovelToBookshelf(targetItem);
+    });
+
+    const repo = (
+      window as unknown as {
+        __yommyServices?: {
+          novelRepository: { listNovels: () => Promise<unknown[]> };
+        };
+      }
+    ).__yommyServices?.novelRepository;
+    if (repo) {
+      vi.spyOn(repo, "listNovels").mockRejectedValueOnce(
+        new Error("DB connection failure"),
+      );
     }
 
     await act(async () => {
