@@ -14,7 +14,7 @@ related_specs:
   - docs/specs/features/reader-view.md
   - docs/specs/features/settings.md
   - docs/specs/changes/issue-80-bookshelf-update-check-and-sort.md
-  - docs/specs/changes/issue-81-prefetch-and-cache-rules.md
+  - docs/specs/changes/archive/issue-81-prefetch-and-cache-rules.md
 related_tests:
   - src/storage/schema.test.ts
   - src/storage/repositories/novelRepository.test.ts

@@ -150,6 +150,11 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         timeoutMs,
         signal,
       });
+      if (chapterRes.status >= 400) {
+        throw new Error(
+          `エピソードの取得に失敗しました (HTTP ${chapterRes.status})`,
+        );
+      }
       const parsedChapter = parser.parseChapterContent(
         chapterRes.html,
         episodeUrl,

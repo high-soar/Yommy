@@ -3,8 +3,8 @@ type: spec-delta
 title: "読書中の5話先読み（プリフェッチ）・未取得話一括キャッシュとキャッシュ更新ルール（TTL 7日間・短タイムアウト）の設計"
 description: "Issue #81 に対する差分仕様、影響する全体正本、テスト計画、および実装Sub-issue分割計画。"
 issue: "#81"
-status: "Review (#81)"
-updated: "2026-10-29"
+status: "Completed (Archived)"
+updated: "2026-10-30"
 tags:
   - delta
   - prefetch
@@ -37,6 +37,7 @@ related_tests:
   - src/features/novel-detail/components/NovelDetailContainer.test.tsx
   - test/it/smoke.spec.ts
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
+  - test/it/scenarios/scn03-prefetch-and-cache.spec.ts
 ---
 
 # 差分仕様書：読書中の5話先読み・未取得話一括キャッシュとキャッシュ更新ルール（Issue #81）
@@ -260,7 +261,7 @@ flowchart TD
 
 ## 6. 申し送り事項（Handover Items）
 
-本差分仕様の策定に伴い、以下の申し送り事項を [docs/quality/bug-and-handover-log.md](../../quality/bug-and-handover-log.md) に登録します。
+本差分仕様の策定に伴い、以下の申し送り事項を [docs/quality/bug-and-handover-log.md](../../../quality/bug-and-handover-log.md) に登録します。
 
 |   ID    | 内容                                                                                                                                                                               | 解決先（対象 Issue / 成果物） | 完了ゲート          | 状態   |
 | :-----: | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------- | :------------------ | :----- |

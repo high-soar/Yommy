@@ -31,7 +31,7 @@ related_specs:
   - docs/specs/parsers/kakuyomu.md
   - docs/specs/changes/archive/issue-79-four-tabs-search-ranking.md
   - docs/specs/changes/issue-80-bookshelf-update-check-and-sort.md
-  - docs/specs/changes/issue-81-prefetch-and-cache-rules.md
+  - docs/specs/changes/archive/issue-81-prefetch-and-cache-rules.md
   - docs/specs/changes/archive/issue-50-fullscreen-shell-and-settings.md
   - docs/specs/changes/archive/issue-51-novel-detail-layout-and-scroll.md
   - docs/specs/changes/archive/issue-13-novel-detail-and-toc.md
@@ -46,6 +46,7 @@ related_tests:
   - src/features/novel-detail/components/NovelDetailPage.test.tsx
   - src/features/novel-detail/components/NovelDetailContainer.test.tsx
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
+  - test/it/scenarios/scn03-prefetch-and-cache.spec.ts
 ---
 
 # 作品詳細・目次画面仕様書（SCR-02）
