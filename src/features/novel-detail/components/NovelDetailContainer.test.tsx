@@ -116,6 +116,8 @@ function createMockNovelRepo(
         currentNovel = null;
       }
     },
+    clearNewUpdate: async () => {},
+    updateLastCheckedAt: async () => {},
   };
 }
 

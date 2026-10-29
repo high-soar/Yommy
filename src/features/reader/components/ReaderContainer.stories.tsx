@@ -99,6 +99,8 @@ function createMockNovelRepository(novel: NovelRecord | null): NovelRepository {
       }
     },
     deleteNovel: async () => {},
+    clearNewUpdate: async () => {},
+    updateLastCheckedAt: async () => {},
   };
 }
 
@@ -140,6 +142,8 @@ const loadingNovelRepo: NovelRepository = {
   upsertNovelWithToc: () => new Promise(() => {}),
   updateBookmark: () => new Promise(() => {}),
   deleteNovel: () => new Promise(() => {}),
+  clearNewUpdate: () => new Promise(() => {}),
+  updateLastCheckedAt: () => new Promise(() => {}),
 };
 
 const loadingChapterRepo: ChapterRepository = {

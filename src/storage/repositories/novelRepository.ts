@@ -1,5 +1,10 @@
 import type { DatabaseAdapter } from "../adapter/types";
-import type { NovelRecord, NovelRepository, NovelSummary } from "../types";
+import type {
+  BookshelfSortOrder,
+  NovelRecord,
+  NovelRepository,
+  NovelSummary,
+} from "../types";
 import type { ParsedNovelIndex } from "../../parsers/types";
 
 interface NovelRow {
@@ -62,7 +67,7 @@ export class SqlNovelRepository implements NovelRepository {
     };
   }
 
-  async listNovels(): Promise<NovelSummary[]> {
+  async listNovels(_sortOrder?: BookshelfSortOrder): Promise<NovelSummary[]> {
     const rows = await this.db.query<NovelRow>(
       `SELECT
         id, site_type, remote_work_id, canonical_url, title, author,
@@ -181,5 +186,20 @@ export class SqlNovelRepository implements NovelRepository {
 
   async deleteNovel(novelId: string): Promise<void> {
     await this.db.execute("DELETE FROM novels WHERE id = ?;", [novelId]);
+  }
+
+  async clearNewUpdate(_novelId: string): Promise<void> {
+    throw new Error(
+      "SqlNovelRepository.clearNewUpdate is not implemented yet.",
+    );
+  }
+
+  async updateLastCheckedAt(
+    _novelId: string,
+    _checkedAt: string,
+  ): Promise<void> {
+    throw new Error(
+      "SqlNovelRepository.updateLastCheckedAt is not implemented yet.",
+    );
   }
 }
