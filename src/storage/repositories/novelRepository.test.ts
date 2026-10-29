@@ -62,6 +62,8 @@ describe("SqlNovelRepository", () => {
       expect(created.bookmarkChapterIndex).toBeNull();
       expect(created.bookmarkScrollProgress).toBe(0);
       expect(created.isFavorite).toBe(false);
+      expect(created.hasNewUpdate).toBe(false);
+      expect(created.latestEpisodePublishedAt).toBe("2026-01-02T10:00:00Z");
       expect(created.lastCheckedAt).toBe(fetchedAt);
       expect(created.lastReadAt).toBeNull();
       expect(created.createdAt).toBe(fetchedAt);
@@ -72,6 +74,38 @@ describe("SqlNovelRepository", () => {
         "kakuyomu:1177354054881162325",
       );
       expect(fetched).toEqual(created);
+    });
+
+    it("各話の publishedAt が未設定または無効な日付文字列の場合は latestEpisodePublishedAt が null となること", async () => {
+      const indexWithoutDates: ParsedNovelIndex = {
+        ...sampleParsedIndex,
+        remoteWorkId: "no-dates",
+        canonicalUrl: "https://kakuyomu.jp/works/no-dates",
+        chapters: [
+          {
+            chapterIndex: 1,
+            remoteChapterId: "ep1",
+            partTitle: null,
+            title: "第1話",
+            url: "https://kakuyomu.jp/works/no-dates/ep1",
+            publishedAt: null,
+          },
+          {
+            chapterIndex: 2,
+            remoteChapterId: "ep2",
+            partTitle: null,
+            title: "第2話",
+            url: "https://kakuyomu.jp/works/no-dates/ep2",
+            publishedAt: "invalid-date-string",
+          },
+        ],
+      };
+
+      const created = await repository.upsertNovelWithToc(
+        indexWithoutDates,
+        "2026-01-01T00:00:00Z",
+      );
+      expect(created.latestEpisodePublishedAt).toBeNull();
     });
 
     it("存在しない novelId の場合 getNovelById は null を返すこと", async () => {
@@ -131,6 +165,10 @@ describe("SqlNovelRepository", () => {
       expect(updatedNovel.createdAt).toBe(fetchedAt1); // 初回登録日時が維持されている
       expect(updatedNovel.lastCheckedAt).toBe(fetchedAt2); // 更新確認日時が更新されている
       expect(updatedNovel.updatedAt).toBe(fetchedAt2);
+      expect(updatedNovel.hasNewUpdate).toBe(true); // 話数増加により NEW フラグが立つ
+      expect(updatedNovel.latestEpisodePublishedAt).toBe(
+        "2026-01-12T10:00:00Z",
+      );
 
       // 第1話のキャッシュと既読フラグが維持されていることの確認
       const ch1 = await adapter.query<{
@@ -158,6 +196,33 @@ describe("SqlNovelRepository", () => {
       expect(ch3[0].body_html).toBeNull();
       expect(ch3[0].byte_size).toBe(0);
       expect(ch3[0].is_read).toBe(0);
+    });
+
+    it("話数が増加しない更新の場合、既存の hasNewUpdate 値が維持されること", async () => {
+      await repository.upsertNovelWithToc(
+        sampleParsedIndex,
+        "2026-01-01T00:00:00Z",
+      );
+
+      // 話数不変で再 upsert（hasNewUpdate = false が維持される）
+      const reUpsert1 = await repository.upsertNovelWithToc(
+        sampleParsedIndex,
+        "2026-01-02T00:00:00Z",
+      );
+      expect(reUpsert1.hasNewUpdate).toBe(false);
+
+      // 意図的に has_new_update = 1 に設定した状態で話数不変の再 upsert
+      const adapter = await initTestDb();
+      await adapter.execute(
+        "UPDATE novels SET has_new_update = 1 WHERE id = ?;",
+        ["kakuyomu:1177354054881162325"],
+      );
+
+      const reUpsert2 = await repository.upsertNovelWithToc(
+        sampleParsedIndex,
+        "2026-01-03T00:00:00Z",
+      );
+      expect(reUpsert2.hasNewUpdate).toBe(true);
     });
 
     it("話が途中に挿入されて chapter_index がずれた場合でも remote_chapter_id により本文キャッシュが正しく維持されること", async () => {
@@ -233,59 +298,221 @@ describe("SqlNovelRepository", () => {
     });
   });
 
-  describe("listNovels", () => {
+  describe("clearNewUpdate", () => {
+    it("clearNewUpdate 呼び出しにより has_new_update が 0 にリセットされること", async () => {
+      await repository.upsertNovelWithToc(
+        sampleParsedIndex,
+        "2026-01-01T00:00:00Z",
+      );
+      const adapter = await initTestDb();
+      await adapter.execute(
+        "UPDATE novels SET has_new_update = 1 WHERE id = 'kakuyomu:1177354054881162325';",
+      );
+
+      await repository.clearNewUpdate("kakuyomu:1177354054881162325");
+
+      const novel = await repository.getNovelById(
+        "kakuyomu:1177354054881162325",
+      );
+      expect(novel?.hasNewUpdate).toBe(false);
+    });
+  });
+
+  describe("updateLastCheckedAt", () => {
+    it("updateLastCheckedAt 呼び出しにより last_checked_at が指定日時に更新されること", async () => {
+      await repository.upsertNovelWithToc(
+        sampleParsedIndex,
+        "2026-01-01T00:00:00Z",
+      );
+
+      const checkedAt = "2026-02-01T15:30:00.000Z";
+      await repository.updateLastCheckedAt(
+        "kakuyomu:1177354054881162325",
+        checkedAt,
+      );
+
+      const novel = await repository.getNovelById(
+        "kakuyomu:1177354054881162325",
+      );
+      expect(novel?.lastCheckedAt).toBe(checkedAt);
+    });
+  });
+
+  describe("listNovels と 5 種ソートクエリ", () => {
     it("作品が0件の場合は空配列を返すこと", async () => {
       const novels = await repository.listNovels();
       expect(novels).toEqual([]);
     });
 
-    it("複数作品が閲覧日時降順（閲覧済み優先）で取得でき synopsis を除外したサマリーとなること", async () => {
-      // 3作品を登録
-      const n1: ParsedNovelIndex = {
-        ...sampleParsedIndex,
-        remoteWorkId: "1",
-        canonicalUrl: "https://kakuyomu.jp/works/1",
-        title: "小説1（閲覧なし）",
-      };
-      const n2: ParsedNovelIndex = {
-        ...sampleParsedIndex,
-        remoteWorkId: "2",
-        canonicalUrl: "https://kakuyomu.jp/works/2",
-        title: "小説2（古い閲覧）",
-      };
-      const n3: ParsedNovelIndex = {
-        ...sampleParsedIndex,
-        remoteWorkId: "3",
-        canonicalUrl: "https://kakuyomu.jp/works/3",
-        title: "小説3（新しい閲覧）",
-      };
+    describe("各ソート順の並び順検証", () => {
+      let adapter: Awaited<ReturnType<typeof initTestDb>>;
 
-      await repository.upsertNovelWithToc(n1, "2026-01-01T00:00:00Z");
-      await repository.upsertNovelWithToc(n2, "2026-01-02T00:00:00Z");
-      await repository.upsertNovelWithToc(n3, "2026-01-03T00:00:00Z");
+      beforeEach(async () => {
+        adapter = await initTestDb();
 
-      // n2, n3 にしおり閲覧日を設定
-      await repository.updateBookmark("kakuyomu:2", 1, 0.5); // last_read_at が設定される
-      // 少し時間をあけて n3 を閲覧
-      const adapter = await initTestDb();
-      await adapter.execute(
-        "UPDATE novels SET last_read_at = '2026-01-10T10:00:00Z' WHERE id = 'kakuyomu:2';",
-      );
-      await adapter.execute(
-        "UPDATE novels SET last_read_at = '2026-01-10T12:00:00Z' WHERE id = 'kakuyomu:3';",
-      );
+        // 4作品（A, B, C, D）を登録
+        // A: hasNewUpdate = 1, read, latestPublished = '2026-01-04'
+        await repository.upsertNovelWithToc(
+          {
+            ...sampleParsedIndex,
+            remoteWorkId: "A",
+            canonicalUrl: "https://kakuyomu.jp/works/A",
+            title: "alpha",
+            chapters: [
+              {
+                chapterIndex: 1,
+                remoteChapterId: "a1",
+                partTitle: null,
+                title: "1話",
+                url: "https://kakuyomu.jp/works/A/1",
+                publishedAt: "2026-01-04T00:00:00Z",
+              },
+            ],
+          },
+          "2026-01-01T00:00:00Z",
+        );
 
-      const list = await repository.listNovels();
-      expect(list).toHaveLength(3);
-      // n3（最新閲覧） -> n2（過去閲覧） -> n1（未閲覧）の順
-      expect(list[0].id).toBe("kakuyomu:3");
-      expect(list[1].id).toBe("kakuyomu:2");
-      expect(list[2].id).toBe("kakuyomu:1");
+        // B: hasNewUpdate = 0, read (most recent read), latestPublished = '2026-01-10' (latest)
+        await repository.upsertNovelWithToc(
+          {
+            ...sampleParsedIndex,
+            remoteWorkId: "B",
+            canonicalUrl: "https://kakuyomu.jp/works/B",
+            title: "Beta",
+            chapters: [
+              {
+                chapterIndex: 1,
+                remoteChapterId: "b1",
+                partTitle: null,
+                title: "1話",
+                url: "https://kakuyomu.jp/works/B/1",
+                publishedAt: "2026-01-10T00:00:00Z",
+              },
+            ],
+          },
+          "2026-01-02T00:00:00Z",
+        );
 
-      // synopsis プロパティが含まれていないことの確認
-      expect(
-        (list[0] as unknown as Record<string, unknown>).synopsis,
-      ).toBeUndefined();
+        // C: hasNewUpdate = 0, unread, latestPublished = '2026-01-02'
+        await repository.upsertNovelWithToc(
+          {
+            ...sampleParsedIndex,
+            remoteWorkId: "C",
+            canonicalUrl: "https://kakuyomu.jp/works/C",
+            title: "Charlie",
+            chapters: [
+              {
+                chapterIndex: 1,
+                remoteChapterId: "c1",
+                partTitle: null,
+                title: "1話",
+                url: "https://kakuyomu.jp/works/C/1",
+                publishedAt: "2026-01-02T00:00:00Z",
+              },
+            ],
+          },
+          "2026-01-03T00:00:00Z",
+        );
+
+        // D: hasNewUpdate = 1, unread, latestPublished = null
+        await repository.upsertNovelWithToc(
+          {
+            ...sampleParsedIndex,
+            remoteWorkId: "D",
+            canonicalUrl: "https://kakuyomu.jp/works/D",
+            title: "delta",
+            chapters: [
+              {
+                chapterIndex: 1,
+                remoteChapterId: "d1",
+                partTitle: null,
+                title: "1話",
+                url: "https://kakuyomu.jp/works/D/1",
+                publishedAt: null,
+              },
+            ],
+          },
+          "2026-01-04T00:00:00Z",
+        );
+
+        // 状態を直接調整
+        // A: has_new_update = 1, last_read_at = '2026-01-05T00:00:00Z'
+        await adapter.execute(
+          "UPDATE novels SET has_new_update = 1, last_read_at = '2026-01-05T00:00:00Z' WHERE id = 'kakuyomu:A';",
+        );
+        // B: has_new_update = 0, last_read_at = '2026-01-06T00:00:00Z'
+        await adapter.execute(
+          "UPDATE novels SET has_new_update = 0, last_read_at = '2026-01-06T00:00:00Z' WHERE id = 'kakuyomu:B';",
+        );
+        // C: has_new_update = 0, last_read_at = NULL
+        await adapter.execute(
+          "UPDATE novels SET has_new_update = 0, last_read_at = NULL WHERE id = 'kakuyomu:C';",
+        );
+        // D: has_new_update = 1, last_read_at = NULL
+        await adapter.execute(
+          "UPDATE novels SET has_new_update = 1, last_read_at = NULL WHERE id = 'kakuyomu:D';",
+        );
+      });
+
+      it("デフォルト（引数なし）および 'unread_first' で更新あり優先＋最近読んだ順となること", async () => {
+        const defaultList = await repository.listNovels();
+        const unreadFirstList = await repository.listNovels("unread_first");
+
+        const expectedIds = [
+          "kakuyomu:A", // NEW = 1, read
+          "kakuyomu:D", // NEW = 1, unread
+          "kakuyomu:B", // NEW = 0, read
+          "kakuyomu:C", // NEW = 0, unread
+        ];
+
+        expect(defaultList.map((n) => n.id)).toEqual(expectedIds);
+        expect(unreadFirstList.map((n) => n.id)).toEqual(expectedIds);
+
+        // synopsis がサマリーに含まれていないこと
+        expect(
+          (defaultList[0] as unknown as Record<string, unknown>).synopsis,
+        ).toBeUndefined();
+      });
+
+      it("'last_read' で最近読んだ順（更新ありを特別扱いしない）となること", async () => {
+        const list = await repository.listNovels("last_read");
+        expect(list.map((n) => n.id)).toEqual([
+          "kakuyomu:B", // 2026-01-06 (最新読了)
+          "kakuyomu:A", // 2026-01-05 (過去読了)
+          "kakuyomu:D", // 未読・created_at: 2026-01-04
+          "kakuyomu:C", // 未読・created_at: 2026-01-03
+        ]);
+      });
+
+      it("'latest_published' で作品更新日順（エピソード公開日最大値 DESC）となること", async () => {
+        const list = await repository.listNovels("latest_published");
+        expect(list.map((n) => n.id)).toEqual([
+          "kakuyomu:B", // 2026-01-10
+          "kakuyomu:A", // 2026-01-04
+          "kakuyomu:C", // 2026-01-02
+          "kakuyomu:D", // NULL (末尾)
+        ]);
+      });
+
+      it("'created_at' で作品登録日降順となること", async () => {
+        const list = await repository.listNovels("created_at");
+        expect(list.map((n) => n.id)).toEqual([
+          "kakuyomu:D", // 2026-01-04
+          "kakuyomu:C", // 2026-01-03
+          "kakuyomu:B", // 2026-01-02
+          "kakuyomu:A", // 2026-01-01
+        ]);
+      });
+
+      it("'title' でタイトル順（アルファベット大文字小文字無視昇順）となること", async () => {
+        const list = await repository.listNovels("title");
+        expect(list.map((n) => n.id)).toEqual([
+          "kakuyomu:A", // "alpha"
+          "kakuyomu:B", // "Beta"
+          "kakuyomu:C", // "Charlie"
+          "kakuyomu:D", // "delta"
+        ]);
+      });
     });
   });
 

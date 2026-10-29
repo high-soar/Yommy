@@ -18,6 +18,8 @@ export interface NovelRecord {
   bookmarkChapterIndex: number | null;
   bookmarkScrollProgress: number;
   isFavorite: boolean;
+  hasNewUpdate?: boolean;
+  latestEpisodePublishedAt?: string | null;
   lastCheckedAt: string | null;
   lastReadAt: string | null;
   createdAt: string;
@@ -60,8 +62,17 @@ export interface ReaderSettings {
   updatedAt: string;
 }
 
+export type BookshelfSortOrder =
+  "unread_first" | "last_read" | "latest_published" | "created_at" | "title";
+
+export interface AppSettingRecord {
+  key: string;
+  value: string;
+  updatedAt: string;
+}
+
 export interface NovelRepository {
-  listNovels(): Promise<NovelSummary[]>;
+  listNovels(sortOrder?: BookshelfSortOrder): Promise<NovelSummary[]>;
   getNovelById(novelId: string): Promise<NovelRecord | null>;
   upsertNovelWithToc(
     index: ParsedNovelIndex,
@@ -73,6 +84,13 @@ export interface NovelRepository {
     scrollProgress: number,
   ): Promise<void>;
   deleteNovel(novelId: string): Promise<void>;
+  clearNewUpdate(novelId: string): Promise<void>;
+  updateLastCheckedAt(novelId: string, checkedAt: string): Promise<void>;
+}
+
+export interface AppSettingsRepository {
+  getSetting(key: string): Promise<string | null>;
+  setSetting(key: string, value: string): Promise<void>;
 }
 
 export interface ChapterRepository {
