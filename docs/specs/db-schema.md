@@ -1,7 +1,7 @@
 ---
 type: spec-db-schema
 title: ローカル DB スキーマ定義（App 全体正本）
-description: SQLite（novels, chapters, download_queue, reader_settings）のER図、テーブル構造、およびDDL定義の正本。
+description: SQLite（novels, chapters, download_queue, reader_settings, app_settings）のER図、テーブル構造、およびDDL定義の正本。
 status: "Review (#80)"
 updated: "2026-10-29"
 tags: [database, sqlite, schema, storage, settings]
@@ -118,6 +118,9 @@ erDiagram
 ### 3.1 `novels` テーブル（登録作品・しおり・集計キャッシュ）
 
 作品のメタデータ、現在のしおり位置、および本棚画面（`SCR-01`）を高速描画するためのエピソード数・キャッシュ容量集計値を保持します。
+
+- **`has_new_update`**: 目次更新（自動更新チェックまたは手動更新）時に話数増加・新規エピソード追加が検知された場合に `1`（NEWバッジ表示）が記録され、作品閲覧時（`SCR-02` または `SCR-03` 表示時）に `0` へ解除されます。
+- **`latest_episode_published_at`**: `upsertNovelWithToc` 実行時に `index.chapters` 内の各エピソードのうち有効な `publishedAt` の最大値（最新公開/更新日時）を算出して保持します。全エピソード未設定時は `NULL` となります。本カラムにより、ソート順「作品更新日順（`latest_published`）」において `chapters` テーブルとの結合なしで高速にソートクエリを実行可能です。
 
 ```sql
 CREATE TABLE IF NOT EXISTS novels (
