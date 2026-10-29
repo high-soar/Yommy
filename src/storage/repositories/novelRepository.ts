@@ -92,6 +92,10 @@ export function computeLatestEpisodePublishedAt(
   return maxPublishedAt;
 }
 
+/**
+ * SQLite バックエンドによる作品リポジトリ実装
+ * （docs/specs/architecture.md および docs/specs/db-schema.md に準拠）
+ */
 export class SqlNovelRepository implements NovelRepository {
   constructor(private db: DatabaseAdapter) {}
 
@@ -119,6 +123,9 @@ export class SqlNovelRepository implements NovelRepository {
     };
   }
 
+  /**
+   * 作品一覧を指定されたソート順で取得する（既定値: 'unread_first'）
+   */
   async listNovels(
     order: BookshelfSortOrder = "unread_first",
   ): Promise<NovelSummary[]> {
@@ -143,6 +150,9 @@ export class SqlNovelRepository implements NovelRepository {
     });
   }
 
+  /**
+   * 作品 ID に対応する詳細レコードを取得する。存在しない場合は null を返す。
+   */
   async getNovelById(novelId: string): Promise<NovelRecord | null> {
     const rows = await this.db.query<NovelRow>(
       "SELECT * FROM novels WHERE id = ?;",
@@ -154,6 +164,10 @@ export class SqlNovelRepository implements NovelRepository {
     return this.mapRowToRecord(rows[0]);
   }
 
+  /**
+   * 目次パース結果から作品情報および各話目次レコードをトランザクション内で保存・更新する。
+   * 話数増加時は has_new_update = 1 を記録し、最新話公開日時（latest_episode_published_at）を更新する。
+   */
   async upsertNovelWithToc(
     index: ParsedNovelIndex,
     fetchedAt: string,
@@ -240,6 +254,9 @@ export class SqlNovelRepository implements NovelRepository {
     });
   }
 
+  /**
+   * しおり位置および閲覧日時を更新する
+   */
   async updateBookmark(
     novelId: string,
     chapterIndex: number,
@@ -254,10 +271,16 @@ export class SqlNovelRepository implements NovelRepository {
     );
   }
 
+  /**
+   * 作品および紐づくエピソード・ダウンロードキュー（CASCADE）を削除する
+   */
   async deleteNovel(novelId: string): Promise<void> {
     await this.db.execute("DELETE FROM novels WHERE id = ?;", [novelId]);
   }
 
+  /**
+   * 指定作品の新着エピソードフラグ（has_new_update）を 0 に解除する
+   */
   async clearNewUpdate(novelId: string): Promise<void> {
     await this.db.execute(
       "UPDATE novels SET has_new_update = 0 WHERE id = ?;",
@@ -265,6 +288,9 @@ export class SqlNovelRepository implements NovelRepository {
     );
   }
 
+  /**
+   * 指定作品の最終更新確認日時（last_checked_at）を更新する
+   */
   async updateLastCheckedAt(novelId: string, checkedAt: string): Promise<void> {
     await this.db.execute(
       "UPDATE novels SET last_checked_at = ? WHERE id = ?;",
