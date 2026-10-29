@@ -1035,6 +1035,53 @@ describe("useNovelDetail", () => {
         vi.useRealTimers();
       });
 
+      it("通信処理中に cancelBatchCache が呼ばれた場合、即座に中断されエラーにならないこと", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedSampleNovel(novelRepo, 2);
+
+        const httpClient = new MockHttpClient();
+        httpClient.setResponse(
+          /kakuyomu\.jp\/works\/.*\/episodes\/.*/,
+          async (options) => {
+            return new Promise<HttpResponse>((_resolve, reject) => {
+              options.signal?.addEventListener("abort", () => {
+                reject(options.signal?.reason ?? new Error("Aborted"));
+              });
+            });
+          },
+        );
+
+        const { result } = renderHook(() => useNovelDetail(seeded.id), {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+            httpClient,
+          }),
+        });
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        let batchPromise: Promise<void>;
+        act(() => {
+          batchPromise = result.current.startBatchCache();
+        });
+
+        act(() => {
+          result.current.cancelBatchCache();
+        });
+
+        await act(async () => {
+          await batchPromise;
+        });
+
+        expect(result.current.isBatchCaching).toBe(false);
+        expect(result.current.error).toBeNull();
+      });
+
       it("コンポーネントアンマウント時に一括キャッシュが即時中断されること", async () => {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         const db = await resetTestDb();

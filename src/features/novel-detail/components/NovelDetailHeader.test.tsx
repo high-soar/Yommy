@@ -465,6 +465,20 @@ describe("NovelDetailHeader", () => {
         expect(screen.getByTestId("detail-resume-button")).toBeDisabled();
         expect(screen.getByTestId("detail-read-first-button")).toBeDisabled();
       });
+
+      it("一括キャッシュ実行中で batchCacheProgress が null の場合、「キャッシュ中...」と表示されること", () => {
+        render(
+          <NovelDetailHeader
+            {...defaultProps}
+            isBatchCaching={true}
+            batchCacheProgress={null}
+          />,
+        );
+
+        expect(screen.getByTestId("batch-cache-progress")).toHaveTextContent(
+          "キャッシュ中...",
+        );
+      });
     });
   });
 });
