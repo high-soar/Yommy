@@ -27,7 +27,15 @@ export const BookshelfContainer: React.FC<BookshelfContainerProps> = ({
   onNavigateRanking,
 }) => {
   const router = useRouter();
-  const { novels, isLoading } = useBookshelf();
+  const {
+    novels,
+    isLoading,
+    isCheckingUpdates,
+    updateCheckProgress,
+    sortOrder,
+    setSortOrder,
+    checkUpdates,
+  } = useBookshelf();
 
   const handleSelectNovel = useCallback(
     (novelId: string) => {
@@ -73,6 +81,11 @@ export const BookshelfContainer: React.FC<BookshelfContainerProps> = ({
     <BookshelfPage
       novels={novels}
       isLoading={isLoading}
+      isCheckingUpdates={isCheckingUpdates}
+      updateCheckProgress={updateCheckProgress}
+      sortOrder={sortOrder}
+      onSortChange={setSortOrder}
+      onCheckUpdates={checkUpdates}
       onNavigateSearch={handleNavigateSearch}
       onNavigateRanking={handleNavigateRanking}
       onSelectNovel={handleSelectNovel}

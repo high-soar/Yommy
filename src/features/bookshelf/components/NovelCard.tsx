@@ -42,12 +42,22 @@ export const NovelCard: React.FC<NovelCardProps> = ({
         className="cursor-pointer group flex-1 focus:outline-hidden focus:ring-2 focus:ring-blue-500 rounded-lg p-1 -m-1 text-left w-full"
       >
         <div className="flex items-start justify-between gap-2 mb-2">
-          <h3
-            data-testid="novel-card-title"
-            className="text-base font-bold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2"
-          >
-            {novel.title}
-          </h3>
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            {novel.hasNewUpdate && (
+              <span
+                data-testid="novel-card-new-badge"
+                className="text-xs px-1.5 py-0.5 rounded-md font-bold bg-rose-500 text-white dark:bg-rose-600 shrink-0"
+              >
+                NEW
+              </span>
+            )}
+            <h3
+              data-testid="novel-card-title"
+              className="text-base font-bold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2"
+            >
+              {novel.title}
+            </h3>
+          </div>
           <span
             data-testid="novel-card-bookmark"
             className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
