@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Review (#79)"
+status: "Review (#80)"
 updated: "2026-10-29"
 tags:
   - architecture
@@ -29,6 +29,7 @@ related_specs:
   - docs/specs/features/settings.md
   - docs/specs/changes/archive/issue-78-apk-signing-and-back-button.md
   - docs/specs/changes/issue-79-four-tabs-search-ranking.md
+  - docs/specs/changes/issue-80-bookshelf-update-check-and-sort.md
   - docs/specs/changes/archive/issue-50-fullscreen-shell-and-settings.md
   - docs/specs/changes/archive/issue-51-novel-detail-layout-and-scroll.md
   - docs/specs/changes/archive/issue-52-reader-fullscreen-and-bottom-overlay.md
@@ -75,7 +76,7 @@ flowchart TB
     end
 
     subgraph StorageLayer ["2. Storage Layer (src/storage/*)"]
-        Repos["Repositories<br>(NovelRepository, ChapterRepository, QueueRepository, SettingsRepository)"]
+        Repos["Repositories<br>(NovelRepository, ChapterRepository, QueueRepository, SettingsRepository, AppSettingsRepository)"]
         DbAdapter["DatabaseAdapter Interface"]
         SqliteImpl["CapacitorSqliteAdapter<br>(Android 実機用)"]
         MemImpl["InMemoryDatabaseAdapter<br>(UT / Storybook / Playwright IT 用・resetTestDb())"]
@@ -363,8 +364,11 @@ export interface NovelParser {
 DB テーブル構造の詳細は [docs/specs/db-schema.md](db-schema.md) を正本とし、アプリケーション層は以下の Repository インターフェースを介してのみデータにアクセスします。
 
 ```ts
+export type BookshelfSortOrder =
+  "unread_first" | "last_read" | "latest_published" | "created_at" | "title";
+
 export interface NovelRepository {
-  listNovels(): Promise<NovelSummary[]>;
+  listNovels(sortOrder?: BookshelfSortOrder): Promise<NovelSummary[]>;
   getNovelById(novelId: string): Promise<NovelRecord | null>;
   upsertNovelWithToc(
     index: ParsedNovelIndex,
@@ -376,6 +380,13 @@ export interface NovelRepository {
     scrollProgress: number,
   ): Promise<void>;
   deleteNovel(novelId: string): Promise<void>;
+  clearNewUpdate(novelId: string): Promise<void>;
+  updateLastCheckedAt(novelId: string, checkedAt: string): Promise<void>;
+}
+
+export interface AppSettingsRepository {
+  getSetting(key: string): Promise<string | null>;
+  setSetting(key: string, value: string): Promise<void>;
 }
 
 export interface ChapterRepository {
