@@ -59,6 +59,9 @@ export interface SearchPageProps {
 
 /**
  * 検索画面 Presentational レイアウト統合コンポーネント（SCR-06）
+ *
+ * 検索バー、絞り込み・並び順フィルタ、結果カード一覧、空状態、ローディング、
+ * およびエラー再試行UIを統括して描画する。
  */
 export const SearchPage: React.FC<SearchPageProps> = ({
   selectedSite,
