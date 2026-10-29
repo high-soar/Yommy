@@ -30,7 +30,7 @@ export interface RouterContextValue {
   navigateToBookshelf: () => void;
   navigateToSearch: () => void;
   navigateToRanking: () => void;
-  navigateToNovelDetail: (novelId: string) => void;
+  navigateToNovelDetail: (novelId: string, origin?: string) => void;
   navigateToReader: (
     novelId: string,
     chapterIndex: number,
@@ -242,7 +242,11 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
   }, [navigate]);
 
   const navigateToNovelDetail = useCallback(
-    (novelId: string) => {
+    (novelId: string, origin?: string) => {
+      if (origin) {
+        novelOriginRef.current = origin;
+        setNovelOrigin(origin);
+      }
       navigate(`/novels/${encodeURIComponent(novelId)}`);
     },
     [navigate],

@@ -132,4 +132,92 @@ describe("SearchContainer コンポーネント", () => {
       expect(handleSelectNovel).toHaveBeenCalled();
     });
   });
+
+  it("登録済み作品カードをカスタム onSelectNovel 存在時にタップすると直接コールバックが呼ばれること", async () => {
+    const user = userEvent.setup();
+    const handleSelectNovel = vi.fn();
+
+    renderWithProviders({ onSelectNovel: handleSelectNovel });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("search-input")).toBeInTheDocument();
+    });
+
+    const input = screen.getByTestId("search-input");
+    await user.type(input, "異世界{Enter}");
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByTestId("search-card-add-button").length,
+      ).toBeGreaterThan(0);
+    });
+
+    // まず本棚に追加して登録済みにする
+    const addButtons = screen.getAllByTestId("search-card-add-button");
+    await user.click(addButtons[0]);
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("search-card-registered-button"),
+      ).toBeInTheDocument();
+    });
+
+    // 登録済みカード本体をタップ
+    const cards = screen.getAllByTestId(/^search-novel-card-/);
+    await user.click(cards[0]);
+
+    expect(handleSelectNovel).toHaveBeenCalledWith(
+      expect.stringContaining("kakuyomu:"),
+    );
+  });
+
+  it("カスタム onSelectNovel が未指定（デフォルト）の場合、カード本体タップで router の詳細画面へ遷移すること", async () => {
+    const user = userEvent.setup();
+    renderWithProviders();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("search-input")).toBeInTheDocument();
+    });
+
+    const input = screen.getByTestId("search-input");
+    await user.type(input, "異世界{Enter}");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("search-results-list")).toBeInTheDocument();
+    });
+
+    const cards = screen.getAllByTestId(/^search-novel-card-/);
+    await user.click(cards[0]);
+
+    await waitFor(() => {
+      expect(window.location.pathname).toContain("/novels/kakuyomu%3A");
+    });
+  });
+
+  it("カスタム onSelectNovel 存在時に作品の自動追加が失敗した場合は onSelectNovel が呼ばれないこと", async () => {
+    const user = userEvent.setup();
+    const handleSelectNovel = vi.fn();
+
+    mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/works\/\d+$/, () => {
+      throw new Error("作品取得エラー");
+    });
+
+    renderWithProviders({ onSelectNovel: handleSelectNovel });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("search-input")).toBeInTheDocument();
+    });
+
+    const input = screen.getByTestId("search-input");
+    await user.type(input, "異世界{Enter}");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("search-results-list")).toBeInTheDocument();
+    });
+
+    const cards = screen.getAllByTestId(/^search-novel-card-/);
+    await user.click(cards[0]);
+
+    expect(handleSelectNovel).not.toHaveBeenCalled();
+  });
 });

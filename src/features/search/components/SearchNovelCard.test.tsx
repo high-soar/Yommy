@@ -4,6 +4,7 @@ import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./SearchNovelCard.stories";
 import { SearchNovelCard } from "./SearchNovelCard";
+import { sampleSearchItem } from "../types";
 
 const { Default, Adding, Registered, WithoutLastPublished } =
   composeStories(stories);
@@ -84,7 +85,7 @@ describe("SearchNovelCard コンポーネント", () => {
 
     render(
       <SearchNovelCard
-        item={stories.sampleSearchItem}
+        item={sampleSearchItem}
         isRegistered={false}
         isAdding={false}
         onAdd={handleAdd}
@@ -106,7 +107,7 @@ describe("SearchNovelCard コンポーネント", () => {
 
     render(
       <SearchNovelCard
-        item={stories.sampleSearchItem}
+        item={sampleSearchItem}
         isRegistered={false}
         isAdding={false}
         onAdd={handleAdd}
@@ -126,7 +127,7 @@ describe("SearchNovelCard コンポーネント", () => {
 
     render(
       <SearchNovelCard
-        item={stories.sampleSearchItem}
+        item={sampleSearchItem}
         isRegistered={false}
         isAdding={false}
         onAdd={vi.fn()}
@@ -141,5 +142,48 @@ describe("SearchNovelCard コンポーネント", () => {
 
     await user.keyboard(" ");
     expect(handleSelect).toHaveBeenCalledTimes(2);
+
+    await user.keyboard("{Escape}");
+    expect(handleSelect).toHaveBeenCalledTimes(2);
+  });
+
+  it("genreLabel が空の場合は genre がフォールバック表示されること", () => {
+    render(
+      <SearchNovelCard
+        item={{
+          ...sampleSearchItem,
+          genreLabel: "",
+          genre: "fantasy_raw",
+        }}
+        isRegistered={false}
+        isAdding={false}
+        onAdd={vi.fn()}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("search-card-genre")).toHaveTextContent(
+      "fantasy_raw",
+    );
+  });
+
+  it("登録済みボタンの親ラッパーをクリックしてもカード本体の onSelect は発火しないこと（stopPropagation）", async () => {
+    const user = userEvent.setup();
+    const handleSelect = vi.fn();
+
+    render(
+      <SearchNovelCard
+        item={sampleSearchItem}
+        isRegistered={true}
+        isAdding={false}
+        onAdd={vi.fn()}
+        onSelect={handleSelect}
+      />,
+    );
+
+    const actionWrapper = screen.getByTestId("search-card-action-wrapper");
+    await user.click(actionWrapper);
+
+    expect(handleSelect).not.toHaveBeenCalled();
   });
 });

@@ -127,6 +127,17 @@ describe("useNovelSearch", () => {
     expect(result.current.isLoading).toBe(false);
     expect(result.current.error).toContain("HTTP 500");
     expect(result.current.items).toEqual([]);
+
+    // 非 Error 例外（文字列）
+    mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/search/, () => {
+      throw "ネットワーク文字列エラー";
+    });
+
+    await act(async () => {
+      await result.current.search();
+    });
+
+    expect(result.current.error).toBe("ネットワーク文字列エラー");
   });
 
   it("検索結果が0件の場合は items が空配列となること", async () => {
@@ -383,5 +394,236 @@ describe("useNovelSearch", () => {
     });
 
     expect(getHtmlSpy).toHaveBeenCalled();
+  });
+
+  it("未対応サイト（narou等）を選択して検索した場合はエラーメッセージが設定されること", async () => {
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.setSelectedSite("narou");
+    });
+
+    await act(async () => {
+      await result.current.search();
+    });
+
+    expect(result.current.error).toContain("検索機能が未実装のサイトです");
+  });
+
+  it("loadMore でエラーが発生した場合（Errorおよび非Error）に error ステートが設定されること", async () => {
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.setKeyword("異世界");
+    });
+
+    await act(async () => {
+      await result.current.search();
+    });
+
+    // Error インスタンスによる失敗
+    mockHttpClient.setResponse(
+      /^https:\/\/kakuyomu\.jp\/search.*page=2/,
+      () => {
+        throw new Error("次ページ取得失敗");
+      },
+    );
+
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    expect(result.current.error).toBe("次ページ取得失敗");
+
+    // 非 Error 例外（文字列）による失敗
+    mockHttpClient.setResponse(
+      /^https:\/\/kakuyomu\.jp\/search.*page=2/,
+      () => {
+        throw "文字列エラー";
+      },
+    );
+
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    expect(result.current.error).toBe("文字列エラー");
+  });
+
+  it("loadMore でパーサーが未実装サイトの場合はエラーメッセージが設定されること", async () => {
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.setKeyword("異世界");
+    });
+
+    await act(async () => {
+      await result.current.search();
+    });
+
+    act(() => {
+      result.current.setSelectedSite("narou");
+    });
+
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    expect(result.current.error).toContain("検索機能が未実装のサイトです");
+  });
+
+  it("addNovelToBookshelf で非Error例外がスローされた場合も error ステートが設定されること", async () => {
+    mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/works\/\d+$/, () => {
+      throw "未知のネットワークエラー";
+    });
+
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.setKeyword("異世界");
+    });
+
+    await act(async () => {
+      await result.current.search();
+    });
+
+    const targetItem = result.current.items[0];
+    let savedId: string | null = "dummy";
+    await act(async () => {
+      savedId = await result.current.addNovelToBookshelf(targetItem);
+    });
+
+    expect(savedId).toBeNull();
+    expect(result.current.error).toBe("未知のネットワークエラー");
+  });
+
+  it("handleCardSelect で未登録作品の追加が失敗した場合は画面遷移しないこと", async () => {
+    mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/works\/\d+$/, () => {
+      throw new Error("作品取得エラー");
+    });
+
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.setKeyword("異世界");
+    });
+
+    await act(async () => {
+      await result.current.search();
+    });
+
+    const targetItem = result.current.items[0];
+    window.history.pushState(null, "", "/search");
+
+    await act(async () => {
+      await result.current.handleCardSelect(targetItem);
+    });
+
+    expect(window.location.pathname).toBe("/search");
+  });
+
+  it("handleCardSelect で登録済みだが listNovels で見つからない場合もフォールバックIDで詳細画面へ遷移すること", async () => {
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.setKeyword("異世界");
+    });
+
+    await act(async () => {
+      await result.current.search();
+    });
+
+    const targetItem = result.current.items[0];
+
+    // 手動で registeredWorkIds に追加した状態をシミュレート
+    await act(async () => {
+      await result.current.addNovelToBookshelf(targetItem);
+    });
+
+    // Repository の listNovels を空配列にモックして found が undefined になるケースを検証
+    const repo = (
+      window as unknown as {
+        __yommyServices?: {
+          novelRepository: { listNovels: () => Promise<unknown[]> };
+        };
+      }
+    ).__yommyServices?.novelRepository;
+    if (repo) {
+      vi.spyOn(repo, "listNovels").mockResolvedValueOnce([]);
+    }
+
+    await act(async () => {
+      await result.current.handleCardSelect(targetItem);
+    });
+
+    expect(window.location.pathname).toBe(
+      `/novels/${encodeURIComponent(`kakuyomu:${targetItem.remoteWorkId}`)}`,
+    );
+  });
+
+  it("refreshRegisteredIds で listNovels が例外をスローしても正常に処理が継続すること", async () => {
+    const failingRepo = {
+      listNovels: vi.fn().mockRejectedValue(new Error("DBエラー")),
+      upsertNovelWithToc: vi.fn(),
+    };
+
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(
+        ServiceProvider,
+        {
+          services: {
+            httpClient: mockHttpClient,
+            novelRepository: failingRepo as never,
+          },
+        },
+        React.createElement(
+          RouterProvider,
+          { initialPath: "/search" },
+          children,
+        ),
+      );
+
+    const { result } = renderHook(() => useNovelSearch(), { wrapper });
+
+    await waitFor(() => {
+      expect(failingRepo.listNovels).toHaveBeenCalled();
+    });
+    expect(result.current.registeredWorkIds.size).toBe(0);
+  });
+
+  it("novelRepository が存在しない場合も refreshRegisteredIds がクラッシュしないこと", async () => {
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(
+        ServiceProvider,
+        {
+          services: {
+            httpClient: mockHttpClient,
+            novelRepository: undefined as never,
+          },
+        },
+        React.createElement(
+          RouterProvider,
+          { initialPath: "/search" },
+          children,
+        ),
+      );
+
+    const { result } = renderHook(() => useNovelSearch(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.registeredWorkIds.size).toBe(0);
+    });
   });
 });
