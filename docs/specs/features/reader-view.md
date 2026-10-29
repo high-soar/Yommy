@@ -33,7 +33,7 @@ related_specs:
   - docs/specs/parsers/kakuyomu.md
   - docs/specs/changes/archive/issue-79-four-tabs-search-ranking.md
   - docs/specs/changes/issue-80-bookshelf-update-check-and-sort.md
-  - docs/specs/changes/issue-81-prefetch-and-cache-rules.md
+  - docs/specs/changes/archive/issue-81-prefetch-and-cache-rules.md
   - docs/specs/changes/archive/issue-50-fullscreen-shell-and-settings.md
   - docs/specs/changes/archive/issue-52-reader-fullscreen-and-bottom-overlay.md
   - docs/specs/changes/archive/issue-12-bookshelf-and-routing.md
@@ -50,6 +50,7 @@ related_tests:
   - test/vrt/vrt.spec.ts
   - test/it/smoke.spec.ts
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
+  - test/it/scenarios/scn03-prefetch-and-cache.spec.ts
 ---
 
 # 小説リーダー画面仕様書（SCR-03）

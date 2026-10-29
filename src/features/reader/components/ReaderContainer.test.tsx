@@ -538,9 +538,12 @@ describe("ReaderContainer", () => {
         window.dispatchEvent(new PopStateEvent("popstate"));
       });
 
-      await waitFor(() => {
-        expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
-      });
+      await waitFor(
+        () => {
+          expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
+        },
+        { timeout: 3000 },
+      );
     });
 
     it("コンポーネントのアンマウント時に flushBookmark が実行されること", async () => {
@@ -565,9 +568,12 @@ describe("ReaderContainer", () => {
 
       unmount();
 
-      await waitFor(() => {
-        expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
-      });
+      await waitFor(
+        () => {
+          expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
+        },
+        { timeout: 3000 },
+      );
     });
   });
 

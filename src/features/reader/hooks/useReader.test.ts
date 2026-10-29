@@ -1875,6 +1875,44 @@ describe("useReader", () => {
         );
         expect(result.current.error).toContain("HTTP 404: Not Found");
       });
+
+      it("未キャッシュ話の通信で HTTP 400 以上のステータスコードが返された場合、例外がスローされエラー画面が表示されること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 2,
+          cachedCount: 0,
+        });
+
+        const httpClient = new MockHttpClient();
+        vi.spyOn(httpClient, "getHtml").mockResolvedValue({
+          status: 500,
+          url: "https://kakuyomu.jp/works/sample/episodes/1",
+          headers: {},
+          html: "",
+        });
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              httpClient,
+            }),
+          },
+        );
+
+        await act(async () => {
+          await Promise.resolve();
+        });
+
+        expect(result.current.isLoading).toBe(false);
+        expect(result.current.error).toContain(
+          "エピソードの取得に失敗しました (HTTP 500)",
+        );
+      });
     });
 
     describe("読書中5話自動先読み (AC-RD-12)", () => {
