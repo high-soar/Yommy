@@ -5,7 +5,7 @@ import type {
   NovelRepository,
   NovelSummary,
 } from "../types";
-import type { ParsedNovelIndex } from "../../parsers/types";
+import type { ParsedNovelIndex, ParsedTocItem } from "../../parsers/types";
 
 interface NovelRow {
   id: string;
@@ -21,6 +21,8 @@ interface NovelRow {
   bookmark_chapter_index: number | null;
   bookmark_scroll_progress: number;
   is_favorite: number;
+  has_new_update: number;
+  latest_episode_published_at: string | null;
   last_checked_at: string | null;
   last_read_at: string | null;
   created_at: string;
@@ -42,6 +44,54 @@ ON CONFLICT(novel_id, remote_chapter_id) DO UPDATE SET
   published_at = excluded.published_at;
 `;
 
+/**
+ * 5種の本棚ソート順に対応する ORDER BY 句の定義
+ * （docs/specs/db-schema.md および docs/specs/changes/issue-80-bookshelf-update-check-and-sort.md に準拠）
+ */
+const ORDER_BY_CLAUSES: Record<BookshelfSortOrder, string> = {
+  unread_first: `ORDER BY
+    novels.has_new_update DESC,
+    CASE WHEN novels.last_read_at IS NOT NULL THEN 0 ELSE 1 END,
+    novels.last_read_at DESC,
+    novels.created_at DESC`,
+  last_read: `ORDER BY
+    CASE WHEN novels.last_read_at IS NOT NULL THEN 0 ELSE 1 END,
+    novels.last_read_at DESC,
+    novels.created_at DESC`,
+  latest_published: `ORDER BY
+    CASE WHEN novels.latest_episode_published_at IS NOT NULL THEN 0 ELSE 1 END,
+    novels.latest_episode_published_at DESC,
+    novels.updated_at DESC`,
+  created_at: `ORDER BY novels.created_at DESC`,
+  title: `ORDER BY novels.title COLLATE NOCASE ASC`,
+};
+
+/**
+ * 各話目次エピソード一覧から有効な publishedAt の最大値（最新公開・更新日時）を算出する
+ */
+export function computeLatestEpisodePublishedAt(
+  chapters: ParsedTocItem[],
+): string | null {
+  let maxTime = -Infinity;
+  let maxPublishedAt: string | null = null;
+
+  for (const chapter of chapters) {
+    if (!chapter.publishedAt) {
+      continue;
+    }
+    const timestamp = Date.parse(chapter.publishedAt);
+    if (Number.isNaN(timestamp)) {
+      continue;
+    }
+    if (timestamp > maxTime) {
+      maxTime = timestamp;
+      maxPublishedAt = chapter.publishedAt;
+    }
+  }
+
+  return maxPublishedAt;
+}
+
 export class SqlNovelRepository implements NovelRepository {
   constructor(private db: DatabaseAdapter) {}
 
@@ -60,6 +110,8 @@ export class SqlNovelRepository implements NovelRepository {
       bookmarkChapterIndex: row.bookmark_chapter_index,
       bookmarkScrollProgress: row.bookmark_scroll_progress,
       isFavorite: row.is_favorite === 1,
+      hasNewUpdate: row.has_new_update === 1,
+      latestEpisodePublishedAt: row.latest_episode_published_at,
       lastCheckedAt: row.last_checked_at,
       lastReadAt: row.last_read_at,
       createdAt: row.created_at,
@@ -67,18 +119,21 @@ export class SqlNovelRepository implements NovelRepository {
     };
   }
 
-  async listNovels(_sortOrder?: BookshelfSortOrder): Promise<NovelSummary[]> {
+  async listNovels(
+    order: BookshelfSortOrder = "unread_first",
+  ): Promise<NovelSummary[]> {
+    const orderByClause =
+      ORDER_BY_CLAUSES[order] ?? ORDER_BY_CLAUSES.unread_first;
+
     const rows = await this.db.query<NovelRow>(
       `SELECT
         id, site_type, remote_work_id, canonical_url, title, author,
         total_chapters, cached_chapters, total_byte_size,
         bookmark_chapter_index, bookmark_scroll_progress, is_favorite,
+        has_new_update, latest_episode_published_at,
         last_checked_at, last_read_at, created_at, updated_at
       FROM novels
-      ORDER BY
-        CASE WHEN last_read_at IS NOT NULL THEN 0 ELSE 1 END,
-        last_read_at DESC,
-        created_at DESC;`,
+      ${orderByClause};`,
     );
 
     return rows.map((row) => {
@@ -104,6 +159,9 @@ export class SqlNovelRepository implements NovelRepository {
     fetchedAt: string,
   ): Promise<NovelRecord> {
     const id = `${index.siteType}:${index.remoteWorkId}`;
+    const latestEpisodePublishedAt = computeLatestEpisodePublishedAt(
+      index.chapters,
+    );
 
     return await this.db.runTransaction(async () => {
       const existing = await this.getNovelById(id);
@@ -114,8 +172,9 @@ export class SqlNovelRepository implements NovelRepository {
             id, site_type, remote_work_id, canonical_url, title, author, synopsis,
             total_chapters, cached_chapters, total_byte_size,
             bookmark_chapter_index, bookmark_scroll_progress, is_favorite,
+            has_new_update, latest_episode_published_at,
             last_checked_at, last_read_at, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, 0, 0, ?, NULL, ?, ?);`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, 0, 0, 0, ?, ?, NULL, ?, ?);`,
           [
             id,
             index.siteType,
@@ -125,16 +184,25 @@ export class SqlNovelRepository implements NovelRepository {
             index.author,
             index.synopsis,
             index.chapters.length,
+            latestEpisodePublishedAt,
             fetchedAt,
             fetchedAt,
             fetchedAt,
           ],
         );
       } else {
+        const hasNewUpdate =
+          index.chapters.length > existing.totalChapters
+            ? 1
+            : existing.hasNewUpdate
+              ? 1
+              : 0;
+
         await this.db.execute(
           `UPDATE novels
            SET site_type = ?, remote_work_id = ?, canonical_url = ?, title = ?, author = ?, synopsis = ?,
-               total_chapters = ?, last_checked_at = ?, updated_at = ?
+               total_chapters = ?, has_new_update = ?, latest_episode_published_at = ?,
+               last_checked_at = ?, updated_at = ?
            WHERE id = ?;`,
           [
             index.siteType,
@@ -144,6 +212,8 @@ export class SqlNovelRepository implements NovelRepository {
             index.author,
             index.synopsis,
             index.chapters.length,
+            hasNewUpdate,
+            latestEpisodePublishedAt,
             fetchedAt,
             fetchedAt,
             id,
@@ -188,18 +258,17 @@ export class SqlNovelRepository implements NovelRepository {
     await this.db.execute("DELETE FROM novels WHERE id = ?;", [novelId]);
   }
 
-  async clearNewUpdate(_novelId: string): Promise<void> {
-    throw new Error(
-      "SqlNovelRepository.clearNewUpdate is not implemented yet.",
+  async clearNewUpdate(novelId: string): Promise<void> {
+    await this.db.execute(
+      "UPDATE novels SET has_new_update = 0 WHERE id = ?;",
+      [novelId],
     );
   }
 
-  async updateLastCheckedAt(
-    _novelId: string,
-    _checkedAt: string,
-  ): Promise<void> {
-    throw new Error(
-      "SqlNovelRepository.updateLastCheckedAt is not implemented yet.",
+  async updateLastCheckedAt(novelId: string, checkedAt: string): Promise<void> {
+    await this.db.execute(
+      "UPDATE novels SET last_checked_at = ? WHERE id = ?;",
+      [checkedAt, novelId],
     );
   }
 }
