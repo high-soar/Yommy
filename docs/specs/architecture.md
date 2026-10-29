@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Review (#80)"
+status: "Review (#81)"
 updated: "2026-10-29"
 tags:
   - architecture
@@ -16,6 +16,9 @@ tags:
   - search
   - ranking
   - four-tabs
+  - prefetch
+  - batch-cache
+  - cache-rules
 related_specs:
   - docs/specs/requirements.md
   - docs/specs/db-schema.md
@@ -30,6 +33,7 @@ related_specs:
   - docs/specs/changes/archive/issue-78-apk-signing-and-back-button.md
   - docs/specs/changes/issue-79-four-tabs-search-ranking.md
   - docs/specs/changes/issue-80-bookshelf-update-check-and-sort.md
+  - docs/specs/changes/issue-81-prefetch-and-cache-rules.md
   - docs/specs/changes/archive/issue-50-fullscreen-shell-and-settings.md
   - docs/specs/changes/archive/issue-51-novel-detail-layout-and-scroll.md
   - docs/specs/changes/archive/issue-52-reader-fullscreen-and-bottom-overlay.md
@@ -466,6 +470,39 @@ export interface RouterContextValue {
   - 作品詳細・目次画面（`SCR-02`）からのバックキー操作時は、直前の呼び出し元画面（本棚 `SCR-01`、検索 `SCR-06`、またはランキング `SCR-07`）へ戻る（`TR-07`、直前履歴が存在しない場合は本棚 `/` へ復帰）。
   - 設定画面（`SCR-05`）、検索画面（`SCR-06`）、ランキング画面（`SCR-07`）で OS バックキーを実行したとき、ホームである本棚画面（`/`）へ復帰する（`TR-12`）。
   - 本棚画面（`SCR-01: /`）でバックボタンが押された際は、2秒以内の連続2回押下で `AppBridge.exitApp()` を呼び出してアプリを終了し、1回目押下時は画面下部に「もう一度バックボタンを押すと終了します」の一時確認トースト（`role="status"`、2秒後に自動消去）を表示する（`TR-13`）。
+
+### 3.6 キャッシュ鮮度・先読み・一括キャッシュ制御ポリシー（v0.3 新設）
+
+読書体験の快適化（待ち時間ゼロ）と外部小説サーバーへの負荷低減（503 IP BAN 防止）を両立するため、共通定数モジュール（`src/shared/constants/cache.ts`）に以下の定数を定義し、制御ポリシーを適用します。
+
+```ts
+/** キャッシュの有効期間（7日間） */
+export const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** 既存キャッシュが存在する場合の再取得短タイムアウト（3秒） */
+export const SHORT_TIMEOUT_MS = 3000;
+/** 未キャッシュ話等の初回取得標準タイムアウト（10秒） */
+export const STANDARD_TIMEOUT_MS = 10000;
+/** 先読みおよび一括キャッシュのリクエスト間隔ウェイト（1.5秒） */
+export const PREFETCH_INTERVAL_MS = 1500;
+/** 読書中の自動先読み対象話数（5話先まで） */
+export const PREFETCH_COUNT = 5;
+```
+
+1. **キャッシュ鮮度判定（TTL 7日間）**:
+   - `chapters.downloaded_at` が現在時刻から `CACHE_TTL_MS`（7日）以内の場合、キャッシュを「有効（Fresh）」とみなし、通信を行わず即座に SQLite の本文を描画する。
+   - 先読みおよび一括キャッシュにおいても、有効なキャッシュを持つ話数はスキップされる。
+2. **読書中 5 話自動先読み（`useReader`）**:
+   - 第 $N$ 話の本文読み込み完了後、バックグラウンドで $N+1 \sim \min(N+5, \text{totalChapters})$ のエピソードを昇順で順次取得・SQLite 保存する。
+   - 対象サーバーの過負荷防止（第 $N$ 話取得直後の連続リクエスト抑止）のため、最初の先読み（第 $N+1$ 話）リクエスト開始前に `PREFETCH_INTERVAL_MS`（1.5秒）の初期インターバルを空け、以降も 1話の取得完了ごとに 1.5秒のウェイトを空けて直列実行する。
+   - 処理全体を `AbortController` で制御し、ユーザーが `goToChapter` で別エピソードへ移動した際やリーダー画面を離脱した際は、直ちに直前の処理をキャンセルしてリソースを解放する。
+3. **作品詳細での未取得話一括キャッシュ（`useNovelDetail`）**:
+   - 作品詳細ヘッダーの「未取得話を一括キャッシュ」操作（`TR-18`）により、未キャッシュエピソード（および TTL 7日経過した古いキャッシュ）を `PREFETCH_INTERVAL_MS`（1.5秒）間隔で順次直列取得する。
+   - 1話取得成功ごとに SQLite へ保存し、ヘッダーの取得済み話数（`cachedChapters`）および各話リストのキャッシュバッジをリアルタイムに更新する。
+   - ユーザー手動中断（「中断」ボタン）および画面アンマウント時は `AbortController` により安全に処理を停止する（取得済み話数は維持される）。
+4. **7日経過キャッシュの短タイムアウトフォールバック**:
+   - 取得から 7日以上経過したキャッシュは、閲覧時・先読み時・一括キャッシュ時に `SHORT_TIMEOUT_MS`（3秒）で再取得を試みる。
+   - 3秒以内に取得成功した場合は新本文で DB および画面を更新する。
+   - タイムアウト・オフライン・通信エラー等で失敗した場合は、**即座に既存の `bodyHtml` を使用してフォールバック表示** し（一括キャッシュ時は既存キャッシュを維持して次話へ進行）、エラー画面を表示せず読書を継続させる。
 
 ---
 
