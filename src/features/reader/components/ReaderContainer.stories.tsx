@@ -49,7 +49,7 @@ const sampleChapter1: ChapterRecord = {
   byteSize: 1024,
   isRead: false,
   publishedAt: "2026-01-01T10:00:00Z",
-  downloadedAt: "2026-01-01T12:00:00Z",
+  downloadedAt: new Date().toISOString(),
 };
 
 const sampleChapter2: ChapterRecord = {
@@ -64,7 +64,7 @@ const sampleChapter2: ChapterRecord = {
   byteSize: 1200,
   isRead: false,
   publishedAt: "2026-01-02T10:00:00Z",
-  downloadedAt: "2026-01-02T12:00:00Z",
+  downloadedAt: new Date().toISOString(),
 };
 
 const sampleChapter3: ChapterRecord = {
@@ -79,7 +79,7 @@ const sampleChapter3: ChapterRecord = {
   byteSize: 1500,
   isRead: false,
   publishedAt: "2026-01-03T10:00:00Z",
-  downloadedAt: "2026-01-03T12:00:00Z",
+  downloadedAt: new Date().toISOString(),
 };
 
 function createMockNovelRepository(novel: NovelRecord | null): NovelRepository {
