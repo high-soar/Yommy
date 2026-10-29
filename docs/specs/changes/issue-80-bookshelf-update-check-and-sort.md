@@ -4,7 +4,7 @@ title: "作品の自動更新チェック（NEWバッジ表示・解除）と本
 description: "Issue #80 に対する差分仕様、影響する全体正本、テスト計画、および実装Sub-issue分割計画。"
 issue: "#80"
 status: "Review (#80)"
-updated: "2026-10-29"
+updated: "2026-10-30"
 tags:
   - delta
   - bookshelf
@@ -75,10 +75,10 @@ related_tests:
 2. **レートリミット制御**:
    - 対象小説サーバー（カクヨム等）への過剰アクセス・503 BAN を防止するため、1作品の目次取得ごとに 1.0秒（`1000ms`）のウェイト間隔を挟んで順次実行する。
 3. **新着話検知および最新話公開日時導出ロジック**:
-   - 目次再取得結果の `index.chapters.length > existing.totalChapters`（または既存にない新規チャプター）を検知した場合に新着と判定する。
+   - 目次再取得結果の `index.chapters.length > existing.totalChapters`、または `chapters` 内に既存の `remote_chapter_id` に含まれない新規チャプターが存在することを検知した場合に新着と判定する。
    - 新着検知時は `has_new_update = 1` を記録し、`last_checked_at` を更新する。
    - 新着なしの場合は既存の `has_new_update` 値を維持（未読 NEW が残っている場合は維持）し、`last_checked_at` のみ現在時刻に更新する。
-   - `upsertNovelWithToc` 実行時、`index.chapters` 内のエピソード（`ParsedTocItem[]`）のうち有効な `publishedAt` の最大値（最新公開/更新日時）を算出し、`novels.latest_episode_published_at` に保存する（全エピソード未設定時は `NULL`）。
+   - `upsertNovelWithToc` 実行時、`index.chapters` 内のエピソード（`ParsedTocItem[]`）のうち有効な `publishedAt` の最大値（最新公開/更新日時）を算出し、ISO 8601 UTC 文字列（例: `2026-01-01T20:00:00.000Z`）に正規化して `novels.latest_episode_published_at` に保存する（全エピソード未設定時は `NULL`）。各話公開日時のタイムゾーン表記揺れによる SQLite でのソート誤差を防止する。
    - 各作品の更新完了時、本棚一覧の `novels` ステートへ反映する。
 4. **「NEW」バッジ描画仕様**:
    - `NovelCard` において `novel.hasNewUpdate === true` のとき、目立つタグ調バッジ `data-testid="novel-card-new-badge"`（表示文字列: `NEW`）を描画する。
@@ -149,6 +149,8 @@ related_tests:
 - **`app_settings` テーブル新設**:
   - `key TEXT PRIMARY KEY`, `value TEXT NOT NULL`, `updated_at TEXT NOT NULL`
   - 初期レコード: `key: 'bookshelf_sort_order'`, `value: 'unread_first'`
+- **スキーママイグレーション方針（v0.2 からの移行）**:
+  - `initializeDatabaseSchema` 時に `PRAGMA table_info(novels)` を参照し、`has_new_update` および `latest_episode_published_at` が存在しない場合は `ALTER TABLE novels ADD COLUMN ...` を実行して既存データを保持したままカラムとインデックスを追加。
 - フロントマター `status: "Review (#80)"`、ER 図、および `related_specs` / `related_tests` を更新。
 
 ### 3.3 全体画面一覧・画面遷移の骨格（`docs/specs/screen-transitions.md`）

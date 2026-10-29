@@ -67,13 +67,14 @@ const ORDER_BY_CLAUSES: Record<BookshelfSortOrder, string> = {
 };
 
 /**
- * 各話目次エピソード一覧から有効な publishedAt の最大値（最新公開・更新日時）を算出する
+ * 各話目次エピソード一覧から有効な publishedAt の最大値（最新公開・更新日時）を算出し、
+ * SQLite の文字列ソート順と実時刻順を一致させるため ISO 8601 UTC 文字列（例: "2026-01-01T20:00:00.000Z"）に正規化して返却する
+ * （docs/specs/db-schema.md §3.1 に準拠）
  */
 export function computeLatestEpisodePublishedAt(
   chapters: ParsedTocItem[],
 ): string | null {
   let maxTime = -Infinity;
-  let maxPublishedAt: string | null = null;
 
   for (const chapter of chapters) {
     if (!chapter.publishedAt) {
@@ -85,11 +86,14 @@ export function computeLatestEpisodePublishedAt(
     }
     if (timestamp > maxTime) {
       maxTime = timestamp;
-      maxPublishedAt = chapter.publishedAt;
     }
   }
 
-  return maxPublishedAt;
+  if (maxTime === -Infinity) {
+    return null;
+  }
+
+  return new Date(maxTime).toISOString();
 }
 
 /**
@@ -205,8 +209,18 @@ export class SqlNovelRepository implements NovelRepository {
           ],
         );
       } else {
+        const existingChapterRows = await this.db.query<{
+          remote_chapter_id: string;
+        }>(`SELECT remote_chapter_id FROM chapters WHERE novel_id = ?;`, [id]);
+        const existingRemoteIds = new Set(
+          existingChapterRows.map((r) => r.remote_chapter_id),
+        );
+        const hasNewChapter = index.chapters.some(
+          (c) => !existingRemoteIds.has(c.remoteChapterId),
+        );
+
         const hasNewUpdate =
-          index.chapters.length > existing.totalChapters
+          index.chapters.length > existing.totalChapters || hasNewChapter
             ? 1
             : existing.hasNewUpdate
               ? 1
