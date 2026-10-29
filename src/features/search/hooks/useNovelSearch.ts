@@ -63,6 +63,9 @@ interface ExecuteSearchParams {
 
 /**
  * 検索画面の状態管理・HTTP取得・SQLite登録を統括するカスタムフック（SCR-06）
+ *
+ * キーワード検索、並び順・連載状況・ジャンルフィルタリング、次ページ追加読み込み、
+ * 登録済み作品の照合・その場本棚追加、および詳細画面への遷移制御を提供する。
  */
 export function useNovelSearch(): UseNovelSearchResult {
   const { httpClient, parserRegistry, novelRepository, isReady } =
