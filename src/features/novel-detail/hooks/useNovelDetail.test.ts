@@ -675,6 +675,29 @@ describe("useNovelDetail", () => {
       expect(result.current.isDeleting).toBe(false);
       expect(result.current.isDeleteDialogOpen).toBe(false);
     });
+
+    it("初回ロード時に novel.hasNewUpdate === true の場合 clearNewUpdate が呼び出されること (AC-ND-10)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const seeded = await seedSampleNovel(novelRepo);
+
+      // 直接 has_new_update = 1 に設定
+      await db.execute("UPDATE novels SET has_new_update = 1 WHERE id = ?", [
+        seeded.id,
+      ]);
+
+      const clearSpy = vi.spyOn(novelRepo, "clearNewUpdate");
+
+      const { result } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({ novelRepository: novelRepo }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(clearSpy).toHaveBeenCalledWith(seeded.id);
+    });
   });
 
   describe("未取得話一括キャッシュ処理 (AC-ND-11, AC-ND-12, AC-ND-13)", () => {

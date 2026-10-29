@@ -2396,6 +2396,40 @@ describe("useReader", () => {
         consoleWarnSpy.mockRestore();
         abortPromiseReject?.();
       });
+
+      it("表示開始時に対象作品の novel.hasNewUpdate === true の場合 clearNewUpdate が呼び出されること (AC-RD-11)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 2,
+          cachedCount: 2,
+        });
+
+        // has_new_update = 1 に設定
+        await db.execute("UPDATE novels SET has_new_update = 1 WHERE id = ?", [
+          seeded.id,
+        ]);
+
+        const clearSpy = vi.spyOn(novelRepo, "clearNewUpdate");
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await act(async () => {
+          await Promise.resolve();
+        });
+        expect(result.current.isLoading).toBe(false);
+
+        expect(clearSpy).toHaveBeenCalledWith(seeded.id);
+      });
     });
   });
 });
