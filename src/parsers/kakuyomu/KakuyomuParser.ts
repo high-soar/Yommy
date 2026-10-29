@@ -96,9 +96,6 @@ function parseGenre(raw?: string | null): {
   if (GENRE_MAP[lower]) {
     return GENRE_MAP[lower];
   }
-  if (GENRE_MAP[trimmed]) {
-    return GENRE_MAP[trimmed];
-  }
   return { genre: lower, genreLabel: trimmed };
 }
 
@@ -221,13 +218,58 @@ interface ApolloConnection {
 type ApolloState = Record<string, unknown>;
 
 /**
+ * Apollo State 内の Connection オブジェクト（参照解決含む）を取得する
+ */
+function resolveApolloConnection(
+  apolloState: ApolloState,
+  rawConn: unknown,
+): ApolloConnection | null {
+  if (!rawConn || typeof rawConn !== "object") {
+    return null;
+  }
+  if ("__ref" in rawConn) {
+    const ref = (rawConn as ApolloRef).__ref;
+    const resolved = apolloState[ref];
+    return resolved && typeof resolved === "object"
+      ? (resolved as ApolloConnection)
+      : null;
+  }
+  return rawConn as ApolloConnection;
+}
+
+/**
+ * Apollo Connection から作品リストを一括抽出する
+ */
+function extractWorksFromApolloConnection(
+  apolloState: ApolloState,
+  conn: ApolloConnection,
+): NovelSearchResultItem[] {
+  const items: NovelSearchResultItem[] = [];
+  const nodes = conn.nodes ?? [];
+  for (const node of nodes) {
+    const workObj =
+      typeof node === "object" && node !== null && "__ref" in node
+        ? (apolloState[(node as ApolloRef).__ref] as
+            ApolloSearchResultWork | undefined)
+        : (node as ApolloSearchResultWork | undefined);
+    if (workObj) {
+      const item = extractWorkFromApollo(apolloState, workObj);
+      if (item) {
+        items.push(item);
+      }
+    }
+  }
+  return items;
+}
+
+/**
  * Apollo State から検索・ランキング用の作品エンティティを抽出する
  */
 function extractWorkFromApollo(
   apolloState: ApolloState,
   work: ApolloSearchResultWork,
 ): NovelSearchResultItem | null {
-  if (!work || !work.id) {
+  if (!work.id) {
     return null;
   }
   const remoteWorkId = String(work.id);
@@ -287,13 +329,12 @@ function extractWorkFromDomCard(card: Element): NovelSearchResultItem | null {
   if (!link) {
     return null;
   }
-  const href = link.getAttribute("href") || "";
-  const match = href.match(WORK_ID_REGEX);
+  const match = link.getAttribute("href")?.match(WORK_ID_REGEX);
   if (!match) {
     return null;
   }
   const remoteWorkId = match[1];
-  const title = link.textContent?.trim() || "";
+  const title = link.textContent!.trim();
 
   const authorEl = card.querySelector(
     'a[href*="/users/"], [class*="author"], [class*="activityName"]',
@@ -313,7 +354,7 @@ function extractWorkFromDomCard(card: Element): NovelSearchResultItem | null {
     statusEl?.textContent,
   );
 
-  const cardText = card.textContent || "";
+  const cardText = card.textContent!;
   const epMatch = cardText.match(/(\d+)話/);
   const episodeCount = epMatch ? parseInt(epMatch[1], 10) : 0;
 
@@ -327,14 +368,15 @@ function extractWorkFromDomCard(card: Element): NovelSearchResultItem | null {
     ? parseInt(reviewMatch[1].replace(/,/g, ""), 10)
     : 0;
 
-  let tagElements = card.querySelectorAll(
-    'a[href*="/tags/"], [class*="tag"] a, [class*="tag"] li, [class*="tag"] span',
+  const tagElements = card.querySelectorAll(
+    'a[href*="/tags/"], [class*="tag"]',
   );
-  if (tagElements.length === 0) {
-    tagElements = card.querySelectorAll('[class*="tag"]');
-  }
   const tags: string[] = [];
   for (const tagEl of Array.from(tagElements)) {
+    // 子要素を持つコンテナタグ（ul等）は除外し、末端要素のテキストのみを採用する
+    if (tagEl.childElementCount > 0) {
+      continue;
+    }
     const text = tagEl.textContent?.trim();
     if (text && !tags.includes(text)) {
       tags.push(text);
@@ -733,28 +775,12 @@ export class KakuyomuParser implements NovelParser {
           k.startsWith("searchWorks"),
         );
         if (searchKey) {
-          let conn = rootQuery[searchKey] as
-            ApolloConnection | ApolloRef | undefined;
-          if (conn && "__ref" in conn) {
-            conn = apolloState[(conn as ApolloRef).__ref] as
-              ApolloConnection | undefined;
-          }
+          const conn = resolveApolloConnection(
+            apolloState,
+            rootQuery[searchKey],
+          );
           if (conn) {
-            const items: NovelSearchResultItem[] = [];
-            const nodes = conn.nodes ?? [];
-            for (const node of nodes) {
-              const workObj =
-                "__ref" in node
-                  ? (apolloState[(node as ApolloRef).__ref] as
-                      ApolloSearchResultWork | undefined)
-                  : node;
-              if (workObj) {
-                const item = extractWorkFromApollo(apolloState, workObj);
-                if (item) {
-                  items.push(item);
-                }
-              }
-            }
+            const items = extractWorksFromApolloConnection(apolloState, conn);
             const hasNextPage = Boolean(conn.pageInfo?.hasNextPage);
             const totalCount =
               typeof conn.totalCount === "number" ? conn.totalCount : undefined;
@@ -835,31 +861,21 @@ export class KakuyomuParser implements NovelParser {
           k.startsWith("rankedWorks"),
         );
         if (rankingKey) {
-          let conn = rootQuery[rankingKey] as
-            ApolloConnection | ApolloRef | undefined;
-          if (conn && "__ref" in conn) {
-            conn = apolloState[(conn as ApolloRef).__ref] as
-              ApolloConnection | undefined;
-          }
+          const conn = resolveApolloConnection(
+            apolloState,
+            rootQuery[rankingKey],
+          );
           if (conn) {
-            const items: NovelRankingResultItem[] = [];
-            const nodes = conn.nodes ?? [];
-            let idx = 0;
-            for (const node of nodes) {
-              const workObj =
-                "__ref" in node
-                  ? (apolloState[(node as ApolloRef).__ref] as
-                      ApolloSearchResultWork | undefined)
-                  : node;
-              if (workObj) {
-                const baseItem = extractWorkFromApollo(apolloState, workObj);
-                if (baseItem) {
-                  const rank = (currentPage - 1) * 100 + (idx + 1);
-                  items.push({ ...baseItem, rank });
-                  idx++;
-                }
-              }
-            }
+            const baseItems = extractWorksFromApolloConnection(
+              apolloState,
+              conn,
+            );
+            const items: NovelRankingResultItem[] = baseItems.map(
+              (item, idx) => ({
+                ...item,
+                rank: (currentPage - 1) * 100 + (idx + 1),
+              }),
+            );
             const hasNextPage = Boolean(conn.pageInfo?.hasNextPage);
             return {
               items,

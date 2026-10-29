@@ -1161,4 +1161,308 @@ describe("KakuyomuParser", () => {
       expect(result.items[0].author).toBe("著者88");
     });
   });
+
+  describe("検索・ランキング抽出の境界値・フォールバック・異常系検証", () => {
+    it("Apollo Connection が __ref で参照されている場合、および nodes に直接オブジェクトと ID 欠損ノードが含まれている場合を処理できること", () => {
+      const html = `
+        <html><body>
+          <script id="__NEXT_DATA__" type="application/json">
+            {
+              "props": {
+                "pageProps": {
+                  "__APOLLO_STATE__": {
+                    "ROOT_QUERY": {
+                      "searchWorks({\\"query\\":\\"test\\"})": { "__ref": "SearchWorkConnection:1" },
+                      "rankedWorks({\\"period\\":\\"WEEKLY\\"})": { "__ref": "RankedWorkConnection:1" }
+                    },
+                    "SearchWorkConnection:1": {
+                      "totalCount": 1,
+                      "pageInfo": { "hasNextPage": false },
+                      "nodes": [
+                        { "id": "direct1", "title": "直接ノード作品", "genre": "custom_genre", "serialStatus": "unknown_status" },
+                        { "title": "ID欠損ノード" }
+                      ]
+                    },
+                    "RankedWorkConnection:1": {
+                      "pageInfo": { "hasNextPage": false },
+                      "nodes": [
+                        { "id": "rankDirect1", "title": "直接ノードランキング作品", "genre": null, "serialStatus": null }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          </script>
+        </body></html>
+      `;
+
+      const searchRes = parser.searchNovels(
+        html,
+        "https://kakuyomu.jp/search?q=test",
+      );
+      expect(searchRes.items).toHaveLength(1);
+      expect(searchRes.items[0].remoteWorkId).toBe("direct1");
+      expect(searchRes.items[0].genre).toBe("custom_genre");
+      expect(searchRes.items[0].genreLabel).toBe("custom_genre");
+      expect(searchRes.items[0].serialStatus).toBe("running");
+      expect(searchRes.items[0].serialStatusLabel).toBe("連載中");
+
+      const rankRes = parser.getRanking(
+        html,
+        "https://kakuyomu.jp/rankings/all/weekly",
+      );
+      expect(rankRes.items).toHaveLength(1);
+      expect(rankRes.items[0].remoteWorkId).toBe("rankDirect1");
+      expect(rankRes.items[0].genre).toBe("");
+      expect(rankRes.items[0].genreLabel).toBe("");
+      expect(rankRes.items[0].serialStatus).toBe("running");
+    });
+
+    it("Apollo Connection の参照先が存在しない場合に安全に DOM 抽出へフォールバックすること", () => {
+      const html = `
+        <html><body>
+          <script id="__NEXT_DATA__" type="application/json">
+            {
+              "props": {
+                "pageProps": {
+                  "__APOLLO_STATE__": {
+                    "ROOT_QUERY": {
+                      "searchWorks({\\"query\\":\\"test\\"})": { "__ref": "MissingConnection" },
+                      "rankedWorks({\\"period\\":\\"WEEKLY\\"})": { "__ref": "MissingConnection" }
+                    }
+                  }
+                }
+              }
+            }
+          </script>
+          <div class="widget-work">
+            <h3 class="widget-work-title">
+              <a href="/works/77777777">DOMフォールバック作品</a>
+            </h3>
+          </div>
+        </body></html>
+      `;
+      const searchRes = parser.searchNovels(
+        html,
+        "https://kakuyomu.jp/search?q=test",
+      );
+      expect(searchRes.items).toHaveLength(1);
+      expect(searchRes.items[0].remoteWorkId).toBe("77777777");
+
+      const rankRes = parser.getRanking(
+        html,
+        "https://kakuyomu.jp/rankings/all/weekly",
+      );
+      expect(rankRes.items).toHaveLength(1);
+      expect(rankRes.items[0].remoteWorkId).toBe("77777777");
+    });
+
+    it("ROOT_QUERY 内の接続が null や非オブジェクトの場合に DOM 抽出へフォールバックすること", () => {
+      const html = `
+        <html><body>
+          <script id="__NEXT_DATA__" type="application/json">
+            {
+              "props": {
+                "pageProps": {
+                  "__APOLLO_STATE__": {
+                    "ROOT_QUERY": {
+                      "searchWorks({\\"query\\":\\"test\\"})": null
+                    }
+                  }
+                }
+              }
+            }
+          </script>
+          <div class="widget-work">
+            <a href="/works/66666">DOM作品</a>
+          </div>
+        </body></html>
+      `;
+      const searchRes = parser.searchNovels(
+        html,
+        "https://kakuyomu.jp/search?q=test",
+      );
+      expect(searchRes.items).toHaveLength(1);
+      expect(searchRes.items[0].remoteWorkId).toBe("66666");
+    });
+
+    it("DOM カード内にリンクがない、または不正なリンク・重複 ID・順位要素なしの場合を正しく処理すること", () => {
+      const html = `
+        <html><body>
+          <div class="RankingWorkBox">
+            <!-- リンクなし -->
+            <div>リンクなしカード</div>
+          </div>
+          <div class="RankingWorkBox">
+            <!-- 不正なURL -->
+            <a href="/other/path">作品IDなしリンク</a>
+          </div>
+          <div class="RankingWorkBox">
+            <!-- 非数字のworkId -->
+            <a href="/works/notdigits">非数字作品</a>
+          </div>
+          <div class="RankingWorkBox">
+            <!-- hrefなしのaタグ -->
+            <a>hrefなし作品</a>
+          </div>
+          <div class="RankingWorkBox">
+            <!-- 順位要素なし -->
+            <a href="/works/111">作品111</a>
+          </div>
+          <div class="RankingWorkBox">
+            <!-- 重複する作品ID -->
+            <a href="/works/111">作品111重複</a>
+          </div>
+          <div class="RankingWorkBox">
+            <!-- 非数値の順位 -->
+            <div class="RankingWorkBox_rank">圏外</div>
+            <a href="/works/222">作品222</a>
+          </div>
+        </body></html>
+      `;
+
+      const rankRes = parser.getRanking(
+        html,
+        "https://kakuyomu.jp/rankings/all/weekly",
+      );
+      expect(rankRes.items).toHaveLength(2);
+      expect(rankRes.items[0].remoteWorkId).toBe("111");
+      expect(rankRes.items[0].rank).toBe(1);
+      expect(rankRes.items[1].remoteWorkId).toBe("222");
+      expect(rankRes.items[1].rank).toBe(2);
+    });
+
+    it("無効な pageUrl や負のページ番号が渡された場合に currentPage がデフォルト 1 になること", () => {
+      const html = loadFixture("search_results_apollo.html");
+      const res1 = parser.searchNovels(html, "not-a-valid-url");
+      expect(res1.pageInfo.currentPage).toBe(1);
+
+      const res2 = parser.searchNovels(
+        html,
+        "https://kakuyomu.jp/search?page=-5",
+      );
+      expect(res2.pageInfo.currentPage).toBe(1);
+
+      const res3 = parser.searchNovels(
+        html,
+        "https://kakuyomu.jp/search?page=abc",
+      );
+      expect(res3.pageInfo.currentPage).toBe(1);
+
+      const res4 = parser.searchNovels(html, "http://[invalid");
+      expect(res4.pageInfo.currentPage).toBe(1);
+    });
+
+    it("DOM カードに話数・文字数・レビュー・更新日時・タグがない場合でもデフォルト値で安全に抽出すること", () => {
+      const html = `
+        <html><body>
+          <div class="widget-work">
+            <a href="/works/55555">シンプル作品</a>
+          </div>
+        </body></html>
+      `;
+      const searchRes = parser.searchNovels(
+        html,
+        "https://kakuyomu.jp/search?q=simple",
+      );
+      expect(searchRes.items).toHaveLength(1);
+      const item = searchRes.items[0];
+      expect(item.remoteWorkId).toBe("55555");
+      expect(item.episodeCount).toBe(0);
+      expect(item.characterCount).toBe(0);
+      expect(item.reviewPoints).toBe(0);
+      expect(item.lastEpisodePublishedAt).toBeNull();
+      expect(item.tags).toEqual([]);
+      expect(item.author).toBe("");
+      expect(item.synopsis).toBe("");
+    });
+
+    it("UserAccount の activityName, name, alternateAuthorName がすべて空の場合は著者が空文字になること", () => {
+      const html = `
+        <html><body>
+          <script id="__NEXT_DATA__" type="application/json">
+            {
+              "props": {
+                "pageProps": {
+                  "__APOLLO_STATE__": {
+                    "ROOT_QUERY": {
+                      "searchWorks({\\"query\\":\\"emptyAuthor\\"})": {
+                        "nodes": [{ "__ref": "Work:emptyUserWork" }]
+                      }
+                    },
+                    "UserAccount:emptyUser": {
+                      "activityName": "",
+                      "name": ""
+                    },
+                    "Work:emptyUserWork": {
+                      "id": "emptyUserWork",
+                      "author": { "__ref": "UserAccount:emptyUser" }
+                    }
+                  }
+                }
+              }
+            }
+          </script>
+        </body></html>
+      `;
+      const res = parser.searchNovels(
+        html,
+        "https://kakuyomu.jp/search?q=emptyAuthor",
+      );
+      expect(res.items).toHaveLength(1);
+      expect(res.items[0].title).toBe("");
+      expect(res.items[0].author).toBe("");
+    });
+
+    it("DOM カードにタグクラス単体要素・重複タグ・空タグ・連載中バッジがある場合を正しく処理すること", () => {
+      const html = `
+        <html><body>
+          <div class="widget-work">
+            <a href="/works/77777">タグバッジ作品</a>
+            <span class="widget-serial-status">連載中</span>
+            <div class="tag-badge">バッジタグ</div>
+            <div class="tag-badge">バッジタグ</div>
+            <div class="tag-badge">   </div>
+          </div>
+        </body></html>
+      `;
+      const res = parser.searchNovels(
+        html,
+        "https://kakuyomu.jp/search?q=tags",
+      );
+      expect(res.items).toHaveLength(1);
+      expect(res.items[0].tags).toEqual(["バッジタグ"]);
+      expect(res.items[0].serialStatus).toBe("running");
+      expect(res.items[0].serialStatusLabel).toBe("連載中");
+    });
+
+    it("Apollo Connection に nodes プロパティが存在しない場合は空配列として扱われること", () => {
+      const html = `
+        <html><body>
+          <script id="__NEXT_DATA__" type="application/json">
+            {
+              "props": {
+                "pageProps": {
+                  "__APOLLO_STATE__": {
+                    "ROOT_QUERY": {
+                      "searchWorks({\\"query\\":\\"noNodes\\"})": {
+                        "totalCount": 0
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          </script>
+        </body></html>
+      `;
+      const res = parser.searchNovels(
+        html,
+        "https://kakuyomu.jp/search?q=noNodes",
+      );
+      expect(res.items).toEqual([]);
+      expect(res.pageInfo.totalCount).toBe(0);
+    });
+  });
 });
