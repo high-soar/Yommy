@@ -192,10 +192,10 @@ export function useNovelRanking(): UseNovelRankingResult {
         );
 
         setRegisteredWorkIds((prev) => new Set(prev).add(item.remoteWorkId));
-        setAddingWorkId(null);
+        setAddingWorkId((prev) => (prev === item.remoteWorkId ? null : prev));
         return savedNovel.id;
       } catch (err) {
-        setAddingWorkId(null);
+        setAddingWorkId((prev) => (prev === item.remoteWorkId ? null : prev));
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
         return null;

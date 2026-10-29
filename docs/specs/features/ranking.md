@@ -26,6 +26,8 @@ related_specs:
 related_tests:
   - src/App.test.tsx
   - src/app/router.test.tsx
+  - src/features/ranking/components/RankingPage.test.tsx
+  - src/features/ranking/hooks/useNovelRanking.test.ts
   - test/it/smoke.spec.ts
 ---
 

@@ -10,7 +10,8 @@ import { MockHttpClient } from "../../../bridges/http/mockHttpClient";
 import rankingApolloHtml from "../../../parsers/kakuyomu/__fixtures__/ranking_results_apollo.html?raw";
 import rankingEmptyHtml from "../../../parsers/kakuyomu/__fixtures__/ranking_results_empty.html?raw";
 import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.html?raw";
-import { sampleRankingItem1 } from "../types";
+import { sampleRankingItem1, sampleRankingItem2 } from "../types";
+import type { HttpResponse } from "../../../bridges/http/types";
 
 describe("useNovelRanking", () => {
   let mockHttpClient: MockHttpClient;
@@ -244,6 +245,152 @@ describe("useNovelRanking", () => {
 
     expect(savedId).toBeNull();
     expect(result.current.error).toBe("Work Detail Fetch Failed");
+    expect(result.current.addingWorkId).toBeNull();
+  });
+
+  it("先行する作品追加完了時に後続作品の addingWorkId が上書き解除されないこと", async () => {
+    let resolveFirst: ((val: HttpResponse) => void) | null = null;
+    let resolveSecond: ((val: HttpResponse) => void) | null = null;
+
+    mockHttpClient.reset();
+    mockHttpClient.setResponse(
+      /^https:\/\/kakuyomu\.jp\/rankings\//,
+      (options) => ({
+        status: 200,
+        url: options.url,
+        headers: {},
+        html: rankingApolloHtml,
+      }),
+    );
+    mockHttpClient.setResponse(
+      sampleRankingItem1.workUrl,
+      () =>
+        new Promise((resolve) => {
+          resolveFirst = resolve;
+        }),
+    );
+    mockHttpClient.setResponse(
+      sampleRankingItem2.workUrl,
+      () =>
+        new Promise((resolve) => {
+          resolveSecond = resolve;
+        }),
+    );
+
+    const { result } = renderHook(() => useNovelRanking(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.items.length).toBeGreaterThan(0);
+    });
+
+    // 1件目の追加を開始（保留中）
+    let promise1: Promise<string | null>;
+    act(() => {
+      promise1 = result.current.addNovelToBookshelf(sampleRankingItem1);
+    });
+    expect(result.current.addingWorkId).toBe(sampleRankingItem1.remoteWorkId);
+
+    // 2件目の追加を開始（保留中）
+    let promise2: Promise<string | null>;
+    act(() => {
+      promise2 = result.current.addNovelToBookshelf(sampleRankingItem2);
+    });
+    expect(result.current.addingWorkId).toBe(sampleRankingItem2.remoteWorkId);
+
+    // 1件目が先に完了する: 1件目の完了処理は addingWorkId が 2件目の ID の場合 null に上書きしないこと
+    await act(async () => {
+      resolveFirst!({
+        url: sampleRankingItem1.workUrl,
+        status: 200,
+        headers: {},
+        html: workIndexHtml,
+      });
+      await promise1!;
+    });
+    expect(result.current.addingWorkId).toBe(sampleRankingItem2.remoteWorkId);
+
+    // 2件目が完了する: 2件目の ID と一致するため null に解除されること
+    await act(async () => {
+      resolveSecond!({
+        url: sampleRankingItem2.workUrl,
+        status: 200,
+        headers: {},
+        html: workIndexHtml,
+      });
+      await promise2!;
+    });
+    expect(result.current.addingWorkId).toBeNull();
+  });
+
+  it("先行する作品追加が失敗した際も後続作品の addingWorkId が上書き解除されないこと", async () => {
+    let rejectFirst: ((err: Error) => void) | null = null;
+    let resolveSecond: ((val: HttpResponse) => void) | null = null;
+
+    mockHttpClient.reset();
+    mockHttpClient.setResponse(
+      /^https:\/\/kakuyomu\.jp\/rankings\//,
+      (options) => ({
+        status: 200,
+        url: options.url,
+        headers: {},
+        html: rankingApolloHtml,
+      }),
+    );
+    mockHttpClient.setResponse(
+      sampleRankingItem1.workUrl,
+      () =>
+        new Promise((_, reject) => {
+          rejectFirst = reject;
+        }),
+    );
+    mockHttpClient.setResponse(
+      sampleRankingItem2.workUrl,
+      () =>
+        new Promise((resolve) => {
+          resolveSecond = resolve;
+        }),
+    );
+
+    const { result } = renderHook(() => useNovelRanking(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.items.length).toBeGreaterThan(0);
+    });
+
+    // 1件目の追加を開始（保留中）
+    let promise1: Promise<string | null>;
+    act(() => {
+      promise1 = result.current.addNovelToBookshelf(sampleRankingItem1);
+    });
+
+    // 2件目の追加を開始（保留中）
+    let promise2: Promise<string | null>;
+    act(() => {
+      promise2 = result.current.addNovelToBookshelf(sampleRankingItem2);
+    });
+    expect(result.current.addingWorkId).toBe(sampleRankingItem2.remoteWorkId);
+
+    // 1件目がエラーで失敗: 1件目の catch は addingWorkId が 2件目の ID の場合 null に上書きしないこと
+    await act(async () => {
+      rejectFirst!(new Error("Item 1 fetch error"));
+      await promise1!;
+    });
+    expect(result.current.addingWorkId).toBe(sampleRankingItem2.remoteWorkId);
+
+    // 2件目が完了する: 2件目の ID と一致するため null に解除されること
+    await act(async () => {
+      resolveSecond!({
+        url: sampleRankingItem2.workUrl,
+        status: 200,
+        headers: {},
+        html: workIndexHtml,
+      });
+      await promise2!;
+    });
     expect(result.current.addingWorkId).toBeNull();
   });
 
