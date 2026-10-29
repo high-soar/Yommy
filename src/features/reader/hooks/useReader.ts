@@ -21,7 +21,11 @@ export const DEFAULT_KAKUYOMU_URL =
   "https://kakuyomu.jp/works/16817330658027210412";
 
 /**
- * キャッシュが7日以内の新鮮な状態か判定する
+ * キャッシュが7日以内（CACHE_TTL_MS）の新鮮な状態かを判定する（AC-RD-13）。
+ *
+ * @param chapter 対象エピソードのレコード（null/undefined 可）
+ * @param now 判定基準となるエポックミリ秒（デフォルト: Date.now()）
+ * @returns 本文が存在し、かつ downloadedAt から 7日以内の場合 true、それ以外（null、未取得、不正な日付、7日超過）は false
  */
 export function isChapterFresh(
   chapter: ChapterRecord | null | undefined,
@@ -38,7 +42,11 @@ export function isChapterFresh(
 }
 
 /**
- * 指定ミリ秒待機する（AbortSignal による即時中断対応）
+ * 指定ミリ秒待機するヘルパー関数（AbortSignal による即時中断対応）。
+ *
+ * @param ms 待機するミリ秒数
+ * @param signal 中断通知を受け取る AbortSignal（省略可）
+ * @returns 待機完了時に resolve する Promise。中断時は signal.reason で reject される。
  */
 export function delay(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -108,6 +116,8 @@ export interface UseReaderResult {
  * 4. 組版設定（組み方向・4テーマ・文字サイズ・行間）の読み込み・変更・永続化
  * 5. 前後エピソード遷移（goToChapter）と境界制御
  * 6. 手動作品取得・更新パイプライン（fetchNovelFromUrl）
+ * 7. 読書中5話自動先読みパイプライン（AC-RD-12: 1.5秒レートリミット・直列取得・AbortController制御）
+ * 8. キャッシュ鮮度管理とフォールバック（AC-RD-13: TTL 7日・3秒短タイムアウト再取得・既存本文フォールバック）
  */
 export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   const {
@@ -156,6 +166,9 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     scrollProgressRef.current = scrollProgress;
   }, [scrollProgress]);
 
+  /**
+   * 進行中の自動先読み処理を即座に中断する内部関数
+   */
   const stopPrefetch = useCallback(() => {
     if (prefetchAbortControllerRef.current) {
       prefetchAbortControllerRef.current.abort();
@@ -202,7 +215,11 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   );
 
   /**
-   * キャッシュ鮮度ルールに基づいて本文を解決する内部関数
+   * キャッシュ鮮度ルールに基づいて本文を解決する内部関数 (AC-RD-13)
+   *
+   * - 7日以内の新鮮なキャッシュ: 通信なしでそのまま返す
+   * - 7日経過したキャッシュ: 3秒短タイムアウトで再取得を試行。失敗時は既存キャッシュ本文へフォールバック
+   * - 未キャッシュ話: 10秒標準タイムアウトで取得試行
    */
   const resolveChapterBody = useCallback(
     async (
@@ -244,7 +261,12 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   );
 
   /**
-   * 読書中エピソードから最大5話の自動先読みを開始する関数
+   * 読書中エピソードから最大5話の自動先読みを開始する関数 (AC-RD-12)
+   *
+   * - 1話ごとに 1.5秒レートリミットを設けて直列実行
+   * - 7日以内キャッシュが存在する話数は通信スキップ
+   * - 先読みエラー時は読書画面にエラーを出さず warning ログに留める
+   * - 話数移動（goToChapter）またはアンマウント時は即時 Abort
    */
   const startPrefetch = useCallback(
     (
