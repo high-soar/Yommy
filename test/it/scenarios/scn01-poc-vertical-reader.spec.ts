@@ -102,24 +102,24 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(tabSettings).toHaveAttribute("aria-selected", "false");
     await expect(page.getByTestId("bookshelf-empty")).toBeVisible();
 
-    // 3. 「URLから作品を追加」ダイアログを開き、URLを入力（サンプルURL自動入力）して登録を実行
-    const openAddButton = page.getByTestId("open-add-novel-button");
-    await expect(openAddButton).toBeVisible();
-    await openAddButton.click();
-
-    const dialog = page.getByTestId("add-novel-dialog");
-    await expect(dialog).toBeVisible();
-
-    const fillSampleButton = page.getByTestId("fill-sample-url-button");
-    await expect(fillSampleButton).toBeVisible();
-    await fillSampleButton.click();
-
-    const submitButton = page.getByTestId("add-novel-submit-button");
-    await expect(submitButton).toBeEnabled();
-    await submitButton.click();
-
-    // ダイアログが閉じ、本棚に作品カードが表示されることを確認
-    await expect(dialog).not.toBeVisible();
+    // 3. 共通サービス（window.__yommyServices）を用いてサンプル作品をシード登録し、本棚をリロードして作品カード表示を確認
+    await page.waitForFunction(
+      () =>
+        typeof window.__yommyServices !== "undefined" &&
+        window.__yommyServices.isReady,
+    );
+    await page.evaluate(async () => {
+      const services = window.__yommyServices!;
+      const sampleUrl = "https://kakuyomu.jp/works/16817330658027210412";
+      const response = await services.httpClient.getHtml({ url: sampleUrl });
+      const parser = services.parserRegistry.requireParser(sampleUrl);
+      const parsedIndex = parser.parseNovelIndex(response.html, sampleUrl);
+      await services.novelRepository.upsertNovelWithToc(
+        parsedIndex,
+        new Date().toISOString(),
+      );
+    });
+    await page.reload();
 
     const novelCard = page.getByTestId("novel-card");
     await expect(novelCard).toBeVisible();

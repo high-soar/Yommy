@@ -527,5 +527,22 @@ describe("ServiceProvider", () => {
         customAppBridge,
       );
     });
+
+    it("初期化完了時に結合テスト用に window.__yommyServices が公開されること", async () => {
+      render(
+        <ServiceProvider>
+          <div>サービス公開テスト</div>
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(window.__yommyServices?.isReady).toBe(true);
+      });
+      expect(window.__yommyServices?.httpClient).toBeDefined();
+      expect(window.__yommyServices?.parserRegistry).toBeDefined();
+      expect(window.__yommyServices?.novelRepository).toBeDefined();
+      expect(window.__yommyServices?.chapterRepository).toBeDefined();
+      expect(window.__yommyServices?.settingsRepository).toBeDefined();
+    });
   });
 });

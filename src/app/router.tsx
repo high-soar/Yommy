@@ -24,6 +24,7 @@ export interface NavigateToReaderOptions {
 export interface RouterContextValue {
   currentPath: string;
   previousPath?: string;
+  novelOrigin: string | null;
   route: AppRoute;
   navigate: (path: string) => void;
   navigateToBookshelf: () => void;
@@ -171,6 +172,7 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
   const [previousPath, setPreviousPath] = useState<string | undefined>(
     undefined,
   );
+  const [novelOrigin, setNovelOrigin] = useState<string | null>(null);
   const novelOriginRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -178,6 +180,7 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
       currentPathRef.current = initialPath;
       if (!initialPath.startsWith("/novels/")) {
         novelOriginRef.current = null;
+        setNovelOrigin(null);
       }
       setCurrentPath(initialPath);
     }
@@ -189,6 +192,7 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
       currentPathRef.current = nextPath;
       if (!nextPath.startsWith("/novels/")) {
         novelOriginRef.current = null;
+        setNovelOrigin(null);
       }
       setCurrentPath((prev) => {
         setPreviousPath(prev);
@@ -210,9 +214,11 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
     if (to.startsWith("/novels/")) {
       if (!current.startsWith("/novels/")) {
         novelOriginRef.current = current;
+        setNovelOrigin(current);
       }
     } else {
       novelOriginRef.current = null;
+      setNovelOrigin(null);
     }
 
     window.history.pushState(null, "", to);
@@ -257,6 +263,7 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
         currentPathRef.current = targetPath;
         setPreviousPath(detailPath);
         novelOriginRef.current = "/";
+        setNovelOrigin("/");
         setCurrentPath(targetPath);
       } else if (options?.replace) {
         window.history.replaceState(null, "", targetPath);
@@ -292,6 +299,7 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
           ? novelOriginRef.current
           : "/";
       novelOriginRef.current = null;
+      setNovelOrigin(null);
       navigate(origin);
       return;
     }
@@ -313,6 +321,7 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
     () => ({
       currentPath,
       previousPath,
+      novelOrigin,
       route,
       navigate,
       navigateToBookshelf,
@@ -326,6 +335,7 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
     [
       currentPath,
       previousPath,
+      novelOrigin,
       route,
       navigate,
       navigateToBookshelf,

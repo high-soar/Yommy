@@ -420,5 +420,43 @@ describe("ReaderPage", () => {
       await user.click(screen.getByTestId("reader-bottom-tab-settings"));
       expect(onSelectTab).toHaveBeenCalledWith("settings");
     });
+
+    it("activeTab が指定された場合、ReaderBottomOverlay に反映され対応するタブがアクティブとなること", () => {
+      const { rerender } = render(
+        <ReaderPage
+          {...createDefaultProps({
+            initialOverlayOpen: true,
+            activeTab: "search",
+          })}
+        />,
+      );
+
+      expect(screen.getByTestId("reader-bottom-tab-search")).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      expect(screen.getByTestId("reader-bottom-tab-bookshelf")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+
+      rerender(
+        <ReaderPage
+          {...createDefaultProps({
+            initialOverlayOpen: true,
+            activeTab: "ranking",
+          })}
+        />,
+      );
+
+      expect(screen.getByTestId("reader-bottom-tab-ranking")).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      expect(screen.getByTestId("reader-bottom-tab-search")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+    });
   });
 });

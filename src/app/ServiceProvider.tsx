@@ -44,6 +44,12 @@ export interface ServiceContextValue {
   error: Error | null;
 }
 
+declare global {
+  interface Window {
+    __yommyServices?: ServiceContextValue;
+  }
+}
+
 export const ServiceContext = createContext<ServiceContextValue | null>(null);
 
 /**
@@ -202,23 +208,29 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           services?.appBridge ??
           (isNative ? new CapacitorAppBridge() : new MockAppBridge());
 
+        const newContext: ServiceContextValue = {
+          httpClient,
+          parserRegistry,
+          databaseAdapter,
+          novelRepository,
+          chapterRepository,
+          settingsRepository,
+          appBridge,
+          isReady: true,
+          error: null,
+        };
+
+        if (typeof window !== "undefined") {
+          window.__yommyServices = newContext;
+        }
+
         if (isMounted) {
-          setContextValue({
-            httpClient,
-            parserRegistry,
-            databaseAdapter,
-            novelRepository,
-            chapterRepository,
-            settingsRepository,
-            appBridge,
-            isReady: true,
-            error: null,
-          });
+          setContextValue(newContext);
         }
       } catch (err) {
         if (isMounted) {
           const error = err instanceof Error ? err : new Error(String(err));
-          setContextValue({
+          const errorContext: ServiceContextValue = {
             httpClient: createDefaultMockHttpClient(),
             parserRegistry: createDefaultParserRegistry(),
             databaseAdapter: null as unknown as DatabaseAdapter,
@@ -228,7 +240,11 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
             appBridge: services?.appBridge ?? new MockAppBridge(),
             isReady: false,
             error,
-          });
+          };
+          if (typeof window !== "undefined") {
+            window.__yommyServices = errorContext;
+          }
+          setContextValue(errorContext);
         }
       }
     }

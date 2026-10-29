@@ -255,6 +255,9 @@ describe("router", () => {
           <span data-testid="previous-path-display">
             {router.previousPath ?? "none"}
           </span>
+          <span data-testid="origin-display">
+            {router.novelOrigin ?? "null"}
+          </span>
           <button
             data-testid="btn-bookshelf"
             onClick={() => router.navigateToBookshelf()}
@@ -739,6 +742,97 @@ describe("router", () => {
         expect(screen.getByTestId("path-display")).toHaveTextContent(
           "/novels/kakuyomu%3A16817330658027210412/chapters/6",
         );
+      });
+
+      describe("novelOrigin の追跡と公開", () => {
+        it("初期状態では novelOrigin は null であること", () => {
+          render(
+            <RouterProvider initialPath="/">
+              <TestConsumer />
+            </RouterProvider>,
+          );
+          expect(screen.getByTestId("origin-display")).toHaveTextContent(
+            "null",
+          );
+        });
+
+        it("検索画面 (/search) から作品詳細画面へ遷移したとき、novelOrigin が /search となること", () => {
+          render(
+            <RouterProvider initialPath="/search">
+              <TestConsumer />
+            </RouterProvider>,
+          );
+          expect(screen.getByTestId("origin-display")).toHaveTextContent(
+            "null",
+          );
+
+          act(() => {
+            screen.getByTestId("btn-detail").click();
+          });
+          expect(screen.getByTestId("origin-display")).toHaveTextContent(
+            "/search",
+          );
+        });
+
+        it("ランキング画面 (/ranking) から作品詳細画面へ遷移したとき、novelOrigin が /ranking となること", () => {
+          render(
+            <RouterProvider initialPath="/ranking">
+              <TestConsumer />
+            </RouterProvider>,
+          );
+          expect(screen.getByTestId("origin-display")).toHaveTextContent(
+            "null",
+          );
+
+          act(() => {
+            screen.getByTestId("btn-detail").click();
+          });
+          expect(screen.getByTestId("origin-display")).toHaveTextContent(
+            "/ranking",
+          );
+        });
+
+        it("探索元から詳細を経てリーダーへ進んだ際も novelOrigin が維持され、設定画面へ遷移すると null にリセットされること", () => {
+          render(
+            <RouterProvider initialPath="/search">
+              <TestConsumer />
+            </RouterProvider>,
+          );
+
+          act(() => {
+            screen.getByTestId("btn-detail").click();
+          });
+          expect(screen.getByTestId("origin-display")).toHaveTextContent(
+            "/search",
+          );
+
+          act(() => {
+            screen.getByTestId("btn-reader").click();
+          });
+          expect(screen.getByTestId("origin-display")).toHaveTextContent(
+            "/search",
+          );
+
+          act(() => {
+            screen.getByTestId("btn-settings").click();
+          });
+          expect(screen.getByTestId("origin-display")).toHaveTextContent(
+            "null",
+          );
+        });
+
+        it("fromBookshelfResume でリーダーへ遷移した場合は novelOrigin が / となること", () => {
+          render(
+            <RouterProvider initialPath="/">
+              <TestConsumer />
+            </RouterProvider>,
+          );
+
+          act(() => {
+            screen.getByTestId("btn-reader-resume").click();
+          });
+          expect(screen.getByTestId("origin-display")).toHaveTextContent("/");
+        });
       });
     });
   });

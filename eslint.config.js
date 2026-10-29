@@ -48,6 +48,7 @@ export default tseslint.config(
             "matchRoute",
             "safeDecodeURIComponent",
             "resolveInitialPath",
+            "getActiveTab",
           ],
         },
       ],
