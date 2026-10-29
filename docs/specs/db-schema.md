@@ -2,9 +2,9 @@
 type: spec-db-schema
 title: ローカル DB スキーマ定義（App 全体正本）
 description: SQLite（novels, chapters, download_queue, reader_settings）のER図、テーブル構造、およびDDL定義の正本。
-status: "Review (#82)"
+status: "Review (#80)"
 updated: "2026-10-29"
-tags: [database, sqlite, schema, storage]
+tags: [database, sqlite, schema, storage, settings]
 related_specs:
   - docs/specs/requirements.md
   - docs/specs/architecture.md
@@ -13,6 +13,7 @@ related_specs:
   - docs/specs/features/novel-detail.md
   - docs/specs/features/reader-view.md
   - docs/specs/features/settings.md
+  - docs/specs/changes/issue-80-bookshelf-update-check-and-sort.md
 related_tests:
   - src/storage/schema.test.ts
   - src/storage/repositories/novelRepository.test.ts
@@ -55,6 +56,8 @@ erDiagram
         INTEGER bookmark_chapter_index "しおり話数 (1始まり, 未読時 NULL)"
         REAL bookmark_scroll_progress "しおりスクロール位置 (0.0〜1.0)"
         INTEGER is_favorite "お気に入りフラグ (0 or 1)"
+        INTEGER has_new_update "新着エピソードありフラグ (0 or 1)"
+        TEXT latest_episode_published_at "最新話公開日時 (ISO8601, NULL許容)"
         TEXT last_checked_at "最終更新確認日時 (ISO8601)"
         TEXT last_read_at "最終閲覧日時 (ISO8601)"
         TEXT created_at "初回登録日時 (ISO8601)"
@@ -100,6 +103,12 @@ erDiagram
         INTEGER enable_volume_key_paging "音量キー送り有効 (0 or 1, 初期値 0)"
         TEXT updated_at "更新日時 (ISO8601)"
     }
+
+    app_settings {
+        TEXT key PK "設定キー (例: bookshelf_sort_order)"
+        TEXT value "設定値 (文字列)"
+        TEXT updated_at "更新日時 (ISO8601)"
+    }
 ```
 
 ---
@@ -125,6 +134,8 @@ CREATE TABLE IF NOT EXISTS novels (
   bookmark_chapter_index INTEGER,                   -- しおり位置の話数連番 (1始まり、未設定は NULL)
   bookmark_scroll_progress REAL NOT NULL DEFAULT 0, -- しおり位置のスクロール率 (0.0 〜 1.0)
   is_favorite INTEGER NOT NULL DEFAULT 0,           -- お気に入り (0 or 1)
+  has_new_update INTEGER NOT NULL DEFAULT 0,        -- 新着エピソードありフラグ (0 or 1)
+  latest_episode_published_at TEXT,                 -- 最新話公開/更新日時 (ISO 8601)
   last_checked_at TEXT,                             -- 最終更新確認日時 (ISO 8601)
   last_read_at TEXT,                                -- 最終閲覧日時 (ISO 8601)
   created_at TEXT NOT NULL,                         -- 登録日時 (ISO 8601)
@@ -132,6 +143,10 @@ CREATE TABLE IF NOT EXISTS novels (
 );
 
 CREATE INDEX IF NOT EXISTS idx_novels_last_read_at ON novels(last_read_at DESC);
+CREATE INDEX IF NOT EXISTS idx_novels_has_new_update ON novels(has_new_update DESC);
+CREATE INDEX IF NOT EXISTS idx_novels_latest_published ON novels(latest_episode_published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_novels_created_at ON novels(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_novels_title ON novels(title COLLATE NOCASE ASC);
 ```
 
 ### 3.2 `chapters` テーブル（各話目次・本文 HTML キャッシュ）
@@ -205,3 +220,31 @@ INSERT OR IGNORE INTO reader_settings (
   1, 'vertical-rl', 'light', 'biz-ud-mincho', 18, 1.8, 20, 1, 0, '2026-01-01T00:00:00.000Z'
 );
 ```
+
+### 3.5 `app_settings` テーブル（汎用アプリケーション設定・本棚ソート順）
+
+本棚のソート順や各種アプリ全体状態をキー・バリュー形式で柔軟に永続化する設定テーブルです。スキーマ初期化時に本棚デフォルトソート順（`bookshelf_sort_order = 'unread_first'`）が登録されます。
+
+```sql
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,                             -- 設定識別子キー
+  value TEXT NOT NULL,                              -- 設定値文字列
+  updated_at TEXT NOT NULL                          -- 更新日時 (ISO 8601)
+);
+
+INSERT OR IGNORE INTO app_settings (
+  key, value, updated_at
+) VALUES (
+  'bookshelf_sort_order', 'unread_first', '2026-01-01T00:00:00.000Z'
+);
+```
+
+#### 本棚ソート順キー仕様（`key: 'bookshelf_sort_order'`）
+
+| 値 (`value`)       | ソート種別                           | 並び順（SQL `ORDER BY` 契約）                                                                                                                 |
+| :----------------- | :----------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------- |
+| `unread_first`     | 更新あり優先＋最近読んだ順（既定値） | `novels.has_new_update DESC, CASE WHEN novels.last_read_at IS NOT NULL THEN 0 ELSE 1 END, novels.last_read_at DESC, novels.created_at DESC`   |
+| `last_read`        | 最近読んだ順                         | `CASE WHEN novels.last_read_at IS NOT NULL THEN 0 ELSE 1 END, novels.last_read_at DESC, novels.created_at DESC`                               |
+| `latest_published` | 作品更新日順                         | `CASE WHEN novels.latest_episode_published_at IS NOT NULL THEN 0 ELSE 1 END, novels.latest_episode_published_at DESC, novels.updated_at DESC` |
+| `created_at`       | 登録日順                             | `novels.created_at DESC`                                                                                                                      |
+| `title`            | タイトル順                           | `novels.title COLLATE NOCASE ASC`                                                                                                             |

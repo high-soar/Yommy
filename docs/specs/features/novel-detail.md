@@ -2,7 +2,7 @@
 type: spec-feature
 title: "作品詳細・目次画面仕様書（SCR-02: Novel Detail & TOC）"
 description: 登録済み作品のヘッダー情報・あらすじ表示、章見出し付きエピソード一覧（キャッシュ済み・既読・しおり状態）、目次更新（再取得）、作品削除、およびリーダー画面への閲覧遷移を提供する作品詳細・目次画面（SCR-02）の正本仕様。
-status: "Review (#79)"
+status: "Review (#80)"
 updated: "2026-10-29"
 tags: [novel-detail, scr-02, toc, routing, ui, shell, bottom-nav, four-tabs]
 related_specs:
@@ -17,6 +17,7 @@ related_specs:
   - docs/specs/features/settings.md
   - docs/specs/parsers/kakuyomu.md
   - docs/specs/changes/issue-79-four-tabs-search-ranking.md
+  - docs/specs/changes/issue-80-bookshelf-update-check-and-sort.md
   - docs/specs/changes/archive/issue-50-fullscreen-shell-and-settings.md
   - docs/specs/changes/archive/issue-51-novel-detail-layout-and-scroll.md
   - docs/specs/changes/archive/issue-13-novel-detail-and-toc.md
@@ -45,7 +46,7 @@ related_tests:
 - **対応要件**:
   - `SYS-REQ-01`（作品登録・目次取得：作品メタデータ・あらすじ・章見出し付きエピソード一覧の表示および目次再取得）
   - `SYS-REQ-02`（本文取得・オフライン閲覧：エピソード選択または読書開始ボタンによるリーダー遷移と、未キャッシュ話のオンデマンド本文取得・キャッシュ状態反映）
-  - `SYS-REQ-04`（更新チェック・差分取得の一部：作品詳細画面での手動目次再取得と新着話数フィードバック表示）
+  - `SYS-REQ-04`（更新チェック・差分取得：作品詳細画面表示時の本棚「NEW」バッジ自動解除、手動目次再取得と新着話数フィードバック表示）
   - `SYS-REQ-05`（キャッシュ管理・容量整理の一部：確認ダイアログ付き作品削除と `chapters` カスケード削除）
   - `SYS-REQ-12`（しおり・スクロール位置自動保存に基づくしおり位置マーク・既読バッジ表示および「続きから読む」導線）
   - `SYS-REQ-16`（全画面シェル・下部タブ・論理階層遷移：100dvh 全画面シェル内配置、固定ヘッダー＋内部スクロール目次、下部タブバー連携）
