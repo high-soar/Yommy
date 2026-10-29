@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { fn } from "@storybook/test";
 import { SearchPage } from "./SearchPage";
-import { sampleSearchItem } from "./SearchNovelCard.stories";
+import { sampleSearchItem } from "../types";
 
 const meta: Meta<typeof SearchPage> = {
   title: "Features/Search/SearchPage",

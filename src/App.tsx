@@ -5,6 +5,7 @@ import type { AppBridge } from "./bridges/app/types";
 import { BookshelfContainer } from "./features/bookshelf/components/BookshelfContainer";
 import { NovelDetailContainer } from "./features/novel-detail/components/NovelDetailContainer";
 import { ReaderContainer } from "./features/reader/components/ReaderContainer";
+import { SearchContainer } from "./features/search/components/SearchContainer";
 import { SettingsContainer } from "./features/settings/components/SettingsContainer";
 import { BottomTabBar, type BottomTab } from "./shared/ui/BottomTabBar";
 
@@ -117,20 +118,7 @@ export const AppContent: React.FC<AppContentProps> = ({
     >
       <main className="flex-1 min-h-0 w-full overflow-hidden relative">
         {router.route.name === "bookshelf" && <BookshelfContainer />}
-        {router.route.name === "search" && (
-          <div
-            data-testid="search-placeholder"
-            className="h-full flex flex-col items-center justify-center p-8 text-center text-slate-500 dark:text-slate-400"
-          >
-            <span className="text-4xl mb-2" aria-hidden="true">
-              🔍
-            </span>
-            <p className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-1">
-              作品検索
-            </p>
-            <p className="text-sm">検索機能は現在準備中です。</p>
-          </div>
-        )}
+        {router.route.name === "search" && <SearchContainer />}
         {router.route.name === "ranking" && (
           <div
             data-testid="ranking-placeholder"

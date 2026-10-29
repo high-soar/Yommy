@@ -68,7 +68,7 @@ describe("App コンポーネント", () => {
 
       expect(screen.getByTestId("app-root")).toBeInTheDocument();
       await waitFor(() => {
-        expect(screen.getByTestId("search-placeholder")).toBeInTheDocument();
+        expect(screen.getByTestId("search-page")).toBeInTheDocument();
       });
 
       const tabBar = screen.getByTestId("bottom-tab-bar");
@@ -219,7 +219,7 @@ describe("App コンポーネント", () => {
       await user.click(searchTab);
 
       await waitFor(() => {
-        expect(screen.getByTestId("search-placeholder")).toBeInTheDocument();
+        expect(screen.getByTestId("search-page")).toBeInTheDocument();
       });
     });
 
@@ -260,7 +260,7 @@ describe("App コンポーネント", () => {
       render(<App initialPath="/search" />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("search-placeholder")).toBeInTheDocument();
+        expect(screen.getByTestId("search-page")).toBeInTheDocument();
       });
 
       const bookshelfTab = screen.getByTestId("tab-bookshelf");
@@ -405,7 +405,7 @@ describe("App コンポーネント", () => {
       await user.click(screen.getByTestId("reader-bottom-tab-search"));
 
       await waitFor(() => {
-        expect(screen.getByTestId("search-placeholder")).toBeInTheDocument();
+        expect(screen.getByTestId("search-page")).toBeInTheDocument();
       });
     });
 
@@ -552,7 +552,7 @@ describe("App コンポーネント", () => {
       render(<App initialPath="/search" appBridge={mockAppBridge} />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("search-placeholder")).toBeInTheDocument();
+        expect(screen.getByTestId("search-page")).toBeInTheDocument();
       });
 
       await act(async () => {
@@ -766,7 +766,7 @@ describe("App コンポーネント", () => {
         );
 
         await waitFor(() => {
-          expect(screen.getByTestId("search-placeholder")).toBeInTheDocument();
+          expect(screen.getByTestId("search-page")).toBeInTheDocument();
         });
         expect(screen.getByTestId("tab-search")).toHaveAttribute(
           "aria-selected",
