@@ -2,14 +2,18 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import React from "react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { ServiceProvider } from "../../../app/ServiceProvider";
-import { useReader, toErrorMessage } from "./useReader";
+import { useReader, toErrorMessage, isChapterFresh, delay } from "./useReader";
 import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
 import { SqlNovelRepository } from "../../../storage/repositories/novelRepository";
 import { SqlChapterRepository } from "../../../storage/repositories/chapterRepository";
 import { SqlSettingsRepository } from "../../../storage/repositories/settingsRepository";
 import { MockHttpClient } from "../../../bridges/http/mockHttpClient";
 import { createDefaultParserRegistry } from "../../../parsers/parserRegistry";
-import type { NovelRecord, SettingsRepository } from "../../../storage/types";
+import type {
+  ChapterRecord,
+  NovelRecord,
+  SettingsRepository,
+} from "../../../storage/types";
 import {
   CACHE_TTL_MS,
   SHORT_TIMEOUT_MS,
@@ -1445,6 +1449,166 @@ describe("useReader", () => {
     });
   });
 
+  describe("isChapterFresh ヘルパー関数", () => {
+    it("chapter が null または undefined の場合は false を返すこと", () => {
+      expect(isChapterFresh(null)).toBe(false);
+      expect(isChapterFresh(undefined)).toBe(false);
+    });
+
+    it("chapter.bodyHtml が null の場合は false を返すこと", () => {
+      expect(
+        isChapterFresh({
+          id: "ch-1",
+          novelId: "nov-1",
+          chapterIndex: 1,
+          remoteChapterId: "rem-1",
+          title: "第1話",
+          partTitle: null,
+          url: "https://example.com/1",
+          bodyHtml: null,
+          byteSize: 0,
+          isRead: false,
+          publishedAt: "2026-01-01T00:00:00Z",
+          downloadedAt: new Date().toISOString(),
+        }),
+      ).toBe(false);
+    });
+
+    it("chapter.downloadedAt が null の場合は false を返すこと", () => {
+      expect(
+        isChapterFresh({
+          id: "ch-1",
+          novelId: "nov-1",
+          chapterIndex: 1,
+          remoteChapterId: "rem-1",
+          title: "第1話",
+          partTitle: null,
+          url: "https://example.com/1",
+          bodyHtml: "<p>本文</p>",
+          byteSize: 10,
+          isRead: false,
+          publishedAt: "2026-01-01T00:00:00Z",
+          downloadedAt: null,
+        }),
+      ).toBe(false);
+    });
+
+    it("downloadedAt が不正な日時文字列の場合（Number.isNaN）は false を返すこと", () => {
+      expect(
+        isChapterFresh({
+          id: "ch-1",
+          novelId: "nov-1",
+          chapterIndex: 1,
+          remoteChapterId: "rem-1",
+          title: "第1話",
+          partTitle: null,
+          url: "https://example.com/1",
+          bodyHtml: "<p>本文</p>",
+          byteSize: 10,
+          isRead: false,
+          publishedAt: "2026-01-01T00:00:00Z",
+          downloadedAt: "invalid-date-string",
+        }),
+      ).toBe(false);
+    });
+
+    it("downloadedAt が 7日以上前の場合は false を返すこと", () => {
+      const now = Date.now();
+      const eightDaysAgo = new Date(now - (CACHE_TTL_MS + 1000)).toISOString();
+      expect(
+        isChapterFresh(
+          {
+            id: "ch-1",
+            novelId: "nov-1",
+            chapterIndex: 1,
+            remoteChapterId: "rem-1",
+            title: "第1話",
+            partTitle: null,
+            url: "https://example.com/1",
+            bodyHtml: "<p>本文</p>",
+            byteSize: 10,
+            isRead: false,
+            publishedAt: "2026-01-01T00:00:00Z",
+            downloadedAt: eightDaysAgo,
+          },
+          now,
+        ),
+      ).toBe(false);
+    });
+
+    it("downloadedAt が 7日以内の場合は true を返すこと（引数省略時の now も含む）", () => {
+      const freshChapter: ChapterRecord = {
+        id: "ch-1",
+        novelId: "nov-1",
+        chapterIndex: 1,
+        remoteChapterId: "rem-1",
+        title: "第1話",
+        partTitle: null,
+        url: "https://example.com/1",
+        bodyHtml: "<p>本文</p>",
+        byteSize: 10,
+        isRead: false,
+        publishedAt: "2026-01-01T00:00:00Z",
+        downloadedAt: new Date(Date.now() - 1000).toISOString(),
+      };
+      expect(isChapterFresh(freshChapter)).toBe(true);
+    });
+  });
+
+  describe("delay ヘルパー関数", () => {
+    it("呼び出し時点で既に signal.aborted が true の場合、即座に reject されること（reason あり/なし）", async () => {
+      const controller = new AbortController();
+      controller.abort("Custom Abort");
+      await expect(delay(100, controller.signal)).rejects.toBe("Custom Abort");
+
+      const emptyController = new AbortController();
+      emptyController.abort();
+      await expect(delay(100, emptyController.signal)).rejects.toThrow(
+        /aborted/i,
+      );
+
+      const mockSignal = {
+        aborted: true,
+        reason: undefined,
+        addEventListener: vi.fn(),
+      } as unknown as AbortSignal;
+      await expect(delay(100, mockSignal)).rejects.toThrow("Aborted");
+    });
+
+    it("待機中に signal.abort() が呼ばれた場合、タイマーが解除され reject されること（reason あり/なし）", async () => {
+      const controller = new AbortController();
+      const p = delay(1000, controller.signal);
+      controller.abort("Aborted during wait");
+      await expect(p).rejects.toBe("Aborted during wait");
+
+      const controller2 = new AbortController();
+      const p2 = delay(1000, controller2.signal);
+      controller2.abort();
+      await expect(p2).rejects.toThrow(/aborted/i);
+
+      let abortListener: (() => void) | undefined;
+      const mockSignal = {
+        aborted: false,
+        reason: undefined,
+        addEventListener: (_event: string, fn: () => void) => {
+          abortListener = fn;
+        },
+      } as unknown as AbortSignal;
+      const p3 = delay(1000, mockSignal);
+      abortListener?.();
+      await expect(p3).rejects.toThrow("Aborted");
+    });
+
+    it("signal を指定しない場合、または abort されない場合、指定時間経過後に正常に resolve されること", async () => {
+      const start = Date.now();
+      await delay(10);
+      expect(Date.now() - start).toBeGreaterThanOrEqual(5);
+
+      const controller = new AbortController();
+      await delay(10, controller.signal);
+    });
+  });
+
   describe("Props / State 変更の追従", () => {
     it("options.chapterIndex が変更された場合、新たに指定された話がロードされること", async () => {
       const db = await resetTestDb();
@@ -2044,6 +2208,155 @@ describe("useReader", () => {
         });
 
         expect(getHtmlSpy).not.toHaveBeenCalled();
+      });
+
+      it("先読みループ中に chapterRepository.getChapter が例外を投げた場合、console.warn で警告され画面エラーにならないこと", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 3,
+          cachedCount: 1,
+        });
+
+        const consoleWarnSpy = vi
+          .spyOn(console, "warn")
+          .mockImplementation(() => {});
+
+        const httpClient = createMockHttpClient();
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              httpClient,
+            }),
+          },
+        );
+
+        await act(async () => {
+          await Promise.resolve();
+        });
+        expect(result.current.isLoading).toBe(false);
+
+        // 先読み時の getChapter で例外を投げる
+        vi.spyOn(chapterRepo, "getChapter").mockRejectedValueOnce(
+          new Error("DB Connection Lost"),
+        );
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(PREFETCH_INTERVAL_MS);
+        });
+
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          "[useReader] Prefetch loop terminated unexpectedly",
+          expect.any(Error),
+        );
+        expect(result.current.error).toBeNull();
+        consoleWarnSpy.mockRestore();
+      });
+
+      it("先読み対象話が DB に存在しない場合（getChapter が null）、スキップされて以降の話が先読みされること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 3,
+          cachedCount: 1,
+        });
+
+        const origGetChapter = chapterRepo.getChapter.bind(chapterRepo);
+        const getChapterSpy = vi.spyOn(chapterRepo, "getChapter");
+        // 第2話の getChapter のみ null を返すようにモック
+        getChapterSpy.mockImplementation(async (novelId, idx) => {
+          if (idx === 2) return null;
+          return origGetChapter(novelId, idx);
+        });
+
+        const httpClient = createMockHttpClient();
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              httpClient,
+            }),
+          },
+        );
+
+        await act(async () => {
+          await Promise.resolve();
+        });
+        expect(result.current.isLoading).toBe(false);
+
+        // 先読みを進める（第2話は null スキップ、第3話が取得される）
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(PREFETCH_INTERVAL_MS * 2);
+        });
+
+        getChapterSpy.mockRestore();
+        const ch3 = await chapterRepo.getChapter(seeded.id, 3);
+        expect(ch3?.bodyHtml).not.toBeNull();
+      });
+
+      it("先読み通信中に abort された場合、catch ブロックで静かに処理が中断すること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 3,
+          cachedCount: 1,
+        });
+
+        const httpClient = new MockHttpClient();
+        let abortPromiseReject: (() => void) | undefined;
+        httpClient.setResponse(
+          /kakuyomu\.jp\/works\/.*\/episodes\/.*/,
+          (options) => {
+            return new Promise((_resolve, reject) => {
+              options.signal?.addEventListener("abort", () => {
+                reject(options.signal?.reason ?? new Error("Aborted"));
+              });
+              abortPromiseReject = () => reject(new Error("Manual abort"));
+            });
+          },
+        );
+
+        const consoleWarnSpy = vi
+          .spyOn(console, "warn")
+          .mockImplementation(() => {});
+
+        const { result, unmount } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              httpClient,
+            }),
+          },
+        );
+
+        await act(async () => {
+          await Promise.resolve();
+        });
+        expect(result.current.isLoading).toBe(false);
+
+        // 初期インターバル経過し、第2話の通信が開始される
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(PREFETCH_INTERVAL_MS);
+        });
+
+        // 通信中にアンマウント（これにより signal.abort() が呼ばれる）
+        unmount();
+
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+        consoleWarnSpy.mockRestore();
+        abortPromiseReject?.();
       });
     });
   });

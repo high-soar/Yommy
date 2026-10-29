@@ -6,12 +6,56 @@ import type {
   WritingMode,
   ReaderTheme,
 } from "../../../storage/types";
+import {
+  CACHE_TTL_MS,
+  SHORT_TIMEOUT_MS,
+  STANDARD_TIMEOUT_MS,
+  PREFETCH_INTERVAL_MS,
+  PREFETCH_COUNT,
+} from "../../../shared/constants/cache";
 
 /**
  * デフォルトの検証用カクヨム作品URL
  */
 export const DEFAULT_KAKUYOMU_URL =
   "https://kakuyomu.jp/works/16817330658027210412";
+
+/**
+ * キャッシュが7日以内の新鮮な状態か判定する
+ */
+export function isChapterFresh(
+  chapter: ChapterRecord | null | undefined,
+  now: number = Date.now(),
+): boolean {
+  if (!chapter || chapter.bodyHtml === null || !chapter.downloadedAt) {
+    return false;
+  }
+  const downloadedTime = new Date(chapter.downloadedAt).getTime();
+  if (Number.isNaN(downloadedTime)) {
+    return false;
+  }
+  return now - downloadedTime < CACHE_TTL_MS;
+}
+
+/**
+ * 指定ミリ秒待機する（AbortSignal による即時中断対応）
+ */
+export function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason ?? new Error("Aborted"));
+      return;
+    }
+    const timer = setTimeout(() => {
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason ?? new Error("Aborted"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
 
 /**
  * 例外オブジェクトをユーザー表示用エラーメッセージ文字列へ変換する
@@ -98,6 +142,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   const novelRef = useRef<NovelRecord | null>(novel);
   const currentChapterIndexRef = useRef<number>(currentChapterIndex);
   const scrollProgressRef = useRef<number>(scrollProgress);
+  const prefetchAbortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     novelRef.current = novel;
@@ -111,6 +156,19 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     scrollProgressRef.current = scrollProgress;
   }, [scrollProgress]);
 
+  const stopPrefetch = useCallback(() => {
+    if (prefetchAbortControllerRef.current) {
+      prefetchAbortControllerRef.current.abort();
+      prefetchAbortControllerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      stopPrefetch();
+    };
+  }, [stopPrefetch]);
+
   /**
    * 指定エピソードの本文をオンデマンドで取得・パースして DB に保存する共通関数
    */
@@ -119,9 +177,15 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       targetNovelId: string,
       targetChapterIndex: number,
       episodeUrl: string,
+      timeoutMs: number = STANDARD_TIMEOUT_MS,
+      signal?: AbortSignal,
     ): Promise<ChapterRecord | null> => {
       const parser = parserRegistry.requireParser(episodeUrl);
-      const chapterRes = await httpClient.getHtml({ url: episodeUrl });
+      const chapterRes = await httpClient.getHtml({
+        url: episodeUrl,
+        timeoutMs,
+        signal,
+      });
       const parsedChapter = parser.parseChapterContent(
         chapterRes.html,
         episodeUrl,
@@ -135,6 +199,129 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       return chapterRepository.getChapter(targetNovelId, targetChapterIndex);
     },
     [chapterRepository, httpClient, parserRegistry],
+  );
+
+  /**
+   * キャッシュ鮮度ルールに基づいて本文を解決する内部関数
+   */
+  const resolveChapterBody = useCallback(
+    async (
+      targetNovelId: string,
+      targetChapterIndex: number,
+      initialChapter: ChapterRecord,
+    ): Promise<ChapterRecord | null> => {
+      let resolved: ChapterRecord | null = initialChapter;
+      if (resolved.bodyHtml !== null) {
+        if (!isChapterFresh(resolved)) {
+          try {
+            const refreshed = await fetchAndSaveChapterBody(
+              targetNovelId,
+              targetChapterIndex,
+              resolved.url,
+              SHORT_TIMEOUT_MS,
+            );
+            if (refreshed) {
+              resolved = refreshed;
+            }
+          } catch (err: unknown) {
+            console.warn(
+              `[useReader] Stale chapter refresh failed for index ${targetChapterIndex}, falling back to existing cache`,
+              err,
+            );
+          }
+        }
+      } else {
+        resolved = await fetchAndSaveChapterBody(
+          targetNovelId,
+          targetChapterIndex,
+          resolved.url,
+          STANDARD_TIMEOUT_MS,
+        );
+      }
+      return resolved;
+    },
+    [fetchAndSaveChapterBody],
+  );
+
+  /**
+   * 読書中エピソードから最大5話の自動先読みを開始する関数
+   */
+  const startPrefetch = useCallback(
+    (
+      targetNovelId: string,
+      currentChapterIdx: number,
+      totalChapterCount: number,
+    ) => {
+      stopPrefetch();
+
+      if (totalChapterCount <= currentChapterIdx) {
+        return;
+      }
+
+      const abortController = new AbortController();
+      prefetchAbortControllerRef.current = abortController;
+      const signal = abortController.signal;
+
+      void (async () => {
+        try {
+          // 第 N 話表示完了後、初期インターバル 1.5秒待機
+          await delay(PREFETCH_INTERVAL_MS, signal);
+
+          const maxChapterIndex = Math.min(
+            currentChapterIdx + PREFETCH_COUNT,
+            totalChapterCount,
+          );
+
+          for (
+            let targetIdx = currentChapterIdx + 1;
+            targetIdx <= maxChapterIndex;
+            targetIdx++
+          ) {
+            const targetChapter = await chapterRepository.getChapter(
+              targetNovelId,
+              targetIdx,
+            );
+            if (!targetChapter) continue;
+
+            // 7日以内キャッシュが存在すれば通信スキップ
+            if (isChapterFresh(targetChapter)) {
+              continue;
+            }
+
+            const timeoutMs =
+              targetChapter.bodyHtml !== null
+                ? SHORT_TIMEOUT_MS
+                : STANDARD_TIMEOUT_MS;
+
+            try {
+              await fetchAndSaveChapterBody(
+                targetNovelId,
+                targetIdx,
+                targetChapter.url,
+                timeoutMs,
+                signal,
+              );
+            } catch (err: unknown) {
+              if (signal.aborted) return;
+              console.warn(
+                `[useReader] Prefetch failed for chapter ${targetIdx}`,
+                err,
+              );
+            }
+
+            // 1話の取得完了ごとに 1.5秒ウェイト
+            await delay(PREFETCH_INTERVAL_MS, signal);
+          }
+        } catch (err: unknown) {
+          if (signal.aborted) return;
+          console.warn(
+            "[useReader] Prefetch loop terminated unexpectedly",
+            err,
+          );
+        }
+      })();
+    },
+    [chapterRepository, fetchAndSaveChapterBody, stopPrefetch],
   );
 
   // 初期ロードおよび options 変更時のデータ同期
@@ -188,18 +375,21 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           targetIndex,
         );
 
-        // 未キャッシュ話のオンデマンド本文取得
-        if (targetChapter && targetChapter.bodyHtml === null) {
-          targetChapter = await fetchAndSaveChapterBody(
+        // キャッシュ鮮度・オンデマンド本文取得
+        if (targetChapter) {
+          const resolved = await resolveChapterBody(
             targetNovel.id,
             targetIndex,
-            targetChapter.url,
+            targetChapter,
           );
-          const reloadedNovel = await novelRepository.getNovelById(
-            targetNovel.id,
-          );
-          if (reloadedNovel) {
-            targetNovel = reloadedNovel;
+          if (resolved) {
+            targetChapter = resolved;
+            const reloadedNovel = await novelRepository.getNovelById(
+              targetNovel.id,
+            );
+            if (reloadedNovel) {
+              targetNovel = reloadedNovel;
+            }
           }
         }
 
@@ -239,6 +429,11 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         setNovel(targetNovel);
         setChapter(targetChapter);
         setCurrentChapterIndex(targetIndex);
+
+        // 本文取得完了時に自動先読みを開始
+        if (targetChapter && targetChapter.bodyHtml !== null) {
+          startPrefetch(targetNovel.id, targetIndex, targetNovel.totalChapters);
+        }
       } catch (err: unknown) {
         if (isMounted) {
           setError(toErrorMessage(err));
@@ -254,6 +449,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
 
     return () => {
       isMounted = false;
+      stopPrefetch();
     };
   }, [
     isReady,
@@ -262,7 +458,9 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     novelRepository,
     chapterRepository,
     settingsRepository,
-    fetchAndSaveChapterBody,
+    resolveChapterBody,
+    startPrefetch,
+    stopPrefetch,
   ]);
 
   // 縦書き・横書き組み方向切替
@@ -366,6 +564,8 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   // 前後エピソード遷移
   const goToChapter = useCallback(
     async (targetChapterIndex: number): Promise<boolean> => {
+      stopPrefetch();
+
       const currentNovel = novelRef.current;
       if (
         !currentNovel ||
@@ -393,13 +593,16 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           targetChapterIndex,
         );
 
-        // 3. 未キャッシュ話のオンデマンド本文取得
-        if (targetChapter && targetChapter.bodyHtml === null) {
-          targetChapter = await fetchAndSaveChapterBody(
+        // 3. キャッシュ鮮度・オンデマンド本文取得
+        if (targetChapter) {
+          const resolved = await resolveChapterBody(
             currentNovel.id,
             targetChapterIndex,
-            targetChapter.url,
+            targetChapter,
           );
+          if (resolved) {
+            targetChapter = resolved;
+          }
         }
 
         // 4. 表示完了時の既読更新
@@ -433,6 +636,14 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         setInitialScrollProgress(0);
         setScrollProgress(0);
         isSuccess = true;
+
+        if (targetChapter && targetChapter.bodyHtml !== null && reloadedNovel) {
+          startPrefetch(
+            reloadedNovel.id,
+            targetChapterIndex,
+            reloadedNovel.totalChapters,
+          );
+        }
       } catch (err: unknown) {
         setError(toErrorMessage(err));
         isSuccess = false;
@@ -441,11 +652,19 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       }
       return isSuccess;
     },
-    [chapterRepository, fetchAndSaveChapterBody, novelRepository],
+    [
+      chapterRepository,
+      novelRepository,
+      resolveChapterBody,
+      startPrefetch,
+      stopPrefetch,
+    ],
   );
 
   // 手動作品取得・更新パイプライン
   const fetchNovelFromUrl = useCallback(async (): Promise<void> => {
+    stopPrefetch();
+
     const targetUrl = novelRef.current?.canonicalUrl ?? initialWorkUrl;
     if (!targetUrl) {
       setError("対象作品のURLが指定されていません");
@@ -508,6 +727,14 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         setCurrentChapterIndex(targetChapterIdx);
         setInitialScrollProgress(0);
         setScrollProgress(0);
+
+        if (savedChapter && reloadedNovel) {
+          startPrefetch(
+            savedNovel.id,
+            targetChapterIdx,
+            reloadedNovel.totalChapters,
+          );
+        }
       } else {
         setNovel(savedNovel);
         setChapter(null);
@@ -526,6 +753,8 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     novelRepository,
     chapterRepository,
     fetchAndSaveChapterBody,
+    startPrefetch,
+    stopPrefetch,
   ]);
 
   const totalChapters = novel ? novel.totalChapters : 0;
