@@ -162,12 +162,12 @@ related_tests:
 
 ### 3.5 機能別仕様書：作品詳細・目次画面（`docs/specs/features/novel-detail.md`）
 
-- `NovelDetailHeaderProps` に一括キャッシュ関連 Props を追加：
-  - `isBatchCaching?: boolean;`
-  - `batchCacheProgress?: { current: number; total: number } | null;`
-  - `onStartBatchCache?: () => void;`
-  - `onCancelBatchCache?: () => void;`
-  - `isAllCached?: boolean;`
+- `NovelDetailHeaderProps` に一括キャッシュ関連 Props を追加（すべて必須）：
+  - `isBatchCaching: boolean;`
+  - `batchCacheProgress: { current: number; total: number } | null;`
+  - `isAllCached: boolean;`
+  - `onStartBatchCache: () => void | Promise<void>;`
+  - `onCancelBatchCache: () => void;`
 - `useNovelDetail` フック戻り値に一括キャッシュ状態・操作を追加：
   - `isBatchCaching: boolean;`
   - `batchCacheProgress: { current: number; total: number } | null;`
@@ -221,7 +221,7 @@ related_tests:
 ### 4.3 結合テスト（Integration Tests: Playwright 実ブラウザ）
 
 - `SCN-01` / `SCN-02`:
-  - リーダー画面で第1話を表示後、自動先読みにより第2話〜第5話が SQLite に保存され、第2話へ遷移した際にロード待機なく即時表示されること（`HO-20`）。
+  - リーダー画面で第1話を表示後、自動先読みにより第2話〜第6話（最大5話）が SQLite に保存され、第2話へ遷移した際にロード待機なく即時表示されること（`HO-20`）。
   - 作品詳細画面で「未取得話を一括キャッシュ」を実行し、各話リストのバッジが順次「取得済み」へ切り替わること（`HO-21`）。
   - オフライン環境（またはモック通信遮断）下で 7日経過キャッシュを開いた際、3秒後に既存キャッシュで読書画面が表示されること（`HO-21`）。
 
