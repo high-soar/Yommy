@@ -1,7 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServices } from "../../../app/ServiceProvider";
 import type { NovelRecord, ChapterSummary } from "../../../storage/types";
 import type { UseNovelDetailResult } from "../types";
+import {
+  SHORT_TIMEOUT_MS,
+  STANDARD_TIMEOUT_MS,
+  PREFETCH_INTERVAL_MS,
+} from "../../../shared/constants/cache";
+import { isChapterFresh, delay } from "../../../shared/utils/cache";
 
 export type { UseNovelDetailResult } from "../types";
 
@@ -58,10 +64,38 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
   const [chapters, setChapters] = useState<ChapterSummary[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [isBatchCaching, setIsBatchCaching] = useState<boolean>(false);
+  const [batchCacheProgress, setBatchCacheProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const isBatchCachingRef = useRef<boolean>(false);
+  const batchAbortControllerRef = useRef<AbortController | null>(null);
+
+  // アンマウント時の一括キャッシュ中断クリーンアップ
+  useEffect(() => {
+    return () => {
+      if (batchAbortControllerRef.current) {
+        batchAbortControllerRef.current.abort();
+        batchAbortControllerRef.current = null;
+      }
+      isBatchCachingRef.current = false;
+    };
+  }, []);
+
+  // 全話有効キャッシュ済み判定（AC-ND-13）
+  const isAllCached = useMemo(() => {
+    if (!novel || chapters.length === 0 || novel.totalChapters === 0) {
+      return false;
+    }
+    const now = Date.now();
+    return chapters.every((ch) => isChapterFresh(ch, now));
+  }, [novel, chapters]);
 
   // 初回ロード（isReady 完了時に自動実行、アンマウント時のリークを防止）
   useEffect(() => {
@@ -123,7 +157,13 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
    * @returns 成功時は `true`、失敗時または未ロード/処理中スキップ時は `false`
    */
   const refreshToc = useCallback(async (): Promise<boolean> => {
-    if (!novel || isRefreshing || isDeleting) {
+    if (
+      !novel ||
+      isRefreshing ||
+      isDeleting ||
+      isBatchCaching ||
+      isBatchCachingRef.current
+    ) {
       return false;
     }
 
@@ -176,12 +216,151 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     chapters.length,
     isRefreshing,
     isDeleting,
+    isBatchCaching,
     parserRegistry,
     httpClient,
     novelRepository,
     chapterRepository,
     novelId,
   ]);
+
+  /**
+   * 作品内の未取得話（および7日経過した古いキャッシュ）をレートリミット（1.5秒）を守りながら
+   * 順次バックグラウンド直列取得・SQLite 保存する（AC-ND-11, AC-ND-12）。
+   */
+  const startBatchCache = useCallback(async (): Promise<void> => {
+    if (
+      !novel ||
+      isBatchCaching ||
+      isBatchCachingRef.current ||
+      isRefreshing ||
+      isDeleting
+    ) {
+      return;
+    }
+
+    const now = Date.now();
+    const targetChapters = chapters
+      .filter((ch) => !isChapterFresh(ch, now))
+      .sort((a, b) => a.chapterIndex - b.chapterIndex);
+
+    if (targetChapters.length === 0) {
+      return;
+    }
+
+    isBatchCachingRef.current = true;
+    const abortController = new AbortController();
+    batchAbortControllerRef.current = abortController;
+    const signal = abortController.signal;
+
+    setIsBatchCaching(true);
+    setBatchCacheProgress({ current: 0, total: targetChapters.length });
+    setError(null);
+    setRefreshMessage(null);
+
+    try {
+      const parser = parserRegistry.requireParser(novel.canonicalUrl);
+
+      for (let i = 0; i < targetChapters.length; i++) {
+        const target = targetChapters[i];
+        const hasStaleCache = target.downloadedAt !== null;
+        const timeoutMs = hasStaleCache
+          ? SHORT_TIMEOUT_MS
+          : STANDARD_TIMEOUT_MS;
+
+        let html: string;
+        try {
+          const response = await httpClient.getHtml({
+            url: target.url,
+            timeoutMs,
+            signal,
+          });
+          if (response.status >= 400) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          html = response.html;
+        } catch (err: unknown) {
+          if (signal.aborted) {
+            break;
+          }
+          throw new Error(
+            `第${target.chapterIndex}話の取得に失敗したためキャッシュを中断しました: ${extractErrorMessage(err, "通信エラー")}`,
+          );
+        }
+
+        const parsedContent = parser.parseChapterContent(html, target.url);
+        const downloadedAt = new Date().toISOString();
+
+        await chapterRepository.saveChapterBody(
+          novelId,
+          target.chapterIndex,
+          parsedContent,
+          downloadedAt,
+        );
+
+        setChapters((prev) =>
+          prev.map((ch) =>
+            ch.chapterIndex === target.chapterIndex
+              ? { ...ch, downloadedAt, byteSize: parsedContent.byteSize }
+              : ch,
+          ),
+        );
+
+        setNovel((prev) => {
+          const isNewCache = target.downloadedAt === null;
+          return {
+            ...prev!,
+            cachedChapters: isNewCache
+              ? prev!.cachedChapters + 1
+              : prev!.cachedChapters,
+            updatedAt: downloadedAt,
+          };
+        });
+
+        setBatchCacheProgress({
+          current: i + 1,
+          total: targetChapters.length,
+        });
+
+        if (i < targetChapters.length - 1) {
+          await delay(PREFETCH_INTERVAL_MS, signal);
+        }
+      }
+
+      if (!signal.aborted) {
+        setRefreshMessage("全話のキャッシュを取得しました");
+      }
+    } catch (err: unknown) {
+      if (!signal.aborted) {
+        setError(extractErrorMessage(err, "キャッシュの取得に失敗しました"));
+      }
+    } finally {
+      isBatchCachingRef.current = false;
+      setIsBatchCaching(false);
+      setBatchCacheProgress(null);
+      batchAbortControllerRef.current = null;
+    }
+  }, [
+    novel,
+    chapters,
+    isBatchCaching,
+    isRefreshing,
+    isDeleting,
+    parserRegistry,
+    httpClient,
+    chapterRepository,
+    novelId,
+  ]);
+
+  /**
+   * 実行中の一括キャッシュ処理を直ちに中断（キャンセル）する（AC-ND-12）。
+   */
+  const cancelBatchCache = useCallback(() => {
+    if (batchAbortControllerRef.current) {
+      batchAbortControllerRef.current.abort();
+      batchAbortControllerRef.current = null;
+    }
+  }, []);
 
   /**
    * 作品削除確認ダイアログを開く
@@ -206,7 +385,12 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
    * @returns 成功時は `true`（ダイアログを閉じる）、失敗時は `false`（ダイアログを開いたままエラー設定）
    */
   const confirmDeleteNovel = useCallback(async (): Promise<boolean> => {
-    if (isDeleting || isRefreshing) {
+    if (
+      isDeleting ||
+      isRefreshing ||
+      isBatchCaching ||
+      isBatchCachingRef.current
+    ) {
       return false;
     }
 
@@ -225,18 +409,23 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
       setIsDeleting(false);
     }
     return isSuccess;
-  }, [isDeleting, isRefreshing, novelRepository, novelId]);
+  }, [isDeleting, isRefreshing, isBatchCaching, novelRepository, novelId]);
 
   return {
     novel,
     chapters,
     isLoading,
     isRefreshing,
+    isBatchCaching,
+    batchCacheProgress,
+    isAllCached,
     isDeleteDialogOpen,
     isDeleting,
     refreshMessage,
     error,
     refreshToc,
+    startBatchCache,
+    cancelBatchCache,
     openDeleteDialog,
     closeDeleteDialog,
     confirmDeleteNovel,

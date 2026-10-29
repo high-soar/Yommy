@@ -13,17 +13,22 @@ export type { NovelDetailHeaderProps } from "../types";
 export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
   novel,
   isRefreshing,
+  isBatchCaching,
+  batchCacheProgress,
+  isAllCached,
   refreshMessage,
   error,
   onStartFromBeginning,
   onResumeBookmark,
   onRefreshToc,
+  onStartBatchCache,
+  onCancelBatchCache,
   onOpenDeleteDialog,
 }) => {
   const [isSynopsisExpanded, setIsSynopsisExpanded] = useState(false);
 
   // メタ情報のフォールバックおよび空文字判定
-  const isStartDisabled = novel.totalChapters === 0;
+  const isStartDisabled = novel.totalChapters === 0 || isBatchCaching;
   const authorText = novel.author?.trim() ? novel.author : "著者不明";
   const hasSynopsis = Boolean(
     novel.synopsis && novel.synopsis.trim().length > 0,
@@ -36,12 +41,42 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
       className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 p-4 md:p-5 shadow-xs mb-4 md:mb-6 flex flex-col gap-3 md:gap-4 shrink-0"
     >
       {/* 管理アクションバー（右寄せ） */}
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex items-center justify-end gap-2 flex-wrap">
+        {isBatchCaching ? (
+          <div className="flex items-center gap-2">
+            <span
+              data-testid="batch-cache-progress"
+              className="text-xs font-medium text-blue-600 dark:text-blue-400 animate-pulse"
+            >
+              {batchCacheProgress
+                ? `キャッシュ中 (${batchCacheProgress.current}/${batchCacheProgress.total})...`
+                : "キャッシュ中..."}
+            </span>
+            <button
+              type="button"
+              data-testid="batch-cache-cancel-button"
+              onClick={onCancelBatchCache}
+              className="px-3 py-1.5 text-xs font-medium bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-amber-500 cursor-pointer"
+            >
+              中断
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            data-testid="batch-cache-button"
+            onClick={onStartBatchCache}
+            disabled={isRefreshing || isAllCached || novel.totalChapters === 0}
+            className="px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+          >
+            {isAllCached ? "全話キャッシュ済み" : "未取得話を一括キャッシュ"}
+          </button>
+        )}
         <button
           type="button"
           data-testid="refresh-toc-button"
           onClick={onRefreshToc}
-          disabled={isRefreshing}
+          disabled={isRefreshing || isBatchCaching}
           className="px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
         >
           {isRefreshing ? "更新中..." : "目次を更新"}
@@ -50,7 +85,7 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
           type="button"
           data-testid="open-delete-dialog-button"
           onClick={onOpenDeleteDialog}
-          disabled={isRefreshing}
+          disabled={isRefreshing || isBatchCaching}
           className="px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-red-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
         >
           作品を削除

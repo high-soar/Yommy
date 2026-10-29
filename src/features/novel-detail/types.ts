@@ -8,11 +8,16 @@ export interface UseNovelDetailResult {
   chapters: ChapterSummary[];
   isLoading: boolean;
   isRefreshing: boolean;
+  isBatchCaching: boolean;
+  batchCacheProgress: { current: number; total: number } | null;
+  isAllCached: boolean;
   isDeleteDialogOpen: boolean;
   isDeleting: boolean;
   refreshMessage: string | null;
   error: string | null;
   refreshToc: () => Promise<boolean>;
+  startBatchCache: () => Promise<void>;
+  cancelBatchCache: () => void;
   openDeleteDialog: () => void;
   closeDeleteDialog: () => void;
   confirmDeleteNovel: () => Promise<boolean>;
@@ -25,11 +30,16 @@ export interface UseNovelDetailResult {
 export interface NovelDetailHeaderProps {
   novel: NovelRecord;
   isRefreshing: boolean;
+  isBatchCaching: boolean;
+  batchCacheProgress: { current: number; total: number } | null;
+  isAllCached: boolean;
   refreshMessage?: string | null;
   error?: string | null;
   onStartFromBeginning: () => void;
   onResumeBookmark: (chapterIndex: number) => void;
   onRefreshToc: () => void | Promise<void>;
+  onStartBatchCache: () => void | Promise<void>;
+  onCancelBatchCache: () => void;
   onOpenDeleteDialog: () => void;
 }
 
@@ -70,6 +80,9 @@ export interface NovelDetailPageProps {
   chapters: ChapterSummary[];
   isLoading: boolean;
   isRefreshing: boolean;
+  isBatchCaching: boolean;
+  batchCacheProgress: { current: number; total: number } | null;
+  isAllCached: boolean;
   isDeleteDialogOpen: boolean;
   isDeleting: boolean;
   refreshMessage?: string | null;
@@ -79,6 +92,8 @@ export interface NovelDetailPageProps {
   onResumeBookmark: (chapterIndex: number) => void;
   onSelectEpisode: (chapterIndex: number) => void;
   onRefreshToc: () => void | Promise<void>;
+  onStartBatchCache: () => void | Promise<void>;
+  onCancelBatchCache: () => void;
   onOpenDeleteDialog: () => void;
   onCloseDeleteDialog: () => void;
   onConfirmDelete: () => void | Promise<void>;

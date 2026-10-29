@@ -29,11 +29,16 @@ const meta: Meta<typeof NovelDetailHeader> = {
   args: {
     novel: sampleNovel,
     isRefreshing: false,
+    isBatchCaching: false,
+    batchCacheProgress: null,
+    isAllCached: false,
     refreshMessage: null,
     error: null,
     onStartFromBeginning: fn(),
     onResumeBookmark: fn(),
     onRefreshToc: fn(),
+    onStartBatchCache: fn(),
+    onCancelBatchCache: fn(),
     onOpenDeleteDialog: fn(),
   },
 };
@@ -60,6 +65,31 @@ export const WithBookmark: Story = {
     novel: {
       ...sampleNovel,
       bookmarkChapterIndex: 5,
+    },
+  },
+};
+
+/**
+ * 一括キャッシュ実行中状態（進捗表示＋中断ボタン表示）
+ */
+export const BatchCaching: Story = {
+  name: "一括キャッシュ中",
+  args: {
+    isBatchCaching: true,
+    batchCacheProgress: { current: 3, total: 15 },
+  },
+};
+
+/**
+ * 全話キャッシュ済み状態（ボタンdisabled）
+ */
+export const AllCached: Story = {
+  name: "全話キャッシュ済み",
+  args: {
+    isAllCached: true,
+    novel: {
+      ...sampleNovel,
+      cachedChapters: 45,
     },
   },
 };

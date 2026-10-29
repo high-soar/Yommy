@@ -35,6 +35,8 @@ const {
   EmptyChapters,
   FallbackAuthorAndSynopsis,
   ExpandedSynopsis,
+  BatchCaching,
+  AllCached,
 } = composeStories(stories);
 
 describe("NovelDetailHeader", () => {
@@ -177,17 +179,22 @@ describe("NovelDetailHeader", () => {
   });
 
   describe("ユーザーインタラクションの検証", () => {
+    const defaultProps = {
+      novel: sampleNovel,
+      isRefreshing: false,
+      isBatchCaching: false,
+      batchCacheProgress: null,
+      isAllCached: false,
+      onStartFromBeginning: vi.fn(),
+      onResumeBookmark: vi.fn(),
+      onRefreshToc: vi.fn(),
+      onStartBatchCache: vi.fn(),
+      onCancelBatchCache: vi.fn(),
+      onOpenDeleteDialog: vi.fn(),
+    };
+
     it("「本棚へ戻る」ボタンはヘッダー内に描画されないこと (AC-ND-07)", () => {
-      render(
-        <NovelDetailHeader
-          novel={sampleNovel}
-          isRefreshing={false}
-          onStartFromBeginning={vi.fn()}
-          onResumeBookmark={vi.fn()}
-          onRefreshToc={vi.fn()}
-          onOpenDeleteDialog={vi.fn()}
-        />,
-      );
+      render(<NovelDetailHeader {...defaultProps} />);
 
       expect(
         screen.queryByTestId("back-to-bookshelf-button"),
@@ -197,16 +204,7 @@ describe("NovelDetailHeader", () => {
     it("あらすじの折りたたみ・展開トグルボタンをクリックすると表示状態が切り替わること (AC-ND-01)", async () => {
       const user = userEvent.setup();
 
-      render(
-        <NovelDetailHeader
-          novel={sampleNovel}
-          isRefreshing={false}
-          onStartFromBeginning={vi.fn()}
-          onResumeBookmark={vi.fn()}
-          onRefreshToc={vi.fn()}
-          onOpenDeleteDialog={vi.fn()}
-        />,
-      );
+      render(<NovelDetailHeader {...defaultProps} />);
 
       const synopsis = screen.getByTestId("novel-detail-synopsis");
       const toggleButton = screen.getByTestId("synopsis-toggle-button");
@@ -237,12 +235,8 @@ describe("NovelDetailHeader", () => {
     it("あらすじが未設定または空白のみの場合、フォールバックが表示されトグルボタンは非表示であること (AC-ND-01)", () => {
       render(
         <NovelDetailHeader
+          {...defaultProps}
           novel={{ ...sampleNovel, synopsis: "   \n  " }}
-          isRefreshing={false}
-          onStartFromBeginning={vi.fn()}
-          onResumeBookmark={vi.fn()}
-          onRefreshToc={vi.fn()}
-          onOpenDeleteDialog={vi.fn()}
         />,
       );
 
@@ -260,12 +254,8 @@ describe("NovelDetailHeader", () => {
 
       render(
         <NovelDetailHeader
-          novel={sampleNovel}
-          isRefreshing={false}
+          {...defaultProps}
           onStartFromBeginning={onStartFromBeginning}
-          onResumeBookmark={vi.fn()}
-          onRefreshToc={vi.fn()}
-          onOpenDeleteDialog={vi.fn()}
         />,
       );
 
@@ -279,12 +269,9 @@ describe("NovelDetailHeader", () => {
 
       render(
         <NovelDetailHeader
+          {...defaultProps}
           novel={{ ...sampleNovel, bookmarkChapterIndex: 8 }}
-          isRefreshing={false}
-          onStartFromBeginning={vi.fn()}
           onResumeBookmark={onResumeBookmark}
-          onRefreshToc={vi.fn()}
-          onOpenDeleteDialog={vi.fn()}
         />,
       );
 
@@ -299,12 +286,9 @@ describe("NovelDetailHeader", () => {
 
       render(
         <NovelDetailHeader
+          {...defaultProps}
           novel={{ ...sampleNovel, bookmarkChapterIndex: 8 }}
-          isRefreshing={false}
           onStartFromBeginning={onStartFromBeginning}
-          onResumeBookmark={vi.fn()}
-          onRefreshToc={vi.fn()}
-          onOpenDeleteDialog={vi.fn()}
         />,
       );
 
@@ -317,14 +301,7 @@ describe("NovelDetailHeader", () => {
       const onRefreshToc = vi.fn();
 
       render(
-        <NovelDetailHeader
-          novel={sampleNovel}
-          isRefreshing={false}
-          onStartFromBeginning={vi.fn()}
-          onResumeBookmark={vi.fn()}
-          onRefreshToc={onRefreshToc}
-          onOpenDeleteDialog={vi.fn()}
-        />,
+        <NovelDetailHeader {...defaultProps} onRefreshToc={onRefreshToc} />,
       );
 
       await user.click(screen.getByTestId("refresh-toc-button"));
@@ -337,11 +314,7 @@ describe("NovelDetailHeader", () => {
 
       render(
         <NovelDetailHeader
-          novel={sampleNovel}
-          isRefreshing={false}
-          onStartFromBeginning={vi.fn()}
-          onResumeBookmark={vi.fn()}
-          onRefreshToc={vi.fn()}
+          {...defaultProps}
           onOpenDeleteDialog={onOpenDeleteDialog}
         />,
       );
@@ -353,22 +326,159 @@ describe("NovelDetailHeader", () => {
     it("全0話かつしおり設定時の境界値で、続きから読むボタンも disabled となること", () => {
       render(
         <NovelDetailHeader
+          {...defaultProps}
           novel={{
             ...sampleNovel,
             totalChapters: 0,
             cachedChapters: 0,
             bookmarkChapterIndex: 1,
           }}
-          isRefreshing={false}
-          onStartFromBeginning={vi.fn()}
-          onResumeBookmark={vi.fn()}
-          onRefreshToc={vi.fn()}
-          onOpenDeleteDialog={vi.fn()}
         />,
       );
 
       expect(screen.getByTestId("detail-resume-button")).toBeDisabled();
       expect(screen.getByTestId("detail-read-first-button")).toBeDisabled();
+    });
+
+    describe("未取得話一括キャッシュ関連の表示・活性制御 (AC-ND-11, AC-ND-12, AC-ND-13)", () => {
+      it("BatchCaching ストーリーで進行状況（3/15）と中断ボタンが表示され、読書・更新・削除ボタンが disabled であること (AC-ND-11, AC-ND-12)", () => {
+        render(<BatchCaching />);
+
+        expect(screen.getByTestId("batch-cache-progress")).toHaveTextContent(
+          "キャッシュ中 (3/15)...",
+        );
+        expect(
+          screen.getByTestId("batch-cache-cancel-button"),
+        ).toHaveTextContent("中断");
+        expect(
+          screen.queryByTestId("batch-cache-button"),
+        ).not.toBeInTheDocument();
+
+        expect(screen.getByTestId("detail-read-first-button")).toBeDisabled();
+        expect(screen.getByTestId("refresh-toc-button")).toBeDisabled();
+        expect(screen.getByTestId("open-delete-dialog-button")).toBeDisabled();
+      });
+
+      it("AllCached ストーリーで「全話キャッシュ済み」ボタンが disabled 表示されること (AC-ND-13)", () => {
+        render(<AllCached />);
+
+        const batchButton = screen.getByTestId("batch-cache-button");
+        expect(batchButton).toBeInTheDocument();
+        expect(batchButton).toHaveTextContent("全話キャッシュ済み");
+        expect(batchButton).toBeDisabled();
+      });
+
+      it("未取得話がある場合に「未取得話を一括キャッシュ」ボタンが有効表示され、クリック時に onStartBatchCache が呼ばれること (AC-ND-11)", async () => {
+        const user = userEvent.setup();
+        const onStartBatchCache = vi.fn();
+
+        render(
+          <NovelDetailHeader
+            novel={sampleNovel}
+            isRefreshing={false}
+            isBatchCaching={false}
+            batchCacheProgress={null}
+            isAllCached={false}
+            onStartFromBeginning={vi.fn()}
+            onResumeBookmark={vi.fn()}
+            onRefreshToc={vi.fn()}
+            onStartBatchCache={onStartBatchCache}
+            onCancelBatchCache={vi.fn()}
+            onOpenDeleteDialog={vi.fn()}
+          />,
+        );
+
+        const batchButton = screen.getByTestId("batch-cache-button");
+        expect(batchButton).toHaveTextContent("未取得話を一括キャッシュ");
+        expect(batchButton).not.toBeDisabled();
+
+        await user.click(batchButton);
+        expect(onStartBatchCache).toHaveBeenCalledTimes(1);
+      });
+
+      it("目次更新中（isRefreshing === true）は一括キャッシュボタンも disabled であること (AC-ND-11)", () => {
+        render(
+          <NovelDetailHeader
+            novel={sampleNovel}
+            isRefreshing={true}
+            isBatchCaching={false}
+            batchCacheProgress={null}
+            isAllCached={false}
+            onStartFromBeginning={vi.fn()}
+            onResumeBookmark={vi.fn()}
+            onRefreshToc={vi.fn()}
+            onStartBatchCache={vi.fn()}
+            onCancelBatchCache={vi.fn()}
+            onOpenDeleteDialog={vi.fn()}
+          />,
+        );
+
+        expect(screen.getByTestId("batch-cache-button")).toBeDisabled();
+      });
+
+      it("総話数 0 の場合は一括キャッシュボタンが disabled となること (AC-ND-13)", () => {
+        render(
+          <NovelDetailHeader
+            novel={{ ...sampleNovel, totalChapters: 0, cachedChapters: 0 }}
+            isRefreshing={false}
+            isBatchCaching={false}
+            batchCacheProgress={null}
+            isAllCached={false}
+            onStartFromBeginning={vi.fn()}
+            onResumeBookmark={vi.fn()}
+            onRefreshToc={vi.fn()}
+            onStartBatchCache={vi.fn()}
+            onCancelBatchCache={vi.fn()}
+            onOpenDeleteDialog={vi.fn()}
+          />,
+        );
+
+        const batchButton = screen.getByTestId("batch-cache-button");
+        expect(batchButton).toHaveTextContent("未取得話を一括キャッシュ");
+        expect(batchButton).toBeDisabled();
+      });
+
+      it("一括キャッシュ実行中に中断ボタンをクリックすると onCancelBatchCache が呼ばれること (AC-ND-12)", async () => {
+        const user = userEvent.setup();
+        const onCancelBatchCache = vi.fn();
+
+        render(
+          <NovelDetailHeader
+            novel={{ ...sampleNovel, bookmarkChapterIndex: 2 }}
+            isRefreshing={false}
+            isBatchCaching={true}
+            batchCacheProgress={{ current: 1, total: 5 }}
+            isAllCached={false}
+            onStartFromBeginning={vi.fn()}
+            onResumeBookmark={vi.fn()}
+            onRefreshToc={vi.fn()}
+            onStartBatchCache={vi.fn()}
+            onCancelBatchCache={onCancelBatchCache}
+            onOpenDeleteDialog={vi.fn()}
+          />,
+        );
+
+        const cancelButton = screen.getByTestId("batch-cache-cancel-button");
+        await user.click(cancelButton);
+        expect(onCancelBatchCache).toHaveBeenCalledTimes(1);
+
+        expect(screen.getByTestId("detail-resume-button")).toBeDisabled();
+        expect(screen.getByTestId("detail-read-first-button")).toBeDisabled();
+      });
+
+      it("一括キャッシュ実行中で batchCacheProgress が null の場合、「キャッシュ中...」と表示されること", () => {
+        render(
+          <NovelDetailHeader
+            {...defaultProps}
+            isBatchCaching={true}
+            batchCacheProgress={null}
+          />,
+        );
+
+        expect(screen.getByTestId("batch-cache-progress")).toHaveTextContent(
+          "キャッシュ中...",
+        );
+      });
     });
   });
 });

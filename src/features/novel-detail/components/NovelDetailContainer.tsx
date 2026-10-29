@@ -24,11 +24,16 @@ export const NovelDetailContainer: React.FC<NovelDetailContainerProps> = ({
     chapters,
     isLoading,
     isRefreshing,
+    isBatchCaching,
+    batchCacheProgress,
+    isAllCached,
     isDeleteDialogOpen,
     isDeleting,
     refreshMessage,
     error,
     refreshToc,
+    startBatchCache,
+    cancelBatchCache,
     openDeleteDialog,
     closeDeleteDialog,
     confirmDeleteNovel,
@@ -81,6 +86,9 @@ export const NovelDetailContainer: React.FC<NovelDetailContainerProps> = ({
       chapters={chapters}
       isLoading={isLoading}
       isRefreshing={isRefreshing}
+      isBatchCaching={isBatchCaching}
+      batchCacheProgress={batchCacheProgress}
+      isAllCached={isAllCached}
       isDeleteDialogOpen={isDeleteDialogOpen}
       isDeleting={isDeleting}
       refreshMessage={refreshMessage}
@@ -90,6 +98,8 @@ export const NovelDetailContainer: React.FC<NovelDetailContainerProps> = ({
       onResumeBookmark={handleResumeBookmark}
       onSelectEpisode={handleSelectEpisode}
       onRefreshToc={handleRefreshToc}
+      onStartBatchCache={startBatchCache}
+      onCancelBatchCache={cancelBatchCache}
       onOpenDeleteDialog={openDeleteDialog}
       onCloseDeleteDialog={closeDeleteDialog}
       onConfirmDelete={handleConfirmDelete}

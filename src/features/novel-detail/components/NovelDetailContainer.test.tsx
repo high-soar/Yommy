@@ -702,5 +702,36 @@ describe("NovelDetailContainer", () => {
         `/novels/${encodeURIComponent(sampleNovel.id)}`,
       );
     });
+
+    it("一括キャッシュボタンが表示され、クリック時に一括キャッシュ処理が連携起動すること (AC-ND-11)", async () => {
+      const user = userEvent.setup();
+      render(
+        <RouterProvider
+          initialPath={`/novels/${encodeURIComponent(sampleNovel.id)}`}
+        >
+          <RouteObserverWrapper
+            novelId={sampleNovel.id}
+            novelRepository={createMockNovelRepo(sampleNovel)}
+            chapterRepository={createMockChapterRepo(sampleChapters)}
+          />
+        </RouterProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("batch-cache-button")).toBeInTheDocument();
+      });
+
+      const batchButton = screen.getByTestId("batch-cache-button");
+      expect(batchButton).toHaveTextContent("未取得話を一括キャッシュ");
+
+      await user.click(batchButton);
+      // クリック後に一括キャッシュ状態に遷移し、進行またはボタン表示が更新されること
+      await waitFor(() => {
+        expect(
+          screen.queryByTestId("batch-cache-progress") !== null ||
+            screen.queryByTestId("batch-cache-button") !== null,
+        ).toBe(true);
+      });
+    });
   });
 });

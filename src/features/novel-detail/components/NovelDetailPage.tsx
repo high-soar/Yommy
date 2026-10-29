@@ -16,6 +16,9 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
   chapters,
   isLoading,
   isRefreshing,
+  isBatchCaching,
+  batchCacheProgress,
+  isAllCached,
   isDeleteDialogOpen,
   isDeleting,
   refreshMessage,
@@ -25,6 +28,8 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
   onResumeBookmark,
   onSelectEpisode,
   onRefreshToc,
+  onStartBatchCache,
+  onCancelBatchCache,
   onOpenDeleteDialog,
   onCloseDeleteDialog,
   onConfirmDelete,
@@ -34,6 +39,13 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
 
   const currentNovelId = novel?.id ?? null;
   const bookmarkChapterIndex = novel?.bookmarkChapterIndex ?? null;
+
+  const handleSelectEpisode = (chapterIndex: number) => {
+    if (isBatchCaching) {
+      return;
+    }
+    onSelectEpisode(chapterIndex);
+  };
 
   useEffect(() => {
     if (!isLoading && currentNovelId && bookmarkChapterIndex !== null) {
@@ -105,11 +117,16 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
             <NovelDetailHeader
               novel={novel}
               isRefreshing={isRefreshing}
+              isBatchCaching={isBatchCaching}
+              batchCacheProgress={batchCacheProgress}
+              isAllCached={isAllCached}
               refreshMessage={refreshMessage}
               error={error}
               onStartFromBeginning={onStartFromBeginning}
               onResumeBookmark={onResumeBookmark}
               onRefreshToc={onRefreshToc}
+              onStartBatchCache={onStartBatchCache}
+              onCancelBatchCache={onCancelBatchCache}
               onOpenDeleteDialog={onOpenDeleteDialog}
             />
           </div>
@@ -117,12 +134,14 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
           <main
             ref={episodeContainerRef}
             data-testid="episode-list-container"
-            className="flex-1 min-h-0 overflow-y-auto w-full max-w-4xl mx-auto p-4 md:p-6 lg:p-8 pt-3 md:pt-4 lg:pt-4"
+            className={`flex-1 min-h-0 overflow-y-auto w-full max-w-4xl mx-auto p-4 md:p-6 lg:p-8 pt-3 md:pt-4 lg:pt-4 ${
+              isBatchCaching ? "pointer-events-none opacity-80" : ""
+            }`}
           >
             <EpisodeList
               chapters={chapters}
               bookmarkChapterIndex={novel.bookmarkChapterIndex}
-              onSelectEpisode={onSelectEpisode}
+              onSelectEpisode={handleSelectEpisode}
             />
           </main>
 
