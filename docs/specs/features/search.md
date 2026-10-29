@@ -2,7 +2,7 @@
 type: spec-feature
 title: "検索画面仕様書（SCR-06: Novel Search）"
 description: "複数小説サイト（v0.3はカクヨム）のキーワード検索、並び順・ジャンル・連載状態フィルタ、作品カード一覧およびその場での本棚追加を提供する検索画面（SCR-06）の正本仕様。"
-status: "Review (#79)"
+status: Approved
 updated: "2026-10-30"
 tags:
   - search
@@ -22,12 +22,13 @@ related_specs:
   - docs/specs/features/ranking.md
   - docs/specs/features/novel-detail.md
   - docs/specs/parsers/kakuyomu.md
-  - docs/specs/changes/issue-79-four-tabs-search-ranking.md
+  - docs/specs/changes/archive/issue-79-four-tabs-search-ranking.md
 related_tests:
   - src/App.test.tsx
   - src/app/router.test.tsx
   - src/features/search/components/SearchPage.test.tsx
   - src/features/search/hooks/useNovelSearch.test.ts
+  - test/it/scenarios/scn02-search-ranking-discovery.spec.ts
   - test/it/smoke.spec.ts
 ---
 

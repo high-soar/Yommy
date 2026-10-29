@@ -2,8 +2,8 @@
 type: spec-feature
 title: "ランキング画面仕様書（SCR-07: Novel Ranking）"
 description: "複数小説サイト（v0.3はカクヨム）のランキング一覧（期間×総合/主要ジャンル）、順位バッジ表示、作品カード一覧およびその場での本棚追加を提供するランキング画面（SCR-07）の正本仕様。"
-status: "Review (#79)"
-updated: "2026-10-29"
+status: Approved
+updated: "2026-10-30"
 tags:
   - ranking
   - scr-07
@@ -22,12 +22,13 @@ related_specs:
   - docs/specs/features/search.md
   - docs/specs/features/novel-detail.md
   - docs/specs/parsers/kakuyomu.md
-  - docs/specs/changes/issue-79-four-tabs-search-ranking.md
+  - docs/specs/changes/archive/issue-79-four-tabs-search-ranking.md
 related_tests:
   - src/App.test.tsx
   - src/app/router.test.tsx
   - src/features/ranking/components/RankingPage.test.tsx
   - src/features/ranking/hooks/useNovelRanking.test.ts
+  - test/it/scenarios/scn02-search-ranking-discovery.spec.ts
   - test/it/smoke.spec.ts
 ---
 

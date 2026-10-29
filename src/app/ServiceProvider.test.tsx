@@ -270,6 +270,62 @@ describe("ServiceProvider", () => {
       });
     });
 
+    it("createDefaultMockHttpClient がカクヨム検索URLおよびランキングURLにマッチすること", async () => {
+      let searchHtml = "";
+      let rankingHtml = "";
+      let searchNovelHtml = "";
+      let rankingNovelHtml = "";
+      const TestConsumer: React.FC = () => {
+        const services = useServices();
+        React.useEffect(() => {
+          if (services.isReady) {
+            services.httpClient
+              .getHtml({
+                url: "https://kakuyomu.jp/search?q=%E7%95%B0%E4%B8%96%E7%95%8C",
+              })
+              .then((res) => {
+                searchHtml = res.html;
+              });
+            services.httpClient
+              .getHtml({
+                url: "https://kakuyomu.jp/rankings/all/weekly",
+              })
+              .then((res) => {
+                rankingHtml = res.html;
+              });
+            services.httpClient
+              .getHtml({
+                url: "https://kakuyomu.jp/works/16817330658027210001",
+              })
+              .then((res) => {
+                searchNovelHtml = res.html;
+              });
+            services.httpClient
+              .getHtml({
+                url: "https://kakuyomu.jp/works/16817330658027210101",
+              })
+              .then((res) => {
+                rankingNovelHtml = res.html;
+              });
+          }
+        }, [services]);
+        return <div>検索・ランキングモックテスト</div>;
+      };
+
+      render(
+        <ServiceProvider>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(searchHtml).toContain("転生令嬢の異世界冒険譚");
+        expect(rankingHtml).toContain("ランキング1位作品：最強の剣士");
+        expect(searchNovelHtml).toContain("転生令嬢の異世界冒険譚");
+        expect(rankingNovelHtml).toContain("ランキング1位作品：最強の剣士");
+      });
+    });
+
     it("カスタム databaseAdapter および 各 Repository が渡された場合にそのまま利用されること", async () => {
       const customDb = {
         execute: vi.fn(),

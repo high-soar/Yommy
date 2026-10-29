@@ -27,7 +27,7 @@ related_specs:
   - docs/specs/features/settings.md
   - docs/specs/parsers/kakuyomu.md
   - docs/specs/changes/archive/issue-78-apk-signing-and-back-button.md
-  - docs/specs/changes/issue-79-four-tabs-search-ranking.md
+  - docs/specs/changes/archive/issue-79-four-tabs-search-ranking.md
   - docs/specs/changes/issue-80-bookshelf-update-check-and-sort.md
   - docs/specs/changes/issue-81-prefetch-and-cache-rules.md
   - docs/specs/changes/archive/issue-50-fullscreen-shell-and-settings.md
@@ -41,6 +41,7 @@ related_tests:
   - src/app/router.test.tsx
   - src/shared/ui/BottomTabBar.test.tsx
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
+  - test/it/scenarios/scn02-search-ranking-discovery.spec.ts
   - test/it/smoke.spec.ts
 ---
 

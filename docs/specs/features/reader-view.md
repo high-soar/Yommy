@@ -31,7 +31,7 @@ related_specs:
   - docs/specs/features/novel-detail.md
   - docs/specs/features/settings.md
   - docs/specs/parsers/kakuyomu.md
-  - docs/specs/changes/issue-79-four-tabs-search-ranking.md
+  - docs/specs/changes/archive/issue-79-four-tabs-search-ranking.md
   - docs/specs/changes/issue-80-bookshelf-update-check-and-sort.md
   - docs/specs/changes/issue-81-prefetch-and-cache-rules.md
   - docs/specs/changes/archive/issue-50-fullscreen-shell-and-settings.md

@@ -28,6 +28,8 @@ import { SqlSettingsRepository } from "../storage/repositories/settingsRepositor
 import { SqlAppSettingsRepository } from "../storage/repositories/appSettingsRepository";
 import workIndexHtml from "../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 import episodeContentHtml from "../parsers/kakuyomu/__fixtures__/episode_content.html?raw";
+import searchApolloHtml from "../parsers/kakuyomu/__fixtures__/search_results_apollo.html?raw";
+import rankingApolloHtml from "../parsers/kakuyomu/__fixtures__/ranking_results_apollo.html?raw";
 
 const STORAGE_KEY = "yommy_sqlite_db_backup";
 
@@ -121,12 +123,36 @@ export function persistDatabaseBinary(
 
 export function createDefaultMockHttpClient(): MockHttpClient {
   const client = new MockHttpClient();
-  client.setResponse(/^https:\/\/kakuyomu\.jp\/works\/\d+$/, (options) => ({
+  client.setResponse(/^https:\/\/kakuyomu\.jp\/search/, (options) => ({
     status: 200,
     url: options.url,
     headers: {},
-    html: workIndexHtml,
+    html: searchApolloHtml,
   }));
+  client.setResponse(/^https:\/\/kakuyomu\.jp\/rankings\//, (options) => ({
+    status: 200,
+    url: options.url,
+    headers: {},
+    html: rankingApolloHtml,
+  }));
+  client.setResponse(/^https:\/\/kakuyomu\.jp\/works\/\d+$/, (options) => {
+    let html = workIndexHtml;
+    if (options.url.includes("16817330658027210001")) {
+      html = html
+        .replaceAll("境界迷宮と異界の魔術師", "転生令嬢の異世界冒険譚")
+        .replaceAll("小野崎", "カクヨム太郎");
+    } else if (options.url.includes("16817330658027210101")) {
+      html = html
+        .replaceAll("境界迷宮と異界の魔術師", "ランキング1位作品：最強の剣士")
+        .replaceAll("小野崎", "ランキング1位作家");
+    }
+    return {
+      status: 200,
+      url: options.url,
+      headers: {},
+      html,
+    };
+  });
   client.setResponse(
     /^https:\/\/kakuyomu\.jp\/works\/\d+\/episodes\/\d+/,
     (options) => ({
