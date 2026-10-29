@@ -23,8 +23,42 @@ export interface ReaderBottomOverlayProps {
   onClose?: () => void;
 }
 
+interface ReaderTabItem {
+  id: BottomTab;
+  label: string;
+  icon: string;
+  testId: string;
+}
+
+const READER_TABS: ReaderTabItem[] = [
+  {
+    id: "bookshelf",
+    label: "本棚",
+    icon: "📚",
+    testId: "reader-bottom-tab-bookshelf",
+  },
+  {
+    id: "search",
+    label: "検索",
+    icon: "🔍",
+    testId: "reader-bottom-tab-search",
+  },
+  {
+    id: "ranking",
+    label: "ランキング",
+    icon: "🏆",
+    testId: "reader-bottom-tab-ranking",
+  },
+  {
+    id: "settings",
+    label: "設定",
+    icon: "⚙️",
+    testId: "reader-bottom-tab-settings",
+  },
+];
+
 /**
- * 前後話ナビゲーションと下部タブバー（本棚/設定）を統合したスライドインオーバーレイ（Presentational）
+ * 前後話ナビゲーションと4タブバー（本棚/検索/ランキング/設定）を統合したスライドインオーバーレイ（Presentational）
  *
  * 画面最下部タッチでスライドイン表示され、読書没入感を保ちつつ素早いナビゲーションを提供する。
  */
@@ -77,69 +111,27 @@ export const ReaderBottomOverlay: React.FC<ReaderBottomOverlayProps> = ({
         aria-label="リーダーナビゲーションタブ"
         className="grid grid-cols-4 border-t border-zinc-200 dark:border-zinc-800 max-w-4xl mx-auto w-full"
       >
-        <button
-          type="button"
-          role="tab"
-          data-testid="reader-bottom-tab-bookshelf"
-          aria-selected={activeTab === "bookshelf"}
-          onClick={() => onSelectTab?.("bookshelf")}
-          className={`flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium transition-colors cursor-pointer ${
-            activeTab === "bookshelf"
-              ? "text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50/50 dark:bg-emerald-950/20"
-              : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
-          }`}
-        >
-          <span aria-hidden="true">📚</span>
-          <span>本棚</span>
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          data-testid="reader-bottom-tab-search"
-          aria-selected={activeTab === "search"}
-          onClick={() => onSelectTab?.("search")}
-          className={`flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium transition-colors cursor-pointer ${
-            activeTab === "search"
-              ? "text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50/50 dark:bg-emerald-950/20"
-              : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
-          }`}
-        >
-          <span aria-hidden="true">🔍</span>
-          <span>検索</span>
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          data-testid="reader-bottom-tab-ranking"
-          aria-selected={activeTab === "ranking"}
-          onClick={() => onSelectTab?.("ranking")}
-          className={`flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium transition-colors cursor-pointer ${
-            activeTab === "ranking"
-              ? "text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50/50 dark:bg-emerald-950/20"
-              : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
-          }`}
-        >
-          <span aria-hidden="true">🏆</span>
-          <span>ランキング</span>
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          data-testid="reader-bottom-tab-settings"
-          aria-selected={activeTab === "settings"}
-          onClick={() => onSelectTab?.("settings")}
-          className={`flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium transition-colors cursor-pointer ${
-            activeTab === "settings"
-              ? "text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50/50 dark:bg-emerald-950/20"
-              : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
-          }`}
-        >
-          <span aria-hidden="true">⚙️</span>
-          <span>設定</span>
-        </button>
+        {READER_TABS.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              data-testid={tab.testId}
+              aria-selected={isActive}
+              onClick={() => onSelectTab?.(tab.id)}
+              className={`flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium transition-colors cursor-pointer ${
+                isActive
+                  ? "text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50/50 dark:bg-emerald-950/20"
+                  : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+              }`}
+            >
+              <span aria-hidden="true">{tab.icon}</span>
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

@@ -6,7 +6,21 @@ import { BookshelfContainer } from "./features/bookshelf/components/BookshelfCon
 import { NovelDetailContainer } from "./features/novel-detail/components/NovelDetailContainer";
 import { ReaderContainer } from "./features/reader/components/ReaderContainer";
 import { SettingsContainer } from "./features/settings/components/SettingsContainer";
-import { BottomTabBar } from "./shared/ui/BottomTabBar";
+import { BottomTabBar, type BottomTab } from "./shared/ui/BottomTabBar";
+
+/**
+ * 現在のルート名からアクティブな下部タブを判定する
+ */
+function getActiveTab(routeName: string): BottomTab {
+  if (
+    routeName === "settings" ||
+    routeName === "search" ||
+    routeName === "ranking"
+  ) {
+    return routeName;
+  }
+  return "bookshelf";
+}
 
 /**
  * App コンポーネントの Props
@@ -144,15 +158,7 @@ const AppContent: React.FC<AppContentProps> = ({
 
       {!isReader && (
         <BottomTabBar
-          activeTab={
-            router.route.name === "settings"
-              ? "settings"
-              : router.route.name === "search"
-                ? "search"
-                : router.route.name === "ranking"
-                  ? "ranking"
-                  : "bookshelf"
-          }
+          activeTab={getActiveTab(router.route.name)}
           onSelectBookshelf={router.navigateToBookshelf}
           onSelectSearch={router.navigateToSearch}
           onSelectRanking={router.navigateToRanking}
