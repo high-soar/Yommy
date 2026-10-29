@@ -41,6 +41,7 @@ related_tests:
   - src/app/router.test.tsx
   - src/shared/ui/BottomTabBar.test.tsx
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
+  - test/it/scenarios/scn02-search-ranking-discovery.spec.ts
   - test/it/smoke.spec.ts
 ---
 

@@ -189,6 +189,21 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     expect(novelTitles).toContain("転生令嬢の異世界冒険譚");
     expect(novelTitles).toContain("ランキング1位作品：最強の剣士");
 
+    // ランキング経由で第2話まで読書した作品のしおり進捗、および検索から未読追加した作品の状態確認
+    const rankCard = novelCards.filter({
+      hasText: "ランキング1位作品：最強の剣士",
+    });
+    await expect(rankCard.getByTestId("novel-card-bookmark")).toHaveText(
+      "しおり: 第2話",
+    );
+
+    const searchCard = novelCards.filter({
+      hasText: "転生令嬢の異世界冒険譚",
+    });
+    await expect(searchCard.getByTestId("novel-card-bookmark")).toHaveText(
+      "未読",
+    );
+
     // 11. OS バックキー（TR-12）による下部タブ（設定・検索・ランキング）からホームタブ（本棚）への復帰検証
     // (a) 設定画面へ移動 -> OS バックキーで本棚へ復帰
     await tabSettings.click();
