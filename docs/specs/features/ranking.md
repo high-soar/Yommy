@@ -59,13 +59,12 @@ related_tests:
 ```text
 src/features/ranking/
 ├── components/
-│   ├── SiteSelector.tsx              # 対象サイト切替ピル（カクヨム / 将来のなろう ※searchと共通再利用可）
-│   ├── RankingPeriodSelector.tsx     # 集計期間切替タブ（日間 / 週間 / 月間 / 累計）
-│   ├── RankingPeriodSelector.stories.tsx
-│   ├── RankingPeriodSelector.test.tsx
-│   ├── RankingGenreBar.tsx           # ジャンル切替横スクロールピル（総合 ＋ 主要12ジャンル）
-│   ├── RankingGenreBar.stories.tsx
-│   ├── RankingGenreBar.test.tsx
+│   ├── SiteSelector.tsx              # 対象サイト切替ピル（カクヨム / 将来のなろう）
+│   ├── SiteSelector.stories.tsx
+│   ├── SiteSelector.test.tsx
+│   ├── RankingFilterBar.tsx          # 集計期間切替（4種）およびジャンル切替横スクロールピル（総合＋主要12ジャンル）
+│   ├── RankingFilterBar.stories.tsx
+│   ├── RankingFilterBar.test.tsx
 │   ├── RankingNovelCard.tsx          # 順位バッジ付き作品カード（「＋ 本棚に追加」ボタン配置）
 │   ├── RankingNovelCard.stories.tsx
 │   ├── RankingNovelCard.test.tsx
@@ -133,6 +132,32 @@ export interface RankingNovelCardProps {
   onAdd: () => void;
   /** カード本体タップハンドラ */
   onSelect: () => void;
+}
+```
+
+### 3.3 `RankingFilterBarProps`
+
+```typescript
+export interface RankingFilterBarProps {
+  /** 選択中集計期間 */
+  selectedPeriod: NovelRankingPeriod;
+  /** 集計期間変更コールバック */
+  onSelectPeriod: (period: NovelRankingPeriod) => void;
+  /** 選択中ジャンル（総合時は undefined または "all"） */
+  selectedGenre?: string;
+  /** ジャンル変更コールバック */
+  onSelectGenre: (genre?: string) => void;
+}
+```
+
+### 3.4 `SiteSelectorProps`
+
+```typescript
+export interface SiteSelectorProps {
+  /** 選択中サイト識別子 */
+  selectedSite: NovelSiteType;
+  /** サイト変更コールバック */
+  onSelectSite: (site: NovelSiteType) => void;
 }
 ```
 
