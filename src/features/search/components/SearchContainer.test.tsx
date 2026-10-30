@@ -61,6 +61,21 @@ describe("SearchContainer コンポーネント", () => {
     expect(screen.getByTestId("search-initial-state")).toBeInTheDocument();
   });
 
+  it("検索実行前に入力欄へキーワードを入力しても初期状態表示が維持されること", async () => {
+    const user = userEvent.setup();
+    renderWithProviders();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("search-input")).toBeInTheDocument();
+    });
+
+    const input = screen.getByTestId("search-input");
+    await user.type(input, "異世界");
+
+    expect(screen.getByTestId("search-initial-state")).toBeInTheDocument();
+    expect(screen.queryByTestId("search-empty-state")).not.toBeInTheDocument();
+  });
+
   it("キーワードを入力して検索を実行し、カード一覧が表示されること (AC-SE-02)", async () => {
     const user = userEvent.setup();
     renderWithProviders();

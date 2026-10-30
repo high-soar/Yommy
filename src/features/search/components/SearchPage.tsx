@@ -41,6 +41,8 @@ export interface SearchPageProps {
   addingWorkId: string | null;
   /** 通信中フラグ */
   isLoading: boolean;
+  /** 検索実行済みフラグ（省略時または false は未検索） */
+  hasSearched?: boolean;
   /** 次ページ通信中フラグ */
   isLoadingMore: boolean;
   /** 次ページが存在するかどうか */

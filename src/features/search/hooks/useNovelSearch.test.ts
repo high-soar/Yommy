@@ -85,6 +85,7 @@ describe("useNovelSearch", () => {
     expect(result.current.hasNextPage).toBe(false);
     expect(result.current.error).toBeNull();
     expect(result.current.addingWorkId).toBeNull();
+    expect(result.current.hasSearched).toBe(false);
   });
 
   it("キーワード検索を実行して検索結果およびページ情報を取得できること (AC-SE-02)", async () => {
@@ -105,6 +106,7 @@ describe("useNovelSearch", () => {
     expect(result.current.items.length).toBeGreaterThan(0);
     expect(result.current.error).toBeNull();
     expect(result.current.items[0].title).toBeDefined();
+    expect(result.current.hasSearched).toBe(true);
   });
 
   it("検索APIが失敗した場合は error ステートにメッセージが設定されること", async () => {
@@ -156,6 +158,7 @@ describe("useNovelSearch", () => {
     expect(result.current.isLoading).toBe(false);
     expect(result.current.items).toEqual([]);
     expect(result.current.error).toBeNull();
+    expect(result.current.hasSearched).toBe(true);
   });
 
   it("次ページ読み込み (loadMore) でアイテムが追記されること (AC-SE-08)", async () => {
