@@ -1,6 +1,6 @@
 /**
  * キャッシュ鮮度・先読み・タイムアウトに関する共通定数定義
- * (docs/specs/changes/issue-81-prefetch-and-cache-rules.md §2.3.1)
+ * (docs/specs/architecture.md §3.6)
  */
 
 /**
