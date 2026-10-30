@@ -354,6 +354,57 @@ describe("NovelDetailContainer", () => {
       });
     });
 
+    it("未検出画面で onBackToBookshelf 未指定時、探索元（/search）が存在する場合は router.back により /search へ復帰すること (TR-07, AC-ND-07)", async () => {
+      const user = userEvent.setup();
+
+      const TestOriginComponent = () => {
+        const router = useRouter();
+        const navigatedRef = React.useRef(false);
+        React.useEffect(() => {
+          if (!navigatedRef.current) {
+            navigatedRef.current = true;
+            router.navigateToNovelDetail("not-found", "/search");
+          }
+        }, [router]);
+
+        return (
+          <div>
+            <div data-testid="observed-current-path">{router.currentPath}</div>
+            <ServiceProvider
+              services={{
+                databaseAdapter: mockDatabaseAdapter,
+                settingsRepository: createMockSettingsRepo(),
+                novelRepository: createMockNovelRepo(null),
+                chapterRepository: createMockChapterRepo([]),
+              }}
+            >
+              <NovelDetailContainer novelId="not-found" />
+            </ServiceProvider>
+          </div>
+        );
+      };
+
+      render(
+        <RouterProvider initialPath="/search">
+          <TestOriginComponent />
+        </RouterProvider>,
+      );
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("novel-detail-not-found"),
+        ).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId("back-to-bookshelf-button"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+          "/search",
+        );
+      });
+    });
+
     it("未検出画面で onBackToBookshelf が注入された場合、カスタムコールバックが呼ばれる", async () => {
       const user = userEvent.setup();
       const onBackToBookshelf = vi.fn();
@@ -627,6 +678,58 @@ describe("NovelDetailContainer", () => {
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           "/",
+        );
+      });
+    });
+
+    it("作品削除フロー: onBackToBookshelf 未指定で直前探索元（/ranking）が存在する場合は router.back() により /ranking へ復帰すること (TR-07, AC-ND-06)", async () => {
+      const user = userEvent.setup();
+
+      const TestOriginDeleteComponent = () => {
+        const router = useRouter();
+        const navigatedRef = React.useRef(false);
+        React.useEffect(() => {
+          if (!navigatedRef.current) {
+            navigatedRef.current = true;
+            router.navigateToNovelDetail(sampleNovel.id, "/ranking");
+          }
+        }, [router]);
+
+        return (
+          <div>
+            <div data-testid="observed-current-path">{router.currentPath}</div>
+            <ServiceProvider
+              services={{
+                databaseAdapter: mockDatabaseAdapter,
+                settingsRepository: createMockSettingsRepo(),
+                novelRepository: createMockNovelRepo(sampleNovel),
+                chapterRepository: createMockChapterRepo(sampleChapters),
+              }}
+            >
+              <NovelDetailContainer novelId={sampleNovel.id} />
+            </ServiceProvider>
+          </div>
+        );
+      };
+
+      render(
+        <RouterProvider initialPath="/ranking">
+          <TestOriginDeleteComponent />
+        </RouterProvider>,
+      );
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("open-delete-dialog-button"),
+        ).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId("open-delete-dialog-button"));
+      await user.click(screen.getByTestId("confirm-delete-button"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+          "/ranking",
         );
       });
     });
