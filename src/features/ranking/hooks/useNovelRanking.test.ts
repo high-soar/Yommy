@@ -21,6 +21,7 @@ describe("useNovelRanking", () => {
     localStorage.clear();
     window.history.replaceState(null, "", "/ranking");
     vi.clearAllMocks();
+    vi.restoreAllMocks();
 
     mockHttpClient = new MockHttpClient();
     mockHttpClient.setResponse(
@@ -392,6 +393,134 @@ describe("useNovelRanking", () => {
       await promise2!;
     });
     expect(result.current.addingWorkId).toBeNull();
+  });
+
+  it("同一作品の追加処理中（addingWorkId === item.remoteWorkId）に再度 addNovelToBookshelf を呼び出した場合、多重実行を防止し直ちに null を返すこと", async () => {
+    const resolves: Array<(val: HttpResponse) => void> = [];
+    let fetchCount = 0;
+    mockHttpClient.setResponse(
+      /^https:\/\/kakuyomu\.jp\/works\/\d+$/,
+      (options) => {
+        if (options.url === sampleRankingItem1.workUrl) {
+          fetchCount++;
+          return new Promise<HttpResponse>((resolve) => {
+            resolves.push(resolve);
+          });
+        }
+        return {
+          status: 200,
+          url: options.url,
+          headers: {},
+          html: workIndexHtml,
+        };
+      },
+    );
+
+    const { result } = renderHook(() => useNovelRanking(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.items.length).toBeGreaterThan(0);
+    });
+
+    let promise1: Promise<string | null>;
+    act(() => {
+      promise1 = result.current.addNovelToBookshelf(sampleRankingItem1);
+    });
+    expect(result.current.addingWorkId).toBe(sampleRankingItem1.remoteWorkId);
+
+    // 同一作品の追加を再度呼び出し（ガードにより即時 null が返るべき）
+    let secondResult: string | null = "dummy";
+    let isSecondResolved = false;
+    const promise2 = result.current
+      .addNovelToBookshelf(sampleRankingItem1)
+      .then((res) => {
+        isSecondResolved = true;
+        secondResult = res;
+        return res;
+      });
+    await Promise.resolve();
+
+    try {
+      expect(isSecondResolved).toBe(true);
+      expect(secondResult).toBeNull();
+      expect(fetchCount).toBe(1);
+    } finally {
+      resolves.forEach((resolve) =>
+        resolve({
+          url: sampleRankingItem1.workUrl,
+          status: 200,
+          headers: {},
+          html: workIndexHtml,
+        }),
+      );
+      await promise1!;
+      await promise2;
+    }
+    expect(result.current.addingWorkId).toBeNull();
+  });
+
+  it("同一作品の追加処理中（addingWorkId === item.remoteWorkId）に handleCardSelect を呼び出した場合、多重実行を防止し何もしないこと", async () => {
+    const resolves: Array<(val: HttpResponse) => void> = [];
+    let fetchCount = 0;
+    mockHttpClient.setResponse(
+      /^https:\/\/kakuyomu\.jp\/works\/\d+$/,
+      (options) => {
+        if (options.url === sampleRankingItem1.workUrl) {
+          fetchCount++;
+          return new Promise<HttpResponse>((resolve) => {
+            resolves.push(resolve);
+          });
+        }
+        return {
+          status: 200,
+          url: options.url,
+          headers: {},
+          html: workIndexHtml,
+        };
+      },
+    );
+
+    const { result } = renderHook(() => useNovelRanking(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.items.length).toBeGreaterThan(0);
+    });
+
+    let promise1: Promise<string | null>;
+    act(() => {
+      promise1 = result.current.addNovelToBookshelf(sampleRankingItem1);
+    });
+    expect(result.current.addingWorkId).toBe(sampleRankingItem1.remoteWorkId);
+
+    // 追加処理中に同一作品の handleCardSelect を呼び出す
+    let isSelectResolved = false;
+    const selectPromise = result.current
+      .handleCardSelect(sampleRankingItem1)
+      .then(() => {
+        isSelectResolved = true;
+      });
+    await Promise.resolve();
+
+    try {
+      expect(isSelectResolved).toBe(true);
+      expect(fetchCount).toBe(1);
+      expect(window.location.pathname).toBe("/ranking");
+    } finally {
+      resolves.forEach((resolve) =>
+        resolve({
+          url: sampleRankingItem1.workUrl,
+          status: 200,
+          headers: {},
+          html: workIndexHtml,
+        }),
+      );
+      await promise1!;
+      await selectPromise;
+    }
   });
 
   it("ランキング取得で非Error例外がスローされた場合も文字列化されてエラー状態に保持されること", async () => {
