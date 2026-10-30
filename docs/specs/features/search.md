@@ -2,7 +2,7 @@
 type: spec-feature
 title: "検索画面仕様書（SCR-06: Novel Search）"
 description: "複数小説サイト（v0.3はカクヨム）のキーワード検索、並び順・ジャンル・連載状態フィルタ、作品カード一覧およびその場での本棚追加を提供する検索画面（SCR-06）の正本仕様。"
-status: "Review (#82)"
+status: Approved
 updated: "2026-10-31"
 tags:
   - search
