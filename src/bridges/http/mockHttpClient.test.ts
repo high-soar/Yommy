@@ -190,5 +190,48 @@ describe("MockHttpClient", () => {
         }),
       ).rejects.toThrow();
     });
+
+    it("実行中に signal が abort された場合にリクエストが中断されること", async () => {
+      const controller = new AbortController();
+      client.setResponse("https://example.com/abort-inflight", async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return { status: 200, html: "late" };
+      });
+
+      const promise = client.getHtml({
+        url: "https://example.com/abort-inflight",
+        signal: controller.signal,
+      });
+      controller.abort(new Error("ユーザーによる中断"));
+
+      await expect(promise).rejects.toThrow("ユーザーによる中断");
+    });
+
+    it("timeoutMs を超過した場合にタイムアウトエラーが発生すること", async () => {
+      client.setResponse("https://example.com/slow", async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return { status: 200, html: "done" };
+      });
+
+      await expect(
+        client.getHtml({
+          url: "https://example.com/slow",
+          timeoutMs: 10,
+        }),
+      ).rejects.toThrow("[MockHttpClient] Request timed out after 10ms");
+    });
+
+    it("timeoutMs 以内にレスポンスが完了した場合は正常に解決すること", async () => {
+      client.setResponse("https://example.com/fast", async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return { status: 200, html: "fast-ok" };
+      });
+
+      const res = await client.getHtml({
+        url: "https://example.com/fast",
+        timeoutMs: 50,
+      });
+      expect(res.html).toBe("fast-ok");
+    });
   });
 });

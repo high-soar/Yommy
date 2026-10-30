@@ -65,24 +65,35 @@ describe("MockAppBridge", () => {
     expect(calls).toEqual(["first", "second"]);
   });
 
-  it("exitApp を呼び出すと exitAppCalled フラグが true に設定されること", async () => {
+  it("exitApp を呼び出すと exitAppCalled フラグが true に設定され呼び出し回数がカウントされること", async () => {
     const bridge = new MockAppBridge();
     expect(bridge.exitAppCalled).toBe(false);
+    expect(bridge.exitAppCount).toBe(0);
+    expect(bridge.getExitAppCallCount()).toBe(0);
 
     await bridge.exitApp();
     expect(bridge.exitAppCalled).toBe(true);
+    expect(bridge.exitAppCount).toBe(1);
+    expect(bridge.getExitAppCallCount()).toBe(1);
+
+    await bridge.exitApp();
+    expect(bridge.exitAppCount).toBe(2);
+    expect(bridge.getExitAppCallCount()).toBe(2);
   });
 
-  it("reset を呼び出すと exitAppCalled フラグと登録リスナーが初期化されること", async () => {
+  it("reset を呼び出すと exitAppCalled フラグ、exitAppCount、および登録リスナーが初期化されること", async () => {
     const bridge = new MockAppBridge();
     const listener = vi.fn();
 
     bridge.addBackButtonListener(listener);
     await bridge.exitApp();
     expect(bridge.exitAppCalled).toBe(true);
+    expect(bridge.getExitAppCallCount()).toBe(1);
 
     bridge.reset();
     expect(bridge.exitAppCalled).toBe(false);
+    expect(bridge.getExitAppCallCount()).toBe(0);
+    expect(bridge.exitAppCount).toBe(0);
 
     await bridge.triggerBackButton();
     expect(listener).not.toHaveBeenCalled();

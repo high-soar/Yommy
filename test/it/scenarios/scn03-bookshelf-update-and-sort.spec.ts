@@ -200,10 +200,10 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
     // 6. 5種ソート切り替えと app_settings 永続化・再表示復元 (HO-19, AC-BS-11, TR-16)
     const sortSelect = page.getByTestId("bookshelf-sort-select");
     await expect(sortSelect).toBeVisible();
-    // 初期選択値は "unread_first"（更新あり優先）
+    // (a) 初期選択値は "unread_first"（更新あり優先）
     await expect(sortSelect).toHaveValue("unread_first");
 
-    // "title"（タイトル順: 昇順）へ変更
+    // (b) "title"（タイトル順: 昇順）へ変更
     await sortSelect.selectOption("title");
     await expect(sortSelect).toHaveValue("title");
 
@@ -230,17 +230,70 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
       reloadedCards.nth(1).getByTestId("novel-card-title"),
     ).toHaveText("境界迷宮と異界の魔術師");
 
-    // 別のソート順 "latest_published"（作品更新日順）への変更確認
+    // (c) "latest_published"（作品更新日順）への変更確認
     await reloadedSortSelect.selectOption("latest_published");
     await expect(reloadedSortSelect).toHaveValue("latest_published");
+    const pubCards = page.getByTestId("novel-card");
+    // latest_episode_published_at: あいうえおの冒険 (2026-10-27) > 境界迷宮 (2026-01-04)
+    await expect(pubCards.nth(0).getByTestId("novel-card-title")).toHaveText(
+      "あいうえおの冒険",
+    );
+    await expect(pubCards.nth(1).getByTestId("novel-card-title")).toHaveText(
+      "境界迷宮と異界の魔術師",
+    );
 
-    // 7. 手動一括更新ボタンの押下と進捗表示 (AC-BS-10, TR-17)
+    // (d) "last_read"（最近読んだ順）への変更確認
+    await reloadedSortSelect.selectOption("last_read");
+    await expect(reloadedSortSelect).toHaveValue("last_read");
+    const readCards = page.getByTestId("novel-card");
+    // last_read_at: あいうえおの冒険（ステップ5でリーダー閲覧）> 境界迷宮（未閲覧・null）
+    await expect(readCards.nth(0).getByTestId("novel-card-title")).toHaveText(
+      "あいうえおの冒険",
+    );
+    await expect(readCards.nth(1).getByTestId("novel-card-title")).toHaveText(
+      "境界迷宮と異界の魔術師",
+    );
+
+    // (e) "created_at"（登録日順: 降順）への変更確認
+    await reloadedSortSelect.selectOption("created_at");
+    await expect(reloadedSortSelect).toHaveValue("created_at");
+    const createdCards = page.getByTestId("novel-card");
+    // created_at: 境界迷宮（ステップ2でシード登録）> あいうえおの冒険 (2026-10-20)
+    await expect(
+      createdCards.nth(0).getByTestId("novel-card-title"),
+    ).toHaveText("境界迷宮と異界の魔術師");
+    await expect(
+      createdCards.nth(1).getByTestId("novel-card-title"),
+    ).toHaveText("あいうえおの冒険");
+
+    // 7. 手動一括更新ボタンの押下と進捗表示・結果反映 (AC-BS-10, TR-17)
     const refreshButton = page.getByTestId("bookshelf-refresh-button");
     await expect(refreshButton).toBeVisible();
     await expect(refreshButton).toBeEnabled();
 
     await refreshButton.click();
-    // 更新完了後にボタンが再度 enabled になること
-    await expect(refreshButton).toBeEnabled({ timeout: 15000 });
+
+    // 更新実行中は進捗表示が表示され、更新ボタンが無効化されること (AC-BS-10)
+    const refreshProgress = page.getByTestId("bookshelf-refresh-progress");
+    await expect(refreshProgress).toBeVisible();
+    await expect(refreshButton).toBeDisabled();
+
+    // 更新完了後に進捗表示が非表示となり、更新ボタンが再活性化されること (TR-17)
+    await expect(refreshProgress).not.toBeVisible({ timeout: 15000 });
+    await expect(refreshButton).toBeEnabled();
+
+    // TR-17 の結果反映: 作品1の更新確認日時 (last_checked_at) が更新されていること
+    const lastChecked = await page.evaluate(async () => {
+      const services = window.__yommyServices!;
+      const rows = await services.databaseAdapter.query<{
+        last_checked_at: string;
+      }>(
+        "SELECT last_checked_at FROM novels WHERE id = 'kakuyomu:16817330658027210412'",
+      );
+      return rows[0]?.last_checked_at;
+    });
+    expect(lastChecked).toBeTruthy();
+    const checkedTime = new Date(lastChecked!).getTime();
+    expect(Date.now() - checkedTime).toBeLessThan(30000);
   });
 });

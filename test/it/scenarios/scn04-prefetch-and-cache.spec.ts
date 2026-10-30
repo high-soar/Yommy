@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("SCN-03: 読書中5話自動先読み・未取得話一括キャッシュ・キャッシュ鮮度フォールバックシナリオ (HO-20, HO-21)", () => {
+test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャッシュ・キャッシュ鮮度フォールバックシナリオ (HO-20, HO-21)", () => {
   test.beforeEach(async ({ page }) => {
     // ローカルストレージをクリアして初期状態から開始
     await page.goto("/");
@@ -118,22 +118,45 @@ test.describe("SCN-03: 読書中5話自動先読み・未取得話一括キャ�
     await expect(page.getByTestId("refresh-toc-button")).not.toBeDisabled();
   });
 
-  test("リーダー第1話表示後にバックグラウンドで後続話が自動先読みされ、第2話へ遷移した際に即時描画されること (HO-20, AC-RD-12, AC-RD-13)", async ({
+  test("リーダー第1話表示後にバックグラウンドで後続5話が自動先読みされ（上限超は未取得）、第2話へ遷移した際に即時描画されること (HO-20, AC-RD-12, AC-RD-13, R1-18)", async ({
     page,
   }) => {
-    // 1. サンプル作品（全4話、未取得状態）をシード登録
+    // 1. サンプル作品（全7話構成、未取得状態）をシード登録
     await page.evaluate(async () => {
       const services = window.__yommyServices!;
       const sampleUrl = "https://kakuyomu.jp/works/16817330658027210412";
       const response = await services.httpClient.getHtml({ url: sampleUrl });
       const parser = services.parserRegistry.requireParser(sampleUrl);
       const parsedIndex = parser.parseNovelIndex(response.html, sampleUrl);
+
+      // 7話分の目次データを構築
+      const chapters7 = [];
+      for (let i = 1; i <= 7; i++) {
+        const episodeId = String(BigInt("16817330658027210412") + BigInt(i));
+        chapters7.push({
+          chapterIndex: i,
+          remoteChapterId: episodeId,
+          title: `第${i}話 テスト`,
+          url: `https://kakuyomu.jp/works/16817330658027210412/episodes/${episodeId}`,
+          publishedAt: "2026-01-01T10:00:00Z",
+        });
+      }
+
       await services.novelRepository.upsertNovelWithToc(
-        parsedIndex,
+        {
+          ...parsedIndex,
+          totalChapters: 7,
+          chapters: chapters7,
+        },
         new Date().toISOString(),
       );
     });
     await page.reload();
+    await page.waitForFunction(
+      () =>
+        typeof window.__yommyServices !== "undefined" &&
+        window.__yommyServices.isReady,
+    );
 
     // 2. 作品詳細画面から第1話リーダーを開く（SPA ナビゲーション）
     await page.getByTestId("novel-card-select").click();
@@ -143,20 +166,49 @@ test.describe("SCN-03: 読書中5話自動先読み・未取得話一括キャ�
     const readerView = page.getByTestId("reader-view");
     await expect(readerView).toBeVisible();
 
-    // 3. バックグラウンド先読みにより第2話が SQLite に保存されるのを監視（HO-20, AC-RD-12）
-    await page.waitForFunction(
-      async () => {
-        const services = window.__yommyServices;
-        if (!services) return false;
+    // 3. バックグラウンド先読みにより第2話〜第6話（PREFETCH_COUNT=5話分）が SQLite に保存されるのを監視（HO-20, AC-RD-12, R1-18）
+    await expect
+      .poll(
+        async () => {
+          return await page.evaluate(async () => {
+            const services = window.__yommyServices;
+            if (!services) return false;
+            const ch6 = await services.chapterRepository.getChapter(
+              "kakuyomu:16817330658027210412",
+              6,
+            );
+            return (
+              ch6 !== null && ch6.downloadedAt !== null && ch6.bodyHtml !== null
+            );
+          });
+        },
+        { timeout: 25000 },
+      )
+      .toBe(true);
+
+    // 第2話〜第6話が取得済みであり、第7話は先読み上限（5話）外のため未取得（downloadedAt === null）であることを検証
+    const chaptersStatus = await page.evaluate(async () => {
+      const services = window.__yommyServices!;
+      const results: { index: number; downloaded: boolean }[] = [];
+      for (let i = 2; i <= 7; i++) {
         const ch = await services.chapterRepository.getChapter(
           "kakuyomu:16817330658027210412",
-          2,
+          i,
         );
-        return ch !== null && ch.downloadedAt !== null && ch.bodyHtml !== null;
-      },
-      null,
-      { timeout: 15000 },
-    );
+        results.push({
+          index: i,
+          downloaded: ch !== null && ch.downloadedAt !== null,
+        });
+      }
+      return results;
+    });
+
+    for (let i = 2; i <= 6; i++) {
+      const s = chaptersStatus.find((item) => item.index === i);
+      expect(s?.downloaded).toBe(true);
+    }
+    const ch7Status = chaptersStatus.find((item) => item.index === 7);
+    expect(ch7Status?.downloaded).toBe(false);
 
     // 4. 下部タッチゾーンをタップしてオーバーレイを表示
     const touchZone = page.getByTestId("reader-bottom-touch-zone");
@@ -176,7 +228,7 @@ test.describe("SCN-03: 読書中5話自動先読み・未取得話一括キャ�
     await expect(readerView).toBeVisible();
   });
 
-  test("7日経過した古いキャッシュが存在する場合、再取得エラー時にエラー画面を出さず既存キャッシュ本文が表示されること (HO-21, AC-RD-13)", async ({
+  test("7日経過した古いキャッシュが存在する場合、SHORT_TIMEOUT_MS（3秒）超過時にエラー画面を出さず既存キャッシュ本文が表示されること (HO-21, AC-RD-13, R1-18)", async ({
     page,
   }) => {
     // 1. サンプル作品をシード登録し、第1話に 8日前の古いキャッシュを設定
@@ -217,23 +269,21 @@ test.describe("SCN-03: 読書中5話自動先読み・未取得話一括キャ�
     );
     await page.reload();
 
-    // 2. HTTP クライアントのエピソード取得をモックし、エラー（500）を返却させて再取得を失敗させる設定
+    // 2. HTTP クライアントのエピソード取得をモックし、SHORT_TIMEOUT_MS（3秒）を超える遅延（3500ms）を発生させる
     await page.evaluate(() => {
       const services = window.__yommyServices!;
       const client = services.httpClient as unknown as {
         setResponse?: (
           pattern: RegExp,
-          handler: (options: unknown) => unknown,
+          handler: (options: { url: string }) => Promise<unknown>,
         ) => void;
       };
       client.setResponse?.(
         /^https:\/\/kakuyomu\.jp\/works\/\d+\/episodes\/\d+/,
-        () => ({
-          status: 500,
-          url: "",
-          headers: {},
-          html: "",
-        }),
+        async (options) => {
+          await new Promise((resolve) => setTimeout(resolve, 3500));
+          return { status: 200, url: options.url, headers: {}, html: "" };
+        },
       );
     });
 
@@ -242,9 +292,9 @@ test.describe("SCN-03: 読書中5話自動先読み・未取得話一括キャ�
     await expect(page.getByTestId("novel-detail-page")).toBeVisible();
     await page.getByTestId("detail-read-first-button").click();
 
-    // 4. エラー画面にならず、古いキャッシュ本文がフォールバック表示されることを確認 (AC-RD-13)
+    // 4. 3秒の短タイムアウト後にエラー画面にならず、古いキャッシュ本文がフォールバック表示されることを確認 (AC-RD-13)
     const readerView = page.getByTestId("reader-view");
-    await expect(readerView).toBeVisible();
+    await expect(readerView).toBeVisible({ timeout: 10000 });
     await expect(page.getByTestId("reader-error")).not.toBeVisible();
     await expect(readerView).toContainText(
       "これは8日前の古いキャッシュ本文です。フォールバック表示されます。",

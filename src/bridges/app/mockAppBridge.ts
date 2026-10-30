@@ -6,6 +6,7 @@ import type { AppBridge, BackButtonEvent, BackButtonListener } from "./types";
 export class MockAppBridge implements AppBridge {
   private listeners: Set<BackButtonListener> = new Set();
   exitAppCalled = false;
+  exitAppCount = 0;
 
   constructor() {
     if (typeof window !== "undefined") {
@@ -36,6 +37,14 @@ export class MockAppBridge implements AppBridge {
    */
   async exitApp(): Promise<void> {
     this.exitAppCalled = true;
+    this.exitAppCount += 1;
+  }
+
+  /**
+   * exitApp の呼び出し回数を取得する。
+   */
+  getExitAppCallCount(): number {
+    return this.exitAppCount;
   }
 
   /**
@@ -56,5 +65,6 @@ export class MockAppBridge implements AppBridge {
   reset(): void {
     this.listeners.clear();
     this.exitAppCalled = false;
+    this.exitAppCount = 0;
   }
 }
