@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -357,16 +357,10 @@ describe("NovelDetailContainer", () => {
     it("未検出画面で onBackToBookshelf 未指定時、探索元（/search）が存在する場合は router.back により /search へ復帰すること (TR-07, AC-ND-07)", async () => {
       const user = userEvent.setup();
 
+      let routerRef: ReturnType<typeof useRouter> | null = null;
       const TestOriginComponent = () => {
         const router = useRouter();
-        const navigatedRef = React.useRef(false);
-        React.useEffect(() => {
-          if (!navigatedRef.current) {
-            navigatedRef.current = true;
-            router.navigateToNovelDetail("not-found", "/search");
-          }
-        }, [router]);
-
+        routerRef = router;
         return (
           <div>
             <div data-testid="observed-current-path">{router.currentPath}</div>
@@ -389,6 +383,11 @@ describe("NovelDetailContainer", () => {
           <TestOriginComponent />
         </RouterProvider>,
       );
+
+      // /search から詳細へ遷移
+      act(() => {
+        routerRef?.navigateToNovelDetail("not-found", "/search");
+      });
 
       await waitFor(() => {
         expect(
@@ -685,16 +684,10 @@ describe("NovelDetailContainer", () => {
     it("作品削除フロー: onBackToBookshelf 未指定で直前探索元（/ranking）が存在する場合は router.back() により /ranking へ復帰すること (TR-07, AC-ND-06)", async () => {
       const user = userEvent.setup();
 
+      let routerRef: ReturnType<typeof useRouter> | null = null;
       const TestOriginDeleteComponent = () => {
         const router = useRouter();
-        const navigatedRef = React.useRef(false);
-        React.useEffect(() => {
-          if (!navigatedRef.current) {
-            navigatedRef.current = true;
-            router.navigateToNovelDetail(sampleNovel.id, "/ranking");
-          }
-        }, [router]);
-
+        routerRef = router;
         return (
           <div>
             <div data-testid="observed-current-path">{router.currentPath}</div>
@@ -717,6 +710,11 @@ describe("NovelDetailContainer", () => {
           <TestOriginDeleteComponent />
         </RouterProvider>,
       );
+
+      // /ranking から詳細へ遷移
+      act(() => {
+        routerRef?.navigateToNovelDetail(sampleNovel.id, "/ranking");
+      });
 
       await waitFor(() => {
         expect(

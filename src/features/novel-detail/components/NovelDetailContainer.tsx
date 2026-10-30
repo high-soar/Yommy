@@ -43,7 +43,7 @@ export const NovelDetailContainer: React.FC<NovelDetailContainerProps> = ({
     if (onBackToBookshelf) {
       onBackToBookshelf();
     } else {
-      router.navigateToBookshelf();
+      router.back();
     }
   }, [onBackToBookshelf, router]);
 
