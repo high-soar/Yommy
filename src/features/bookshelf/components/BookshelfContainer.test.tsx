@@ -341,4 +341,85 @@ describe("BookshelfContainer", () => {
       );
     });
   });
+
+  describe("作品閲覧時のNEW自動解除連携（AC-BS-09, TR-02, TR-03）", () => {
+    it("hasNewUpdate === true の作品カードクリック時に clearNovelUpdate が呼ばれて作品詳細へ遷移すること (AC-BS-09, TR-02)", async () => {
+      const user = userEvent.setup();
+      const clearNewUpdateSpy = vi.fn().mockResolvedValue(undefined);
+      const sampleWithNew: NovelSummary = {
+        ...sampleNovels[0],
+        id: "kakuyomu:new-update-work",
+        hasNewUpdate: true,
+        lastCheckedAt: new Date().toISOString(),
+      };
+      const novelRepo = {
+        ...createMockNovelRepo([sampleWithNew]),
+        clearNewUpdate: clearNewUpdateSpy,
+      };
+
+      render(
+        <ServiceProvider services={{ novelRepository: novelRepo }}>
+          <RouterProvider initialPath="/">
+            <RouteObserverWrapper />
+          </RouterProvider>
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("novel-card")).toBeInTheDocument();
+      });
+
+      const selectBtn = screen.getByTestId("novel-card-select");
+      await user.click(selectBtn);
+
+      expect(clearNewUpdateSpy).toHaveBeenCalledWith(
+        "kakuyomu:new-update-work",
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+          "/novels/kakuyomu%3Anew-update-work",
+        );
+      });
+    });
+
+    it("hasNewUpdate === true の作品の「続きから読む」クリック時に clearNovelUpdate が呼ばれてリーダーへ遷移すること (AC-BS-09, TR-03)", async () => {
+      const user = userEvent.setup();
+      const clearNewUpdateSpy = vi.fn().mockResolvedValue(undefined);
+      const sampleWithNew: NovelSummary = {
+        ...sampleNovels[0],
+        id: "kakuyomu:new-update-work-2",
+        bookmarkChapterIndex: 3,
+        hasNewUpdate: true,
+        lastCheckedAt: new Date().toISOString(),
+      };
+      const novelRepo = {
+        ...createMockNovelRepo([sampleWithNew]),
+        clearNewUpdate: clearNewUpdateSpy,
+      };
+
+      render(
+        <ServiceProvider services={{ novelRepository: novelRepo }}>
+          <RouterProvider initialPath="/">
+            <RouteObserverWrapper />
+          </RouterProvider>
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("novel-card")).toBeInTheDocument();
+      });
+
+      const resumeBtn = screen.getByTestId("novel-card-resume");
+      await user.click(resumeBtn);
+
+      expect(clearNewUpdateSpy).toHaveBeenCalledWith(
+        "kakuyomu:new-update-work-2",
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+          "/novels/kakuyomu%3Anew-update-work-2/chapters/3",
+        );
+      });
+    });
+  });
 });

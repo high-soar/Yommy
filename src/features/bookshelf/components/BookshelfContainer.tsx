@@ -35,21 +35,30 @@ export const BookshelfContainer: React.FC<BookshelfContainerProps> = ({
     sortOrder,
     setSortOrder,
     checkUpdates,
+    clearNovelUpdate,
   } = useBookshelf();
 
   const handleSelectNovel = useCallback(
-    (novelId: string) => {
+    async (novelId: string) => {
+      const targetNovel = novels.find((n) => n.id === novelId);
+      if (targetNovel?.hasNewUpdate) {
+        await clearNovelUpdate(novelId);
+      }
       if (onSelectNovel) {
         onSelectNovel(novelId);
       } else {
         router.navigateToNovelDetail(novelId);
       }
     },
-    [onSelectNovel, router],
+    [clearNovelUpdate, novels, onSelectNovel, router],
   );
 
   const handleResumeNovel = useCallback(
-    (novelId: string, chapterIndex: number) => {
+    async (novelId: string, chapterIndex: number) => {
+      const targetNovel = novels.find((n) => n.id === novelId);
+      if (targetNovel?.hasNewUpdate) {
+        await clearNovelUpdate(novelId);
+      }
       if (onResumeNovel) {
         onResumeNovel(novelId, chapterIndex);
       } else {
@@ -58,7 +67,7 @@ export const BookshelfContainer: React.FC<BookshelfContainerProps> = ({
         });
       }
     },
-    [onResumeNovel, router],
+    [clearNovelUpdate, novels, onResumeNovel, router],
   );
 
   const handleNavigateSearch = useCallback(() => {

@@ -110,7 +110,12 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     ])
       .then(([fetchedNovel, fetchedChapters]) => {
         if (isMounted) {
-          setNovel(fetchedNovel);
+          if (fetchedNovel?.hasNewUpdate) {
+            void novelRepository.clearNewUpdate(novelId);
+            setNovel({ ...fetchedNovel, hasNewUpdate: false });
+          } else {
+            setNovel(fetchedNovel);
+          }
           setChapters(fetchedChapters);
         }
       })

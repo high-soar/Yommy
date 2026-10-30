@@ -30,7 +30,6 @@ docs/
 │   ├── parsers/                       # [App全体正本] 小説サイト別の現在スクレイピング・DOM解析仕様書
 │   │   └── kakuyomu.md                # カクヨム パーサー・スクレイピング仕様書（kakuyomu.jp）
 │   └── changes/                       # [差分仕様 (Delta Specs)] 要望（親Issue）ごとの設計差分・テスト計画・Sub-issue分割
-│       ├── issue-80-bookshelf-update-check-and-sort.md # [Review] 自動更新チェック（NEWバッジ表示・解除）と本棚5種ソート機能の差分仕様 (#80)
 │       └── archive/                   # 完了済みの差分仕様アーカイブ（親Issueクローズ時に git mv で移動）
 │           ├── issue-12-bookshelf-and-routing.md # [Archived] 本棚画面・共通ルーティング基盤の差分仕様 (#12)
 │           ├── issue-13-novel-detail-and-toc.md # [Archived] 作品詳細・目次画面・オンデマンド取得の差分仕様 (#13)
@@ -41,6 +40,7 @@ docs/
 │           ├── issue-52-reader-fullscreen-and-bottom-overlay.md # [Archived] 小説リーダー画面全画面テキスト表示化・下部オーバーレイ差分仕様 (#52)
 │           ├── issue-78-apk-signing-and-back-button.md # [Archived] Android APK上書きインストール修正・実機戻るボタン論理階層遷移の差分仕様 (#78)
 │           ├── issue-79-four-tabs-search-ranking.md # [Archived] 下部4タブ化・カクヨム検索・ランキング画面新設の差分仕様 (#79)
+│           ├── issue-80-bookshelf-update-check-and-sort.md # [Archived] 自動更新チェック（NEWバッジ表示・解除）と本棚5種ソート機能の差分仕様 (#80)
 │           ├── issue-81-prefetch-and-cache-rules.md # [Archived] 読書中5話先読み・一括キャッシュ・鮮度管理ルールの差分仕様 (#81)
 │           └── .gitkeep
 └── quality/                           # 【柱3：品質分析・バグ記録・申し送り管理】

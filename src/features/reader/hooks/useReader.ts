@@ -348,6 +348,15 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           return;
         }
 
+        // 新着更新フラグの自動解除 (AC-RD-11)
+        if (targetNovel.hasNewUpdate) {
+          await novelRepository.clearNewUpdate(targetNovel.id);
+          targetNovel = {
+            ...targetNovel,
+            hasNewUpdate: false,
+          };
+        }
+
         let targetChapter = await chapterRepository.getChapter(
           targetNovel.id,
           targetIndex,

@@ -158,6 +158,18 @@ describe("InMemoryDatabaseAdapter", () => {
       );
       expect(falseRows).toHaveLength(1);
       expect(falseRows[0].id).toBe(2);
+
+      // undefined パラメータの正規化テスト（undefined -> null）
+      await adapter.execute("INSERT INTO test_table VALUES (?, ?);", [
+        3,
+        undefined,
+      ]);
+      const nullRows = await adapter.query<{ id: number; name: string | null }>(
+        "SELECT * FROM test_table WHERE id = ?;",
+        [3],
+      );
+      expect(nullRows).toHaveLength(1);
+      expect(nullRows[0].name).toBeNull();
     });
 
     it("不正な SQL 構文の場合に execute および query で例外がスローされること", async () => {

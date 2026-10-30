@@ -2,8 +2,8 @@
 type: spec-feature
 title: "本棚画面仕様書（SCR-01: Bookshelf）"
 description: "登録済み小説カード一覧の表示、しおり位置からのワンタップ読書再開、および検索・ランキング画面への誘導を提供する本棚画面（SCR-01）の正本仕様。"
-status: "Review (#80)"
-updated: "2026-10-29"
+status: Approved
+updated: "2026-10-30"
 tags:
   - bookshelf
   - scr-01
@@ -26,7 +26,7 @@ related_specs:
   - docs/specs/parsers/kakuyomu.md
   - docs/specs/changes/archive/issue-78-apk-signing-and-back-button.md
   - docs/specs/changes/archive/issue-79-four-tabs-search-ranking.md
-  - docs/specs/changes/issue-80-bookshelf-update-check-and-sort.md
+  - docs/specs/changes/archive/issue-80-bookshelf-update-check-and-sort.md
   - docs/specs/changes/archive/issue-50-fullscreen-shell-and-settings.md
   - docs/specs/changes/archive/issue-12-bookshelf-and-routing.md
 related_tests:
@@ -38,6 +38,7 @@ related_tests:
   - src/features/bookshelf/components/BookshelfContainer.test.tsx
   - test/it/smoke.spec.ts
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
+  - test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts
 ---
 
 # 本棚画面仕様書（SCR-01）
