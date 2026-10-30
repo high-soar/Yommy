@@ -38,7 +38,11 @@ const meta: Meta<typeof SearchPage> = {
 export default meta;
 type Story = StoryObj<typeof SearchPage>;
 
+/**
+ * 検索画面（初期未検索状態）
+ */
 export const Initial: Story = {
+  name: "初期未検索状態",
   args: {
     keyword: "",
     items: [],
@@ -46,7 +50,11 @@ export const Initial: Story = {
   },
 };
 
+/**
+ * 検索画面（初回検索中ローディング表示）
+ */
 export const Loading: Story = {
+  name: "検索中ローディング",
   args: {
     keyword: "異世界",
     items: [],
@@ -54,7 +62,11 @@ export const Loading: Story = {
   },
 };
 
+/**
+ * 検索画面（検索結果0件空状態）
+ */
 export const Empty: Story = {
+  name: "検索結果0件空状態",
   args: {
     keyword: "存在しない作品名",
     items: [],
@@ -63,7 +75,11 @@ export const Empty: Story = {
   },
 };
 
+/**
+ * 検索画面（検索結果一覧・登録済み混在表示）
+ */
 export const WithResults: Story = {
+  name: "検索結果一覧表示（登録済み混在）",
   args: {
     keyword: "異世界",
     hasSearched: true,
@@ -86,7 +102,11 @@ export const WithResults: Story = {
   },
 };
 
+/**
+ * 検索画面（次ページ追加読み込み中）
+ */
 export const LoadingMore: Story = {
+  name: "追加読み込み中状態",
   args: {
     keyword: "異世界",
     hasSearched: true,
@@ -96,7 +116,11 @@ export const LoadingMore: Story = {
   },
 };
 
+/**
+ * 検索画面（通信エラー状態）
+ */
 export const ErrorState: Story = {
+  name: "通信エラー状態",
   args: {
     keyword: "エラー作品",
     hasSearched: true,

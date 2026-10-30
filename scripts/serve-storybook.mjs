@@ -54,6 +54,9 @@ const server = http.createServer((req, res) => {
     res.on("error", () => {
       stream.destroy();
     });
+    res.on("close", () => {
+      stream.destroy();
+    });
     stream.pipe(res);
   });
 });

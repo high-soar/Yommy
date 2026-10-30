@@ -21,7 +21,11 @@ const meta: Meta<typeof SearchNovelCard> = {
 export default meta;
 type Story = StoryObj<typeof SearchNovelCard>;
 
+/**
+ * 検索結果カード（未登録・通常表示）
+ */
 export const Default: Story = {
+  name: "未登録（デフォルト表示）",
   args: {
     item: sampleSearchItem,
     isRegistered: false,
@@ -29,7 +33,11 @@ export const Default: Story = {
   },
 };
 
+/**
+ * 検索結果カード（本棚追加処理中）
+ */
 export const Adding: Story = {
+  name: "追加処理中状態",
   args: {
     item: sampleSearchItem,
     isRegistered: false,
@@ -37,7 +45,11 @@ export const Adding: Story = {
   },
 };
 
+/**
+ * 検索結果カード（本棚登録済み状態）
+ */
 export const Registered: Story = {
+  name: "登録済み状態",
   args: {
     item: sampleSearchItem,
     isRegistered: true,
@@ -45,7 +57,11 @@ export const Registered: Story = {
   },
 };
 
+/**
+ * 検索結果カード（最新話公開日・タグ未設定）
+ */
 export const WithoutLastPublished: Story = {
+  name: "更新日・タグなし",
   args: {
     item: {
       ...sampleSearchItem,
