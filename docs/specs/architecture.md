@@ -2,8 +2,8 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Review (#81)"
-updated: "2026-10-29"
+status: "Review (#82)"
+updated: "2026-10-31"
 tags:
   - architecture
   - parser
@@ -48,6 +48,12 @@ related_tests:
   - src/App.test.tsx
   - src/shared/ui/BottomTabBar.test.tsx
   - src/storage/schema.test.ts
+  - src/bridges/app/capacitorAppBridge.test.ts
+  - src/bridges/app/mockAppBridge.test.ts
+  - src/bridges/app/index.test.ts
+  - src/storage/repositories/appSettingsRepository.test.ts
+  - src/shared/utils/cache.test.ts
+  - src/shared/constants/cache.test.ts
   - scripts/generate-icons.test.ts
   - scripts/android-build-config.test.ts
 ---
@@ -63,7 +69,7 @@ flowchart TB
     subgraph UILayer ["3. Viewer & UI Layer (src/features/*, src/shared/ui/*)"]
         Pages["Pages / Containers (SCR-01〜SCR-07)"]
         Components["Presentational UI Components<br>(縦書き vertical-rl / ルビ / テーマ / 本棚カード / 検索・ランキングカード / BottomTabBar 4タブ)"]
-        Hooks["Application Hooks<br>(useBookshelf, useNovelDetail, useReader, useSettings, useNovelSearch, useNovelRanking, useDownloadQueue)"]
+        Hooks["Application Hooks<br>(useBookshelf, useNovelDetail, useReader, useSettings, useNovelSearch, useNovelRanking)"]
         Pages --> Components
         Pages --> Hooks
     end
@@ -80,7 +86,7 @@ flowchart TB
     end
 
     subgraph StorageLayer ["2. Storage Layer (src/storage/*)"]
-        Repos["Repositories<br>(NovelRepository, ChapterRepository, QueueRepository, SettingsRepository, AppSettingsRepository)"]
+        Repos["Repositories<br>(NovelRepository, ChapterRepository, SettingsRepository, AppSettingsRepository, QueueRepository［v0.4〜］)"]
         DbAdapter["DatabaseAdapter Interface"]
         SqliteImpl["CapacitorSqliteAdapter<br>(Android 実機用)"]
         MemImpl["InMemoryDatabaseAdapter<br>(UT / Storybook / Playwright IT 用・resetTestDb())"]
@@ -162,8 +168,9 @@ Yommy/
     │   └── repositories/
     │       ├── novelRepository.ts     # novels テーブル操作
     │       ├── chapterRepository.ts   # chapters テーブル操作（本文キャッシュ保存・削除・容量集計）
-    │       ├── queueRepository.ts     # download_queue テーブル操作（v0.3〜）
-    │       └── settingsRepository.ts  # reader_settings 操作
+    │       ├── settingsRepository.ts  # reader_settings 操作
+    │       ├── appSettingsRepository.ts # app_settings 操作（ソート順等永続化）
+    │       └── queueRepository.ts     # download_queue テーブル操作（v0.4〜）
     ├── features/                      # 【3. Viewer & UI Layer（画面・機能別モジュール）】
     │   ├── bookshelf/                 # SCR-01: 本棚一覧（空状態での検索/ランキング誘導）
     │   ├── novel-detail/              # SCR-02: 作品詳細・目次一覧・取得操作
@@ -173,6 +180,8 @@ Yommy/
     │   ├── search/                    # SCR-06: 検索画面（カクヨム作品検索・カードから本棚追加・SCR-02遷移、v0.3〜）
     │   └── ranking/                   # SCR-07: ランキング画面（期間/ジャンル別ランキング・カードから本棚追加・SCR-02遷移、v0.3〜）
     └── shared/                        # 複数機能で共有する汎用 UI コンポーネント・ユーティリティ
+        ├── constants/                 # キャッシュ・レートリミット等の共有定数（cache.ts）
+        ├── utils/                     # キャッシュ判定等の共有ユーティリティ（cache.ts）
         ├── ui/                        # BottomTabBar, Header, Button, Modal, Toast, Badge 等
         └── lib/                       # URL正規化、バイトサイズ整形、日時フォーマット等
 ├── docs/                              # 【ドキュメント正本（OKF）】
@@ -442,13 +451,14 @@ export interface NavigateToReaderOptions {
 
 export interface RouterContextValue {
   currentPath: string;
-  route: AppRoute;
   previousPath?: string;
+  novelOrigin: string | null;
+  route: AppRoute;
   navigate: (path: string) => void;
   navigateToBookshelf: () => void;
   navigateToSearch: () => void;
   navigateToRanking: () => void;
-  navigateToNovelDetail: (novelId: string) => void;
+  navigateToNovelDetail: (novelId: string, origin?: string) => void;
   navigateToReader: (
     novelId: string,
     chapterIndex: number,

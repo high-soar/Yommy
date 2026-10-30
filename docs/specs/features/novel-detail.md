@@ -2,8 +2,8 @@
 type: spec-feature
 title: "作品詳細・目次画面仕様書（SCR-02: Novel Detail & TOC）"
 description: 登録済み作品のヘッダー情報・あらすじ表示、章見出し付きエピソード一覧（キャッシュ済み・既読・しおり状態）、目次更新（再取得）、作品削除、およびリーダー画面への閲覧遷移を提供する作品詳細・目次画面（SCR-02）の正本仕様。
-status: "Review (#81)"
-updated: "2026-10-29"
+status: "Review (#82)"
+updated: "2026-10-31"
 tags:
   [
     novel-detail,
@@ -46,6 +46,8 @@ related_tests:
   - src/features/novel-detail/components/NovelDetailPage.test.tsx
   - src/features/novel-detail/components/NovelDetailContainer.test.tsx
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
+  - test/it/scenarios/scn02-search-ranking-discovery.spec.ts
+  - test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts
   - test/it/scenarios/scn04-prefetch-and-cache.spec.ts
 ---
 
@@ -66,6 +68,7 @@ related_tests:
   - `SYS-REQ-05`（キャッシュ管理・容量整理：未取得話の一括キャッシュ、確認ダイアログ付き作品削除と `chapters` カスケード削除）
   - `SYS-REQ-12`（しおり・スクロール位置自動保存に基づくしおり位置マーク・既読バッジ表示および「続きから読む」導線）
   - `SYS-REQ-16`（全画面シェル・下部タブ・論理階層遷移：100dvh 全画面シェル内配置、固定ヘッダー＋内部スクロール目次、下部タブバー連携）
+  - `SYS-REQ-19`（探索一覧からの作品即時登録・遷移：検索・ランキングからの遷移元導線）
   - `SYS-REQ-20`（下部 4 タブナビゲーションおよび OS バックキーによる直前の遷移元［本棚/検索/ランキング］への論理階層復帰）
 - **関連画面遷移**:
   - `TR-01`（下部タブバーによる 4 画面「本棚 `/`」「検索 `/search`」「ランキング `/ranking`」「設定 `/settings`」相互切替）
@@ -74,6 +77,7 @@ related_tests:
   - `TR-04`（目次リストのエピソード行タップ、または「最初から読む／続きから読む」ボタンタップによる小説リーダー画面 `SCR-03` `/novels/:novelId/chapters/:chapterIndex` への遷移）
   - `TR-06`（小説リーダー画面 `SCR-03` の OS バックキー操作による `SCR-02` `/novels/:novelId` への復帰）
   - `TR-07`（作品詳細画面からの戻り元復帰導線：作品未検出画面 `novel-detail-not-found` の「戻る」ボタン、作品削除確認ダイアログでの削除実行完了、または OS バックキー操作による直前の遷移元画面［本棚 `SCR-01` `/`、検索 `SCR-06` `/search`、ランキング `SCR-07` `/ranking`］への復帰。直前履歴が存在しない場合は本棚 `/` へ復帰。※`NovelDetailHeader` 内の「← 本棚へ戻る」ボタンは廃止。なお下部タブバー「本棚」タップ時は `TR-01b` が適用される）
+  - `TR-14`（検索結果カードおよびランキング結果カード本体タップによる `SCR-02` `/novels/:novelId` への遷移）
   - `TR-18`（作品詳細ヘッダーの「未取得話を一括キャッシュ」アクションによる順次本文取得・進捗表示・手動中断）
 - **対象外スコープ（後続 Issue / Milestone）**:
   - エピソード閲覧に伴うしおり位置（`bookmarkChapterIndex`, `bookmarkScrollProgress`）および既読フラグ（`isRead`）の自動更新ロジック本体（Issue #14 の `SCR-03` リーダー画面拡張で一括実装）
@@ -86,7 +90,7 @@ related_tests:
 
 `docs/guidelines/testing.md` の親子分離原則および 1対1 Story/UT 原則に従い、`src/features/novel-detail/` 配下を以下のモジュール構成とします（Issue #12 で暫定配置された `NovelDetailPlaceholder.*` は `NovelDetailContainer` のルーター統合時に置き換えて廃止します）。
 
-`SYS-REQ-16` に基づき、`NovelDetailPage` は 100dvh 全画面シェル（`h-full flex flex-col overflow-hidden`）内に配置され、ウィンドウ全体のスクロールを抑止した上で、作品詳細ヘッダーおよびエピソード目次一覧が中間領域（`flex-1 min-h-0 overflow-y-auto`）で独立して縦スクロールします。画面下部には共通下部タブバー（`BottomTabBar`）が「本棚」アクティブ状態で配置されます。
+`SYS-REQ-16` に基づき、`NovelDetailPage` は 100dvh 全画面シェル（`h-full flex flex-col overflow-hidden`）内に配置され、ウィンドウ全体のスクロールを抑止した上で、作品詳細ヘッダーおよびエピソード目次一覧が中間領域（`flex-1 min-h-0 overflow-y-auto`）で独立して縦スクロールします。画面下部には共通下部タブバー（`BottomTabBar`）が直前の探索元（`novelOrigin`）のアクティブ状態で配置されます。
 
 ```text
 src/features/novel-detail/
@@ -320,11 +324,11 @@ src/features/novel-detail/
 
 #### プロパティ契約（`NovelDetailContainerProps`）
 
-| プロパティ名        | 型                                                | 必須 | 説明                                                                               |
-| :------------------ | :------------------------------------------------ | :--- | :--------------------------------------------------------------------------------- |
-| `novelId`           | `string`                                          | 必須 | ルート `/novels/:novelId` から渡される対象作品 ID                                  |
-| `onBackToBookshelf` | `() => void`                                      | 任意 | 本棚へ戻る遷移コールバック（省略時は `useRouter().navigateToBookshelf` を使用）    |
-| `onSelectEpisode`   | `(novelId: string, chapterIndex: number) => void` | 任意 | リーダー画面への遷移コールバック（省略時は `useRouter().navigateToReader` を使用） |
+| プロパティ名        | 型                                                | 必須 | 説明                                                                                             |
+| :------------------ | :------------------------------------------------ | :--- | :----------------------------------------------------------------------------------------------- |
+| `novelId`           | `string`                                          | 必須 | ルート `/novels/:novelId` から渡される対象作品 ID                                                |
+| `onBackToBookshelf` | `() => void`                                      | 任意 | 探索元（または本棚）へ戻る遷移コールバック（省略時は直前の探索元へ復帰、履歴なし時は本棚へ復帰） |
+| `onSelectEpisode`   | `(novelId: string, chapterIndex: number) => void` | 任意 | リーダー画面への遷移コールバック（省略時は `useRouter().navigateToReader` を使用）               |
 
 ---
 
@@ -376,7 +380,7 @@ export interface UseNovelDetailResult {
 3. **作品削除とカスケード削除（`confirmDeleteNovel`）**:
    - `isDeleting = true`, `error = null` にセットし、`novelRepository.deleteNovel(novelId)` を実行する。
    - SQLite の外部キー制約（`PRAGMA foreign_keys = ON` ＆ `FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE`）により、当該作品に紐づく `chapters`（および `download_queue`）の全レコードが一括カスケード削除される。
-   - 削除成功時はダイアログを閉じ（`isDeleteDialogOpen = false`）、`true` を返す。呼び出し元の `NovelDetailContainer` は `true` を受け取って即座に `onBackToBookshelf()`（`/` への遷移 `TR-07`）を実行する。
+   - 削除成功時はダイアログを閉じ（`isDeleteDialogOpen = false`）、`true` を返す。呼び出し元の `NovelDetailContainer` は `true` を受け取って即座に `onBackToBookshelf()`（直前の探索元画面への復帰 `TR-07`、履歴なし時は本棚 `/` へ復帰）を実行する。
    - 削除失敗時はダイアログを閉じずに `error` をセットし、`isDeleting = false` に戻して `false` を返す。
 4. **エピソード選択と未キャッシュ話オンデマンド本文取得（`TR-04` → `SCR-03`）**:
    - 目次一覧のエピソード行タップ、またはヘッダーの「最初から読む（第1話）」「続きから読む（第N話）」ボタンタップ時は、即座にリーダー画面ルート `/novels/:novelId/chapters/:chapterIndex`（`SCR-03`）へ遷移する。
@@ -408,11 +412,11 @@ export interface UseNovelDetailResult {
 | **`AC-ND-03`** | 読書開始ボタンの表示制御と遷移             | しおり未設定時は「最初から読む（第1話）」の1ボタンのみが表示され、しおり設定時は「続きから読む（第N話）」と「最初から読む（第1話）」の2ボタンが表示され、それぞれ該当話のリーダー画面（`/novels/:novelId/chapters/:chapterIndex`）へ遷移（`TR-04`）すること。                                                                                                                                                                                              | `SYS-REQ-02`, `12` / `TR-04`                  |
 | **`AC-ND-04`** | 未キャッシュ話選択とオンデマンド取得       | 目次一覧で未キャッシュ話をタップすると即座にリーダー画面（`SCR-03`）へ遷移（`TR-04`）して本文がオンデマンド取得・DB保存され、OS バックキー（`TR-06`）で戻ると該当話が `取得済み` バッジ・取得済み話数 `+1` に更新されていること。                                                                                                                                                                                                                          | `SYS-REQ-02` / `TR-04`, `TR-06`               |
 | **`AC-ND-05`** | 目次再取得（更新）とフィードバック表示     | 「目次を更新」ボタンを押下すると作品トップ HTML を再取得して `upsertNovelWithToc` で既存キャッシュを保持したまま目次を更新し、完了時に新着話数に応じたインライン通知（`目次を更新しました（+N話）` / `最新の状態です`）、失敗時にエラーメッセージを表示すること。                                                                                                                                                                                          | `SYS-REQ-01`, `04`                            |
-| **`AC-ND-06`** | 確認ダイアログ付き作品削除と本棚復帰       | 「作品を削除」ボタンから確認ダイアログを開き、「削除する」を確定すると `deleteNovel` により作品および関連 `chapters` がカスケード削除され、本棚画面（`/`）へ遷移（`TR-07`）して一覧から消えていること。                                                                                                                                                                                                                                                    | `SYS-REQ-05` / `TR-07`                        |
+| **`AC-ND-06`** | 確認ダイアログ付き作品削除と戻り元復帰     | 「作品を削除」ボタンから確認ダイアログを開き、「削除する」を確定すると `deleteNovel` により作品および関連 `chapters` がカスケード削除され、直前の遷移元画面（探索元画面、履歴なし時は本棚 `/`）へ復帰（`TR-07`）して一覧から消えていること。                                                                                                                                                                                                               | `SYS-REQ-05` / `TR-07`                        |
 | **`AC-ND-07`** | 戻り元復帰導線の整理と未存在フォールバック | `NovelDetailHeader` 内の「← 本棚へ戻る」ボタンは廃止されていること。また存在しない `novelId` が指定された場合はクラッシュせず `novel-detail-not-found` と「戻る」導線（`back-to-bookshelf-button`）を表示し、タップ時に直前の遷移元画面（本棚 `/`、検索 `/search`、ランキング `/ranking`、履歴なし時は本棚 `/`）へ復帰できること（`TR-07`）。                                                                                                              | `SYS-REQ-01, 16, 20` / `TR-07`                |
 | **`AC-ND-08`** | しおり位置への初期スクロール自動調整       | 対象作品に `bookmarkChapterIndex` が設定されている場合、初回データ読み込み完了時に該当話（`data-chapter-index`）の要素が各話リストスクロール領域の先頭（上端）に来るよう自動スクロールされること。また、「目次を更新」実行時には自動スクロールが再発火せず、ユーザーの現在スクロール位置が維持されること。                                                                                                                                                 | `SYS-REQ-01, 12`                              |
 | **`AC-ND-09`** | 100dvh 全画面シェル・下部タブ・階層復帰    | 作品詳細画面が `h-full flex flex-col overflow-hidden` の全画面シェル内に配置され、中間コンテンツ領域（`flex-1 min-h-0 overflow-y-auto`）のみがスクロール可能であること。画面下部に共通 `BottomTabBar`（`bottom-tab-bar`）が 4 タブ構成で表示され、各タブタップ（`TR-01`, `TR-01b`）により各画面へ遷移でき、OS バックキー（`TR-07`）により直前の遷移元画面（本棚 `SCR-01`、検索 `SCR-06`、ランキング `SCR-07`、履歴なし時は本棚 `/`）へ論理復帰できること。 | `SYS-REQ-16, 20` / `TR-01`, `TR-01b`, `TR-07` |
 | **`AC-ND-10`** | 作品詳細表示による本棚「NEW」バッジ解除    | 本棚で「NEW」バッジが表示されていた作品の詳細画面（`SCR-02`）を開いた際（`TR-02` 等）、`clearNewUpdate` が実行されて作品の `has_new_update` が 0 に解除され、本棚へ戻った際（`TR-07`）に対象作品カードの「NEW」バッジが消去されていること。                                                                                                                                                                                                                | `SYS-REQ-04` / `TR-02`, `TR-07`               |
 | **`AC-ND-11`** | 未取得話の一括キャッシュ実行と進捗表示     | 「未取得話を一括キャッシュ」ボタンを押下すると、未キャッシュ話を対象に 1.5秒間隔のウェイト制御を挟んで順次本文を取得して SQLite に保存し、進行状況（`batch-cache-progress`）が表示され、各話取得ごとに取得済み話数・キャッシュバッジ（`取得済み`）が即時更新されること。                                                                                                                                                                                   | `SYS-REQ-02, 03, 05` / `TR-18`                |
-| **`AC-ND-12`** | 一括キャッシュの中断と安全性               | 一括キャッシュ実行中に「中断」ボタン（`batch-cache-cancel-button`）を押下した際、または画面離脱（アンマウント）時に `AbortController` により直ちに通信が停止し、それまでに保存された本文データが破損せず SQLite に保持されること。                                                                                                                                                                                                                         | `SYS-REQ-03, 05` / `TR-18`                    |
+| **`AC-ND-12`** | 一括キャッシュの中断と安全性               | 一括キャッシュ実行中に「中断」ボタン（`batch-cache-cancel-button`）を押下した際、または画面離脱（アンマウント）時に `AbortController` により直ちに通信が停止し、それまでに保存された本文データが破損せず SQLite に保持されること。                                                                                                                                                                                                                         | `SYS-REQ-02, 03, 05` / `TR-18`                |
 | **`AC-ND-13`** | 全話取得済み時のボタン状態制御             | 対象作品にエピソードが存在し（`chapters.length > 0`）、かつ全エピソードがキャッシュ済みかつ有効期間内（7日以内）である場合、一括キャッシュボタンが disabled 化され「全話キャッシュ済み」と表示されること。エピソードが 0 話の場合は `isAllCached = false` かつ一括キャッシュボタンが disabled（「未取得話を一括キャッシュ」）となること。                                                                                                                  | `SYS-REQ-02, 05` / `TR-18`                    |

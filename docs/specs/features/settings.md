@@ -11,8 +11,12 @@ related_specs:
   - docs/specs/db-schema.md
   - docs/specs/screen-transitions.md
   - docs/specs/features/bookshelf.md
+  - docs/specs/features/search.md
+  - docs/specs/features/ranking.md
   - docs/specs/features/novel-detail.md
   - docs/specs/features/reader-view.md
+  - docs/specs/changes/archive/issue-78-apk-signing-and-back-button.md
+  - docs/specs/changes/archive/issue-79-four-tabs-search-ranking.md
   - docs/specs/changes/archive/issue-50-fullscreen-shell-and-settings.md
 related_tests:
   - src/App.test.tsx
@@ -38,11 +42,12 @@ related_tests:
   - `SYS-REQ-08`（縦書き `vertical-rl` / 横書き `horizontal-tb` 切り替え）
   - `SYS-REQ-09`（文字サイズ `12〜32px`、行間 `1.4〜2.4` のカスタマイズと永続化 ※フォント種別・余白は `v0.4`）
   - `SYS-REQ-10`（4カラーテーマ `light` / `sepia` / `dark` / `black` 切り替え）
-  - `SYS-REQ-16`（全画面シェル・下部タブバー・論理階層遷移：下部タブ「設定」からの直接遷移、および OS バックキーによる直前画面復帰）
+  - `SYS-REQ-16`（全画面シェル・下部タブバー・論理階層遷移：下部タブ「設定」からの直接遷移、および OS バックキーによるホーム「本棚 `/`」への復帰）
+  - `SYS-REQ-20`（下部4タブナビゲーションおよびOSバックキー論理階層遷移）
 - **関連画面遷移**:
   - `TR-01`（下部タブバー「設定」タップによる各画面から `SCR-05` への遷移）
   - `TR-01b`（下部タブバー「本棚」タップによる `SCR-05` から本棚画面 `SCR-01` `/` への直接遷移）
-  - `TR-12`（OS バックキー操作による `SCR-05` から設定を開く直前の画面［本棚 `SCR-01` / 目次 `SCR-02` / 各話View `SCR-03`］への復帰遷移）
+  - `TR-12`（設定画面（`/settings`）で OS バックキーを実行したとき、ホームである本棚画面（`/`）へ復帰すること）
 - **対象外スコープ（後続 Milestone）**:
   - フォント種別（`fontFamily`）の選択および画面余白（`pageMarginPx`）の設定（Milestone `v0.4`：`SYS-REQ-09` 拡張）
   - タップ送り（`enableTapPaging`）・音量キー送り（`enableVolumeKeyPaging`）のトグル設定（Milestone `v0.4`：`SYS-REQ-11` 拡張）
@@ -212,5 +217,5 @@ export interface UseSettingsResult {
 | **`AC-ST-03`** | 縦書き / 横書き切替と永続化              | `toggle-orientation` ボタンで `vertical-rl` と `horizontal-tb` を相互に切り替えられ、`reader_settings` テーブルへ永続化され、リロード後およびリーダー画面（`SCR-03`）でも同じ組み方向が維持されること。                                                                                   | `SYS-REQ-08`                   |
 | **`AC-ST-04`** | 4カラーテーマ切替と永続化                | `theme-{light\|sepia\|dark\|black}` ボタンでテーマを切り替えられ、選択中ボタンに `aria-pressed="true"` が設定され、プレビュー枠にテーマが反映されるとともに `reader_settings` へ永続化されること（外枠は標準UIテーマを維持）。                                                            | `SYS-REQ-10`                   |
 | **`AC-ST-05`** | 文字サイズ・行間ステッパー境界制御       | 文字サイズ（`12〜32px`、`±2px` 刻み）および行間（`1.4〜2.4`、`±0.2` 刻み）の `−` / `＋` ボタンで値が変更でき、上限・下限で各ボタンが `disabled` となり、プレビュー枠および `reader_settings` へ即時反映されること。                                                                       | `SYS-REQ-09`                   |
-| **`AC-ST-06`** | OS バックキーによる直前画面復帰          | 設定画面（`/settings`）で OS バックキー（ブラウザ戻る操作）を実行したとき、設定を開く直前の画面（本棚 `/`、目次 `/novels/:novelId`、リーダー `/novels/:novelId/chapters/:chapterIndex`）へ正しく復帰すること。                                                                            | `SYS-REQ-16` / `TR-12`         |
+| **`AC-ST-06`** | OS バックキーによる本棚復帰              | 設定画面（`/settings`）で OS バックキー（ブラウザ戻る操作）を実行したとき、ホームである本棚画面（`/`）へ正しく復帰すること。                                                                                                                                                              | `SYS-REQ-16, 20` / `TR-12`     |
 | **`AC-ST-07`** | 設定保存失敗時のロールバックとエラー通知 | 設定変更（組み方向・テーマ・文字サイズ・行間）の永続化処理が失敗した場合、直前の値へ状態が自動ロールバックされ、画面上部ヘッダー直下に `role="alert"`（`data-testid="settings-error-alert"`）でエラーメッセージが表示されること。                                                         | `SYS-REQ-08, 09, 10`           |

@@ -2,8 +2,8 @@
 type: spec-feature
 title: "小説リーダー画面仕様書（SCR-03: Novel Reader）"
 description: "小説本文の全画面（100dvh）縦書き・横書き組版表示、最下部タッチによる下部オーバーレイ（ReaderBottomOverlay: 前後話ナビ＋下部タブ）、ルビ・傍点描画、4カラーテーマ・文字サイズ・行間設定の永続化、前後エピソード遷移、未キャッシュ話のオンデマンド取得、既読・しおり・スクロール進捗率の自動保存/復元、およびSCN-01統合シナリオの正本仕様。"
-status: "Review (#81)"
-updated: "2026-10-29"
+status: "Review (#82)"
+updated: "2026-10-31"
 tags:
   - reader
   - scr-03
@@ -50,6 +50,8 @@ related_tests:
   - test/vrt/vrt.spec.ts
   - test/it/smoke.spec.ts
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
+  - test/it/scenarios/scn02-search-ranking-discovery.spec.ts
+  - test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts
   - test/it/scenarios/scn04-prefetch-and-cache.spec.ts
 ---
 
@@ -72,9 +74,11 @@ related_tests:
   - `SYS-REQ-10`（4カラーテーマ `light` / `sepia` / `dark` / `black` 切り替え ※設定画面 `SCR-05` で変更）
   - `SYS-REQ-11`（全画面連続スクロール、最下部タッチによる `ReaderBottomOverlay` 開閉、および前後話ナビゲーションによる前話・次話への連続遷移 ※1画面タップ/音量キー送りは `v0.4`）
   - `SYS-REQ-12`（しおり話数 `bookmark_chapter_index`・本文スクロール進捗率 `bookmark_scroll_progress` の自動保存・復元、OSバックキー・下部タブ遷移時の `flushBookmark` 実行、および既読フラグ `is_read` の自動更新）
+  - `SYS-REQ-16`（100dvh 全画面シェル・下部タブバー連携・OSバックキー論理階層復帰）
   - `SYS-REQ-20`（下部4タブバー・リーダーオーバーレイ4タブ化）
 - **関連画面遷移**:
   - `TR-01`（下部オーバーレイの4タブ「本棚 `/`」「検索 `/search`」「ランキング `/ranking`」「設定 `/settings`」タップによる各画面への遷移）
+  - `TR-01b`（下部オーバーレイの「本棚」タブタップによる本棚トップ画面 `SCR-01` `/` へのダイレクト遷移）
   - `TR-03`（本棚画面 `SCR-01` の「続きから読む」から `SCR-03` への直接遷移）
   - `TR-04`（作品詳細・目次画面 `SCR-02` のエピソード選択または読書開始ボタンから `SCR-03` への遷移）
   - `TR-05`（`SCR-03` 内の下部オーバーレイ「前の話へ」「次の話へ」操作による同一作品の前後エピソード `chapterIndex ± 1` への遷移）
@@ -157,21 +161,21 @@ src/features/reader/
 
 ### 3.3 `ReaderBottomOverlay`（下部スライドインオーバーレイ）
 
-画面最下部タッチにより下からスライドイン表示され、前後話ナビゲーションと下部タブバー（本棚/設定）を一体化して提供する Presentational コンポーネントです。
+画面最下部タッチにより下からスライドイン表示され、前後話ナビゲーションと下部タブバー（本棚/検索/ランキング/設定の4タブ）を一体化して提供する Presentational コンポーネントです。
 
 #### プロパティ契約（`ReaderBottomOverlayProps`）
 
-| プロパティ名    | 型                                                                  | 必須 | 既定値        | 説明                                                                              |
-| :-------------- | :------------------------------------------------------------------ | :--- | :------------ | :-------------------------------------------------------------------------------- |
-| `isOpen`        | `boolean`                                                           | 必須 | -             | オーバーレイの表示・展開状態（`true` でスライドイン表示、`false` で画面外へ退避） |
-| `chapterIndex`  | `number`                                                            | 必須 | -             | 現在表示中のエピソード連番（1始まり）                                             |
-| `totalChapters` | `number`                                                            | 必須 | -             | 作品の全エピソード数                                                              |
-| `isLoading`     | `boolean`                                                           | 任意 | `false`       | エピソード通信中フラグ                                                            |
-| `activeTab`     | `'bookshelf' \| 'search' \| 'ranking' \| 'settings'`                | 任意 | `'bookshelf'` | リーダー画面の論理所属タブ（常に `'bookshelf'` をアクティブ表示）                 |
-| `onPrevChapter` | `() => void`                                                        | 必須 | -             | 「前の話へ」ボタン押下時のコールバック                                            |
-| `onNextChapter` | `() => void`                                                        | 必須 | -             | 「次の話へ」ボタン押下時のコールバック                                            |
-| `onSelectTab`   | `(tab: 'bookshelf' \| 'search' \| 'ranking' \| 'settings') => void` | 任意 | -             | 下部タブ（本棚 / 検索 / ランキング / 設定）押下時のコールバック                   |
-| `onClose`       | `() => void`                                                        | 任意 | -             | オーバーレイを閉じる要求コールバック                                              |
+| プロパティ名    | 型                         | 必須 | 既定値        | 説明                                                                              |
+| :-------------- | :------------------------- | :--- | :------------ | :-------------------------------------------------------------------------------- |
+| `isOpen`        | `boolean`                  | 必須 | -             | オーバーレイの表示・展開状態（`true` でスライドイン表示、`false` で画面外へ退避） |
+| `chapterIndex`  | `number`                   | 必須 | -             | 現在表示中のエピソード連番（1始まり）                                             |
+| `totalChapters` | `number`                   | 必須 | -             | 作品の全エピソード数                                                              |
+| `isLoading`     | `boolean`                  | 任意 | `false`       | エピソード通信中フラグ                                                            |
+| `activeTab`     | `BottomTab`                | 任意 | `'bookshelf'` | リーダー画面の論理所属タブ（探索元または `'bookshelf'` をアクティブ表示）         |
+| `onPrevChapter` | `() => void`               | 必須 | -             | 「前の話へ」ボタン押下時のコールバック                                            |
+| `onNextChapter` | `() => void`               | 必須 | -             | 「次の話へ」ボタン押下時のコールバック                                            |
+| `onSelectTab`   | `(tab: BottomTab) => void` | 任意 | -             | 下部タブ（本棚 / 検索 / ランキング / 設定）押下時のコールバック                   |
+| `onClose`       | `() => void`               | 任意 | -             | オーバーレイを閉じる要求コールバック                                              |
 
 #### セマンティック属性とスタイル仕様
 
@@ -179,7 +183,7 @@ src/features/reader/
 - **閉じるボタン**: `data-testid="reader-bottom-overlay-close"`（`onClose` 提供時に描画、`aria-label="オーバーレイを閉じる"`）
 - **配置・アニメーション**: 画面下端固定（`fixed bottom-0 left-0 right-0 z-40`）、背景にはテーマに合わせた半透明または不透明背景（例: `bg-white/95 dark:bg-zinc-900/95 shadow-lg border-t border-zinc-200 dark:border-zinc-800`）、開閉時のなめらかなスライド（`transition-transform duration-200 ease-in-out`、`isOpen ? 'translate-y-0' : 'translate-y-full'`）。
 - **上段（エピソードナビ）**: `ReaderChapterNav`（`data-testid="reader-chapter-nav"`）を描画し、前話/次話遷移と話数インジケーターを提供。
-- **下段（下部タブバー）**: `data-testid="reader-bottom-tabs"`（`role="tablist"`）を描画し、各タブボタン `data-testid="reader-bottom-tab-bookshelf"`（「本棚」/ 常にアクティブ `aria-selected="true"` 表示）、`data-testid="reader-bottom-tab-search"`（「検索」）、`data-testid="reader-bottom-tab-ranking"`（「ランキング」）、`data-testid="reader-bottom-tab-settings"`（「設定」）を表示。
+- **下段（下部タブバー）**: `data-testid="reader-bottom-tabs"`（`role="tablist"`）を描画し、各タブボタン `data-testid="reader-bottom-tab-bookshelf"`（「本棚」/ activeTab に応じて `aria-selected="true"` 表示）、`data-testid="reader-bottom-tab-search"`（「検索」）、`data-testid="reader-bottom-tab-ranking"`（「ランキング」）、`data-testid="reader-bottom-tab-settings"`（「設定」）を表示。
 
 ---
 
@@ -237,24 +241,25 @@ src/features/reader/
 
 #### プロパティ契約（`ReaderPageProps`）
 
-| プロパティ名             | 型                                         | 必須 | 説明                                         |
-| :----------------------- | :----------------------------------------- | :--- | :------------------------------------------- |
-| `novel`                  | `NovelRecord \| null`                      | 必須 | 現在の作品レコード                           |
-| `chapter`                | `ChapterRecord \| null`                    | 必須 | 現在のエピソードレコード                     |
-| `chapterIndex`           | `number`                                   | 必須 | 現在のエピソード連番（1始まり）              |
-| `totalChapters`          | `number`                                   | 必須 | 作品の全エピソード数                         |
-| `writingMode`            | `WritingMode`                              | 必須 | 現在の組み方向                               |
-| `theme`                  | `ReaderTheme`                              | 必須 | 現在のカラーテーマ                           |
-| `fontSizePx`             | `number`                                   | 必須 | 現在の文字サイズ (px)                        |
-| `lineHeight`             | `number`                                   | 必須 | 現在の行間倍率                               |
-| `initialScrollProgress`  | `number`                                   | 必須 | 初期復元するスクロール進捗率（`0.0 〜 1.0`） |
-| `isLoading`              | `boolean`                                  | 必須 | 読み込み・通信中フラグ                       |
-| `error`                  | `string \| null`                           | 任意 | エラーメッセージ文字列                       |
-| `onPrevChapter`          | `() => void`                               | 必須 | 「前の話へ」押下時（`TR-05`）                |
-| `onNextChapter`          | `() => void`                               | 必須 | 「次の話へ」押下時（`TR-05`）                |
-| `onScrollProgressChange` | `(progress: number) => void`               | 必須 | 本文スクロール進捗変化時                     |
-| `onSelectTab`            | `(tab: 'bookshelf' \| 'settings') => void` | 任意 | 下部タブ押下時                               |
-| `initialOverlayOpen`     | `boolean`                                  | 任意 | `false`（エラー/空状態時は `true`）          | オーバーレイ初期展開状態制御用 |
+| プロパティ名             | 型                           | 必須 | 説明                                                |
+| :----------------------- | :--------------------------- | :--- | :-------------------------------------------------- |
+| `novel`                  | `NovelRecord \| null`        | 必須 | 現在の作品レコード                                  |
+| `chapter`                | `ChapterRecord \| null`      | 必須 | 現在のエピソードレコード                            |
+| `chapterIndex`           | `number`                     | 必須 | 現在のエピソード連番（1始まり）                     |
+| `totalChapters`          | `number`                     | 必須 | 作品の全エピソード数                                |
+| `writingMode`            | `WritingMode`                | 必須 | 現在の組み方向                                      |
+| `theme`                  | `ReaderTheme`                | 必須 | 現在のカラーテーマ                                  |
+| `fontSizePx`             | `number`                     | 必須 | 現在の文字サイズ (px)                               |
+| `lineHeight`             | `number`                     | 必須 | 現在の行間倍率                                      |
+| `initialScrollProgress`  | `number`                     | 必須 | 初期復元するスクロール進捗率（`0.0 〜 1.0`）        |
+| `isLoading`              | `boolean`                    | 必須 | 読み込み・通信中フラグ                              |
+| `error`                  | `string \| null`             | 任意 | エラーメッセージ文字列                              |
+| `activeTab`              | `BottomTab`                  | 任意 | リーダー画面の論理所属タブ（既定値: `"bookshelf"`） |
+| `onPrevChapter`          | `() => void`                 | 必須 | 「前の話へ」押下時（`TR-05`）                       |
+| `onNextChapter`          | `() => void`                 | 必須 | 「次の話へ」押下時（`TR-05`）                       |
+| `onScrollProgressChange` | `(progress: number) => void` | 必須 | 本文スクロール進捗変化時                            |
+| `onSelectTab`            | `(tab: BottomTab) => void`   | 任意 | 下部タブ押下時                                      |
+| `initialOverlayOpen`     | `boolean`                    | 任意 | `false`（エラー/空状態時は `true`）                 | オーバーレイ初期展開状態制御用 |
 
 #### セマンティック属性とレイアウト・排他描画ルール
 
@@ -283,6 +288,7 @@ src/features/reader/
 | `novelId`            | `string`                                          | 任意 | ルート `/novels/:novelId/chapters/:chapterIndex` から渡される対象作品 ID                       |
 | `chapterIndex`       | `number`                                          | 任意 | ルートから渡される対象エピソード連番（1始まり、省略時は `1`）                                  |
 | `initialWorkUrl`     | `string`                                          | 任意 | 単体検証・手動取得時の対象作品 URL（既定値: 検証用カクヨム作品 URL）                           |
+| `activeTab`          | `BottomTab`                                       | 任意 | リーダー画面のアクティブタブ（省略時: `"bookshelf"`）                                          |
 | `onBackToBookshelf`  | `() => void`                                      | 任意 | 「本棚へ戻る」（`/`）コールバック（省略時はルーター環境下で `navigateToBookshelf` を使用）     |
 | `onNavigateSettings` | `() => void`                                      | 任意 | 「設定へ」（`/settings`）コールバック（省略時はルーター環境下で `navigateToSettings`）         |
 | `onNavigateChapter`  | `(novelId: string, chapterIndex: number) => void` | 任意 | 前後話遷移コールバック（省略時はルーター環境下で `navigateToReader` を使用し、内部話数も同期） |
@@ -348,7 +354,7 @@ export interface UseReaderResult {
      - `targetNovel.bookmarkChapterIndex !== targetChapterIndex`（別話を開いた場合、または前後話遷移 `TR-05` 時）: `initialScrollProgress = 0`, `scrollProgress = 0` にセットし、直ちに `novelRepository.updateBookmark(targetNovel.id, targetChapterIndex, 0)` を実行してしおりを現在話の先頭へ更新する。
    - **スクロール操作時および画面離脱時**:
      - `updateScrollProgress(progress)` 呼び出し時、`0.0 〜 1.0` にクランプした進捗率で `scrollProgress` を更新し、`novelRepository.updateBookmark(novel.id, chapterIndex, clampedProgress)` で DB へ自動保存する。
-     - OS バックキー（`TR-06`）による目次復帰、または下部オーバーレイ「本棚」タブ（`TR-01b`）・「設定」タブ（`TR-01`）遷移時には、`flushBookmark()` により最新の `(chapterIndex, scrollProgress)` を確実に DB 保存してから画面遷移コールバックを呼び出す。
+     - OS バックキー（`TR-06`）による目次復帰、または下部オーバーレイの4タブ（本棚 `TR-01b`、検索/ランキング/設定 `TR-01`）遷移時には、`flushBookmark()` により最新の `(chapterIndex, scrollProgress)` を確実に DB 保存してから画面遷移コールバックを呼び出す。
 5. **前後エピソード遷移（`goToChapter(targetChapterIndex)`、`TR-05`）**:
    - `novel === null`、または `targetChapterIndex < 1` もしくは `targetChapterIndex > totalChapters`（範囲外）が指定された場合は何もせず `false` を返す。
    - 有効範囲内の場合は、遷移前の現在話（次話遷移時を含む）に対して `chapterRepository.markChapterRead(novel.id, chapterIndex, true)` を実行した上で、`targetChapterIndex` のエピソード読み込み（未キャッシュ時はオンデマンド本文取得・`saveChapterBody` 保存）、表示完了時の `markChapterRead(novel.id, targetChapterIndex, true)`、および新エピソード先頭へのしおり更新（`updateBookmark(novel.id, targetChapterIndex, 0)`、`initialScrollProgress = 0`, `scrollProgress = 0`）を実行し、`true` を返す。
@@ -411,7 +417,7 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
 - **目的**: 本棚画面（`SCR-01`）での URL 作品登録から、作品詳細・目次画面（`SCR-02`）での目次確認・更新・エピソード選択（`TR-02`, `TR-04`）、リーダー画面（`SCR-03`）での未キャッシュ話オンデマンド取得、全画面（100dvh）テキスト表示、縦書き・ルビ・傍点描画、画面最下部タップによる下部オーバーレイ（`ReaderBottomOverlay`）のスライドイン展開、スクロール操作による自動非表示、縦書き・横書き双方でのスクロール進捗保存と復元（`AC-RD-08`）、下部オーバーレイからの前後エピソード遷移（`TR-05`）、既読・しおり保存と作品詳細・本棚「続きから読む」からの再開復元（`TR-06`, `TR-04`, `TR-03`）、および作品削除（`TR-07`）までの一連のユーザー体験を一気通貫で検証する。
 - **検証ステップ**:
   1. 初期表示（`/`）で本棚の空状態（`bookshelf-empty`）が表示されることを確認。
-  2. 「URLから作品を追加」ダイアログを開き、カクヨム作品 URL を入力して登録を実行し、本棚一覧に作品カード（`novel-card`）が追加され、しおり位置バッジ（`novel-card-bookmark`）に `未読` が表示されることを確認。
+  2. 探索元（検索・ランキング画面またはテスト用サービス連携）より作品を登録し、本棚一覧に作品カード（`novel-card`）が追加され、しおり位置バッジ（`novel-card-bookmark`）に `未読` が表示されることを確認。
   3. 作品カード本体（`novel-card-select`）をクリックして `/novels/:novelId`（`SCR-02` 作品詳細・目次画面）へ遷移（`TR-02`）し、作品ヘッダー情報・章見出し・エピソード一覧（`未取得` バッジ）が表示されること、および「目次を更新」ボタン押下で最新状態が通知されることを確認。
   4. 目次一覧から第1話を選択して `/novels/:novelId/chapters/1`（`SCR-03`）へ遷移（`TR-04`）することを確認。
   5. 第1話本文がオンデマンド取得され、外枠余白・枠線のない全画面（`100dvh`）で `reader-view` が表示され、常時固定バーが表示されていないことを確認（`AC-RD-09`）。
