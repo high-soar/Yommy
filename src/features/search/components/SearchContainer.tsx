@@ -55,6 +55,7 @@ export const SearchContainer: React.FC<SearchContainerProps> = ({
       registeredWorkIds={search.registeredWorkIds}
       addingWorkId={search.addingWorkId}
       isLoading={search.isLoading}
+      hasSearched={search.hasSearched}
       isLoadingMore={search.isLoadingMore}
       hasNextPage={search.hasNextPage}
       onLoadMore={search.loadMore}

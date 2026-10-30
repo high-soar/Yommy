@@ -81,6 +81,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
   registeredWorkIds,
   addingWorkId,
   isLoading,
+  hasSearched = false,
   isLoadingMore,
   hasNextPage,
   onLoadMore,
@@ -158,7 +159,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
         )}
 
         {/* 初期未検索状態 */}
-        {!isLoading && !error && items.length === 0 && keyword === "" && (
+        {!isLoading && !error && !hasSearched && (
           <div
             data-testid="search-initial-state"
             className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-slate-400 gap-3 text-center"
@@ -178,7 +179,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
         )}
 
         {/* 検索結果 0 件空状態 */}
-        {!isLoading && !error && items.length === 0 && keyword !== "" && (
+        {!isLoading && !error && hasSearched && items.length === 0 && (
           <div
             data-testid="search-empty-state"
             className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-slate-400 gap-3 text-center"

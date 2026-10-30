@@ -93,6 +93,7 @@ export function useNovelSearch(): UseNovelSearchResult {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [error, setError] = useState<string | null>(null);
 
+  const [hasSearched, setHasSearched] = useState<boolean>(false);
   const hasSearchedRef = useRef<boolean>(false);
 
   // DB内の登録済み作品ID一覧を更新
@@ -128,6 +129,7 @@ export function useNovelSearch(): UseNovelSearchResult {
 
       setIsLoading(true);
       setError(null);
+      setHasSearched(true);
       hasSearchedRef.current = true;
 
       try {
@@ -346,7 +348,7 @@ export function useNovelSearch(): UseNovelSearchResult {
     registeredWorkIds,
     addingWorkId,
     isLoading,
-    hasSearched: false,
+    hasSearched,
     isLoadingMore,
     hasNextPage,
     loadMore,
