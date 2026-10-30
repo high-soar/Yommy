@@ -3,7 +3,7 @@ type: guideline
 title: テスト・実装規律の正本（SSOT）
 description: Yommyの3層テスト体系（Parser/Storage/Viewer）、TDDコミット規約、1対1 Story/UT、親子分離、C0/C1 100%、縦書きVRT、および原因D設計同期ルールの正本。
 status: Approved
-updated: "2026-10-27"
+updated: "2026-10-31"
 tags: [testing, tdd, vrt, storybook, vitest, playwright, coverage]
 related_specs:
   - docs/index.md
@@ -31,7 +31,7 @@ related_tests: []
    単体テスト（`*.test.ts`, `*.test.tsx`）および Storybook ファイル（`*.stories.tsx`）は、対象ソースファイルと同一ディレクトリに配置する。
 5. **例外なしの 1 対 1 対応原則**:
    - 全 `*.tsx` ファイル（ただし §5.2 項4 に定めるブラウザ初期マウントエントリーポイント `src/main.tsx` を除く）に対して、同階層に **`*.stories.tsx`（必須）** と **`*.test.tsx`（Portable Stories `composeStories` 全件実行 ＋ ロジック補完）** を 1 対 1 で作成する。
-   - 全 `*.ts` ファイル（型定義専用ファイルを除く）に対して、同階層に **`*.test.ts`（または `.test.tsx`）** を 1 対 1 で作成する。
+   - 全 `*.ts` ファイル（型定義専用ファイルを除く）に対して、同階層に **`*.test.ts`（または `.test.tsx`）** を 1 対 1 で作成する。なお、実行時定数定義ファイル（`src/**/constants/*.ts` 等）およびバレルエクスポート（`src/**/index.ts` 等）も型専用ファイルに該当しないため、1 対 1 単体テスト（`*.test.ts`）を必須とする。
 6. **親子コンポーネント分離原則（相乗りテスト禁止）**:
    親（Page / Container）のテストでは「状態管理・Loading/Error/Ready の切り替え・子への Props 渡し」のみを検証し、子コンポーネントの表示バリエーション・境界値・イベント発火は必ず子自身の `.stories.tsx` / `.test.tsx` で独立して検証する。
 7. **C0 / C1 / Functions 100% カバレッジ原則**:
@@ -135,10 +135,11 @@ TDD の実践を Git 履歴から客観的に監査できるよう、各ステ�
 
 - **Vitest テスト名（`it`）**:
   「〜すること」「〜する」等の自然な日本語で記述し、対応する受け入れ条件（`AC-xx`）があれば末尾に付記する（例: `it("ルビタグを保持したまま本文HTMLを抽出する (AC-02)", ...)`）。
-- **Storybook ストーリー定義**:
-  - エクスポート識別子は PascalCase の英語名（`export const VerticalDarkTheme: Story = ...`）とする。
-  - `name` プロパティに簡潔な日本語表示名（例: `name: "縦書き・ダークテーマ"`）を設定し、JSDoc コメントで日本語の補足説明を記載する。
-  - 同階層の `.test.tsx` では `@storybook/react` の `composeStories` を用いて全 Story の描画および `play` 関数を実行し、Story だけで届かないエッジケース分岐を Vitest ケースとして補完する。
+- **Storybook ストーリー定義（必須チェックリスト）**:
+  - [ ] **英語識別子**: エクスポート識別子は PascalCase の英語名（`export const VerticalDarkTheme: Story = ...`）とする。
+  - [ ] **日本語 JSDoc**: 各 Story の直前に日本語の JSDoc コメント（ストーリーの意図・描画状態の説明）を付与する。
+  - [ ] **日本語 `name` プロパティ**: `name: "縦書き・ダークテーマ"` のように、Storybook サイドバーに表示される日本語名を必ず明示する（省略時の英語自動変換に依存しない）。
+  - [ ] **Portable Stories テスト連携**: 同階層の `.test.tsx` では `@storybook/react` の `composeStories` を用いて全 Story の描画および `play` 関数を実行し、Story だけで届かないエッジケース分岐を Vitest ケースとして補完する。
 
 ---
 
