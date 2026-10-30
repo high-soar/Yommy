@@ -2,8 +2,8 @@
 type: spec-feature
 title: "検索画面仕様書（SCR-06: Novel Search）"
 description: "複数小説サイト（v0.3はカクヨム）のキーワード検索、並び順・ジャンル・連載状態フィルタ、作品カード一覧およびその場での本棚追加を提供する検索画面（SCR-06）の正本仕様。"
-status: Approved
-updated: "2026-10-30"
+status: "Review (#82)"
+updated: "2026-10-31"
 tags:
   - search
   - scr-06
@@ -27,6 +27,7 @@ related_tests:
   - src/App.test.tsx
   - src/app/router.test.tsx
   - src/features/search/components/SearchPage.test.tsx
+  - src/features/search/components/SearchContainer.test.tsx
   - src/features/search/hooks/useNovelSearch.test.ts
   - test/it/scenarios/scn02-search-ranking-discovery.spec.ts
   - test/it/smoke.spec.ts
@@ -122,6 +123,8 @@ export interface SearchPageProps {
   registeredWorkIds: Set<string>;
   /** 現在追加処理中の remoteWorkId（処理中でない場合 null） */
   addingWorkId: string | null;
+  /** 検索実行済みフラグ（初回未検索状態と0件結果状態の判別用 / R1-14） */
+  hasSearched?: boolean;
   /** 通信中フラグ */
   isLoading: boolean;
   /** 次ページ通信中フラグ */
@@ -154,6 +157,47 @@ export interface SearchNovelCardProps {
   onAdd: () => void;
   /** カード本体タップハンドラ */
   onSelect: () => void;
+}
+```
+
+### 3.3 `SiteSelectorProps`
+
+```typescript
+export interface SiteSelectorProps {
+  selectedSite: NovelSiteType;
+  onSelectSite: (site: NovelSiteType) => void;
+}
+```
+
+### 3.4 `SearchInputBarProps`
+
+```typescript
+export interface SearchInputBarProps {
+  keyword: string;
+  onChangeKeyword: (keyword: string) => void;
+  onSubmitSearch: () => void;
+}
+```
+
+### 3.5 `SearchFilterBarProps`
+
+```typescript
+export interface SearchFilterBarProps {
+  selectedOrder: NovelSearchOrder;
+  onSelectOrder: (order: NovelSearchOrder) => void;
+  selectedSerialStatus: NovelSerialStatus;
+  onSelectSerialStatus: (status: NovelSerialStatus) => void;
+  selectedGenre?: string;
+  onSelectGenre: (genre?: string) => void;
+}
+```
+
+### 3.6 `SearchContainerProps`
+
+```typescript
+export interface SearchContainerProps {
+  /** 作品カード本体タップ時の遷移コールバック（省略時は useNovelSearch().handleCardSelect を使用） */
+  onSelectNovel?: (novelId: string) => void;
 }
 ```
 
@@ -192,16 +236,16 @@ export interface UseNovelSearchResult {
 
 ## 5. 受入条件（Acceptance Criteria: `AC-SE-xx`）
 
-| 受入条件 ID    | 対象項目                            | 仕様・期待動作                                                                                                                                                                                                                           |
-| :------------- | :---------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`AC-SE-01`** | 初期表示とサイト選択                | `/search` への初回アクセス時、上部に「検索」タイトルと「カクヨム」ピルが表示され、未検索時は「キーワードを入力して小説を検索」の初期案内 UI が表示されること。                                                                           |
-| **`AC-SE-02`** | キーワード検索実行                  | 検索バーに文字列を入力して検索を実行すると、`KakuyomuParser.buildSearchUrl` により生成された URL を `httpClient` 経由で取得し、`searchNovels` でパースされた作品一覧がカード形式で表示されること。                                       |
-| **`AC-SE-03`** | 並び順の切り替え                    | フィルタバーの並び順（週間ランキング順、累計ランキング順、更新順、新作順）を選択すると、即座に対応するパラメータ（`order`）で再検索され、一覧が更新されること（デフォルトは週間ランキング順）。                                          |
-| **`AC-SE-04`** | 連載状態・ジャンル絞り込み          | 連載状態ピル（すべて、連載中、完結済）およびジャンルピル（すべて、異世界ファンタジー、現代ファンタジー等12種）の選択により、絞り込み再検索が実行されること。                                                                             |
-| **`AC-SE-05`** | 作品カードメタデータ描画            | 各作品カードに、タイトル、著者名、ジャンルバッジ、連載状態バッジ、あらすじ抜粋、話数、総文字数、★ポイント数、タグラベルが欠損なく描画されること。                                                                                        |
-| **`AC-SE-06`** | カード内「＋ 本棚に追加」その場登録 | カードの「＋ 本棚に追加」ボタンを押下すると、画面遷移せずにボタンがローディング表示となり、バックグラウンドで作品トップ HTML 取得 ＆ 目次パース ＆ SQLite 保存（`upsertNovelWithToc`）が行われ、成功時に「✓ 登録済み」へ切り替わること。 |
-| **`AC-SE-07`** | カード本体タップ時の導線            | 登録済みカードをタップしたときは直ちにその作品の目次画面（`SCR-02`）へ遷移し、未登録カードをタップしたときは自動で「本棚に追加」を実行した上で完了後に目次画面へ遷移すること。                                                           |
-| **`AC-SE-08`** | 次ページ読み込み                    | 検索結果が20件以上あり `hasNextPage` が true の場合、最下部の「次へ」ボタン押下で次ページの作品が追加読み込み（またはページ切り替え）されること。                                                                                        |
+| 受入条件 ID    | 対象項目                            | 仕様・期待動作                                                                                                                                                                                                                           | 関連要件 / 遷移            |
+| :------------- | :---------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------- |
+| **`AC-SE-01`** | 初期表示とサイト選択                | `/search` への初回アクセス時、上部に「検索」タイトルと「カクヨム」ピルが表示され、未検索時は「キーワードを入力して小説を検索」の初期案内 UI が表示されること。                                                                           | `SYS-REQ-17, 20` / `TR-01` |
+| **`AC-SE-02`** | キーワード検索実行                  | 検索バーに文字列を入力して検索を実行すると、`KakuyomuParser.buildSearchUrl` により生成された URL を `httpClient` 経由で取得し、`searchNovels` でパースされた作品一覧がカード形式で表示されること。                                       | `SYS-REQ-17`               |
+| **`AC-SE-03`** | 並び順の切り替え                    | フィルタバーの並び順（週間ランキング順、累計ランキング順、更新順、新作順）を選択すると、即座に対応するパラメータ（`order`）で再検索され、一覧が更新されること（デフォルトは週間ランキング順）。                                          | `SYS-REQ-17`               |
+| **`AC-SE-04`** | 連載状態・ジャンル絞り込み          | 連載状態ピル（すべて、連載中、完結済）およびジャンルピル（すべて、異世界ファンタジー、現代ファンタジー等12種）の選択により、絞り込み再検索が実行されること。                                                                             | `SYS-REQ-17`               |
+| **`AC-SE-05`** | 作品カードメタデータ描画            | 各作品カードに、タイトル、著者名、ジャンルバッジ、連載状態バッジ、あらすじ抜粋、話数、総文字数、★ポイント数、タグラベルが欠損なく描画されること。                                                                                        | `SYS-REQ-17`               |
+| **`AC-SE-06`** | カード内「＋ 本棚に追加」その場登録 | カードの「＋ 本棚に追加」ボタンを押下すると、画面遷移せずにボタンがローディング表示となり、バックグラウンドで作品トップ HTML 取得 ＆ 目次パース ＆ SQLite 保存（`upsertNovelWithToc`）が行われ、成功時に「✓ 登録済み」へ切り替わること。 | `SYS-REQ-19` / `TR-14`     |
+| **`AC-SE-07`** | カード本体タップ時の導線            | 登録済みカードをタップしたときは直ちにその作品の目次画面（`SCR-02`）へ遷移し、未登録カードをタップしたときは自動で「本棚に追加」を実行した上で完了後に目次画面へ遷移すること。                                                           | `SYS-REQ-19` / `TR-14`     |
+| **`AC-SE-08`** | 次ページ読み込み                    | 検索結果が20件以上あり `hasNextPage` が true の場合、最下部の「次へ」ボタン押下で次ページの作品が追加読み込み（またはページ切り替え）されること。                                                                                        | `SYS-REQ-17`               |
 
 ---
 
