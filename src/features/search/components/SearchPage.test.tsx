@@ -117,6 +117,39 @@ describe("SearchPage コンポーネント", () => {
     expect(handleRetry).toHaveBeenCalledTimes(1);
   });
 
+  it("hasSearched が false の場合、keyword が入力されていても初期状態案内が表示されること", () => {
+    render(
+      <SearchPage
+        selectedSite="kakuyomu"
+        onSelectSite={vi.fn()}
+        keyword="異世界ファンタジー"
+        onChangeKeyword={vi.fn()}
+        onSubmitSearch={vi.fn()}
+        selectedOrder="weekly_ranking"
+        onSelectOrder={vi.fn()}
+        selectedSerialStatus="all"
+        onSelectSerialStatus={vi.fn()}
+        selectedGenre={undefined}
+        onSelectGenre={vi.fn()}
+        items={[]}
+        registeredWorkIds={new Set()}
+        addingWorkId={null}
+        isLoading={false}
+        isLoadingMore={false}
+        hasNextPage={false}
+        onLoadMore={vi.fn()}
+        error={null}
+        onRetry={vi.fn()}
+        onAddNovel={vi.fn()}
+        onSelectCard={vi.fn()}
+        hasSearched={false}
+      />,
+    );
+
+    expect(screen.getByTestId("search-initial-state")).toBeInTheDocument();
+    expect(screen.queryByTestId("search-empty-state")).not.toBeInTheDocument();
+  });
+
   it("さらに読み込むボタン押下時に onLoadMore が呼び出されること", async () => {
     const user = userEvent.setup();
     const handleLoadMore = vi.fn();

@@ -39,6 +39,8 @@ export interface UseNovelSearchResult {
   addingWorkId: string | null;
   /** 検索中ローディングフラグ */
   isLoading: boolean;
+  /** 検索実行済みフラグ（未検索時は false、1度でも検索実行されると true） */
+  hasSearched: boolean;
   /** 次ページ追加読み込み中フラグ */
   isLoadingMore: boolean;
   /** 次ページが存在するかどうか */
@@ -344,6 +346,7 @@ export function useNovelSearch(): UseNovelSearchResult {
     registeredWorkIds,
     addingWorkId,
     isLoading,
+    hasSearched: false,
     isLoadingMore,
     hasNextPage,
     loadMore,
