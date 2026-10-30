@@ -37,7 +37,7 @@ related_tests:
   - src/features/novel-detail/components/NovelDetailContainer.test.tsx
   - test/it/smoke.spec.ts
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
-  - test/it/scenarios/scn03-prefetch-and-cache.spec.ts
+  - test/it/scenarios/scn04-prefetch-and-cache.spec.ts
 ---
 
 # 差分仕様書：読書中の5話先読み・未取得話一括キャッシュとキャッシュ更新ルール（Issue #81）

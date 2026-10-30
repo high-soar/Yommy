@@ -50,7 +50,7 @@ related_tests:
   - test/vrt/vrt.spec.ts
   - test/it/smoke.spec.ts
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
-  - test/it/scenarios/scn03-prefetch-and-cache.spec.ts
+  - test/it/scenarios/scn04-prefetch-and-cache.spec.ts
 ---
 
 # 小説リーダー画面仕様書（SCR-03）

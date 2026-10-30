@@ -286,8 +286,10 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(prevChapterButton).toBeDisabled();
     await expect(nextChapterButton).toBeEnabled();
 
-    // リーダー下部オーバーレイ内のタブ（本棚・設定）が表示されていることを確認
+    // リーダー下部オーバーレイ内のタブ（本棚・検索・ランキング・設定）が表示されていることを確認
     await expect(page.getByTestId("reader-bottom-tab-bookshelf")).toBeVisible();
+    await expect(page.getByTestId("reader-bottom-tab-search")).toBeVisible();
+    await expect(page.getByTestId("reader-bottom-tab-ranking")).toBeVisible();
     await expect(page.getByTestId("reader-bottom-tab-settings")).toBeVisible();
 
     // 7. 本文内の <ruby>（ルビ）および <em class="bouten">（傍点）が可視状態で正しくレンダリングされていることを確認
@@ -596,5 +598,35 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
 
     // 2秒後にトーストが自動消滅することを確認
     await expect(exitToast).not.toBeVisible({ timeout: 4000 });
+
+    // 本棚画面で2秒以内に連続2回戻るボタンを押下した場合は exitApp が呼び出されること（AC-AB-06, TR-13）
+    await page.evaluate(async () => {
+      const bridge = (
+        window as unknown as {
+          __yommyAppBridge?: { triggerBackButton: () => Promise<void> };
+        }
+      ).__yommyAppBridge;
+      if (bridge) {
+        await bridge.triggerBackButton();
+        await bridge.triggerBackButton();
+      }
+    });
+
+    const exitInfo = await page.evaluate(() => {
+      const bridge = (
+        window as unknown as {
+          __yommyAppBridge?: {
+            exitAppCalled: boolean;
+            getExitAppCallCount?: () => number;
+          };
+        }
+      ).__yommyAppBridge;
+      return {
+        exitAppCalled: bridge?.exitAppCalled,
+        exitAppCount: bridge?.getExitAppCallCount?.(),
+      };
+    });
+    expect(exitInfo.exitAppCalled).toBe(true);
+    expect(exitInfo.exitAppCount).toBe(1);
   });
 });

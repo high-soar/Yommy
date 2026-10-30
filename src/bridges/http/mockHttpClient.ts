@@ -6,7 +6,9 @@ import type {
 
 export type MockResponseHandler =
   | Partial<HttpResponse>
-  | ((options: HttpRequestOptions) => HttpResponse | Promise<HttpResponse>);
+  | ((
+      options: HttpRequestOptions,
+    ) => Partial<HttpResponse> | Promise<Partial<HttpResponse>>);
 
 interface MockRoute {
   pattern: string | RegExp;
@@ -55,16 +57,60 @@ export class MockHttpClient implements HttpClientBridge {
       );
     }
 
-    const resolved =
-      typeof matched.handler === "function"
-        ? await matched.handler(options)
-        : matched.handler;
+    const executeHandler = async (): Promise<HttpResponse> => {
+      const resolved =
+        typeof matched.handler === "function"
+          ? await matched.handler(options)
+          : matched.handler;
 
-    return {
-      status: resolved.status ?? 200,
-      url: resolved.url ?? options.url,
-      html: resolved.html ?? "",
-      headers: resolved.headers ?? {},
+      return {
+        status: resolved.status ?? 200,
+        url: resolved.url ?? options.url,
+        html: resolved.html ?? "",
+        headers: resolved.headers ?? {},
+      };
     };
+
+    const promises: Promise<HttpResponse>[] = [executeHandler()];
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    if (typeof options.timeoutMs === "number" && options.timeoutMs > 0) {
+      promises.push(
+        new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(
+              new Error(
+                `[MockHttpClient] Request timed out after ${options.timeoutMs}ms`,
+              ),
+            );
+          }, options.timeoutMs);
+        }),
+      );
+    }
+
+    let abortHandler: (() => void) | undefined;
+    if (options.signal) {
+      promises.push(
+        new Promise<never>((_, reject) => {
+          abortHandler = () => {
+            reject(options.signal?.reason);
+          };
+          options.signal?.addEventListener("abort", abortHandler, {
+            once: true,
+          });
+        }),
+      );
+    }
+
+    try {
+      return await Promise.race(promises);
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      if (options.signal && abortHandler) {
+        options.signal.removeEventListener("abort", abortHandler);
+      }
+    }
   }
 }

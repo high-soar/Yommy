@@ -1,4 +1,25 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+
+async function triggerBackButton(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const bridge =
+      (
+        window as unknown as {
+          __yommyAppBridge?: { triggerBackButton: () => Promise<void> };
+        }
+      ).__yommyAppBridge ||
+      (
+        window as unknown as {
+          __yommyServices?: {
+            appBridge: { triggerBackButton: () => Promise<void> };
+          };
+        }
+      ).__yommyServices?.appBridge;
+    if (bridge) {
+      await bridge.triggerBackButton();
+    }
+  });
+}
 
 test.describe("SCN-02: 検索・ランキング探索・その場追加・目次確認・リーダー読書・4タブ/OSバックキー論理階層遷移シナリオ", () => {
   test.beforeEach(async ({ page }) => {
@@ -32,8 +53,11 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     const emptyState = page.getByTestId("bookshelf-empty");
     await expect(emptyState).toBeVisible();
 
-    // 2. 下部タブから「検索」タブ（/search）を選択（TR-01）
-    await tabSearch.click();
+    // 2. 空状態の「小説を検索する」ボタンを押下して「検索」画面（/search）へ遷移（TR-15）
+    const emptySearchButton = page.getByTestId("empty-search-button");
+    await expect(emptySearchButton).toBeVisible();
+    await emptySearchButton.click();
+
     await expect(page).toHaveURL("/search");
     await expect(tabSearch).toHaveAttribute("aria-selected", "true");
     await expect(tabBookshelf).toHaveAttribute("aria-selected", "false");
@@ -150,16 +174,16 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     );
     await expect(readerBody).toBeVisible();
 
-    // 8. リーダーから OS バックキー（page.goBack()）で目次画面（SCR-02）へ復帰（TR-06）
-    await page.goBack();
+    // 8. リーダーから OS バックキー（triggerBackButton）で目次画面（SCR-02）へ復帰（TR-06）
+    await triggerBackButton(page);
     await expect(page).toHaveURL(
       /\/novels\/kakuyomu(%3A|:)16817330658027210101$/,
     );
     await expect(novelDetailPage).toBeVisible();
     await expect(tabRanking).toHaveAttribute("aria-selected", "true");
 
-    // 9. 目次から OS バックキー（page.goBack()）で直前の探索元（ランキング）へ復帰（TR-07）
-    await page.goBack();
+    // 9. 目次から OS バックキー（triggerBackButton）で直前の探索元（ランキング）へ復帰（TR-07）
+    await triggerBackButton(page);
     await expect(page).toHaveURL("/ranking");
     await expect(rankingPage).toBeVisible();
     await expect(tabRanking).toHaveAttribute("aria-selected", "true");
@@ -204,13 +228,13 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
       "未読",
     );
 
-    // 11. OS バックキー（TR-12）による下部タブ（設定・検索・ランキング）からホームタブ（本棚）への復帰検証
+    // 11. OS バックキー（TR-12）による下部タブ（設定・検索・ランキング）からホームタブ（本棚）への論理階層復帰検証
     // (a) 設定画面へ移動 -> OS バックキーで本棚へ復帰
     await tabSettings.click();
     await expect(page).toHaveURL("/settings");
     await expect(tabSettings).toHaveAttribute("aria-selected", "true");
 
-    await page.goBack();
+    await triggerBackButton(page);
     await expect(page).toHaveURL("/");
     await expect(tabBookshelf).toHaveAttribute("aria-selected", "true");
 
@@ -219,7 +243,7 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     await expect(page).toHaveURL("/search");
     await expect(tabSearch).toHaveAttribute("aria-selected", "true");
 
-    await page.goBack();
+    await triggerBackButton(page);
     await expect(page).toHaveURL("/");
     await expect(tabBookshelf).toHaveAttribute("aria-selected", "true");
 
@@ -228,7 +252,17 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     await expect(page).toHaveURL("/ranking");
     await expect(tabRanking).toHaveAttribute("aria-selected", "true");
 
-    await page.goBack();
+    await triggerBackButton(page);
+    await expect(page).toHaveURL("/");
+    await expect(tabBookshelf).toHaveAttribute("aria-selected", "true");
+
+    // (d) /search -> /ranking と複数タブを渡り歩いた場合も、ブラウザ履歴ではなく本棚（/）へ復帰すること（TR-12）
+    await tabSearch.click();
+    await expect(page).toHaveURL("/search");
+    await tabRanking.click();
+    await expect(page).toHaveURL("/ranking");
+
+    await triggerBackButton(page);
     await expect(page).toHaveURL("/");
     await expect(tabBookshelf).toHaveAttribute("aria-selected", "true");
   });
