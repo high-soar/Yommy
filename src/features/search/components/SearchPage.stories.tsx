@@ -59,12 +59,14 @@ export const Empty: Story = {
     keyword: "存在しない作品名",
     items: [],
     isLoading: false,
+    hasSearched: true,
   },
 };
 
 export const WithResults: Story = {
   args: {
     keyword: "異世界",
+    hasSearched: true,
     items: [
       sampleSearchItem,
       {
@@ -87,6 +89,7 @@ export const WithResults: Story = {
 export const LoadingMore: Story = {
   args: {
     keyword: "異世界",
+    hasSearched: true,
     items: [sampleSearchItem],
     hasNextPage: true,
     isLoadingMore: true,
@@ -96,6 +99,7 @@ export const LoadingMore: Story = {
 export const ErrorState: Story = {
   args: {
     keyword: "エラー作品",
+    hasSearched: true,
     items: [],
     error: "検索結果の取得に失敗しました。ネットワーク接続を確認してください。",
   },
