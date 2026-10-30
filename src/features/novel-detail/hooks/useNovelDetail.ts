@@ -250,6 +250,8 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
       .sort((a, b) => a.chapterIndex - b.chapterIndex);
 
     if (targetChapters.length === 0) {
+      setError(null);
+      setRefreshMessage("全話キャッシュ済みです");
       return;
     }
 
@@ -287,6 +289,16 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
         } catch (err: unknown) {
           if (signal.aborted) {
             break;
+          }
+          if (hasStaleCache) {
+            setBatchCacheProgress({
+              current: i + 1,
+              total: targetChapters.length,
+            });
+            if (i < targetChapters.length - 1) {
+              await delay(PREFETCH_INTERVAL_MS, signal);
+            }
+            continue;
           }
           throw new Error(
             `第${target.chapterIndex}話の取得に失敗したためキャッシュを中断しました: ${extractErrorMessage(err, "通信エラー")}`,

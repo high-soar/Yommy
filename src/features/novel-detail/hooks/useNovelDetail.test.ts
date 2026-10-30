@@ -1026,16 +1026,26 @@ describe("useNovelDetail", () => {
         );
 
         const httpClient = new MockHttpClient();
-        httpClient.setResponse(/kakuyomu\.jp\/works\/.*\/episodes\/1$/, {
-          status: 500,
-          headers: {},
-          html: "Internal Server Error",
-        });
-        httpClient.setResponse(/kakuyomu\.jp\/works\/.*\/episodes\/2$/, {
-          status: 200,
-          headers: {},
-          html: episodeContentHtml,
-        });
+        httpClient.setResponse(
+          new RegExp(
+            `kakuyomu\\.jp/works/.*/episodes/${KAKUYOMU_EPISODE_IDS[0]}`,
+          ),
+          {
+            status: 500,
+            headers: {},
+            html: "Internal Server Error",
+          },
+        );
+        httpClient.setResponse(
+          new RegExp(
+            `kakuyomu\\.jp/works/.*/episodes/${KAKUYOMU_EPISODE_IDS[1]}`,
+          ),
+          {
+            status: 200,
+            headers: {},
+            html: episodeContentHtml,
+          },
+        );
 
         const { result } = renderHook(() => useNovelDetail(seeded.id), {
           wrapper: createWrapper({
