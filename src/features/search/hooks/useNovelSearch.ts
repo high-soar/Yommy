@@ -268,6 +268,8 @@ export function useNovelSearch(): UseNovelSearchResult {
 
   const addNovelToBookshelf = useCallback(
     async (item: NovelSearchResultItem): Promise<string | null> => {
+      if (addingWorkId === item.remoteWorkId) return null;
+
       setAddingWorkId(item.remoteWorkId);
       setError(null);
 
@@ -283,20 +285,22 @@ export function useNovelSearch(): UseNovelSearchResult {
         );
 
         setRegisteredWorkIds((prev) => new Set(prev).add(item.remoteWorkId));
-        setAddingWorkId(null);
+        setAddingWorkId((prev) => (prev === item.remoteWorkId ? null : prev));
         return savedNovel.id;
       } catch (err) {
-        setAddingWorkId(null);
+        setAddingWorkId((prev) => (prev === item.remoteWorkId ? null : prev));
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
         return null;
       }
     },
-    [httpClient, novelRepository, parserRegistry],
+    [addingWorkId, httpClient, novelRepository, parserRegistry],
   );
 
   const handleCardSelect = useCallback(
     async (item: NovelSearchResultItem): Promise<void> => {
+      if (addingWorkId === item.remoteWorkId) return;
+
       if (registeredWorkIds.has(item.remoteWorkId)) {
         const fallbackSiteType =
           (item as { siteType?: NovelSiteType }).siteType ?? selectedSite;
@@ -324,6 +328,7 @@ export function useNovelSearch(): UseNovelSearchResult {
       }
     },
     [
+      addingWorkId,
       registeredWorkIds,
       addNovelToBookshelf,
       novelRepository,
