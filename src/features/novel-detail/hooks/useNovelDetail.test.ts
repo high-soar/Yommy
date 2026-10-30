@@ -976,7 +976,7 @@ describe("useNovelDetail", () => {
         vi.useRealTimers();
       });
 
-      it("対象エピソードが存在しない（0件）場合、通信を行わずに即時終了すること", async () => {
+      it("対象エピソードが存在しない（0件）場合、通信を行わずに「全話キャッシュ済みです」を設定して即時終了すること", async () => {
         const db = await resetTestDb();
         const novelRepo = new SqlNovelRepository(db);
         const chapterRepo = new SqlChapterRepository(db);
@@ -1003,6 +1003,74 @@ describe("useNovelDetail", () => {
 
         expect(getHtmlSpy).not.toHaveBeenCalled();
         expect(result.current.isBatchCaching).toBe(false);
+        expect(result.current.error).toBeNull();
+        expect(result.current.refreshMessage).toBe("全話キャッシュ済みです");
+      });
+
+      it("7日経過した古いキャッシュ（hasStaleCache）の再取得時にエラーが発生した場合、例外を送出せず既存キャッシュを維持して次話へ継続すること", async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedSampleNovel(novelRepo, 2);
+
+        // 第1話は7日経過した古いキャッシュ
+        const staleTime = new Date(
+          Date.now() - CACHE_TTL_MS - 5000,
+        ).toISOString();
+        await chapterRepo.saveChapterBody(
+          seeded.id,
+          1,
+          createDummyContent(1, "<p>古い第1話本文</p>"),
+          staleTime,
+        );
+
+        const httpClient = new MockHttpClient();
+        httpClient.setResponse(/kakuyomu\.jp\/works\/.*\/episodes\/1$/, {
+          status: 500,
+          headers: {},
+          html: "Internal Server Error",
+        });
+        httpClient.setResponse(/kakuyomu\.jp\/works\/.*\/episodes\/2$/, {
+          status: 200,
+          headers: {},
+          html: episodeContentHtml,
+        });
+
+        const { result } = renderHook(() => useNovelDetail(seeded.id), {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+            httpClient,
+          }),
+        });
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        let batchPromise: Promise<void>;
+        act(() => {
+          batchPromise = result.current.startBatchCache();
+        });
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1600);
+        });
+
+        await act(async () => {
+          await batchPromise;
+        });
+
+        expect(result.current.isBatchCaching).toBe(false);
+        expect(result.current.error).toBeNull();
+        expect(result.current.refreshMessage).toBe(
+          "全話のキャッシュを取得しました",
+        );
+        expect(result.current.chapters[0].downloadedAt).toBe(staleTime);
+        expect(result.current.chapters[1].downloadedAt).not.toBeNull();
+
+        vi.useRealTimers();
       });
     });
 
