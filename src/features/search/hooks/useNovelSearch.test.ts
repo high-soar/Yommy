@@ -9,6 +9,7 @@ import { MockHttpClient } from "../../../bridges/http/mockHttpClient";
 import searchApolloHtml from "../../../parsers/kakuyomu/__fixtures__/search_results_apollo.html?raw";
 import searchEmptyHtml from "../../../parsers/kakuyomu/__fixtures__/search_results_empty.html?raw";
 import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.html?raw";
+import type { HttpResponse } from "../../../bridges/http/types";
 
 describe("useNovelSearch", () => {
   let mockHttpClient: MockHttpClient;
@@ -351,6 +352,283 @@ describe("useNovelSearch", () => {
 
     expect(savedNovelId).toBeNull();
     expect(result.current.error).toContain("作品詳細の取得に失敗しました");
+    expect(result.current.addingWorkId).toBeNull();
+  });
+
+  it("同一作品の追加処理中（addingWorkId === item.remoteWorkId）に再度 addNovelToBookshelf を呼び出した場合、多重実行を防止し直ちに null を返すこと", async () => {
+    const resolves: Array<(val: HttpResponse) => void> = [];
+    let fetchCount = 0;
+
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.setKeyword("異世界");
+    });
+    await act(async () => {
+      await result.current.search();
+    });
+
+    const item1 = result.current.items[0];
+    mockHttpClient.setResponse(
+      /^https:\/\/kakuyomu\.jp\/works\/\d+$/,
+      (options) => {
+        if (options.url === item1.workUrl) {
+          fetchCount++;
+          return new Promise<HttpResponse>((resolve) => {
+            resolves.push(resolve);
+          });
+        }
+        return {
+          status: 200,
+          url: options.url,
+          headers: {},
+          html: workIndexHtml,
+        };
+      },
+    );
+
+    let promise1: Promise<string | null>;
+    act(() => {
+      promise1 = result.current.addNovelToBookshelf(item1);
+    });
+    expect(result.current.addingWorkId).toBe(item1.remoteWorkId);
+
+    // 重複呼び出し（ガードにより即時 null が返るべき）
+    let secondResult: string | null = "dummy";
+    let isSecondResolved = false;
+    const promise2 = result.current.addNovelToBookshelf(item1).then((res) => {
+      isSecondResolved = true;
+      secondResult = res;
+      return res;
+    });
+    await Promise.resolve();
+
+    try {
+      expect(isSecondResolved).toBe(true);
+      expect(secondResult).toBeNull();
+      expect(fetchCount).toBe(1);
+    } finally {
+      resolves.forEach((resolve) =>
+        resolve({
+          url: item1.workUrl,
+          status: 200,
+          headers: {},
+          html: workIndexHtml,
+        }),
+      );
+      await promise1!;
+      await promise2;
+    }
+    expect(result.current.addingWorkId).toBeNull();
+  });
+
+  it("同一作品の追加処理中（addingWorkId === item.remoteWorkId）に handleCardSelect を呼び出した場合、多重実行を防止し何もしないこと", async () => {
+    const resolves: Array<(val: HttpResponse) => void> = [];
+    let fetchCount = 0;
+
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: createWrapper("/search"),
+    });
+
+    act(() => {
+      result.current.setKeyword("異世界");
+    });
+    await act(async () => {
+      await result.current.search();
+    });
+
+    const item1 = result.current.items[0];
+    mockHttpClient.setResponse(
+      /^https:\/\/kakuyomu\.jp\/works\/\d+$/,
+      (options) => {
+        if (options.url === item1.workUrl) {
+          fetchCount++;
+          return new Promise<HttpResponse>((resolve) => {
+            resolves.push(resolve);
+          });
+        }
+        return {
+          status: 200,
+          url: options.url,
+          headers: {},
+          html: workIndexHtml,
+        };
+      },
+    );
+
+    let promise1: Promise<string | null>;
+    act(() => {
+      promise1 = result.current.addNovelToBookshelf(item1);
+    });
+    expect(result.current.addingWorkId).toBe(item1.remoteWorkId);
+
+    // 追加処理中に同一作品の handleCardSelect を呼び出す
+    let isSelectResolved = false;
+    const selectPromise = result.current.handleCardSelect(item1).then(() => {
+      isSelectResolved = true;
+    });
+    await Promise.resolve();
+
+    try {
+      expect(isSelectResolved).toBe(true);
+      expect(fetchCount).toBe(1);
+      expect(window.location.pathname).toBe("/search");
+    } finally {
+      resolves.forEach((resolve) =>
+        resolve({
+          url: item1.workUrl,
+          status: 200,
+          headers: {},
+          html: workIndexHtml,
+        }),
+      );
+      await promise1!;
+      await selectPromise;
+    }
+  });
+
+  it("先行する作品追加完了時に後続作品の addingWorkId が上書き解除されないこと", async () => {
+    let resolveFirst: ((val: HttpResponse) => void) | null = null;
+    let resolveSecond: ((val: HttpResponse) => void) | null = null;
+
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.setKeyword("異世界");
+    });
+    await act(async () => {
+      await result.current.search();
+    });
+
+    const item1 = result.current.items[0];
+    const item2 = result.current.items[1];
+    mockHttpClient.setResponse(
+      /^https:\/\/kakuyomu\.jp\/works\/\d+$/,
+      (options) => {
+        if (options.url === item1.workUrl) {
+          return new Promise<HttpResponse>((resolve) => {
+            resolveFirst = resolve;
+          });
+        }
+        if (options.url === item2.workUrl) {
+          return new Promise<HttpResponse>((resolve) => {
+            resolveSecond = resolve;
+          });
+        }
+        return {
+          status: 200,
+          url: options.url,
+          headers: {},
+          html: workIndexHtml,
+        };
+      },
+    );
+
+    let promise1: Promise<string | null>;
+    act(() => {
+      promise1 = result.current.addNovelToBookshelf(item1);
+    });
+    expect(result.current.addingWorkId).toBe(item1.remoteWorkId);
+
+    let promise2: Promise<string | null>;
+    act(() => {
+      promise2 = result.current.addNovelToBookshelf(item2);
+    });
+    expect(result.current.addingWorkId).toBe(item2.remoteWorkId);
+
+    await act(async () => {
+      resolveFirst!({
+        url: item1.workUrl,
+        status: 200,
+        headers: {},
+        html: workIndexHtml,
+      });
+      await promise1!;
+    });
+    expect(result.current.addingWorkId).toBe(item2.remoteWorkId);
+
+    await act(async () => {
+      resolveSecond!({
+        url: item2.workUrl,
+        status: 200,
+        headers: {},
+        html: workIndexHtml,
+      });
+      await promise2!;
+    });
+    expect(result.current.addingWorkId).toBeNull();
+  });
+
+  it("先行する作品追加が失敗した際も後続作品の addingWorkId が上書き解除されないこと", async () => {
+    let rejectFirst: ((err: Error) => void) | null = null;
+    let resolveSecond: ((val: HttpResponse) => void) | null = null;
+
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.setKeyword("異世界");
+    });
+    await act(async () => {
+      await result.current.search();
+    });
+
+    const item1 = result.current.items[0];
+    const item2 = result.current.items[1];
+    mockHttpClient.setResponse(
+      /^https:\/\/kakuyomu\.jp\/works\/\d+$/,
+      (options) => {
+        if (options.url === item1.workUrl) {
+          return new Promise<HttpResponse>((_, reject) => {
+            rejectFirst = reject;
+          });
+        }
+        if (options.url === item2.workUrl) {
+          return new Promise<HttpResponse>((resolve) => {
+            resolveSecond = resolve;
+          });
+        }
+        return {
+          status: 200,
+          url: options.url,
+          headers: {},
+          html: workIndexHtml,
+        };
+      },
+    );
+
+    let promise1: Promise<string | null>;
+    act(() => {
+      promise1 = result.current.addNovelToBookshelf(item1);
+    });
+    expect(result.current.addingWorkId).toBe(item1.remoteWorkId);
+
+    let promise2: Promise<string | null>;
+    act(() => {
+      promise2 = result.current.addNovelToBookshelf(item2);
+    });
+    expect(result.current.addingWorkId).toBe(item2.remoteWorkId);
+
+    await act(async () => {
+      rejectFirst!(new Error("Network Error"));
+      await promise1!;
+    });
+    expect(result.current.addingWorkId).toBe(item2.remoteWorkId);
+
+    await act(async () => {
+      resolveSecond!({
+        url: item2.workUrl,
+        status: 200,
+        headers: {},
+        html: workIndexHtml,
+      });
+      await promise2!;
+    });
     expect(result.current.addingWorkId).toBeNull();
   });
 
