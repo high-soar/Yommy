@@ -17,13 +17,21 @@ const meta: Meta<typeof SiteSelector> = {
 export default meta;
 type Story = StoryObj<typeof SiteSelector>;
 
+/**
+ * サイト切替タブ（カクヨム選択状態）
+ */
 export const Default: Story = {
+  name: "カクヨム選択",
   args: {
     selectedSite: "kakuyomu",
   },
 };
 
+/**
+ * サイト切替タブ（小説家になろう選択状態）
+ */
 export const NarouSelected: Story = {
+  name: "小説家になろう選択",
   args: {
     selectedSite: "narou",
   },

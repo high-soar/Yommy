@@ -47,4 +47,9 @@ const meta: Meta<typeof RankingContainer> = {
 export default meta;
 type Story = StoryObj<typeof RankingContainer>;
 
-export const Default: Story = {};
+/**
+ * ランキングコンテナ（モックHTTPサービス・ルーター連携）
+ */
+export const Default: Story = {
+  name: "デフォルト（ランキングコンテナ統合表示）",
+};

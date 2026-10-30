@@ -26,6 +26,9 @@ const meta: Meta<typeof RankingNovelCard> = {
 export default meta;
 type Story = StoryObj<typeof RankingNovelCard>;
 
+/**
+ * ランキングカード（1位・ゴールドバッジ表示）
+ */
 export const Rank1Gold: Story = {
   name: "1位（ゴールドバッジ）",
   args: {
@@ -35,6 +38,9 @@ export const Rank1Gold: Story = {
   },
 };
 
+/**
+ * ランキングカード（2位・シルバーバッジ表示）
+ */
 export const Rank2Silver: Story = {
   name: "2位（シルバーバッジ）",
   args: {
@@ -44,6 +50,9 @@ export const Rank2Silver: Story = {
   },
 };
 
+/**
+ * ランキングカード（3位・ブロンズバッジ表示）
+ */
 export const Rank3Bronze: Story = {
   name: "3位（ブロンズバッジ）",
   args: {
@@ -53,6 +62,9 @@ export const Rank3Bronze: Story = {
   },
 };
 
+/**
+ * ランキングカード（4位以降・通常数字バッジ表示）
+ */
 export const Rank4Standard: Story = {
   name: "4位以降（通常数字バッジ）",
   args: {
@@ -62,6 +74,9 @@ export const Rank4Standard: Story = {
   },
 };
 
+/**
+ * ランキングカード（本棚追加処理中）
+ */
 export const Adding: Story = {
   name: "追加処理中状態",
   args: {
@@ -71,6 +86,9 @@ export const Adding: Story = {
   },
 };
 
+/**
+ * ランキングカード（本棚登録済み状態）
+ */
 export const Registered: Story = {
   name: "登録済み状態",
   args: {
@@ -80,6 +98,9 @@ export const Registered: Story = {
   },
 };
 
+/**
+ * ランキングカード（最新話公開日・タグ未設定）
+ */
 export const WithoutLastPublished: Story = {
   name: "更新日・タグなし",
   args: {

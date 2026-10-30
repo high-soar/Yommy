@@ -47,4 +47,9 @@ const meta: Meta<typeof SearchContainer> = {
 export default meta;
 type Story = StoryObj<typeof SearchContainer>;
 
-export const Default: Story = {};
+/**
+ * 検索コンテナ（モックHTTPサービス・ルーター連携）
+ */
+export const Default: Story = {
+  name: "デフォルト（検索コンテナ統合表示）",
+};
