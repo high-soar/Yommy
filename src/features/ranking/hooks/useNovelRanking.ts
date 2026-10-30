@@ -177,6 +177,8 @@ export function useNovelRanking(): UseNovelRankingResult {
 
   const addNovelToBookshelf = useCallback(
     async (item: NovelRankingResultItem): Promise<string | null> => {
+      if (addingWorkId === item.remoteWorkId) return null;
+
       setAddingWorkId(item.remoteWorkId);
       setError(null);
 
@@ -201,11 +203,13 @@ export function useNovelRanking(): UseNovelRankingResult {
         return null;
       }
     },
-    [httpClient, novelRepository, parserRegistry],
+    [addingWorkId, httpClient, novelRepository, parserRegistry],
   );
 
   const handleCardSelect = useCallback(
     async (item: NovelRankingResultItem): Promise<void> => {
+      if (addingWorkId === item.remoteWorkId) return;
+
       if (registeredWorkIds.has(item.remoteWorkId)) {
         const fallbackSiteType =
           (item as { siteType?: NovelSiteType }).siteType ?? selectedSite;
@@ -233,6 +237,7 @@ export function useNovelRanking(): UseNovelRankingResult {
       }
     },
     [
+      addingWorkId,
       registeredWorkIds,
       addNovelToBookshelf,
       novelRepository,

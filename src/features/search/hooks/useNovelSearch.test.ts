@@ -17,6 +17,7 @@ describe("useNovelSearch", () => {
   beforeEach(async () => {
     await resetTestDb();
     localStorage.clear();
+    window.history.replaceState(null, "", "/search");
     vi.clearAllMocks();
 
     mockHttpClient = new MockHttpClient();
@@ -421,7 +422,9 @@ describe("useNovelSearch", () => {
       await promise1!;
       await promise2;
     }
-    expect(result.current.addingWorkId).toBeNull();
+    await waitFor(() => {
+      expect(result.current.addingWorkId).toBeNull();
+    });
   });
 
   it("同一作品の追加処理中（addingWorkId === item.remoteWorkId）に handleCardSelect を呼び出した場合、多重実行を防止し何もしないこと", async () => {
