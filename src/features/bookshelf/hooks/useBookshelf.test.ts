@@ -6,7 +6,7 @@ import { useBookshelf } from "./useBookshelf";
 import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
 import { SqlNovelRepository } from "../../../storage/repositories/novelRepository";
 import { MockHttpClient } from "../../../bridges/http/mockHttpClient";
-import type { NovelSummary } from "../../../storage/types";
+import type { NovelRepository, NovelSummary } from "../../../storage/types";
 import type { SyncEngine } from "../../cloud-sync/services/syncEngine";
 import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 
@@ -1421,17 +1421,31 @@ describe("useBookshelf", () => {
         notifyChanged: vi.fn().mockResolvedValue(undefined),
       };
 
+      let list = [
+        {
+          id: "kakuyomu:999",
+          title: "削除対象作品",
+          author: "作者",
+          canonicalUrl: "https://kakuyomu.jp/works/999",
+          lastCheckedAt: new Date().toISOString(),
+          totalChapters: 1,
+          cachedChapters: 0,
+          bookmarkChapterIndex: null,
+          bookmarkScrollProgress: 0,
+          hasNewUpdate: false,
+          lastReadAt: null,
+          latestEpisodePublishedAt: null,
+        },
+      ];
+
       const customNovelRepo = {
-        listNovels: vi
-          .fn()
-          .mockResolvedValueOnce([
-            { id: "kakuyomu:999", title: "削除対象作品" },
-          ])
-          .mockResolvedValueOnce([]),
+        listNovels: vi.fn().mockImplementation(async () => [...list]),
         getNovelById: vi.fn(),
         upsertNovelWithToc: vi.fn(),
         updateBookmark: vi.fn(),
-        deleteNovel: vi.fn().mockResolvedValue(undefined),
+        deleteNovel: vi.fn().mockImplementation(async (id: string) => {
+          list = list.filter((n) => n.id !== id);
+        }),
         clearNewUpdate: vi.fn(),
         updateLastCheckedAt: vi.fn(),
       };
@@ -1464,15 +1478,29 @@ describe("useBookshelf", () => {
         notifyChanged: vi.fn().mockResolvedValue(undefined),
       };
 
+      let list: unknown[] = [];
+
       const customNovelRepo = {
-        listNovels: vi
-          .fn()
-          .mockResolvedValueOnce([])
-          .mockResolvedValueOnce([
-            { id: "kakuyomu:123", title: "新規追加作品" },
-          ]),
+        listNovels: vi.fn().mockImplementation(async () => [...list]),
         getNovelById: vi.fn(),
-        upsertNovelWithToc: vi.fn().mockResolvedValue(undefined),
+        upsertNovelWithToc: vi.fn().mockImplementation(async () => {
+          list = [
+            {
+              id: "kakuyomu:123",
+              title: "新規追加作品",
+              author: "作者",
+              canonicalUrl: "https://kakuyomu.jp/works/123",
+              lastCheckedAt: new Date().toISOString(),
+              totalChapters: 1,
+              cachedChapters: 0,
+              bookmarkChapterIndex: null,
+              bookmarkScrollProgress: 0,
+              hasNewUpdate: false,
+              lastReadAt: null,
+              latestEpisodePublishedAt: null,
+            },
+          ];
+        }),
         updateBookmark: vi.fn(),
         deleteNovel: vi.fn(),
         clearNewUpdate: vi.fn(),
@@ -1530,6 +1558,76 @@ describe("useBookshelf", () => {
       });
 
       expect(result.current.novels).toEqual([]);
+    });
+
+    it("deleteNovel で例外が発生したとき、error ステートにメッセージが設定されること", async () => {
+      const customNovelRepo = {
+        listNovels: vi.fn().mockResolvedValue([]),
+        upsertNovelWithToc: vi.fn(),
+        updateBookmark: vi.fn(),
+        deleteNovel: vi.fn().mockRejectedValue(new Error("削除エラー")),
+        clearNewUpdate: vi.fn(),
+        updateLastCheckedAt: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          novelRepository: customNovelRepo as unknown as NovelRepository,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.deleteNovel?.("kakuyomu:999");
+      });
+
+      expect(result.current.error).toBe("削除エラー");
+
+      // 非Errorオブジェクト（文字列）の場合
+      customNovelRepo.deleteNovel.mockRejectedValueOnce("削除文字列エラー");
+      await act(async () => {
+        await result.current.deleteNovel?.("kakuyomu:999");
+      });
+      expect(result.current.error).toBe("削除文字列エラー");
+    });
+
+    it("addNovel で例外が発生したとき、error ステートにメッセージが設定されること", async () => {
+      const customNovelRepo = {
+        listNovels: vi.fn().mockResolvedValue([]),
+        upsertNovelWithToc: vi.fn().mockRejectedValue(new Error("追加エラー")),
+        updateBookmark: vi.fn(),
+        deleteNovel: vi.fn(),
+        clearNewUpdate: vi.fn(),
+        updateLastCheckedAt: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          novelRepository: customNovelRepo as unknown as NovelRepository,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.addNovel?.("https://kakuyomu.jp/works/123");
+      });
+
+      expect(result.current.error).toBe("追加エラー");
+
+      // 非Errorオブジェクト（文字列）の場合
+      customNovelRepo.upsertNovelWithToc.mockRejectedValueOnce(
+        "追加文字列エラー",
+      );
+      await act(async () => {
+        await result.current.addNovel?.("https://kakuyomu.jp/works/123");
+      });
+      expect(result.current.error).toBe("追加文字列エラー");
     });
   });
 });

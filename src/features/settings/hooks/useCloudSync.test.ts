@@ -99,13 +99,13 @@ describe("useCloudSync", () => {
       });
 
       await waitFor(() => {
-        expect(result.current.authState.status).toBe("unlinked");
+        expect(bridge.getAuthState).toHaveBeenCalledTimes(1);
       });
 
+      expect(result.current.authState.status).toBe("unlinked");
       expect(result.current.lastSyncedAt).toBeNull();
       expect(result.current.isSyncing).toBe(false);
       expect(result.current.error).toBeNull();
-      expect(bridge.getAuthState).toHaveBeenCalledTimes(1);
     });
 
     it("保存済みの最終同期日時と認証状態が存在する場合、正しく復元されること", async () => {
@@ -478,6 +478,499 @@ describe("useCloudSync", () => {
 
       expect(result.current.isSyncing).toBe(false);
       expect(result.current.error).toBeNull();
+    });
+
+    it("appSettingsRepository が getCloudSyncLastSyncedAt を持たない場合、getSetting から復元されること", async () => {
+      const bridge = createMockBridge({ status: "unlinked" });
+      const fallbackSettings: AppSettingsRepository = {
+        getSetting: vi.fn().mockImplementation(async (key: string) => {
+          if (key === "cloud_sync_last_synced_at") {
+            return "1730376000000";
+          }
+          return null;
+        }),
+        setSetting: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: fallbackSettings,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.lastSyncedAt).toBe(
+          new Date(1730376000000).toISOString(),
+        );
+      });
+    });
+
+    it("getSetting が ISO 日時文字列または不正な文字列を返す場合のフォールバック", async () => {
+      const bridge = createMockBridge({ status: "unlinked" });
+      const isoStr = "2026-10-31T00:00:00.000Z";
+      const fallbackSettings: AppSettingsRepository = {
+        getSetting: vi.fn().mockResolvedValueOnce(isoStr),
+        setSetting: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: fallbackSettings,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.lastSyncedAt).toBe(isoStr);
+      });
+
+      // 不正な文字列
+      const invalidSettings: AppSettingsRepository = {
+        getSetting: vi.fn().mockResolvedValueOnce("not-a-valid-date"),
+        setSetting: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const { result: invalidResult } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: invalidSettings,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(invalidResult.current.lastSyncedAt).toBeNull();
+      });
+    });
+
+    it("getSetting が NaN または無効な数値を返す場合、lastSyncedAt が null となること", async () => {
+      const bridge = createMockBridge({ status: "unlinked" });
+      const fallbackSettings: AppSettingsRepository = {
+        getSetting: vi.fn().mockResolvedValueOnce(NaN as unknown as string),
+        setSetting: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: fallbackSettings,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.lastSyncedAt).toBeNull();
+      });
+    });
+
+    it("signIn 中に falsy（null）な例外がスローされた場合も安全に処理されること", async () => {
+      const bridge = createMockBridge();
+      vi.mocked(bridge.signIn).mockRejectedValueOnce(null);
+      const appSettings = createMockAppSettings();
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.authState.status).toBe("unlinked");
+      });
+
+      await act(async () => {
+        await result.current.signIn();
+      });
+
+      expect(result.current.authState.status).toBe("error");
+      expect(result.current.error).toBe("null");
+    });
+
+    it("syncNow 実行中に非Error例外（文字列）がスローされた場合もエラーメッセージが設定されること", async () => {
+      const bridge = createMockBridge({
+        status: "connected",
+        email: "user@example.com",
+      });
+      const appSettings = createMockAppSettings();
+      const syncEngine = createMockSyncEngine();
+      vi.mocked(syncEngine.sync).mockRejectedValueOnce("文字列同期エラー");
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+          syncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.authState.status).toBe("connected");
+      });
+
+      await act(async () => {
+        await result.current.syncNow();
+      });
+
+      expect(result.current.error).toBe("文字列同期エラー");
+    });
+
+    it("cloudSyncBridge.getAuthState が存在しない場合、デフォルトで unlinked 状態となること", async () => {
+      const dummyBridge = {} as CloudSyncBridge;
+      const appSettings = createMockAppSettings();
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: dummyBridge,
+          appSettingsRepository: appSettings,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.authState.status).toBe("unlinked");
+      });
+    });
+
+    it("initialize 実行中に例外が発生した場合、エラーメッセージが設定されること", async () => {
+      const bridge = createMockBridge();
+      vi.mocked(bridge.getAuthState).mockRejectedValueOnce(
+        new Error("Bridge init error"),
+      );
+      const appSettings = createMockAppSettings();
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.error).toBe("Bridge init error");
+      });
+    });
+
+    it("bridge の connected 状態かつ email 未設定で getCloudSyncAccountEmail が null を返す場合", async () => {
+      const bridge = createMockBridge({ status: "connected" });
+      const appSettings = createMockAppSettings({ email: null });
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.authState.status).toBe("connected");
+        expect(
+          (result.current.authState as { email?: string }).email,
+        ).toBeUndefined();
+      });
+    });
+
+    it("signIn で connected でも error でもないステータスが返された場合、そのステータスがそのまま設定されること", async () => {
+      const bridge = createMockBridge();
+      vi.mocked(bridge.signIn).mockResolvedValueOnce({
+        status: "unlinked",
+      });
+      const appSettings = createMockAppSettings();
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.authState.status).toBe("unlinked");
+      });
+
+      await act(async () => {
+        await result.current.signIn();
+      });
+
+      expect(result.current.authState.status).toBe("unlinked");
+    });
+
+    it("signIn 後の初回 syncEngine.sync で例外が発生しても、警告ログ出力の上で connected 状態を維持すること", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const bridge = createMockBridge();
+      const appSettings = createMockAppSettings();
+      const syncEngine = createMockSyncEngine();
+      vi.mocked(syncEngine.sync).mockRejectedValueOnce(
+        new Error("初回 Pull 失敗"),
+      );
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+          syncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.authState.status).toBe("unlinked");
+      });
+
+      await act(async () => {
+        await result.current.signIn();
+      });
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Initial sync failed"),
+        expect.any(Error),
+      );
+      expect(result.current.authState.status).toBe("connected");
+      warnSpy.mockRestore();
+    });
+
+    it("signIn 中に 401 エラーが発生し、その後の bridge.signOut も失敗した場合に例外が伝播せず未連携にフォールバックすること", async () => {
+      const bridge = createMockBridge();
+      vi.mocked(bridge.signIn).mockRejectedValueOnce({
+        statusCode: 401,
+        message: "Unauthorized",
+      });
+      vi.mocked(bridge.signOut).mockRejectedValueOnce(
+        new Error("Sign out failed"),
+      );
+      const appSettings = createMockAppSettings();
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.authState.status).toBe("unlinked");
+      });
+
+      await act(async () => {
+        await result.current.signIn();
+      });
+
+      expect(result.current.authState.status).toBe("unlinked");
+      expect(result.current.error).toContain("解除");
+    });
+
+    it("signIn 中に非Error例外（文字列）がスローされた場合も error ステートが設定されること", async () => {
+      const bridge = createMockBridge();
+      vi.mocked(bridge.signIn).mockRejectedValueOnce("ログイン処理中断");
+      const appSettings = createMockAppSettings();
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.authState.status).toBe("unlinked");
+      });
+
+      await act(async () => {
+        await result.current.signIn();
+      });
+
+      expect(result.current.authState.status).toBe("error");
+      expect(result.current.error).toBe("ログイン処理中断");
+    });
+
+    it("signOut 実行時に bridge.signOut が例外を投げた場合、エラーメッセージが設定されること", async () => {
+      const bridge = createMockBridge({
+        status: "connected",
+        email: "user@example.com",
+      });
+      vi.mocked(bridge.signOut).mockRejectedValueOnce(
+        new Error("ログアウト失敗"),
+      );
+      const appSettings = createMockAppSettings();
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.authState.status).toBe("connected");
+      });
+
+      await act(async () => {
+        await result.current.signOut();
+      });
+
+      expect(result.current.error).toBe("ログアウト失敗");
+
+      // 非Errorオブジェクトの場合
+      vi.mocked(bridge.signOut).mockRejectedValueOnce("文字列エラー");
+      await act(async () => {
+        await result.current.signOut();
+      });
+      expect(result.current.error).toBe("文字列エラー");
+    });
+
+    it("syncNow 実行中に 401 エラーが発生し、その後の bridge.signOut も失敗した場合に安全に処理されること", async () => {
+      const bridge = createMockBridge({
+        status: "connected",
+        email: "user@example.com",
+      });
+      vi.mocked(bridge.signOut).mockRejectedValueOnce(
+        new Error("Sign out failed"),
+      );
+      const appSettings = createMockAppSettings();
+      const syncEngine = createMockSyncEngine();
+      vi.mocked(syncEngine.sync).mockRejectedValueOnce({
+        status: 401,
+        message: "Token expired",
+      });
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+          syncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.authState.status).toBe("connected");
+      });
+
+      await act(async () => {
+        await result.current.syncNow();
+      });
+
+      expect(result.current.authState.status).toBe("unlinked");
+      expect(result.current.error).toContain("解除");
+    });
+
+    it("initialize 実行中に非Error例外（文字列）が発生した場合、エラーメッセージが設定されること", async () => {
+      const bridge = createMockBridge();
+      vi.mocked(bridge.getAuthState).mockRejectedValueOnce(
+        "Bridge string error",
+      );
+      const appSettings = createMockAppSettings();
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.error).toBe("Bridge string error");
+      });
+    });
+
+    it("signIn 処理中または例外発生時にコンポーネントがアンマウントされていた場合、安全に早期リターンすること", async () => {
+      const bridge = createMockBridge();
+      let resolveSignIn!: (val: unknown) => void;
+      bridge.signIn = vi.fn().mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveSignIn = resolve;
+          }),
+      );
+      const appSettings = createMockAppSettings();
+
+      const { result, unmount } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.authState.status).toBe("unlinked");
+      });
+
+      let promise: Promise<void>;
+      await act(async () => {
+        promise = result.current.signIn();
+      });
+      unmount();
+      await act(async () => {
+        resolveSignIn({ status: "connected", email: "unmounted@example.com" });
+        await promise;
+      });
+
+      // アンマウント後の例外発生パターン
+      let rejectSignIn!: (err: unknown) => void;
+      bridge.signIn = vi.fn().mockImplementation(
+        () =>
+          new Promise((_, reject) => {
+            rejectSignIn = reject;
+          }),
+      );
+
+      const { result: res2, unmount: unmount2 } = renderHook(
+        () => useCloudSync(),
+        {
+          wrapper: createWrapper({
+            cloudSyncBridge: bridge,
+            appSettingsRepository: appSettings,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(res2.current.authState.status).toBe("unlinked");
+      });
+
+      let p2: Promise<void>;
+      await act(async () => {
+        p2 = res2.current.signIn();
+      });
+      unmount2();
+      await act(async () => {
+        rejectSignIn(new Error("Unmounted error"));
+        await p2;
+      });
+    });
+
+    it("syncNow 例外発生時にコンポーネントがアンマウントされていた場合、安全に早期リターンすること", async () => {
+      const bridge = createMockBridge({
+        status: "connected",
+        email: "user@example.com",
+      });
+      const appSettings = createMockAppSettings();
+      const syncEngine = createMockSyncEngine();
+      let rejectSync!: (err: unknown) => void;
+      syncEngine.sync = vi.fn().mockImplementation(
+        () =>
+          new Promise((_, reject) => {
+            rejectSync = reject;
+          }),
+      );
+
+      const { result, unmount } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+          syncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.authState.status).toBe("connected");
+      });
+
+      let promise: Promise<void>;
+      await act(async () => {
+        promise = result.current.syncNow();
+      });
+      unmount();
+      await act(async () => {
+        rejectSync(new Error("Unmounted sync error"));
+        await promise;
+      });
     });
   });
 });

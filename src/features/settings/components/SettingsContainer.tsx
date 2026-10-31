@@ -1,5 +1,6 @@
 import React from "react";
 import { useSettings } from "../hooks/useSettings";
+import { useCloudSync } from "../hooks/useCloudSync";
 import { SettingsPage } from "./SettingsPage";
 
 export interface SettingsContainerProps {
@@ -8,12 +9,12 @@ export interface SettingsContainerProps {
 }
 
 /**
- * 設定画面（SCR-05）の Container コンポーネント（AC-ST-03, AC-ST-04, AC-ST-05）
+ * 設定画面（SCR-05）の Container コンポーネント（AC-ST-03, AC-ST-04, AC-ST-05, AC-ST-08〜12）
  *
- * useSettings フックを呼び出し、SettingsPage に組版設定（組み方向・テーマ・文字サイズ・行間）
- * および設定変更コールバックを注入する。
+ * useSettings および useCloudSync フックを呼び出し、SettingsPage に組版設定（組み方向・テーマ・文字サイズ・行間）
+ * および Google Drive クラウド同期状態・操作コールバックを注入する。
  *
- * @see docs/specs/features/settings.md §3.3
+ * @see docs/specs/features/settings.md §3.4
  */
 export const SettingsContainer: React.FC<SettingsContainerProps> = ({
   className,
@@ -31,6 +32,16 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
     changeLineHeight,
   } = useSettings();
 
+  const {
+    authState: cloudSyncAuthState,
+    lastSyncedAt: cloudSyncLastSyncedAt,
+    isSyncing: isCloudSyncing,
+    error: cloudSyncError,
+    signIn: onSignInGoogle,
+    signOut: onSignOutGoogle,
+    syncNow: onSyncNow,
+  } = useCloudSync();
+
   return (
     <SettingsPage
       writingMode={writingMode}
@@ -39,10 +50,17 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
       lineHeight={lineHeight}
       isLoading={isLoading}
       error={error}
+      cloudSyncAuthState={cloudSyncAuthState}
+      cloudSyncLastSyncedAt={cloudSyncLastSyncedAt}
+      isCloudSyncing={isCloudSyncing}
+      cloudSyncError={cloudSyncError}
       onToggleWritingMode={toggleWritingMode}
       onChangeTheme={changeTheme}
       onChangeFontSize={changeFontSize}
       onChangeLineHeight={changeLineHeight}
+      onSignInGoogle={onSignInGoogle}
+      onSignOutGoogle={onSignOutGoogle}
+      onSyncNow={onSyncNow}
       className={className}
     />
   );

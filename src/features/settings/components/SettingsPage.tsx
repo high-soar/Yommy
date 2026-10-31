@@ -1,6 +1,8 @@
 import React from "react";
 import type { WritingMode, ReaderTheme } from "../../../storage/types";
+import type { CloudSyncAuthState } from "../../../bridges/cloud-sync/types";
 import { SampleTextPreview } from "./SampleTextPreview";
+import { CloudSyncSection } from "./CloudSyncSection";
 
 export interface SettingsPageProps {
   /** 現在の組み方向 */
@@ -21,6 +23,20 @@ export interface SettingsPageProps {
   onChangeFontSize: (nextSizePx: number) => void;
   /** 行間変更ボタン押下時のコールバック */
   onChangeLineHeight: (nextHeight: number) => void;
+  /** Google アカウント認証状態（v0.4） */
+  cloudSyncAuthState?: CloudSyncAuthState;
+  /** 最終同期完了日時（ISO 8601、v0.4） */
+  cloudSyncLastSyncedAt?: string | null;
+  /** クラウド同期処理中フラグ（v0.4） */
+  isCloudSyncing?: boolean;
+  /** クラウド同期エラーメッセージ（v0.4） */
+  cloudSyncError?: string | null;
+  /** Google 連携ボタン押下時のコールバック（v0.4） */
+  onSignInGoogle?: () => Promise<void>;
+  /** Google 連携解除ボタン押下時のコールバック（v0.4） */
+  onSignOutGoogle?: () => Promise<void>;
+  /** 今すぐ同期ボタン押下時のコールバック（v0.4） */
+  onSyncNow?: () => Promise<void>;
   /** エラーメッセージ（省略時: null） */
   error?: string | null;
   /** 追加の CSS クラス（任意） */
@@ -101,10 +117,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   lineHeight = 1.8,
   isLoading = false,
   error = null,
+  cloudSyncAuthState = { status: "unlinked" },
+  cloudSyncLastSyncedAt = null,
+  isCloudSyncing = false,
+  cloudSyncError = null,
   onToggleWritingMode,
   onChangeTheme,
   onChangeFontSize,
   onChangeLineHeight,
+  onSignInGoogle,
+  onSignOutGoogle,
+  onSyncNow,
   className,
 }) => {
   const rootClasses =
@@ -307,7 +330,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         <section
           data-testid="preview-section"
           aria-label="組版プレビュー"
-          className="space-y-4"
+          className="space-y-4 mb-8"
         >
           <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
             組版プレビュー
@@ -319,6 +342,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             lineHeight={lineHeight}
           />
         </section>
+
+        <CloudSyncSection
+          authState={cloudSyncAuthState}
+          lastSyncedAt={cloudSyncLastSyncedAt}
+          isSyncing={isCloudSyncing}
+          error={cloudSyncError}
+          onSignIn={onSignInGoogle}
+          onSignOut={onSignOutGoogle}
+          onSyncNow={onSyncNow}
+        />
       </div>
     </div>
   );

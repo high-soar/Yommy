@@ -68,6 +68,7 @@ export function useBookshelf(
     parserRegistry,
     novelRepository,
     appSettingsRepository,
+    syncEngine,
     isReady,
   } = useServices();
 
@@ -219,6 +220,26 @@ export function useBookshelf(
         if (autoTargets.length > 0) {
           runSequentialUpdateCheck(autoTargets);
         }
+
+        // クラウド同期連携: 初回自動 Pull (AC-BS-13)
+        if (syncEngine) {
+          syncEngine
+            .pullAndMerge()
+            .then(async () => {
+              if (!cancelled && isMountedRef.current) {
+                const refreshed = await novelRepository.listNovels(
+                  sortOrderRef.current,
+                );
+                if (!cancelled && isMountedRef.current) {
+                  setNovels(refreshed);
+                  novelsRef.current = refreshed;
+                }
+              }
+            })
+            .catch(() => {
+              // オフライン時等の Pull 失敗は既存表示を維持
+            });
+        }
       } catch (err: unknown) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : String(err));
@@ -237,7 +258,53 @@ export function useBookshelf(
     isReady,
     novelRepository,
     runSequentialUpdateCheck,
+    syncEngine,
   ]);
+
+  // バックグラウンド復帰時の自動 Pull（休止5分以上経過検知: AC-BS-13）
+  useEffect(() => {
+    let lastHiddenAt: number | null = null;
+    const backgroundThresholdMs = 5 * 60 * 1000; // 5分 (300,000ms)
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        lastHiddenAt = Date.now();
+      } else if (document.visibilityState === "visible") {
+        if (lastHiddenAt !== null) {
+          const elapsed = Date.now() - lastHiddenAt;
+          lastHiddenAt = null;
+          if (elapsed >= backgroundThresholdMs && syncEngine) {
+            syncEngine
+              .pullAndMerge()
+              .then(async () => {
+                if (isMountedRef.current) {
+                  const refreshed = await novelRepository.listNovels(
+                    sortOrderRef.current,
+                  );
+                  if (isMountedRef.current) {
+                    setNovels(refreshed);
+                    novelsRef.current = refreshed;
+                  }
+                }
+              })
+              .catch(() => {});
+          }
+        }
+      }
+    };
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
+    return () => {
+      if (typeof document !== "undefined") {
+        document.removeEventListener(
+          "visibilitychange",
+          handleVisibilityChange,
+        );
+      }
+    };
+  }, [novelRepository, syncEngine]);
 
   const setSortOrder = useCallback(
     async (order: BookshelfSortOrder): Promise<void> => {
@@ -304,6 +371,60 @@ export function useBookshelf(
     }
   }, [novelRepository]);
 
+  const deleteNovel = useCallback(
+    async (novelId: string): Promise<void> => {
+      try {
+        await novelRepository.deleteNovel(novelId);
+        if (syncEngine) {
+          syncEngine.notifyChanged().catch(() => {});
+        }
+        if (isMountedRef.current) {
+          const updated = await novelRepository.listNovels(
+            sortOrderRef.current,
+          );
+          setNovels(updated);
+          novelsRef.current = updated;
+          setError(null);
+        }
+      } catch (err: unknown) {
+        if (isMountedRef.current) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      }
+    },
+    [novelRepository, syncEngine],
+  );
+
+  const addNovel = useCallback(
+    async (url: string): Promise<void> => {
+      try {
+        const parser = parserRegistry.requireParser(url);
+        const res = await httpClient.getHtml({ url });
+        const parsed = parser.parseNovelIndex(res.html, url);
+        await novelRepository.upsertNovelWithToc(
+          parsed,
+          new Date().toISOString(),
+        );
+        if (syncEngine) {
+          syncEngine.notifyChanged().catch(() => {});
+        }
+        if (isMountedRef.current) {
+          const updated = await novelRepository.listNovels(
+            sortOrderRef.current,
+          );
+          setNovels(updated);
+          novelsRef.current = updated;
+          setError(null);
+        }
+      } catch (err: unknown) {
+        if (isMountedRef.current) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      }
+    },
+    [httpClient, novelRepository, parserRegistry, syncEngine],
+  );
+
   return {
     novels,
     isLoading,
@@ -315,5 +436,7 @@ export function useBookshelf(
     checkUpdates,
     reloadNovels,
     clearNovelUpdate,
+    deleteNovel,
+    addNovel,
   };
 }

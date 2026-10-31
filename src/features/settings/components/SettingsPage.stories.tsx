@@ -108,3 +108,23 @@ export const WithError: Story = {
     error: "設定の保存に失敗しました。時間をおいて再試行してください。",
   },
 };
+
+/**
+ * クラウド同期連携中表示（cloudSyncAuthState: connected）
+ */
+export const CloudSyncConnected: Story = {
+  name: "クラウド同期連携中",
+  args: {
+    writingMode: "vertical-rl",
+    theme: "light",
+    fontSizePx: 18,
+    lineHeight: 1.8,
+    isLoading: false,
+    cloudSyncAuthState: {
+      status: "connected",
+      email: "user@example.com",
+    },
+    cloudSyncLastSyncedAt: "2026-10-31T12:00:00.000Z",
+    isCloudSyncing: false,
+  },
+};
