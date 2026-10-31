@@ -3,7 +3,7 @@ type: spec-delta
 title: "Google Drive（appDataFolder）による本棚・しおり・既読状態のクラウド同期機能の設計"
 description: "Issue #120 に対する差分仕様、影響する全体正本、テスト計画、および実装Sub-issue分割計画。"
 issue: "#120"
-status: "Review (#120)"
+status: "Completed (Archived)"
 updated: "2026-10-31"
 tags:
   - delta
