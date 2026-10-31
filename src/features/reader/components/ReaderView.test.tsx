@@ -848,7 +848,7 @@ describe("ReaderView", () => {
       expect(onTotalPagesChange).not.toHaveBeenCalled();
     });
 
-    it("実効 paged モードのときに scroll イベントが発生しても onScrollProgressChange は呼び出されないこと", () => {
+    it("実効 paged モードであっても scroll イベントが発生した際に onScrollProgressChange が呼び出され進捗が通知されること", () => {
       const onProgress = vi.fn();
       render(
         <ReaderView
@@ -860,8 +860,13 @@ describe("ReaderView", () => {
       );
 
       const container = screen.getByTestId("reader-view");
+      mockElementDimensions(container, {
+        scrollWidth: 1000,
+        clientWidth: 500,
+      });
+      container.scrollLeft = -250;
       fireEvent.scroll(container);
-      expect(onProgress).not.toHaveBeenCalled();
+      expect(onProgress).toHaveBeenCalledWith(0.5);
     });
   });
 

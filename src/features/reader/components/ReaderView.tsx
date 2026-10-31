@@ -189,25 +189,23 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     onTotalPagesChange,
   ]);
 
-  // スクロール操作時の進捗率（0.0 〜 1.0）算出（実効 scroll 時）
+  // スクロール操作時の進捗率（0.0 〜 1.0）算出
   const handleScroll = useCallback(() => {
-    if (isPaged) return;
     const el = containerRef.current;
     if (!el) return;
     if (!onScrollProgressChange) return;
 
     const progress = calculateScrollProgress(el, writingMode);
     onScrollProgressChange(progress);
-  }, [isPaged, writingMode, onScrollProgressChange]);
+  }, [writingMode, onScrollProgressChange]);
 
-  // マウント時および bodyHtml / writingMode / initialScrollProgress / pagingMode 変化時のスクロール位置復元（実効 scroll 時）
+  // マウント時および bodyHtml / writingMode / initialScrollProgress / pagingMode 変化時のスクロール位置復元
   useEffect(() => {
-    if (isPaged) return;
     const el = containerRef.current;
     if (!el) return;
 
     restoreScrollPosition(el, writingMode, initialScrollProgress);
-  }, [isPaged, initialScrollProgress, bodyHtml, writingMode, pagingMode]);
+  }, [initialScrollProgress, bodyHtml, writingMode, pagingMode]);
 
   // pageWidth はコンテナの clientWidth（取得できない場合は 0）
   const pageWidth = containerRef.current?.clientWidth ?? containerWidth;
