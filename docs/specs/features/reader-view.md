@@ -1,8 +1,8 @@
 ---
 type: spec-feature
 title: "小説リーダー画面仕様書（SCR-03: Novel Reader）"
-description: "小説本文の全画面（100dvh）縦書き・横書き組版表示、最下部タッチによる下部オーバーレイ（ReaderBottomOverlay: 前後話ナビ＋下部タブ）、ルビ・傍点描画、4カラーテーマ・文字サイズ・行間設定の永続化、前後エピソード遷移、未キャッシュ話のオンデマンド取得、既読・しおり・スクロール進捗率の自動保存/復元、およびSCN-01統合シナリオの正本仕様。"
-status: "Review (#120)"
+description: "小説本文の全画面（100dvh）縦書き・横書き組版表示、ページめくり（タップ/Kindle様式スワイプ送り）と連続スクロール切替、エピソード端シームレス遷移、最下部タッチによる下部オーバーレイ（ReaderBottomOverlay: 前後話ナビ＋下部タブ）、ルビ・傍点描画、4カラーテーマ・文字サイズ・行間設定の永続化、前後エピソード遷移、未キャッシュ話のオンデマンド取得、既読・しおり・進捗率の自動保存/復元、およびSCN-01統合シナリオの正本仕様。"
+status: "Review (#122)"
 updated: "2026-10-31"
 tags:
   - reader
@@ -22,7 +22,13 @@ tags:
   - cache-rules
   - cloud-sync
   - google-drive
+  - paging
+  - swipe
+  - gestures
+  - kindle
+  - snap-back
 related_specs:
+  - docs/specs/changes/issue-122-reader-page-turning.md
   - docs/specs/changes/issue-120-cloud-sync-google-drive.md
   - docs/specs/architecture.md
   - docs/specs/requirements.md
@@ -77,8 +83,8 @@ related_tests:
   - `SYS-REQ-08`（全画面 `100dvh` での縦書き `vertical-rl` / 横書き `horizontal-tb` 表示）
   - `SYS-REQ-09`（文字サイズ `fontSizePx`・行間 `lineHeight` のカスタマイズと永続化 ※設定画面 `SCR-05` で変更、余白・フォント種別は `v0.4`）
   - `SYS-REQ-10`（4カラーテーマ `light` / `sepia` / `dark` / `black` 切り替え ※設定画面 `SCR-05` で変更）
-  - `SYS-REQ-11`（全画面連続スクロール、最下部タッチによる `ReaderBottomOverlay` 開閉、および前後話ナビゲーションによる前話・次話への連続遷移 ※1画面タップ/音量キー送りは `v0.4`）
-  - `SYS-REQ-12`（しおり話数 `bookmark_chapter_index`・本文スクロール進捗率 `bookmark_scroll_progress` の自動保存・復元、OSバックキー・下部タブ遷移時の `flushBookmark` 実行、および既読フラグ `is_read` の自動更新）
+  - `SYS-REQ-11`（全画面表示でのページ送りモード［自動/ページめくり/スクロール］切替、1ページ組版［行途切れ防止］、横スライドアニメーション、ページインジケーター表示、Kindle様式のリアルタイム指追従スワイプ・30%規定値スナップバック・画面左右約20%タップ送り、画面中央タップオーバーレイ開閉、エピソード端でのシームレス前後話遷移［ラバーバンド離上遷移およびスクロール2段階操作遷移］）
+  - `SYS-REQ-12`（しおり話数 `bookmark_chapter_index`・本文進捗率 `bookmark_scroll_progress` の自動保存・復元、ページめくりモードとスクロールモードの進捗連動、OSバックキー・下部タブ遷移時の `flushBookmark` 実行、および既読フラグ `is_read` の自動更新）
   - `SYS-REQ-16`（100dvh 全画面シェル・下部タブバー連携・OSバックキー論理階層復帰）
   - `SYS-REQ-20`（下部4タブバー・リーダーオーバーレイ4タブ化）
 - **関連画面遷移**:
@@ -89,7 +95,8 @@ related_tests:
   - `TR-05`（`SCR-03` 内の下部オーバーレイ「前の話へ」「次の話へ」操作による同一作品の前後エピソード `chapterIndex ± 1` への遷移）
   - `TR-06`（OS バックキーまたは下部オーバーレイの4タブ遷移によりスクロール進捗率を保存して `SCR-02` `/novels/:novelId`、または各タブへ遷移）
 - **対象外スコープ（後続 Milestone）**:
-  - 画面左右タップ（`enableTapPaging`）およびハードウェア音量キー（`enableVolumeKeyPaging`）による1画面ジャンプ送り（Milestone `v0.4`：`SYS-REQ-11` 拡張）
+  - ハードウェア音量キー（`enableVolumeKeyPaging`）による1画面ジャンプ送り（Milestone `v0.4`：`SYS-REQ-11` 拡張、本Issueでは対象外）
+  - 3D カール等の過剰な描画エフェクト（2D 横スライドアニメーションを採用）
   - 画面余白（`pageMarginPx`）・フォント種別（`fontFamily`）の UI カスタマイズ（Milestone `v0.4`：`SYS-REQ-09` 拡張）
   - 取得失敗時の内蔵 WebView フォールバック遷移 `TR-10`（Milestone `v0.4`：`SYS-REQ-13`）
 
@@ -197,17 +204,22 @@ src/features/reader/
 
 #### プロパティ契約（`ReaderViewProps`）
 
-| プロパティ名             | 型                           | 必須 | 既定値          | 説明                                                                         |
-| :----------------------- | :--------------------------- | :--- | :-------------- | :--------------------------------------------------------------------------- |
-| `title`                  | `string`                     | 任意 | -               | 作品タイトル                                                                 |
-| `chapterTitle`           | `string`                     | 任意 | -               | 各話サブタイトル                                                             |
-| `bodyHtml`               | `string`                     | 必須 | -               | サニタイズ済み本文 HTML（ルビ `<ruby>`, 傍点 `<em class="bouten">` 含む）    |
-| `writingMode`            | `WritingMode`                | 任意 | `'vertical-rl'` | 組み方向（`'vertical-rl'` または `'horizontal-tb'`）                         |
-| `theme`                  | `ReaderTheme`                | 任意 | `'light'`       | 背景・文字色テーマ（`'light'`, `'sepia'`, `'dark'`, `'black'`）              |
-| `fontSizePx`             | `number`                     | 任意 | `18`            | 文字サイズ (px)                                                              |
-| `lineHeight`             | `number`                     | 任意 | `1.8`           | 行間倍率                                                                     |
-| `initialScrollProgress`  | `number`                     | 任意 | `0`             | 初期復元するスクロール進捗率（`0.0 〜 1.0`）                                 |
-| `onScrollProgressChange` | `(progress: number) => void` | 任意 | -               | ユーザースクロール時に算出された進捗率（`0.0 〜 1.0`）を通知するコールバック |
+| プロパティ名             | 型                           | 必須 | 既定値          | 説明                                                                                 |
+| :----------------------- | :--------------------------- | :--- | :-------------- | :----------------------------------------------------------------------------------- |
+| `title`                  | `string`                     | 任意 | -               | 作品タイトル                                                                         |
+| `chapterTitle`           | `string`                     | 任意 | -               | 各話サブタイトル                                                                     |
+| `bodyHtml`               | `string`                     | 必須 | -               | サニタイズ済み本文 HTML（ルビ `<ruby>`, 傍点 `<em class="bouten">` 含む）            |
+| `writingMode`            | `WritingMode`                | 任意 | `'vertical-rl'` | 組み方向（`'vertical-rl'` または `'horizontal-tb'`）                                 |
+| `theme`                  | `ReaderTheme`                | 任意 | `'light'`       | 背景・文字色テーマ（`'light'`, `'sepia'`, `'dark'`, `'black'`）                      |
+| `fontSizePx`             | `number`                     | 任意 | `18`            | 文字サイズ (px)                                                                      |
+| `lineHeight`             | `number`                     | 任意 | `1.8`           | 行間倍率                                                                             |
+| `initialScrollProgress`  | `number`                     | 任意 | `0`             | 初期復元する進捗率（`0.0 〜 1.0`）                                                   |
+| `pagingMode`             | `ReaderPagingMode`           | 任意 | `'auto'`        | ページ送りモード（`'auto'`, `'paged'`, `'scroll'`、v0.4 Issue #122）                 |
+| `currentPage`            | `number`                     | 任意 | `1`             | ページめくり表示時の現在ページ番号（1始まり）                                        |
+| `totalPages`             | `number`                     | 任意 | `1`             | ページめくり表示時の総ページ数                                                       |
+| `slideOffsetPx`          | `number`                     | 任意 | `0`             | スワイプドラッグ中のリアルタイムスライド変位量 (px)                                  |
+| `isAnimating`            | `boolean`                    | 任意 | `false`         | ページ遷移アニメーション中フラグ                                                     |
+| `onScrollProgressChange` | `(progress: number) => void` | 任意 | -               | スクロールまたはページ変更時に算出された進捗率（`0.0 〜 1.0`）を通知するコールバック |
 
 #### セマンティック属性と組版・スクロール仕様
 
@@ -217,13 +229,26 @@ src/features/reader/
   - `data-theme`: 現在のカラーテーマ（`"light"`, `"sepia"`, `"dark"`, `"black"`）
   - `data-font-size`: 現在の文字サイズ数値（`String(fontSizePx)`）
   - `data-line-height`: 現在の行間倍率（`String(lineHeight)`）
-- **全画面レイアウト ＆ スタイル**:
-  - カード装飾（`rounded-lg border shadow-sm`）および高さ制限（`h-[70vh] / max-h-[70vh]`）を撤廃し、画面全体（`h-full w-full`）をフルに使って本文を表示する。
-  - 縦書き時: CSS `writing-mode: vertical-rl`、`text-orientation: mixed`、水平スクロール（`overflow-x-auto overflow-y-hidden`）。直交フロー（Orthogonal Flow）での横幅膨張を防ぐため `w-full max-w-full` を指定。
+  - `data-paging-mode`: 設定されたページ送りモード（`"auto"`, `"paged"`, `"scroll"`）
+  - `data-effective-paging-mode`: 実効ページ送りモード（`"paged"` または `"scroll"`）
+  - `data-current-page`: ページめくり表示時の現在ページ番号
+  - `data-total-pages`: ページめくり表示時の総ページ数
+- **実効ページ送りモード（`effectivePagingMode`）の算出**:
+  - `pagingMode === 'paged'`: 常に `"paged"`
+  - `pagingMode === 'scroll'`: 常に `"scroll"`
+  - `pagingMode === 'auto'`: `writingMode === 'vertical-rl' ? "paged" : "scroll"`
+- **1ページ単位の組版（実効 `"paged"` 時）**:
+  - 画面端で行が縦半分に途切れることを防ぐため、ビューポート寸法に応じた 1 ページ区切りの組版（マルチカラム `column-width` / `column-gap` / `column-fill: auto`、またはコンテナ寸法に基づくページ分割スライド）を適用する。
+  - ページ送り時は、横スライドアニメーション（150〜250ms、`transition: transform 200ms ease-out`）でなめらかに遷移する。
+  - ドラッグ操作中は `slideOffsetPx` に応じてリアルタイムに表示が水平追従スライドする。
+  - 画面隅に控えめなページインジケーター（`data-testid="reader-page-indicator"`、例: `3 / 12`）を表示する。
+- **連続スクロール仕様（実効 `"scroll"` 時）**:
+  - 縦書き時: CSS `writing-mode: vertical-rl`、`text-orientation: mixed`、水平スクロール（`overflow-x-auto overflow-y-hidden`）。
   - 横書き時: CSS `writing-mode: horizontal-tb`、垂直スクロール（`overflow-y-auto overflow-x-hidden`）。
+- **共通スタイル・禁則処理**:
   - フォント: 日本語明朝体（`font-serif`）をベースとし、禁則処理（`line-break: strict; word-break: break-word`）を適用。
   - ルビ・傍点: `<ruby>` はブラウザ標準のルビ表示、`<em class="bouten">` は CSS `text-emphasis: filled sesame`（セサミ傍点）で描画。
-  - Storybook / VRT バリエーション: 4カラーテーマ・縦書き/横書き・カスタム組版・初期スクロール位置に加え、1280px / 375px の双方で画面幅を超える長文データを用いた水平スクロール（Overflow）検証ストーリー（`VerticalLongContent`）を備える。
+  - Storybook / VRT バリエーション: 4カラーテーマ・縦書き/横書き・ページめくり/スクロール双方の検証ストーリーを備える。
 - **縦書き・横書き双方のスクロール進捗率（`0.0 〜 1.0`）算出・復元アルゴリズム**:
   1. **横書き（`horizontal-tb`、上→下の垂直スクロール）**:
      - 最大スクロール量: `maxScroll = element.scrollHeight - element.clientHeight`
@@ -234,50 +259,75 @@ src/features/reader/
      - 最大スクロール量: `maxScroll = element.scrollWidth - element.clientWidth`
      - 進捗率算出: `progress = maxScroll > 0 ? Math.min(1, Math.max(0, Math.abs(element.scrollLeft) / maxScroll)) : 0`
      - 位置復元: `maxScroll > 0` のとき `element.scrollLeft = -clampedInitialProgress * maxScroll`（`maxScroll <= 0` のときは `0`）
-  3. **スクロール位置復元の発火トリガー条件**:
-     - マウント時、および `initialScrollProgress`・`bodyHtml`（エピソード切替時）・`writingMode`（縦書き/横書き切替時）のいずれかが変化したタイミングで、`clampedInitialProgress = Math.min(1, Math.max(0, initialScrollProgress))` に基づくスクロール位置復元を実行する。
+  3. **ページめくり表示（実効 `"paged"`）時の進捗率（`0.0 〜 1.0`）算出・復元アルゴリズム**:
+     - 総ページ数 $P_{total}$、現在ページ $P_{current}$（1始まり）のとき：
+       - 進捗率算出: `progress = totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0`
+       - ページ復元: `targetPage = totalPages > 1 ? Math.round(clampedInitialProgress * (totalPages - 1)) + 1 : 1`
+  4. **位置復元の発火トリガー条件**:
+     - マウント時、および `initialScrollProgress`・`bodyHtml`（エピソード切替時）・`writingMode`（縦書き/横書き切替時）・`pagingMode`（ページ送りモード切替時）のいずれかが変化したタイミングで、進捗率に基づく位置復元を実行する。
 
 ---
 
 ### 3.5 `ReaderPage`（リーダー画面 Presentational コンポーネント）
 
-全画面本文（`ReaderView`）と最下部タッチ連動の下部オーバーレイ（`ReaderBottomOverlay`）、および状態別表示（ローディング・エラー・空状態）を統合する画面レイアウトコンポーネントです。
+全画面本文（`ReaderView`）と最下部タッチ連動の下部オーバーレイ（`ReaderBottomOverlay`）、Kindle様式のジェスチャー操作、エピソード境界シームレス遷移、および状態別表示（ローディング・エラー・空状態）を統合する画面レイアウトコンポーネントです。
 
 #### プロパティ契約（`ReaderPageProps`）
 
-| プロパティ名             | 型                           | 必須 | 説明                                                |
-| :----------------------- | :--------------------------- | :--- | :-------------------------------------------------- |
-| `novel`                  | `NovelRecord \| null`        | 必須 | 現在の作品レコード                                  |
-| `chapter`                | `ChapterRecord \| null`      | 必須 | 現在のエピソードレコード                            |
-| `chapterIndex`           | `number`                     | 必須 | 現在のエピソード連番（1始まり）                     |
-| `totalChapters`          | `number`                     | 必須 | 作品の全エピソード数                                |
-| `writingMode`            | `WritingMode`                | 必須 | 現在の組み方向                                      |
-| `theme`                  | `ReaderTheme`                | 必須 | 現在のカラーテーマ                                  |
-| `fontSizePx`             | `number`                     | 必須 | 現在の文字サイズ (px)                               |
-| `lineHeight`             | `number`                     | 必須 | 現在の行間倍率                                      |
-| `initialScrollProgress`  | `number`                     | 必須 | 初期復元するスクロール進捗率（`0.0 〜 1.0`）        |
-| `isLoading`              | `boolean`                    | 必須 | 読み込み・通信中フラグ                              |
-| `error`                  | `string \| null`             | 任意 | エラーメッセージ文字列                              |
-| `activeTab`              | `BottomTab`                  | 任意 | リーダー画面の論理所属タブ（既定値: `"bookshelf"`） |
-| `onPrevChapter`          | `() => void`                 | 必須 | 「前の話へ」押下時（`TR-05`）                       |
-| `onNextChapter`          | `() => void`                 | 必須 | 「次の話へ」押下時（`TR-05`）                       |
-| `onScrollProgressChange` | `(progress: number) => void` | 必須 | 本文スクロール進捗変化時                            |
-| `onSelectTab`            | `(tab: BottomTab) => void`   | 任意 | 下部タブ押下時                                      |
-| `initialOverlayOpen`     | `boolean`                    | 任意 | `false`（エラー/空状態時は `true`）                 | オーバーレイ初期展開状態制御用 |
+| プロパティ名             | 型                           | 必須 | 説明                                                  |
+| :----------------------- | :--------------------------- | :--- | :---------------------------------------------------- |
+| `novel`                  | `NovelRecord \| null`        | 必須 | 現在の作品レコード                                    |
+| `chapter`                | `ChapterRecord \| null`      | 必須 | 現在のエピソードレコード                              |
+| `chapterIndex`           | `number`                     | 必須 | 現在のエピソード連番（1始まり）                       |
+| `totalChapters`          | `number`                     | 必須 | 作品の全エピソード数                                  |
+| `writingMode`            | `WritingMode`                | 必須 | 現在の組み方向                                        |
+| `theme`                  | `ReaderTheme`                | 必須 | 現在のカラーテーマ                                    |
+| `fontSizePx`             | `number`                     | 必須 | 現在の文字サイズ (px)                                 |
+| `lineHeight`             | `number`                     | 必須 | 現在の行間倍率                                        |
+| `initialScrollProgress`  | `number`                     | 必須 | 初期復元する進捗率（`0.0 〜 1.0`）                    |
+| `pagingMode`             | `ReaderPagingMode`           | 任意 | ページ送りモード（省略時: `'auto'`、v0.4 Issue #122） |
+| `isLoading`              | `boolean`                    | 必須 | 読み込み・通信中フラグ                                |
+| `error`                  | `string \| null`             | 任意 | エラーメッセージ文字列                                |
+| `activeTab`              | `BottomTab`                  | 任意 | リーダー画面の論理所属タブ（既定値: `"bookshelf"`）   |
+| `onPrevChapter`          | `() => void`                 | 必須 | 「前の話へ」押下時（`TR-05`）                         |
+| `onNextChapter`          | `() => void`                 | 必須 | 「次の話へ」押下時（`TR-05`）                         |
+| `onScrollProgressChange` | `(progress: number) => void` | 必須 | 本文スクロール／ページ進捗変化時                      |
+| `onSelectTab`            | `(tab: BottomTab) => void`   | 任意 | 下部タブ押下時                                        |
+| `initialOverlayOpen`     | `boolean`                    | 任意 | `false`（エラー/空状態時は `true`）                   |
 
-#### セマンティック属性とレイアウト・排他描画ルール
+#### セマンティック属性とレイアウト・ジェスチャー仕様
 
 - **画面ルート**: `data-testid="reader-page"`（外枠パディングなし、`h-dvh w-full overflow-hidden relative`）
+- **Kindle様式タッチ・ジェスチャー操作（実効 `"paged"` 時）**:
+  - **リアルタイム指追従（Direct Manipulation）**:
+    - 水平スワイプ中、指の変位量（`deltaX`）に合わせて本文表示が水平スライド追従する。
+  - **規定値判定（30%）とスナップバック（Snap Back）**:
+    - 指離し時に移動量が画面幅の 30% 以上（またはフリック速度一定以上）の場合、次／前ページへめくり完了アニメーションを実行。
+    - 30% 未満の場合はページめくりを行わず、元のページ位置へ滑らかにスナップバック復帰（キャンセル）する。
+  - **縦書き（右開き）のタッチ領域**:
+    - 画面左端（幅約 20%）タップ: 次のページ
+    - 画面右端（幅約 20%）タップ: 前のページ
+    - 画面中央（幅約 60%）タップ: 下部オーバーレイ（`ReaderBottomOverlay`）の開閉
+  - **横書き（左開き）のタッチ領域**:
+    - 画面右端（幅約 20%）タップ: 次のページ
+    - 画面左端（幅約 20%）タップ: 前のページ
+    - 画面中央（幅約 60%）タップ: 下部オーバーレイの開閉
+  - **タップとドラッグの誤判定防止**: 移動 10px 未満かつ 300ms 未満はタップ判定とする。
+- **エピソード境界シームレス遷移（前後話移動）**:
+  - **ページめくり時**:
+    - 最終ページでさらに「次へ」、第 1 ページで「前へ」引いた際はラバーバンド抵抗感（変位減衰）を付与。
+    - 画面幅の 30% 以上引くと案内バッジ（`data-testid="reader-episode-boundary-hint"`、「指を離して次の話へ／前の話へ」）を表示し、指離しで次話先頭（前話末尾）へシームレス遷移。30% 未満で離すとスナップバック。
+  - **連続スクロール時**:
+    - 一度末尾（または先頭）までスクロールしきった状態から、もう一度同方向へスクロール操作を行った場合に限定して次話（前話）へ遷移（誤遷移防止の 2 段階操作）。
 - **最下部タッチゾーン**:
-  - 画面最下部（下端約 72px または画面高さ 15% の領域）へのタップ操作を検知。
-  - **スワイプ誤検知防止**: タッチ開始（`pointerdown`）から終了（`pointerup`）までの移動距離が 10px 未満かつ 500ms 未満のタップ操作時のみオーバーレイ開閉をトグルする（スクロール操作では開閉しない）。
+  - 実効 `"scroll"` モード時、画面最下部（下端約 72px）のタップ操作によりオーバーレイ開閉をトグルする。
 - **自動非表示（Auto-Hide）**:
-  - オーバーレイ表示中に「本文エリアのスクロール操作」「オーバーレイ外（本文エリア）の再タップ」「前後話への移動」が行われた場合は、自動的にオーバーレイを閉じる。
+  - オーバーレイ表示中に「本文エリアのスクロール／ページ送り操作」「本文エリアの再タップ」「前後話への移動」が行われた場合は、自動的にオーバーレイを閉じる。
 - **メイン表示領域の排他描画ルール**:
   1. `error` が非 null の場合: エラー表示要素 `data-testid="reader-error"`（`role="alert"`）を描画し、**下部オーバーレイを最初から開いた状態とする**。
   2. `error === null` かつ `isLoading === true` かつ表示可能な本文（`chapter?.bodyHtml`）が未取得の場合: ローディング表示要素 `data-testid="reader-loading"` を描画する。
   3. `error === null` かつ `isLoading === false` かつ（`novel === null` または `chapter === null` または `chapter.bodyHtml === null`）の場合: 空状態要素 `data-testid="reader-empty"` を描画し、**下部オーバーレイを最初から開いた状態とする**。
-  4. 上記以外（`novel !== null` かつ `chapter?.bodyHtml` が存在する場合）: 全画面 `ReaderView` を描画し、オーバーレイは初期非表示（最下部タッチで開閉可能）とする。
+  4. 上記以外（`novel !== null` かつ `chapter?.bodyHtml` が存在する場合）: 全画面 `ReaderView` を描画し、オーバーレイは初期非表示（画面中央タップまたは最下部タッチで開閉可能）とする。
 
 ---
 
@@ -321,6 +371,10 @@ export interface UseReaderResult {
   lineHeight: number;
   initialScrollProgress: number;
   scrollProgress: number;
+  pagingMode: ReaderPagingMode; // 【新設: v0.4 Issue #122】
+  effectivePagingMode: "paged" | "scroll"; // 【新設: v0.4 Issue #122】
+  currentPage: number; // 【新設: v0.4 Issue #122】
+  totalPages: number; // 【新設: v0.4 Issue #122】
   isLoading: boolean;
   error: string | null;
   hasPrevChapter: boolean;
@@ -329,6 +383,8 @@ export interface UseReaderResult {
   changeTheme: (theme: ReaderTheme) => Promise<void>;
   changeFontSize: (fontSizePx: number) => Promise<void>;
   changeLineHeight: (lineHeight: number) => Promise<void>;
+  changePagingMode: (pagingMode: ReaderPagingMode) => Promise<void>; // 【新設: v0.4 Issue #122】
+  goToPage: (targetPage: number) => void; // 【新設: v0.4 Issue #122】
   updateScrollProgress: (progress: number) => Promise<void>;
   flushBookmark: () => Promise<void>;
   goToChapter: (targetChapterIndex: number) => Promise<boolean>;
@@ -339,8 +395,9 @@ export interface UseReaderResult {
 ### 4.2 パイプライン仕様
 
 1. **設定の初期読み出しと変更永続化**:
-   - マウント時に `settingsRepository.getReaderSettings()` を呼び出し、保存済みの `writingMode`, `theme`, `fontSizePx`（初期値 `18`）, `lineHeight`（初期値 `1.8`）を復元する。
-   - `toggleWritingMode`, `changeTheme`, `changeFontSize`（`12〜32` にクランプ）, `changeLineHeight`（`1.4〜2.4` にクランプ・小数第1位丸め）実行時は、即座に State を更新するとともに `settingsRepository.updateReaderSettings(patch)` で非同期保存する。
+   - マウント時に `settingsRepository.getReaderSettings()` を呼び出し、保存済みの `writingMode`, `theme`, `fontSizePx`（初期値 `18`）, `lineHeight`（初期値 `1.8`）, `pagingMode`（初期値 `'auto'`）を復元する。
+   - `toggleWritingMode`, `changeTheme`, `changeFontSize`（`12〜32` にクランプ）, `changeLineHeight`（`1.4〜2.4` にクランプ・小数第1位丸め）, `changePagingMode`（`'auto' | 'paged' | 'scroll'`）実行時は、即座に State を更新するとともに `settingsRepository.updateReaderSettings(patch)` で非同期保存する。
+   - 実効モード `effectivePagingMode` は、`pagingMode === 'auto' ? (writingMode === 'vertical-rl' ? 'paged' : 'scroll') : pagingMode` として動的に算出する。
 2. **エピソード読み込みとキャッシュ鮮度・オンデマンド取得（`TR-03`, `TR-04`, `TR-05`）**:
    - `novelId` 指定時は `novelRepository.getNovelById(novelId)`、`novelId` 未指定時は `novelRepository.listNovels()` の先頭作品を取得する（未登録時は空状態 `novel = null, chapter = null`）。
    - 対象エピソード `chapterRepository.getChapter(targetNovel.id, targetChapterIndex)` を取得する。
@@ -352,12 +409,12 @@ export interface UseReaderResult {
    - エピソード本文（`bodyHtml !== null`）の表示準備が完了した時点で、`chapter.isRead === false` であれば直ちに `chapterRepository.markChapterRead(targetNovel.id, targetChapterIndex, true)` を実行する。
    - 対象作品の `targetNovel.hasNewUpdate === true` の場合、直ちに `novelRepository.clearNewUpdate(targetNovel.id)` を呼び出して `has_new_update = 0` に解除し、本棚（`SCR-01`）復帰時に「NEW」バッジが消去された状態とする。
    - また「次の話へ」遷移（`TR-05`）実行時にも、現在話に対して `chapterRepository.markChapterRead(targetNovel.id, currentChapterIndex, true)` を確実に実行する。
-4. **しおり（`bookmark_chapter_index`）とスクロール進捗率（`bookmark_scroll_progress`）の復元・自動保存（`SYS-REQ-12`, `TR-06`）**:
+4. **しおり（`bookmark_chapter_index`）と進捗率（`bookmark_scroll_progress`）の復元・自動保存（`SYS-REQ-12`, `TR-06`）**:
    - **エピソード表示開始時**:
-     - `targetNovel.bookmarkChapterIndex === targetChapterIndex`（保存済みしおり話と一致する場合）: 保存済みの `targetNovel.bookmarkScrollProgress`（`0.0 〜 1.0`）を `initialScrollProgress` および `scrollProgress` にセットしてスクロール位置を復元する。
-     - `targetNovel.bookmarkChapterIndex !== targetChapterIndex`（別話を開いた場合、または前後話遷移 `TR-05` 時）: `initialScrollProgress = 0`, `scrollProgress = 0` にセットし、直ちに `novelRepository.updateBookmark(targetNovel.id, targetChapterIndex, 0)` を実行してしおりを現在話の先頭へ更新する。
-   - **スクロール操作時および画面離脱時**:
-     - `updateScrollProgress(progress)` 呼び出し時、`0.0 〜 1.0` にクランプした進捗率で `scrollProgress` を更新し、`novelRepository.updateBookmark(novel.id, chapterIndex, clampedProgress)` で DB へ自動保存する。
+     - `targetNovel.bookmarkChapterIndex === targetChapterIndex`（保存済みしおり話と一致する場合）: 保存済みの `targetNovel.bookmarkScrollProgress`（`0.0 〜 1.0`）を `initialScrollProgress` および `scrollProgress` にセットして位置を復元する。実効 `"paged"` モード時は `targetPage = totalPages > 1 ? Math.round(initialScrollProgress * (totalPages - 1)) + 1 : 1` で現在ページを復元する。
+     - `targetNovel.bookmarkChapterIndex !== targetChapterIndex`（別話を開いた場合、または前後話遷移 `TR-05` 時）: `initialScrollProgress = 0`, `scrollProgress = 0`, `currentPage = 1` にセットし、直ちに `novelRepository.updateBookmark(targetNovel.id, targetChapterIndex, 0)` を実行してしおりを現在話の先頭へ更新する。
+   - **スクロール／ページめくり操作時および画面離脱時**:
+     - ユーザースクロール時またはページ遷移時、算出された進捗率 `progress`（`0.0 〜 1.0`）で `scrollProgress` を更新し、`novelRepository.updateBookmark(novel.id, chapterIndex, clampedProgress)` で DB へ自動保存する。
      - OS バックキー（`TR-06`）による目次復帰、または下部オーバーレイの4タブ（本棚 `TR-01b`、検索/ランキング/設定 `TR-01`）遷移時には、`flushBookmark()` により最新の `(chapterIndex, scrollProgress)` を確実に DB 保存してから画面遷移コールバックを呼び出す。
 5. **前後エピソード遷移（`goToChapter(targetChapterIndex)`、`TR-05`）**:
    - `novel === null`、または `targetChapterIndex < 1` もしくは `targetChapterIndex > totalChapters`（範囲外）が指定された場合は何もせず `false` を返す。
@@ -416,6 +473,12 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
 | **`AC-RD-12`** | 読書中の 5 話自動先読み                     | リーダーで第 $N$ 話を表示完了後、バックグラウンドで $N+1 \sim N+5$ 話が 1.5秒間隔のウェイト制御を挟んで順次キャッシュ取得され、`goToChapter` での移動時やリーダー離脱時に `AbortController` で安全に処理が中断・切り替えられること。また先読み中の通信失敗が現在読書画面にエラーを表示しないこと。 | `SYS-REQ-02, 03` / `TR-05`, `TR-06`                                |
 | **`AC-RD-13`** | キャッシュ鮮度管理とフォールバック          | 取得から 7日以内のキャッシュは通信を行わず即座に本文が表示され、7日以上経過したキャッシュは 3秒短タイムアウトで再取得を試行し、通信タイムアウト・オフライン時には即座に既存キャッシュ本文（`bodyHtml`）を表示へフォールバックしてエラー画面を出さないこと。                                        | `SYS-REQ-02` / `TR-03`, `TR-04`, `TR-05`                           |
 | **`AC-RD-14`** | 読書進行・既読更新時のクラウド同期自動 Push | 前後話移動時（`goToChapter`）や既読更新時（`markChapterRead`）にクラウド同期エンジンへ変更通知が行われ、2〜3秒デバウンスされた上で最新のしおり話数・既読エピソードリストが Google Drive へ自動 Push されること。                                                                                   | `SYS-REQ-06`                                                       |
+| **`AC-RD-15`** | ページ送りモードに応じた組版・表示切替      | ページ送り設定（`auto` / `paged` / `scroll`）に基づき、実効モードが決定されること（`auto` 時は縦書きでページめくり・横書きでスクロール、`paged` で組み方向不問でページめくり、`scroll` で組み方向不問で連続スクロール）。設定変更により即座に組版と操作モードが切り替わること。                    | `SYS-REQ-11`                                                       |
+| **`AC-RD-16`** | 1ページ組版・スライド・ページインジケーター | 実効 `paged` モード時、画面端で行が縦半分に途切れない 1 ページ区切りの組版が適用され、ページ送り時は 150〜250ms の横スライドアニメーションで遷移し、画面隅に `reader-page-indicator`（例: `3 / 12`）が表示されること。                                                                             | `SYS-REQ-11`                                                       |
+| **`AC-RD-17`** | Kindle様式指追従・スナップバック・タップ    | 左右ドラッグ中に表示がリアルタイムに水平追従し、移動距離 30% 以上または高速フリックでページ送りが確定し、30% 未満で離した場合は元の位置へ滑らかにスナップバック復帰すること。また画面左右端約 20% タップで次/前ページめくり、画面中央タップで下部オーバーレイ開閉が動作すること。                  | `SYS-REQ-11`                                                       |
+| **`AC-RD-18`** | ページめくり時のラバーバンドと次話遷移      | 最終ページでさらに次へ、第 1 ページで前へドラッグした際にゴム抵抗感（変位減衰）が付与され、30% 以上引くと案内バッジ（`reader-episode-boundary-hint`）が表示され、指を離すことで次エピソード先頭（または前エピソード末尾）へシームレス遷移すること（30% 未満離上時は留まること）。                  | `SYS-REQ-11` / `TR-05`                                             |
+| **`AC-RD-19`** | 連続スクロール時の2段階誤遷移防止遷移       | 連続スクロールモード時、末尾（または先頭）へ到達した勢いでの誤遷移を防ぐため、一度端まで到達した後に再度同方向へスクロール操作を行った場合に限定して次エピソード（または前エピソード）へ遷移すること。                                                                                             | `SYS-REQ-11` / `TR-05`                                             |
+| **`AC-RD-20`** | ページめくりモードにおける進捗率保存・復元  | ページめくりモードにおいても現在ページ位置を進捗率（`0.0〜1.0`）として算出して DB 保存（`bookmark_scroll_progress`）され、再開時に該当ページ位置が復元されること。またスクロールモードとページめくりモードの切替時にも進捗位置が維持されること。                                                   | `SYS-REQ-12` / `TR-03`, `TR-04`, `TR-06`                           |
 
 ---
 
@@ -429,10 +492,10 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
   3. 作品カード本体（`novel-card-select`）をクリックして `/novels/:novelId`（`SCR-02` 作品詳細・目次画面）へ遷移（`TR-02`）し、作品ヘッダー情報・章見出し・エピソード一覧（`未取得` バッジ）が表示されること、および「目次を更新」ボタン押下で最新状態が通知されることを確認。
   4. 目次一覧から第1話を選択して `/novels/:novelId/chapters/1`（`SCR-03`）へ遷移（`TR-04`）することを確認。
   5. 第1話本文がオンデマンド取得され、外枠余白・枠線のない全画面（`100dvh`）で `reader-view` が表示され、常時固定バーが表示されていないことを確認（`AC-RD-09`）。
-  6. 初期表示が `writing-vertical-rl`（縦書き）であり、本文内の `<ruby>`（ルビ）および `<em class="bouten">`（傍点）が可視状態で正しくレンダリングされていることを確認。
-  7. 画面最下部ゾーンをタップし、下端から `ReaderBottomOverlay`（`data-testid="reader-bottom-overlay"`）がスライドイン表示され、第1話では「前の話へ」（`reader-prev-chapter`）が `disabled` かつ「次の話へ」（`reader-next-chapter`）が有効であること、および下部タブバーが表示されていることを確認（`AC-RD-10`）。
-  8. 縦書き（`writing-vertical-rl`）状態で左方向（負の `scrollLeft`）へ水平スクロール操作を行い、スクロール開始に伴いオーバーレイが自動的に隠れること、および進捗率が自動保存されることを確認。
-  9. ブラウザの戻る操作（OS バックキー相当）により現在のスクロール進捗率を保存して作品詳細（`SCR-02`）へ戻り、「続きから読む（第1話）」（`TR-04`）で再開した際に負の `scrollLeft` 位置が復元されることを確認（`AC-RD-08`）。
-  10. 再度画面最下部ゾーンをタップしてオーバーレイを表示し、「次の話へ」（`reader-next-chapter`）をクリックして `/novels/:novelId/chapters/2` へ遷移（`TR-05`）することを確認。遷移後に第2話本文がオンデマンド取得され、オーバーレイが自動的に隠れることを確認。
-  11. 第2話で最下部タップによりオーバーレイを表示し、「前の話へ」（`reader-prev-chapter`）をクリックして第1話へ戻る遷移（`TR-05`）を確認した後、再度第2話へ進んでスクロール操作を行う。
-  12. オーバーレイを表示して下部タブ「本棚」をタップし、しおり進捗率が DB 保存（`flushBookmark`）された上で本棚画面（`/`）へ遷移（`TR-01b`）することを確認。本棚の作品カードに `しおり: 第2話` が表示され、「第2話から読む」（`novel-card-resume`）で第2話のスクロール位置が復元されること、および最後に `SCR-02` から作品を削除して本棚が空状態になることを確認（`TR-07`）。
+  6. 初期表示が `writing-vertical-rl`（縦書き）であり、デフォルトの `pagingMode="auto"` により実効 `paged`（ページめくりモード）として 1 ページ組版が行われ、本文内の `<ruby>`（ルビ）および `<em class="bouten">`（傍点）が可視状態で正しくレンダリングされ、画面隅にページインジケーター（`reader-page-indicator`）が表示されることを確認（`AC-RD-15`, `AC-RD-16`）。
+  7. 画面中央領域をタップして下端から `ReaderBottomOverlay`（`data-testid="reader-bottom-overlay"`）がスライドイン表示され、第1話では「前の話へ」（`reader-prev-chapter`）が `disabled` かつ「次の話へ」（`reader-next-chapter`）が有効であること、および下部タブバーが表示されていることを確認（`AC-RD-10`, `AC-RD-17`）。再度中央タップで非表示になることを確認。
+  8. 画面左端領域（幅約 20%）をタップして次ページへめくり遷移し、ページインジケーターが更新されること、および最終ページまでめくってさらに次へドラッグ離上することで次話（第2話）へシームレス遷移（`TR-05`）することを確認（`AC-RD-17`, `AC-RD-18`）。
+  9. ブラウザの戻る操作（OS バックキー相当）により現在の進捗率を保存して作品詳細（`SCR-02`）へ戻り、「続きから読む」（`TR-04`）で再開した際に保存された進捗率・ページ位置が復元されることを確認（`AC-RD-08`, `AC-RD-20`）。
+  10. 設定画面（`SCR-05`）で「連続スクロール」を選択してリーダーに戻り、連続スクロール表示へ切り替わること、および末尾到達後の 2 段階スクロールで次話へ遷移できることを確認（`AC-RD-15`, `AC-RD-19`）。
+  11. 第2話でオーバーレイを表示し、「前の話へ」（`reader-prev-chapter`）をクリックして第1話へ戻る遷移（`TR-05`）を確認した後、再度第2話へ進む。
+  12. オーバーレイを表示して下部タブ「本棚」をタップし、しおり進捗率が DB 保存（`flushBookmark`）された上で本棚画面（`/`）へ遷移（`TR-01b`）することを確認。本棚の作品カードに `しおり: 第2話` が表示され、「第2話から読む」（`novel-card-resume`）で第2話の位置が復元されること、および最後に `SCR-02` から作品を削除して本棚が空状態になることを確認（`TR-07`）。

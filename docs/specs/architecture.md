@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Review (#120)"
+status: "Review (#122)"
 updated: "2026-10-31"
 tags:
   - architecture
@@ -21,7 +21,10 @@ tags:
   - cache-rules
   - cloud-sync
   - google-drive
+  - paging
+  - gestures
 related_specs:
+  - docs/specs/changes/issue-122-reader-page-turning.md
   - docs/specs/changes/issue-120-cloud-sync-google-drive.md
   - docs/specs/changes/archive/issue-124-settings-back-button-navigation.md
   - docs/specs/requirements.md
@@ -456,6 +459,21 @@ export interface ChapterRepository {
     novelId: string,
     options?: { onlyRead?: boolean },
   ): Promise<number>;
+}
+
+export type ReaderPagingMode = "auto" | "paged" | "scroll";
+
+export interface ReaderSettings {
+  writingMode: WritingMode;
+  theme: ReaderTheme;
+  fontFamily: ReaderFontFamily;
+  fontSizePx: number;
+  lineHeight: number;
+  pageMarginPx: number;
+  enableTapPaging: boolean;
+  enableVolumeKeyPaging: boolean;
+  pagingMode: ReaderPagingMode;
+  updatedAt: string;
 }
 
 export interface SettingsRepository {
