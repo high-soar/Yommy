@@ -2,7 +2,7 @@
 type: spec-db-schema
 title: ローカル DB スキーマ定義（App 全体正本）
 description: SQLite（novels, chapters, download_queue, reader_settings, app_settings）のER図、テーブル構造、およびDDL定義の正本。
-status: "Review (#120)"
+status: "Review (#122)"
 updated: "2026-10-31"
 tags:
   [
@@ -16,8 +16,10 @@ tags:
     cloud-sync,
     google-drive,
     tombstone,
+    paging,
   ]
 related_specs:
+  - docs/specs/changes/issue-122-reader-page-turning.md
   - docs/specs/changes/issue-120-cloud-sync-google-drive.md
   - docs/specs/requirements.md
   - docs/specs/architecture.md
@@ -236,13 +238,14 @@ CREATE TABLE IF NOT EXISTS reader_settings (
   page_margin_px INTEGER NOT NULL DEFAULT 20,       -- 8 〜 48
   enable_tap_paging INTEGER NOT NULL DEFAULT 1,     -- 0 or 1
   enable_volume_key_paging INTEGER NOT NULL DEFAULT 0, -- 0 or 1
+  paging_mode TEXT NOT NULL DEFAULT 'auto' CHECK (paging_mode IN ('auto', 'paged', 'scroll')), -- 'auto' | 'paged' | 'scroll' (v0.4 Issue #122)
   updated_at TEXT NOT NULL
 );
 
 INSERT OR IGNORE INTO reader_settings (
-  id, writing_mode, theme, font_family, font_size_px, line_height, page_margin_px, enable_tap_paging, enable_volume_key_paging, updated_at
+  id, writing_mode, theme, font_family, font_size_px, line_height, page_margin_px, enable_tap_paging, enable_volume_key_paging, paging_mode, updated_at
 ) VALUES (
-  1, 'vertical-rl', 'light', 'biz-ud-mincho', 18, 1.8, 20, 1, 0, '2026-01-01T00:00:00.000Z'
+  1, 'vertical-rl', 'light', 'biz-ud-mincho', 18, 1.8, 20, 1, 0, 'auto', '2026-01-01T00:00:00.000Z'
 );
 ```
 
@@ -306,6 +309,7 @@ CREATE INDEX IF NOT EXISTS idx_deleted_novels_deleted_at ON deleted_novels(delet
 既存データベース（v0.3 以前）に対して `initializeDatabaseSchema` が呼び出された場合：
 
 1. `PRAGMA table_info(novels)` を参照し、`has_new_update` および `latest_episode_published_at` カラムが存在しない場合に `ALTER TABLE novels ADD COLUMN ...` を実行して既存データを保持したままカラムを追加します。
-2. `CREATE TABLE IF NOT EXISTS app_settings` および `CREATE TABLE IF NOT EXISTS deleted_novels` を実行し、新規テーブルおよびインデックスを追加作成します。
+2. `PRAGMA table_info(reader_settings)` を参照し、`paging_mode` カラムが存在しない場合に `ALTER TABLE reader_settings ADD COLUMN paging_mode TEXT NOT NULL DEFAULT 'auto' CHECK (paging_mode IN ('auto', 'paged', 'scroll'));` を実行して既存設定を維持したまま追加します（`v0.4` Issue #122）。
+3. `CREATE TABLE IF NOT EXISTS app_settings` および `CREATE TABLE IF NOT EXISTS deleted_novels` を実行し、新規テーブルおよびインデックスを追加作成します。
 
 これにより、v0.2 / v0.3 からのバージョンアップ時でも既存の作品データ・キャッシュ・しおり位置を完全に維持したまま安全にスキーマ移行が完了します。

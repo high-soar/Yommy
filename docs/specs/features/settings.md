@@ -1,8 +1,8 @@
 ---
 type: spec-feature
 title: "設定画面仕様書（SCR-05: Settings）"
-description: 小説リーダーの組版設定（縦書き/横書き、4カラーテーマ、文字サイズ、行間）の一括カスタマイズ・永続化、ルビ・傍点を含むサンプル文章プレビュー、および下部タブ・OSバックキー連携を提供する設定画面（SCR-05）の正本仕様。
-status: "Review (#120)"
+description: 小説リーダーの組版設定（縦書き/横書き、ページ送りモード、4カラーテーマ、文字サイズ、行間）の一括カスタマイズ・永続化、ルビ・傍点を含むサンプル文章プレビュー、および下部タブ・OSバックキー連携を提供する設定画面（SCR-05）の正本仕様。
+status: "Review (#122)"
 updated: "2026-10-31"
 tags:
   [
@@ -15,8 +15,10 @@ tags:
     ui,
     cloud-sync,
     google-drive,
+    paging,
   ]
 related_specs:
+  - docs/specs/changes/issue-122-reader-page-turning.md
   - docs/specs/changes/issue-120-cloud-sync-google-drive.md
   - docs/specs/changes/archive/issue-124-settings-back-button-navigation.md
   - docs/specs/requirements.md
@@ -56,6 +58,7 @@ related_tests:
   - `SYS-REQ-08`（縦書き `vertical-rl` / 横書き `horizontal-tb` 切り替え）
   - `SYS-REQ-09`（文字サイズ `12〜32px`、行間 `1.4〜2.4` のカスタマイズと永続化 ※フォント種別・余白は `v0.4`）
   - `SYS-REQ-10`（4カラーテーマ `light` / `sepia` / `dark` / `black` 切り替え）
+  - `SYS-REQ-11`（ページ送りモード［自動/ページめくり/スクロール］の選択と永続化、v0.4 Issue #122）
   - `SYS-REQ-16`（全画面シェル・下部タブバー・論理階層遷移：下部タブ「設定」からの直接遷移、および OS バックキーによるホーム「本棚 `/`」への復帰）
   - `SYS-REQ-20`（下部4タブナビゲーションおよびOSバックキー論理階層遷移）
 - **関連画面遷移**:
@@ -64,7 +67,7 @@ related_tests:
   - `TR-12`（設定画面（`/settings`）で OS バックキーを実行したとき、直前の画面（リーダー `SCR-03`、作品詳細 `SCR-02`）またはホームの本棚画面（`SCR-01`）へ復帰すること）
 - **対象外スコープ（後続 Milestone）**:
   - フォント種別（`fontFamily`）の選択および画面余白（`pageMarginPx`）の設定（Milestone `v0.4`：`SYS-REQ-09` 拡張）
-  - タップ送り（`enableTapPaging`）・音量キー送り（`enableVolumeKeyPaging`）のトグル設定（Milestone `v0.4`：`SYS-REQ-11` 拡張）
+  - ハードウェア音量キー送り（`enableVolumeKeyPaging`）のトグル設定（Milestone `v0.4`：`SYS-REQ-11` 拡張、本Issueでは対象外）
   - 全体および作品別キャッシュ使用量の可視化、既読キャッシュ一括削除（Milestone `v0.4`：`SYS-REQ-05`）
 
 ---
@@ -143,25 +146,27 @@ src/features/settings/
 
 #### プロパティ契約（`SettingsPageProps`）
 
-| プロパティ名            | 型                             | 必須 | 既定値                   | 説明                                                   |
-| :---------------------- | :----------------------------- | :--- | :----------------------- | :----------------------------------------------------- |
-| `writingMode`           | `WritingMode`                  | 必須 | -                        | 現在の組み方向                                         |
-| `theme`                 | `ReaderTheme`                  | 必須 | -                        | 現在のカラーテーマ                                     |
-| `fontSizePx`            | `number`                       | 任意 | `18`                     | 現在の文字サイズ (`12 〜 32` px)                       |
-| `lineHeight`            | `number`                       | 任意 | `1.8`                    | 現在の行間倍率 (`1.4 〜 2.4`)                          |
-| `isLoading`             | `boolean`                      | 任意 | `false`                  | 設定読み込み中フラグ                                   |
-| `error`                 | `string \| null`               | 任意 | `null`                   | 設定保存・読込エラーメッセージ                         |
-| `cloudSyncAuthState`    | `CloudSyncAuthState`           | 任意 | `{ status: 'unlinked' }` | Google アカウント認証状態（v0.4）                      |
-| `cloudSyncLastSyncedAt` | `string \| null`               | 任意 | `null`                   | 最終同期完了日時（ISO 8601、v0.4）                     |
-| `isCloudSyncing`        | `boolean`                      | 任意 | `false`                  | クラウド同期処理中フラグ（v0.4）                       |
-| `cloudSyncError`        | `string \| null`               | 任意 | `null`                   | クラウド同期エラーメッセージ（v0.4）                   |
-| `onToggleWritingMode`   | `() => void`                   | 必須 | -                        | 組み方向切替ボタン押下時のコールバック                 |
-| `onChangeTheme`         | `(theme: ReaderTheme) => void` | 必須 | -                        | テーマ選択ボタン押下時のコールバック                   |
-| `onChangeFontSize`      | `(nextSizePx: number) => void` | 必須 | -                        | 文字サイズ変更ボタン（`−` / `＋`）押下時のコールバック |
-| `onChangeLineHeight`    | `(nextHeight: number) => void` | 必須 | -                        | 行間変更ボタン（`−` / `＋`）押下時のコールバック       |
-| `onSignInGoogle`        | `() => Promise<void>`          | 任意 | -                        | Google 連携ボタン押下時のコールバック（v0.4）          |
-| `onSignOutGoogle`       | `() => Promise<void>`          | 任意 | -                        | Google 連携解除ボタン押下時のコールバック（v0.4）      |
-| `onSyncNow`             | `() => Promise<void>`          | 任意 | -                        | 今すぐ同期ボタン押下時のコールバック（v0.4）           |
+| プロパティ名            | 型                                 | 必須 | 既定値                   | 説明                                                                       |
+| :---------------------- | :--------------------------------- | :--- | :----------------------- | :------------------------------------------------------------------------- |
+| `writingMode`           | `WritingMode`                      | 必須 | -                        | 現在の組み方向                                                             |
+| `theme`                 | `ReaderTheme`                      | 必須 | -                        | 現在のカラーテーマ                                                         |
+| `fontSizePx`            | `number`                           | 任意 | `18`                     | 現在の文字サイズ (`12 〜 32` px)                                           |
+| `lineHeight`            | `number`                           | 任意 | `1.8`                    | 現在の行間倍率 (`1.4 〜 2.4`)                                              |
+| `pagingMode`            | `ReaderPagingMode`                 | 任意 | `'auto'`                 | 現在のページ送りモード（`'auto'`, `'paged'`, `'scroll'`、v0.4 Issue #122） |
+| `isLoading`             | `boolean`                          | 任意 | `false`                  | 設定読み込み中フラグ                                                       |
+| `error`                 | `string \| null`                   | 任意 | `null`                   | 設定保存・読込エラーメッセージ                                             |
+| `cloudSyncAuthState`    | `CloudSyncAuthState`               | 任意 | `{ status: 'unlinked' }` | Google アカウント認証状態（v0.4）                                          |
+| `cloudSyncLastSyncedAt` | `string \| null`                   | 任意 | `null`                   | 最終同期完了日時（ISO 8601、v0.4）                                         |
+| `isCloudSyncing`        | `boolean`                          | 任意 | `false`                  | クラウド同期処理中フラグ（v0.4）                                           |
+| `cloudSyncError`        | `string \| null`                   | 任意 | `null`                   | クラウド同期エラーメッセージ（v0.4）                                       |
+| `onToggleWritingMode`   | `() => void`                       | 必須 | -                        | 組み方向切替ボタン押下時のコールバック                                     |
+| `onChangePagingMode`    | `(mode: ReaderPagingMode) => void` | 任意 | -                        | ページ送りモード変更時のコールバック（v0.4 Issue #122）                    |
+| `onChangeTheme`         | `(theme: ReaderTheme) => void`     | 必須 | -                        | テーマ選択ボタン押下時のコールバック                                       |
+| `onChangeFontSize`      | `(nextSizePx: number) => void`     | 必須 | -                        | 文字サイズ変更ボタン（`−` / `＋`）押下時のコールバック                     |
+| `onChangeLineHeight`    | `(nextHeight: number) => void`     | 必須 | -                        | 行間変更ボタン（`−` / `＋`）押下時のコールバック                           |
+| `onSignInGoogle`        | `() => Promise<void>`              | 任意 | -                        | Google 連携ボタン押下時のコールバック（v0.4）                              |
+| `onSignOutGoogle`       | `() => Promise<void>`              | 任意 | -                        | Google 連携解除ボタン押下時のコールバック（v0.4）                          |
+| `onSyncNow`             | `() => Promise<void>`              | 任意 | -                        | 今すぐ同期ボタン押下時のコールバック（v0.4）                               |
 
 #### 表示項目・セマンティック属性・境界制御ルール
 
@@ -172,6 +177,9 @@ src/features/settings/
   1. **表示・組版設定セクション (`data-testid="typography-settings-section"`)**:
      - **組み方向切替**: `data-testid="toggle-orientation"` ボタン
        - 現在が縦書き（`vertical-rl`）のときは `横書き表示に切替`、横書き（`horizontal-tb`）のときは `縦書き表示に切替` を表示。
+     - **ページ送りモード切替 (`data-testid="paging-mode-select"`, v0.4 Issue #122)**:
+       - 選択肢: 「自動（縦書き: めくり / 横書き: スクロール）」（`auto`）、「ページめくり」（`paged`）、「連続スクロール」（`scroll`）。
+       - 選択変更時に `onChangePagingMode(mode)` を呼び出し、即座に State 更新および `reader_settings` へ非同期永続化。
      - **カラーテーマ選択**: `data-testid="theme-{light|sepia|dark|black}"` ボタングループ
        - 各テーマボタン（ライト、セピア、ダーク、ブラック）。選択中のボタンには `aria-pressed="true"` を設定。
      - **文字サイズステッパー (`12px 〜 32px`、`±2px` 刻み)**:
@@ -254,21 +262,23 @@ export interface UseSettingsResult {
   theme: ReaderTheme;
   fontSizePx: number;
   lineHeight: number;
+  pagingMode: ReaderPagingMode; // 【新設: v0.4 Issue #122】
   isLoading: boolean;
   error: string | null;
   toggleWritingMode: () => Promise<void>;
   changeTheme: (theme: ReaderTheme) => Promise<void>;
   changeFontSize: (fontSizePx: number) => Promise<void>;
   changeLineHeight: (lineHeight: number) => Promise<void>;
+  changePagingMode: (pagingMode: ReaderPagingMode) => Promise<void>; // 【新設: v0.4 Issue #122】
 }
 ```
 
 ### 4.2 永続化パイプライン仕様
 
 1. **初期ロード**:
-   - `ServiceProvider` の `isReady` 完了後、`settingsRepository.getReaderSettings()` を呼び出し、保存済みの `writingMode` (既定値 `'vertical-rl'`), `theme` (既定値 `'light'`), `fontSizePx` (既定値 `18`), `lineHeight` (既定値 `1.8`) を復元する。
+   - `ServiceProvider` の `isReady` 完了後、`settingsRepository.getReaderSettings()` を呼び出し、保存済みの `writingMode` (既定値 `'vertical-rl'`), `theme` (既定値 `'light'`), `fontSizePx` (既定値 `18`), `lineHeight` (既定値 `1.8`), `pagingMode` (既定値 `'auto'`) を復元する。
 2. **変更の即時反映と非同期永続化**:
-   - `toggleWritingMode`, `changeTheme`, `changeFontSize`（`12〜32` にクランプ）, `changeLineHeight`（`1.4〜2.4` にクランプ・小数第1位丸め）実行時は、即座に React State を更新（楽観的更新）すると同時に `settingsRepository.updateReaderSettings(patch)` を呼び出して SQLite / ローカル永続化層へ書き込む。
+   - `toggleWritingMode`, `changeTheme`, `changeFontSize`（`12〜32` にクランプ）, `changeLineHeight`（`1.4〜2.4` にクランプ・小数第1位丸め）, `changePagingMode`（`'auto' | 'paged' | 'scroll'`）実行時は、即座に React State を更新（楽観的更新）すると同時に `settingsRepository.updateReaderSettings(patch)` を呼び出して SQLite / ローカル永続化層へ書き込む。
    - 万一 `updateReaderSettings` が失敗（reject）した場合、直前の設定値に State をロールバックし、`error` を設定して画面上（`SettingsPage` ヘッダー直下）に `role="alert"`（`data-testid="settings-error-alert"`）でエラーメッセージを表示する。
    - 正常に更新された設定はリーダー画面（`SCR-03`）の `useReader` でも共有され、リーダーを開いた際に同じ設定が自動適用される。
 
@@ -319,3 +329,4 @@ export interface UseCloudSyncResult {
 | **`AC-ST-10`** | 連携解除確認と Revoke・ローカル保持                         | 「連携解除」ボタン押下時に確認ダイアログが表示され、確定時に Google サーバーへの Revoke および OS トークン破棄が実行され、未連携状態に戻ること（端末内の登録作品・しおりデータは消去されず安全に保持されること）。                                                                                     | `SYS-REQ-06`                   |
 | **`AC-ST-11`** | 遠隔認可解除（401）検知時の未連携フォールバック             | Google アカウント管理から遠隔で権限が取り消された場合、次回通信時の 401 Unauthorized を検知して自動的に安全な未連携状態へ遷移し、セクション内にエラー通知が表示されること。                                                                                                                            | `SYS-REQ-06`                   |
 | **`AC-ST-12`** | クライアントID未設定時の安全なフォールバック                | `VITE_GOOGLE_CLIENT_ID` が未設定または空文字の場合、アプリや画面がクラッシュすることなく、連携ボタンが disabled 化されるか安全なモックモードとして振る舞うこと。                                                                                                                                       | `SYS-REQ-06`                   |
+| **`AC-ST-13`** | ページ送りモード切替と永続化                                | ページ送りモードセレクター（`paging-mode-select`）で「自動 / ページめくり / 連続スクロール」を切り替えられ、`reader_settings` テーブルへ永続化され、リロード後およびリーダー画面（`SCR-03`）でも設定が維持・反映されること。                                                                           | `SYS-REQ-11`                   |
