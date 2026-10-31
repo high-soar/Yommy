@@ -3,8 +3,8 @@ type: spec-delta
 title: "リーダーのページめくり表示（タップ/スワイプ送り）とスクロール表示切替機能の設計"
 description: "Issue #122 に対する差分仕様、影響する全体正本、テスト計画、および実装Sub-issue分割計画。"
 issue: "#122"
-status: "Review (#122)"
-updated: "2026-10-31"
+status: "Completed (Archived)"
+updated: "2026-11-01"
 tags:
   - delta
   - reader
