@@ -36,6 +36,17 @@ public class CloudSyncPlugin extends Plugin {
     private static final String TAG = "CloudSyncPlugin";
     private static final String DRIVE_APPDATA_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
     private static final String SYNC_FILE_NAME = "yommy-sync-state.json";
+    private static final String REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke?token=";
+    private static final String DRIVE_FILES_ENDPOINT = "https://www.googleapis.com/drive/v3/files";
+    private static final String DRIVE_UPLOAD_ENDPOINT = "https://www.googleapis.com/upload/drive/v3/files/";
+
+    private static final int HTTP_CONNECT_TIMEOUT_MS = 10000;
+    private static final int HTTP_READ_TIMEOUT_MS = 10000;
+    private static final int REVOKE_TIMEOUT_MS = 5000;
+
+    private static final String STATUS_CONNECTED = "connected";
+    private static final String STATUS_UNLINKED = "unlinked";
+    private static final String STATUS_ERROR = "error";
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private String currentAccessToken = null;
@@ -45,10 +56,10 @@ public class CloudSyncPlugin extends Plugin {
     public void getAuthState(PluginCall call) {
         JSObject ret = new JSObject();
         if (currentAccessToken != null && !currentAccessToken.isEmpty()) {
-            ret.put("status", "connected");
+            ret.put("status", STATUS_CONNECTED);
             ret.put("email", currentUserEmail != null ? currentUserEmail : "");
         } else {
-            ret.put("status", "unlinked");
+            ret.put("status", STATUS_UNLINKED);
         }
         call.resolve(ret);
     }
@@ -68,7 +79,7 @@ public class CloudSyncPlugin extends Plugin {
                     } else {
                         currentAccessToken = result.getAccessToken();
                         JSObject ret = new JSObject();
-                        ret.put("status", "connected");
+                        ret.put("status", STATUS_CONNECTED);
                         ret.put("email", currentUserEmail != null ? currentUserEmail : "");
                         call.resolve(ret);
                     }
@@ -76,14 +87,14 @@ public class CloudSyncPlugin extends Plugin {
                 .addOnFailureListener(e -> {
                     Log.e(TAG, "Authorization failed", e);
                     JSObject ret = new JSObject();
-                    ret.put("status", "error");
+                    ret.put("status", STATUS_ERROR);
                     ret.put("message", e.getMessage() != null ? e.getMessage() : "Authorization failed");
                     call.resolve(ret);
                 });
         } catch (Exception e) {
             Log.e(TAG, "signIn exception", e);
             JSObject ret = new JSObject();
-            ret.put("status", "error");
+            ret.put("status", STATUS_ERROR);
             ret.put("message", e.getMessage() != null ? e.getMessage() : "signIn failed");
             call.resolve(ret);
         }
@@ -99,19 +110,19 @@ public class CloudSyncPlugin extends Plugin {
                     .getAuthorizationResultFromIntent(data);
                 currentAccessToken = authResult.getAccessToken();
                 JSObject ret = new JSObject();
-                ret.put("status", "connected");
+                ret.put("status", STATUS_CONNECTED);
                 ret.put("email", currentUserEmail != null ? currentUserEmail : "");
                 call.resolve(ret);
             } catch (Exception e) {
                 Log.e(TAG, "Error getting auth result from intent", e);
                 JSObject ret = new JSObject();
-                ret.put("status", "error");
+                ret.put("status", STATUS_ERROR);
                 ret.put("message", e.getMessage() != null ? e.getMessage() : "Failed to resolve auth");
                 call.resolve(ret);
             }
         } else {
             JSObject ret = new JSObject();
-            ret.put("status", "unlinked");
+            ret.put("status", STATUS_UNLINKED);
             call.resolve(ret);
         }
     }
@@ -124,18 +135,21 @@ public class CloudSyncPlugin extends Plugin {
             currentUserEmail = null;
 
             if (token != null && !token.isEmpty()) {
+                HttpURLConnection conn = null;
                 try {
-                    // Revoke token on Google OAuth server
-                    URL url = new URL("https://oauth2.googleapis.com/revoke?token=" + token);
-                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    URL url = new URL(REVOKE_ENDPOINT + token);
+                    conn = (HttpURLConnection) url.openConnection();
                     conn.setRequestMethod("POST");
                     conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-                    conn.setConnectTimeout(5000);
-                    conn.setReadTimeout(5000);
+                    conn.setConnectTimeout(REVOKE_TIMEOUT_MS);
+                    conn.setReadTimeout(REVOKE_TIMEOUT_MS);
                     conn.getResponseCode();
-                    conn.disconnect();
                 } catch (Exception e) {
                     Log.w(TAG, "Failed to revoke token on server", e);
+                } finally {
+                    if (conn != null) {
+                        conn.disconnect();
+                    }
                 }
             }
             call.resolve();
@@ -150,6 +164,7 @@ public class CloudSyncPlugin extends Plugin {
         }
 
         executor.execute(() -> {
+            HttpURLConnection conn = null;
             try {
                 String fileId = findSyncFileId(currentAccessToken);
                 if (fileId == null) {
@@ -159,29 +174,25 @@ public class CloudSyncPlugin extends Plugin {
                     return;
                 }
 
-                URL downloadUrl = new URL("https://www.googleapis.com/drive/v3/files/" + fileId + "?alt=media");
-                HttpURLConnection conn = (HttpURLConnection) downloadUrl.openConnection();
+                URL downloadUrl = new URL(DRIVE_FILES_ENDPOINT + "/" + fileId + "?alt=media");
+                conn = (HttpURLConnection) downloadUrl.openConnection();
                 conn.setRequestMethod("GET");
                 conn.setRequestProperty("Authorization", "Bearer " + currentAccessToken);
-                conn.setConnectTimeout(10000);
-                conn.setReadTimeout(10000);
+                conn.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
+                conn.setReadTimeout(HTTP_READ_TIMEOUT_MS);
 
                 int responseCode = conn.getResponseCode();
                 if (responseCode == 401) {
                     currentAccessToken = null;
-                    conn.disconnect();
                     call.reject("401 Unauthorized");
                     return;
                 }
                 if (responseCode < 200 || responseCode >= 300) {
-                    conn.disconnect();
                     call.reject("Failed to download sync file: HTTP " + responseCode);
                     return;
                 }
 
                 String content = readStream(conn.getInputStream());
-                conn.disconnect();
-
                 JSObject ret = new JSObject();
                 ret.put("content", content);
                 call.resolve(ret);
@@ -193,6 +204,10 @@ public class CloudSyncPlugin extends Plugin {
                     call.reject("401 Unauthorized");
                 } else {
                     call.reject("pullFile error: " + msg);
+                }
+            } finally {
+                if (conn != null) {
+                    conn.disconnect();
                 }
             }
         });
@@ -212,78 +227,76 @@ public class CloudSyncPlugin extends Plugin {
         }
 
         executor.execute(() -> {
+            HttpURLConnection conn = null;
             try {
                 String fileId = findSyncFileId(currentAccessToken);
                 int responseCode;
 
                 if (fileId != null) {
-                    // Update existing file content
-                    URL patchUrl = new URL("https://www.googleapis.com/upload/drive/v3/files/" + fileId + "?uploadType=media");
-                    HttpURLConnection conn = (HttpURLConnection) patchUrl.openConnection();
+                    URL patchUrl = new URL(DRIVE_UPLOAD_ENDPOINT + fileId + "?uploadType=media");
+                    conn = (HttpURLConnection) patchUrl.openConnection();
                     conn.setRequestMethod("PATCH");
                     conn.setRequestProperty("Authorization", "Bearer " + currentAccessToken);
                     conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
                     conn.setDoOutput(true);
-                    conn.setConnectTimeout(10000);
-                    conn.setReadTimeout(10000);
+                    conn.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
+                    conn.setReadTimeout(HTTP_READ_TIMEOUT_MS);
 
                     try (OutputStream os = conn.getOutputStream()) {
                         os.write(content.getBytes(StandardCharsets.UTF_8));
                     }
                     responseCode = conn.getResponseCode();
-                    conn.disconnect();
                 } else {
-                    // Create new metadata in appDataFolder
-                    URL createUrl = new URL("https://www.googleapis.com/drive/v3/files");
+                    URL createUrl = new URL(DRIVE_FILES_ENDPOINT);
                     HttpURLConnection metaConn = (HttpURLConnection) createUrl.openConnection();
-                    metaConn.setRequestMethod("POST");
-                    metaConn.setRequestProperty("Authorization", "Bearer " + currentAccessToken);
-                    metaConn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
-                    metaConn.setDoOutput(true);
-                    metaConn.setConnectTimeout(10000);
-                    metaConn.setReadTimeout(10000);
+                    String newFileId;
+                    try {
+                        metaConn.setRequestMethod("POST");
+                        metaConn.setRequestProperty("Authorization", "Bearer " + currentAccessToken);
+                        metaConn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                        metaConn.setDoOutput(true);
+                        metaConn.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
+                        metaConn.setReadTimeout(HTTP_READ_TIMEOUT_MS);
 
-                    JSONObject metaJson = new JSONObject();
-                    metaJson.put("name", SYNC_FILE_NAME);
-                    metaJson.put("parents", new JSONArray(Collections.singletonList("appDataFolder")));
+                        JSONObject metaJson = new JSONObject();
+                        metaJson.put("name", SYNC_FILE_NAME);
+                        metaJson.put("parents", new JSONArray(Collections.singletonList("appDataFolder")));
 
-                    try (OutputStream os = metaConn.getOutputStream()) {
-                        os.write(metaJson.toString().getBytes(StandardCharsets.UTF_8));
-                    }
+                        try (OutputStream os = metaConn.getOutputStream()) {
+                            os.write(metaJson.toString().getBytes(StandardCharsets.UTF_8));
+                        }
 
-                    int metaResponseCode = metaConn.getResponseCode();
-                    if (metaResponseCode == 401) {
-                        currentAccessToken = null;
+                        int metaResponseCode = metaConn.getResponseCode();
+                        if (metaResponseCode == 401) {
+                            currentAccessToken = null;
+                            call.reject("401 Unauthorized");
+                            return;
+                        }
+                        if (metaResponseCode < 200 || metaResponseCode >= 300) {
+                            call.reject("Failed to create file metadata: HTTP " + metaResponseCode);
+                            return;
+                        }
+
+                        String metaResStr = readStream(metaConn.getInputStream());
+                        JSONObject createdObj = new JSONObject(metaResStr);
+                        newFileId = createdObj.getString("id");
+                    } finally {
                         metaConn.disconnect();
-                        call.reject("401 Unauthorized");
-                        return;
-                    }
-                    if (metaResponseCode < 200 || metaResponseCode >= 300) {
-                        metaConn.disconnect();
-                        call.reject("Failed to create file metadata: HTTP " + metaResponseCode);
-                        return;
                     }
 
-                    String metaResStr = readStream(metaConn.getInputStream());
-                    metaConn.disconnect();
-                    JSONObject createdObj = new JSONObject(metaResStr);
-                    String newFileId = createdObj.getString("id");
+                    URL patchUrl = new URL(DRIVE_UPLOAD_ENDPOINT + newFileId + "?uploadType=media");
+                    conn = (HttpURLConnection) patchUrl.openConnection();
+                    conn.setRequestMethod("PATCH");
+                    conn.setRequestProperty("Authorization", "Bearer " + currentAccessToken);
+                    conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                    conn.setDoOutput(true);
+                    conn.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
+                    conn.setReadTimeout(HTTP_READ_TIMEOUT_MS);
 
-                    // Upload content
-                    URL patchUrl = new URL("https://www.googleapis.com/upload/drive/v3/files/" + newFileId + "?uploadType=media");
-                    HttpURLConnection uploadConn = (HttpURLConnection) patchUrl.openConnection();
-                    uploadConn.setRequestMethod("PATCH");
-                    uploadConn.setRequestProperty("Authorization", "Bearer " + currentAccessToken);
-                    uploadConn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
-                    uploadConn.setDoOutput(true);
-                    uploadConn.setConnectTimeout(10000);
-                    uploadConn.setReadTimeout(10000);
-
-                    try (OutputStream os = uploadConn.getOutputStream()) {
+                    try (OutputStream os = conn.getOutputStream()) {
                         os.write(content.getBytes(StandardCharsets.UTF_8));
                     }
-                    responseCode = uploadConn.getResponseCode();
-                    uploadConn.disconnect();
+                    responseCode = conn.getResponseCode();
                 }
 
                 if (responseCode == 401) {
@@ -306,49 +319,54 @@ public class CloudSyncPlugin extends Plugin {
                 } else {
                     call.reject("pushFile error: " + msg);
                 }
+            } finally {
+                if (conn != null) {
+                    conn.disconnect();
+                }
             }
         });
     }
 
     private String findSyncFileId(String token) throws Exception {
-        String queryUrlStr = "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='" 
+        String queryUrlStr = DRIVE_FILES_ENDPOINT + "?spaces=appDataFolder&q=name='" 
             + SYNC_FILE_NAME + "'%20and%20trashed=false&fields=files(id,name)";
         URL url = new URL(queryUrlStr);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestMethod("GET");
-        conn.setRequestProperty("Authorization", "Bearer " + token);
-        conn.setConnectTimeout(10000);
-        conn.setReadTimeout(10000);
+        try {
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Authorization", "Bearer " + token);
+            conn.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
+            conn.setReadTimeout(HTTP_READ_TIMEOUT_MS);
 
-        int responseCode = conn.getResponseCode();
-        if (responseCode == 401) {
-            currentAccessToken = null;
+            int responseCode = conn.getResponseCode();
+            if (responseCode == 401) {
+                currentAccessToken = null;
+                throw new Exception("401 Unauthorized");
+            }
+            if (responseCode < 200 || responseCode >= 300) {
+                throw new Exception("HTTP " + responseCode);
+            }
+
+            String resStr = readStream(conn.getInputStream());
+            JSONObject json = new JSONObject(resStr);
+            JSONArray files = json.optJSONArray("files");
+            if (files != null && files.length() > 0) {
+                return files.getJSONObject(0).getString("id");
+            }
+            return null;
+        } finally {
             conn.disconnect();
-            throw new Exception("401 Unauthorized");
         }
-        if (responseCode < 200 || responseCode >= 300) {
-            conn.disconnect();
-            throw new Exception("HTTP " + responseCode);
-        }
-
-        String resStr = readStream(conn.getInputStream());
-        conn.disconnect();
-
-        JSONObject json = new JSONObject(resStr);
-        JSONArray files = json.optJSONArray("files");
-        if (files != null && files.length() > 0) {
-            return files.getJSONObject(0).getString("id");
-        }
-        return null;
     }
 
     private String readStream(InputStream in) throws Exception {
-        BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
-        StringBuilder sb = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-            sb.append(line).append("\n");
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line).append("\n");
+            }
+            return sb.toString();
         }
-        return sb.toString();
     }
 }
