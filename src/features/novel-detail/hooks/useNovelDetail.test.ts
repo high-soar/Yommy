@@ -560,6 +560,76 @@ describe("useNovelDetail", () => {
       expect(dbChapters).toEqual([]);
     });
 
+    it("confirmDeleteNovel: 作品削除時に syncEngine.notifyChanged が呼び出されること", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 2);
+
+      const mockSyncEngine = {
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const { result } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          // @ts-expect-error Mocking syncEngine for hook test
+          syncEngine: mockSyncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      act(() => {
+        result.current.openDeleteDialog();
+      });
+
+      await act(async () => {
+        await result.current.confirmDeleteNovel();
+      });
+
+      expect(mockSyncEngine.notifyChanged).toHaveBeenCalledTimes(1);
+    });
+
+    it("confirmDeleteNovel: syncEngine.notifyChanged が例外を送出してもエラーにならず正常に削除完了すること", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 2);
+
+      const mockSyncEngine = {
+        notifyChanged: vi.fn().mockRejectedValue(new Error("Push failed")),
+      };
+
+      const { result } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          // @ts-expect-error Mocking syncEngine for hook test
+          syncEngine: mockSyncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      act(() => {
+        result.current.openDeleteDialog();
+      });
+
+      let success = false;
+      await act(async () => {
+        success = await result.current.confirmDeleteNovel();
+      });
+
+      expect(success).toBe(true);
+      expect(mockSyncEngine.notifyChanged).toHaveBeenCalledTimes(1);
+    });
+
     it("confirmDeleteNovel: 削除処理中にエラーが発生した場合、ダイアログを開いたまま error をセットし false を返すこと (AC-ND-06)", async () => {
       const db = await resetTestDb();
       const novelRepo = new SqlNovelRepository(db);
