@@ -1758,5 +1758,411 @@ describe("syncEngine", () => {
       expect(isUnauthorizedError("Unauthorized response")).toBe(true);
       expect(isUnauthorizedError("Internal Server Error 500")).toBe(false);
     });
+
+    it("作品URLや作品IDにたまたま '401' が含まれていても誤判定して true を返さないこと (R1-13)", () => {
+      expect(
+        isUnauthorizedError(
+          new Error(
+            "Failed to fetch https://kakuyomu.jp/works/16817330658027210401",
+          ),
+        ),
+      ).toBe(false);
+      expect(isUnauthorizedError("Downloaded 4010 bytes for episode 401")).toBe(
+        false,
+      );
+      expect(
+        isUnauthorizedError(new Error("Novel kakuyomu:40123 not found")),
+      ).toBe(false);
+    });
+  });
+
+  describe("横断レビュー指摘事項の是正検証 (R1-05, R1-10, R1-11, R1-12, R1-14, R1-28)", () => {
+    it("リモート作品取得失敗時に作品単位で try/catch され、他作品の同期が継続すること (R1-05)", async () => {
+      await resetTestDb();
+      const db = await createInMemoryDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const appSettingsRepo = new SqlAppSettingsRepository(db);
+      const bridge = new MockCloudSyncBridge();
+      await bridge.signIn();
+
+      const parserRegistry = createDefaultParserRegistry();
+      const httpClient = new MockHttpClient();
+
+      const validUrl = "https://kakuyomu.jp/works/16817330658027210412";
+      const errorUrl = "https://kakuyomu.jp/works/99999999999999999999";
+
+      httpClient.setResponse(validUrl, (options) => ({
+        status: 200,
+        url: options.url,
+        headers: {},
+        html: workIndexHtml,
+      }));
+      httpClient.setResponse(errorUrl, () => {
+        throw new Error("HTTP 500: Internal Server Error");
+      });
+
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: new Date().toISOString(),
+        novels: {
+          "kakuyomu:99999999999999999999": {
+            id: "kakuyomu:99999999999999999999",
+            siteType: "kakuyomu",
+            remoteWorkId: "99999999999999999999",
+            canonicalUrl: errorUrl,
+            title: "エラー作品",
+            author: "不詳",
+            synopsis: "あらすじ",
+            totalChapters: 1,
+            isFavorite: 0,
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: null,
+            bookmarkChapterIndex: null,
+            lastReadAt: null,
+            readChapterIds: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+          "kakuyomu:16817330658027210412": {
+            id: "kakuyomu:16817330658027210412",
+            siteType: "kakuyomu",
+            remoteWorkId: "16817330658027210412",
+            canonicalUrl: validUrl,
+            title: "正常作品",
+            author: "小野崎",
+            synopsis: "あらすじ",
+            totalChapters: 3,
+            isFavorite: 1,
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: null,
+            bookmarkChapterIndex: 1,
+            lastReadAt: null,
+            readChapterIds: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        },
+        deletedNovels: {},
+      };
+
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      const engine = new SyncEngine({
+        bridge,
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        appSettingsRepository: appSettingsRepo,
+        parserRegistry,
+        httpClient,
+      });
+
+      // エラー作品があっても全体例外で死なず、正常作品がマージされること
+      const result = await engine.pullAndMerge();
+      expect(result.pulled).toBe(true);
+
+      const savedValid = await novelRepo.getNovelById(
+        "kakuyomu:16817330658027210412",
+      );
+      expect(savedValid).not.toBeNull();
+      expect(savedValid?.title).toBe("境界迷宮と異界の魔術師");
+
+      const savedError = await novelRepo.getNovelById(
+        "kakuyomu:99999999999999999999",
+      );
+      expect(savedError).toBeNull();
+    });
+
+    it("Push 前にリモート novels と和集合マージし、他端末で追加された作品が消失しないこと (R1-10)", async () => {
+      await resetTestDb();
+      const db = await createInMemoryDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const appSettingsRepo = new SqlAppSettingsRepository(db);
+      const bridge = new MockCloudSyncBridge();
+      await bridge.signIn();
+
+      const parserRegistry = createDefaultParserRegistry();
+      const httpClient = new MockHttpClient();
+
+      // リモートに既に作品 A が存在
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: new Date().toISOString(),
+        novels: {
+          "kakuyomu:11111111111111111111": {
+            id: "kakuyomu:11111111111111111111",
+            siteType: "kakuyomu",
+            remoteWorkId: "11111111111111111111",
+            canonicalUrl: "https://kakuyomu.jp/works/11111111111111111111",
+            title: "端末Bの作品",
+            author: "著者B",
+            synopsis: "あらすじB",
+            totalChapters: 5,
+            isFavorite: 0,
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: null,
+            bookmarkChapterIndex: null,
+            lastReadAt: null,
+            readChapterIds: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        },
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      // ローカルには作品 B のみを追加
+      const validUrl = "https://kakuyomu.jp/works/16817330658027210412";
+      httpClient.setResponse(validUrl, (options) => ({
+        status: 200,
+        url: options.url,
+        headers: {},
+        html: workIndexHtml,
+      }));
+      const parser = parserRegistry.getParser(validUrl)!;
+      const index = parser.parseNovelIndex(workIndexHtml, validUrl);
+      await novelRepo.upsertNovelWithToc(index, new Date().toISOString());
+
+      const engine = new SyncEngine({
+        bridge,
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        appSettingsRepository: appSettingsRepo,
+        parserRegistry,
+        httpClient,
+      });
+
+      // ローカル側から Push を実行
+      await engine.pushCurrentState();
+
+      // リモートの最新状態を確認: 作品 A と作品 B の両方が保持されていること
+      const latestRaw = await bridge.pullFile();
+      expect(latestRaw).not.toBeNull();
+      const parsed = validateSyncState(latestRaw!);
+      expect(parsed.novels["kakuyomu:11111111111111111111"]).toBeDefined();
+      expect(parsed.novels["kakuyomu:16817330658027210412"]).toBeDefined();
+    });
+
+    it("ローカルで削除された作品について、リモートの updatedAt ではなく createdAt が deletedAt より後でない限り復活しないこと (R1-11)", async () => {
+      await resetTestDb();
+      const db = await createInMemoryDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const appSettingsRepo = new SqlAppSettingsRepository(db);
+      const bridge = new MockCloudSyncBridge();
+      await bridge.signIn();
+
+      const parserRegistry = createDefaultParserRegistry();
+      const httpClient = new MockHttpClient();
+
+      const novelId = "kakuyomu:16817330658027210412";
+      const validUrl = "https://kakuyomu.jp/works/16817330658027210412";
+      httpClient.setResponse(validUrl, (options) => ({
+        status: 200,
+        url: options.url,
+        headers: {},
+        html: workIndexHtml,
+      }));
+
+      // 作品を一度追加して削除（deleted_novels に記録）
+      const parser = parserRegistry.getParser(validUrl)!;
+      const index = parser.parseNovelIndex(workIndexHtml, validUrl);
+      await novelRepo.upsertNovelWithToc(index, "2026-10-20T00:00:00.000Z");
+      await novelRepo.deleteNovel(novelId);
+
+      // ローカル削除日時
+      const tombstones = (await novelRepo.getDeletedNovels?.()) ?? [];
+      expect(tombstones.length).toBe(1);
+      const deletedAt = tombstones[0].deletedAt;
+
+      // リモート側のデータ: 作成日は削除前だが、サイト更新により updatedAt が削除時刻より新しい
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: new Date().toISOString(),
+        novels: {
+          [novelId]: {
+            id: novelId,
+            siteType: "kakuyomu",
+            remoteWorkId: "16817330658027210412",
+            canonicalUrl: validUrl,
+            title: "境界迷宮と異界の魔術師",
+            author: "小野崎",
+            synopsis: "あらすじ",
+            totalChapters: 3,
+            isFavorite: 0,
+            hasNewUpdate: 1,
+            latestEpisodePublishedAt: null,
+            bookmarkChapterIndex: null,
+            lastReadAt: null,
+            readChapterIds: [],
+            createdAt: "2026-10-20T00:00:00.000Z", // 削除より前
+            updatedAt: new Date(deletedAt + 10000).toISOString(), // 削除より後
+          },
+        },
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      const engine = new SyncEngine({
+        bridge,
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        appSettingsRepository: appSettingsRepo,
+        parserRegistry,
+        httpClient,
+      });
+
+      await engine.pullAndMerge();
+
+      // updatedAt が新しくても createdAt が削除前なので復元されないこと
+      const novel = await novelRepo.getNovelById(novelId);
+      expect(novel).toBeNull();
+    });
+
+    it("新規作品取込時にリモートの lastReadAt および isFavorite が保持されること (R1-12)", async () => {
+      await resetTestDb();
+      const db = await createInMemoryDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const appSettingsRepo = new SqlAppSettingsRepository(db);
+      const bridge = new MockCloudSyncBridge();
+      await bridge.signIn();
+
+      const parserRegistry = createDefaultParserRegistry();
+      const httpClient = new MockHttpClient();
+
+      const novelId = "kakuyomu:16817330658027210412";
+      const validUrl = "https://kakuyomu.jp/works/16817330658027210412";
+      httpClient.setResponse(validUrl, (options) => ({
+        status: 200,
+        url: options.url,
+        headers: {},
+        html: workIndexHtml,
+      }));
+
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: new Date().toISOString(),
+        novels: {
+          [novelId]: {
+            id: novelId,
+            siteType: "kakuyomu",
+            remoteWorkId: "16817330658027210412",
+            canonicalUrl: validUrl,
+            title: "境界迷宮と異界の魔術師",
+            author: "小野崎",
+            synopsis: "あらすじ",
+            totalChapters: 3,
+            isFavorite: 1, // お気に入り
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: null,
+            bookmarkChapterIndex: 2,
+            lastReadAt: "2026-10-30T10:00:00.000Z", // 最終閲覧日時
+            readChapterIds: ["1"],
+            createdAt: "2026-10-20T00:00:00.000Z",
+            updatedAt: "2026-10-30T10:00:00.000Z",
+          },
+        },
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      const engine = new SyncEngine({
+        bridge,
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        appSettingsRepository: appSettingsRepo,
+        parserRegistry,
+        httpClient,
+      });
+
+      await engine.pullAndMerge();
+
+      const novel = await novelRepo.getNovelById(novelId);
+      expect(novel).not.toBeNull();
+      expect(novel?.isFavorite).toBe(true);
+      expect(novel?.lastReadAt).toBe("2026-10-30T10:00:00.000Z");
+    });
+
+    it("未連携（unlinked）時に pullAndMerge / pushCurrentState がスキップされること (R1-14)", async () => {
+      await resetTestDb();
+      const db = await createInMemoryDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const appSettingsRepo = new SqlAppSettingsRepository(db);
+      const bridge = new MockCloudSyncBridge(); // デフォルト未連携 (unlinked)
+
+      const parserRegistry = createDefaultParserRegistry();
+      const httpClient = new MockHttpClient();
+
+      const pullSpy = vi.spyOn(bridge, "pullFile");
+      const pushSpy = vi.spyOn(bridge, "pushFile");
+
+      const engine = new SyncEngine({
+        bridge,
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        appSettingsRepository: appSettingsRepo,
+        parserRegistry,
+        httpClient,
+      });
+
+      const pullResult = await engine.pullAndMerge();
+      expect(pullResult).toEqual({ pulled: false, mergedNovels: 0 });
+      expect(pullSpy).not.toHaveBeenCalled();
+
+      await engine.pushCurrentState();
+      expect(pushSpy).not.toHaveBeenCalled();
+    });
+
+    it("30日以上経過した古い Tombstone（deletedNovels）が自動的にパージされること (R1-28)", async () => {
+      await resetTestDb();
+      const db = await createInMemoryDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const appSettingsRepo = new SqlAppSettingsRepository(db);
+      const bridge = new MockCloudSyncBridge();
+      await bridge.signIn();
+
+      const parserRegistry = createDefaultParserRegistry();
+      const httpClient = new MockHttpClient();
+
+      const now = Date.now();
+      const thirtyOneDaysAgoMs = now - 31 * 24 * 60 * 60 * 1000;
+      const fiveDaysAgoMs = now - 5 * 24 * 60 * 60 * 1000;
+
+      // リモートに 31日前の Tombstone と 5日前の Tombstone がある
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: new Date().toISOString(),
+        novels: {},
+        deletedNovels: {
+          "kakuyomu:old-tombstone": new Date(thirtyOneDaysAgoMs).toISOString(),
+          "kakuyomu:recent-tombstone": new Date(fiveDaysAgoMs).toISOString(),
+        },
+      };
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      const engine = new SyncEngine({
+        bridge,
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        appSettingsRepository: appSettingsRepo,
+        parserRegistry,
+        httpClient,
+      });
+
+      await engine.pushCurrentState();
+
+      const latestRaw = await bridge.pullFile();
+      expect(latestRaw).not.toBeNull();
+      const parsed = validateSyncState(latestRaw!);
+
+      // 31日前の Tombstone はパージされ、5日前のものは保持されること
+      expect(parsed.deletedNovels["kakuyomu:old-tombstone"]).toBeUndefined();
+      expect(parsed.deletedNovels["kakuyomu:recent-tombstone"]).toBeDefined();
+    });
   });
 });

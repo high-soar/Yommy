@@ -348,4 +348,15 @@ export class SqlNovelRepository implements NovelRepository {
       idList,
     );
   }
+
+  async updateSyncMetadata(
+    _novelId: string,
+    _metadata: { isFavorite?: boolean; lastReadAt?: string | null },
+  ): Promise<void> {
+    // Red: 未実装
+  }
+
+  async purgeExpiredDeletedNovels(_cutoffTimeMs: number): Promise<void> {
+    // Red: 未実装
+  }
 }

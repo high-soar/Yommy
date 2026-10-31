@@ -772,5 +772,75 @@ describe("SqlNovelRepository", () => {
       const remaining = await repository.getDeletedNovels();
       expect(remaining).toEqual([{ id: "kakuyomu:1", deletedAt: 1000 }]);
     });
+
+    it("upsertNovelWithToc で以前削除された作品を再追加した際、deleted_novels から自動削除されること (R1-28)", async () => {
+      const db = await initTestDb();
+      const novelId = "kakuyomu:work-001";
+      await db.execute(
+        `INSERT INTO deleted_novels (id, deleted_at) VALUES (?, 1000);`,
+        [novelId],
+      );
+
+      const parsedIndex: ParsedNovelIndex = {
+        siteType: "kakuyomu",
+        remoteWorkId: "work-001",
+        canonicalUrl: "https://kakuyomu.jp/works/work-001",
+        title: "再追加作品",
+        author: "テスト作者",
+        synopsis: "あらすじ",
+        chapters: [],
+        nextTocPageUrl: null,
+      };
+
+      await repository.upsertNovelWithToc(parsedIndex, "2026-11-01T00:00:00Z");
+
+      const remaining = await repository.getDeletedNovels();
+      expect(remaining.some((r) => r.id === novelId)).toBe(false);
+    });
+
+    it("updateSyncMetadata で isFavorite と lastReadAt が正しく更新されること (R1-12)", async () => {
+      await initTestDb();
+      const parsedIndex: ParsedNovelIndex = {
+        siteType: "kakuyomu",
+        remoteWorkId: "work-002",
+        canonicalUrl: "https://kakuyomu.jp/works/work-002",
+        title: "メタデータ更新作品",
+        author: "テスト作者",
+        synopsis: "あらすじ",
+        chapters: [],
+        nextTocPageUrl: null,
+      };
+
+      const created = await repository.upsertNovelWithToc(
+        parsedIndex,
+        "2026-11-01T00:00:00Z",
+      );
+      expect(created.isFavorite).toBe(false);
+      expect(created.lastReadAt).toBeNull();
+
+      await repository.updateSyncMetadata?.(created.id, {
+        isFavorite: true,
+        lastReadAt: "2026-11-01T12:00:00Z",
+      });
+
+      const updated = await repository.getNovelById(created.id);
+      expect(updated?.isFavorite).toBe(true);
+      expect(updated?.lastReadAt).toBe("2026-11-01T12:00:00Z");
+    });
+
+    it("purgeExpiredDeletedNovels で指定時刻以前の Tombstone が一括パージされること (R1-28)", async () => {
+      const db = await initTestDb();
+      await db.execute(
+        `INSERT INTO deleted_novels (id, deleted_at) VALUES
+          ('kakuyomu:old-1', 1000),
+          ('kakuyomu:old-2', 2000),
+          ('kakuyomu:recent-1', 5000);`,
+      );
+
+      await repository.purgeExpiredDeletedNovels?.(3000);
+
+      const remaining = await repository.getDeletedNovels();
+      expect(remaining).toEqual([{ id: "kakuyomu:recent-1", deletedAt: 5000 }]);
+    });
   });
 });

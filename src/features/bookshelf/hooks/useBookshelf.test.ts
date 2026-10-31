@@ -1560,6 +1560,33 @@ describe("useBookshelf", () => {
       expect(result.current.novels).toEqual([]);
     });
 
+    it("未連携状態（cloudSyncBridge.getAuthState が unlinked）のとき、pullAndMerge の実行がスキップされること (R1-14)", async () => {
+      const mockBridge = {
+        getAuthState: vi.fn().mockResolvedValue({ status: "unlinked" }),
+        signIn: vi.fn(),
+        signOut: vi.fn(),
+        pullFile: vi.fn(),
+        pushFile: vi.fn(),
+      };
+      const mockSyncEngine = {
+        pullAndMerge: vi.fn(),
+        notifyChanged: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          cloudSyncBridge: mockBridge,
+          syncEngine: mockSyncEngine as unknown as SyncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(mockSyncEngine.pullAndMerge).not.toHaveBeenCalled();
+    });
+
     it("deleteNovel で例外が発生したとき、error ステートにメッセージが設定されること", async () => {
       const customNovelRepo = {
         listNovels: vi.fn().mockResolvedValue([]),
