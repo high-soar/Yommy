@@ -156,11 +156,6 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
     onNextChapter();
   }, [onNextChapter]);
 
-  // 閉じる要求
-  const handleClose = useCallback(() => {
-    setIsOpen(false);
-  }, []);
-
   return (
     <div
       data-testid="reader-page"
@@ -245,7 +240,6 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
         onPrevChapter={handlePrevChapter}
         onNextChapter={handleNextChapter}
         onSelectTab={onSelectTab}
-        onClose={handleClose}
       />
     </div>
   );
