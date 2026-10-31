@@ -26,6 +26,9 @@ import { SqlNovelRepository } from "../storage/repositories/novelRepository";
 import { SqlChapterRepository } from "../storage/repositories/chapterRepository";
 import { SqlSettingsRepository } from "../storage/repositories/settingsRepository";
 import { SqlAppSettingsRepository } from "../storage/repositories/appSettingsRepository";
+import type { CloudSyncBridge } from "../bridges/cloud-sync/types";
+import { MockCloudSyncBridge } from "../bridges/cloud-sync/mockCloudSyncBridge";
+import { SyncEngine } from "../features/cloud-sync/services/syncEngine";
 import workIndexHtml from "../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 import episodeContentHtml from "../parsers/kakuyomu/__fixtures__/episode_content.html?raw";
 import searchApolloHtml from "../parsers/kakuyomu/__fixtures__/search_results_apollo.html?raw";
@@ -45,6 +48,8 @@ export interface ServiceContextValue {
   settingsRepository: SettingsRepository;
   appSettingsRepository: AppSettingsRepository;
   appBridge: AppBridge;
+  cloudSyncBridge: CloudSyncBridge;
+  syncEngine?: SyncEngine;
   isReady: boolean;
   error: Error | null;
 }
@@ -240,6 +245,20 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           services?.appBridge ??
           (isNative ? new CapacitorAppBridge() : new MockAppBridge());
 
+        const cloudSyncBridge =
+          services?.cloudSyncBridge ?? new MockCloudSyncBridge();
+
+        const syncEngine =
+          services?.syncEngine ??
+          new SyncEngine({
+            bridge: cloudSyncBridge,
+            novelRepository,
+            chapterRepository,
+            appSettingsRepository,
+            parserRegistry,
+            httpClient,
+          });
+
         const newContext: ServiceContextValue = {
           httpClient,
           parserRegistry,
@@ -249,6 +268,8 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           settingsRepository,
           appSettingsRepository,
           appBridge,
+          cloudSyncBridge,
+          syncEngine,
           isReady: true,
           error: null,
         };
@@ -273,6 +294,9 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
             appSettingsRepository:
               services?.appSettingsRepository as AppSettingsRepository,
             appBridge: services?.appBridge ?? new MockAppBridge(),
+            cloudSyncBridge:
+              services?.cloudSyncBridge ?? new MockCloudSyncBridge(),
+            syncEngine: undefined,
             isReady: false,
             error,
           };
@@ -315,6 +339,9 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           appSettingsRepository:
             services?.appSettingsRepository as AppSettingsRepository,
           appBridge: services?.appBridge ?? new MockAppBridge(),
+          cloudSyncBridge:
+            services?.cloudSyncBridge ?? new MockCloudSyncBridge(),
+          syncEngine: undefined,
           isReady: false,
           error: null,
         }
