@@ -52,4 +52,54 @@ describe("SqlAppSettingsRepository", () => {
       expect(rows[0].updated_at).not.toBe("2026-01-01T00:00:00.000Z");
     });
   });
+
+  describe("クラウド同期設定キーの読み書き (AC-ST-08 / db-schema)", () => {
+    describe("cloud_sync_last_synced_at", () => {
+      it("初期状態（未同期）では null を返却すること", async () => {
+        const lastSyncedAt = await repository.getCloudSyncLastSyncedAt();
+        expect(lastSyncedAt).toBeNull();
+      });
+
+      it("最終同期日時（ミリ秒タイムスタンプ）を保存・取得できること", async () => {
+        const timestamp = 1730376000000;
+        await repository.setCloudSyncLastSyncedAt(timestamp);
+
+        const fetched = await repository.getCloudSyncLastSyncedAt();
+        expect(fetched).toBe(timestamp);
+      });
+
+      it("null を設定した場合は設定がクリアされ null を返却すること", async () => {
+        await repository.setCloudSyncLastSyncedAt(1730376000000);
+        expect(await repository.getCloudSyncLastSyncedAt()).toBe(1730376000000);
+
+        await repository.setCloudSyncLastSyncedAt(null);
+        expect(await repository.getCloudSyncLastSyncedAt()).toBeNull();
+      });
+    });
+
+    describe("cloud_sync_account_email", () => {
+      it("初期状態（未連携）では null を返却すること", async () => {
+        const email = await repository.getCloudSyncAccountEmail();
+        expect(email).toBeNull();
+      });
+
+      it("連携アカウントメールアドレスを保存・取得できること", async () => {
+        const testEmail = "testuser@gmail.com";
+        await repository.setCloudSyncAccountEmail(testEmail);
+
+        const fetched = await repository.getCloudSyncAccountEmail();
+        expect(fetched).toBe(testEmail);
+      });
+
+      it("null を設定した場合は設定がクリアされ null を返却すること", async () => {
+        await repository.setCloudSyncAccountEmail("testuser@gmail.com");
+        expect(await repository.getCloudSyncAccountEmail()).toBe(
+          "testuser@gmail.com",
+        );
+
+        await repository.setCloudSyncAccountEmail(null);
+        expect(await repository.getCloudSyncAccountEmail()).toBeNull();
+      });
+    });
+  });
 });

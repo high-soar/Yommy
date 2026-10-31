@@ -42,4 +42,20 @@ export class SqlAppSettingsRepository implements AppSettingsRepository {
       [key, value, now],
     );
   }
+
+  async getCloudSyncLastSyncedAt(): Promise<number | null> {
+    throw new Error("getCloudSyncLastSyncedAt is not implemented yet");
+  }
+
+  async setCloudSyncLastSyncedAt(_timestamp: number | null): Promise<void> {
+    throw new Error("setCloudSyncLastSyncedAt is not implemented yet");
+  }
+
+  async getCloudSyncAccountEmail(): Promise<string | null> {
+    throw new Error("getCloudSyncAccountEmail is not implemented yet");
+  }
+
+  async setCloudSyncAccountEmail(_email: string | null): Promise<void> {
+    throw new Error("setCloudSyncAccountEmail is not implemented yet");
+  }
 }

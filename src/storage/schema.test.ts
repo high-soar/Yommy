@@ -18,6 +18,9 @@ describe("storage/schema", () => {
       "CREATE TABLE IF NOT EXISTS reader_settings",
     );
     expect(DDL_STATEMENTS).toContain("CREATE TABLE IF NOT EXISTS app_settings");
+    expect(DDL_STATEMENTS).toContain(
+      "CREATE TABLE IF NOT EXISTS deleted_novels",
+    );
     expect(DDL_STATEMENTS).toContain("UNIQUE (novel_id, remote_chapter_id)");
     expect(DDL_STATEMENTS).toContain("INSERT OR IGNORE INTO reader_settings");
     expect(DDL_STATEMENTS).toContain("INSERT OR IGNORE INTO app_settings");
@@ -50,6 +53,17 @@ describe("storage/schema", () => {
     expect(DDL_STATEMENTS).toContain("value TEXT NOT NULL");
     expect(DDL_STATEMENTS).toContain("updated_at TEXT NOT NULL");
     expect(DDL_STATEMENTS).toContain("'bookshelf_sort_order', 'unread_first'");
+  });
+
+  it("deleted_novels テーブルに id, deleted_at カラムおよびインデックスが定義されていること (db-schema)", () => {
+    expect(DDL_STATEMENTS).toContain(
+      "CREATE TABLE IF NOT EXISTS deleted_novels",
+    );
+    expect(DDL_STATEMENTS).toContain("id TEXT PRIMARY KEY");
+    expect(DDL_STATEMENTS).toContain("deleted_at INTEGER NOT NULL");
+    expect(DDL_STATEMENTS).toContain(
+      "CREATE INDEX IF NOT EXISTS idx_deleted_novels_deleted_at ON deleted_novels(deleted_at DESC)",
+    );
   });
 
   it("initializeDatabaseSchema が各 DDL 文を順次実行し、reader_settings および app_settings の初期行を投入すること", async () => {
@@ -126,6 +140,19 @@ describe("storage/schema", () => {
     );
     expect(settings).toHaveLength(1);
     expect(settings[0].value).toBe("unread_first");
+
+    // deleted_novels テーブル存在およびカラム型検証
+    const deletedNovelsColumns = await db.query<{
+      name: string;
+      type: string;
+      pk: number;
+      notnull: number;
+    }>("PRAGMA table_info(deleted_novels);");
+    expect(deletedNovelsColumns).toHaveLength(2);
+    expect(deletedNovelsColumns.find((c) => c.name === "id")?.pk).toBe(1);
+    expect(
+      deletedNovelsColumns.find((c) => c.name === "deleted_at")?.notnull,
+    ).toBe(1);
   });
 
   it("既存の v0.2 スキーマ（旧 novels テーブル）から initializeDatabaseSchema を実行した際、既存データが保持されたままカラム・インデックス・app_settings が正常に追加されること", async () => {
@@ -204,5 +231,40 @@ describe("storage/schema", () => {
     );
     expect(settings).toHaveLength(1);
     expect(settings[0].value).toBe("unread_first");
+
+    // deleted_novels も新設され、インデックスが利用可能であること
+    const deletedNovels = await db.query(
+      "SELECT id, deleted_at FROM deleted_novels ORDER BY deleted_at DESC;",
+    );
+    expect(deletedNovels).toEqual([]);
+  });
+
+  it("既存の v0.3 スキーマ（deleted_novels なし）から migrateDatabaseSchema を実行した際、deleted_novels テーブルとインデックスが安全に追加されること (AC-BS-13 / db-schema)", async () => {
+    const db = await resetTestDb();
+    await db.execute("DROP TABLE IF EXISTS deleted_novels;");
+
+    // deleted_novels が存在しないことを確認
+    const tablesBefore = await db.query<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'deleted_novels';",
+    );
+    expect(tablesBefore).toHaveLength(0);
+
+    // マイグレーション実行
+    await migrateDatabaseSchema(db);
+
+    // deleted_novels が作成されていること
+    const tablesAfter = await db.query<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'deleted_novels';",
+    );
+    expect(tablesAfter).toHaveLength(1);
+
+    // インデックスを使用してクエリ可能であること
+    await db.execute(
+      "INSERT INTO deleted_novels (id, deleted_at) VALUES ('kakuyomu:del_1', 1730376000000);",
+    );
+    const rows = await db.query<{ id: string; deleted_at: number }>(
+      "SELECT id, deleted_at FROM deleted_novels ORDER BY deleted_at DESC;",
+    );
+    expect(rows).toEqual([{ id: "kakuyomu:del_1", deleted_at: 1730376000000 }]);
   });
 });
