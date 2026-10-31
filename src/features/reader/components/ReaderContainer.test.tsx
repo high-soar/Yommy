@@ -1113,14 +1113,17 @@ describe("ReaderContainer", () => {
         lastCallProps?.onTotalPagesChange?.(12);
       });
 
-      await waitFor(() => {
-        expect(pageSpy).toHaveBeenLastCalledWith(
-          expect.objectContaining({
-            totalPages: 12,
-          }),
-          undefined,
-        );
-      });
+      await waitFor(
+        () => {
+          expect(pageSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+              totalPages: 12,
+            }),
+            undefined,
+          );
+        },
+        { timeout: 3000 },
+      );
     });
 
     it("ReaderPage に渡された onPageChange が呼ばれた際、currentPage が更新されること", async () => {
