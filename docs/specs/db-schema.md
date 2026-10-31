@@ -20,7 +20,7 @@ tags:
   ]
 related_specs:
   - docs/specs/changes/issue-122-reader-page-turning.md
-  - docs/specs/changes/issue-120-cloud-sync-google-drive.md
+  - docs/specs/changes/archive/issue-120-cloud-sync-google-drive.md
   - docs/specs/requirements.md
   - docs/specs/architecture.md
   - docs/specs/parsers/kakuyomu.md

@@ -16,7 +16,7 @@ tags:
   - cloud-sync
   - google-drive
 related_specs:
-  - docs/specs/changes/issue-120-cloud-sync-google-drive.md
+  - docs/specs/changes/archive/issue-120-cloud-sync-google-drive.md
   - docs/specs/requirements.md
   - docs/specs/architecture.md
   - docs/specs/db-schema.md
