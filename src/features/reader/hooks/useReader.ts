@@ -25,10 +25,12 @@ export { isChapterFresh, delay, toErrorMessage };
  * ページ送りモードと組み方向から実効動作モード（"paged" | "scroll"）を算出する純粋関数
  */
 export function resolveEffectivePagingMode(
-  _pagingMode: ReaderPagingMode,
-  _writingMode: WritingMode,
+  pagingMode: ReaderPagingMode,
+  writingMode: WritingMode,
 ): "paged" | "scroll" {
-  throw new Error("resolveEffectivePagingMode is not implemented yet");
+  if (pagingMode === "paged") return "paged";
+  if (pagingMode === "scroll") return "scroll";
+  return writingMode === "vertical-rl" ? "paged" : "scroll";
 }
 
 /**
@@ -116,6 +118,9 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   const [theme, setTheme] = useState<ReaderTheme>("light");
   const [fontSizePx, setFontSizePx] = useState<number>(18);
   const [lineHeight, setLineHeight] = useState<number>(1.8);
+  const [pagingMode, setPagingMode] = useState<ReaderPagingMode>("auto");
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalPages, setTotalPagesState] = useState<number>(1);
   const [initialScrollProgress, setInitialScrollProgress] = useState<number>(0);
   const [scrollProgress, setScrollProgress] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -124,6 +129,10 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   const novelRef = useRef<NovelRecord | null>(novel);
   const currentChapterIndexRef = useRef<number>(currentChapterIndex);
   const scrollProgressRef = useRef<number>(scrollProgress);
+  const currentPageRef = useRef<number>(currentPage);
+  const totalPagesRef = useRef<number>(totalPages);
+  const initialScrollProgressRef = useRef<number>(initialScrollProgress);
+  const isFirstPageMeasurementRef = useRef<boolean>(true);
   const prefetchAbortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -137,6 +146,18 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   useEffect(() => {
     scrollProgressRef.current = scrollProgress;
   }, [scrollProgress]);
+
+  useEffect(() => {
+    currentPageRef.current = currentPage;
+  }, [currentPage]);
+
+  useEffect(() => {
+    totalPagesRef.current = totalPages;
+  }, [totalPages]);
+
+  useEffect(() => {
+    initialScrollProgressRef.current = initialScrollProgress;
+  }, [initialScrollProgress]);
 
   /**
    * 進行中の自動先読み処理を即座に中断する内部関数
@@ -341,6 +362,9 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             setTheme(settings.theme);
             setFontSizePx(settings.fontSizePx);
             setLineHeight(settings.lineHeight);
+            if (settings.pagingMode) {
+              setPagingMode(settings.pagingMode);
+            }
           }
         } catch {
           // 初期行取得に失敗した場合はデフォルト値維持
@@ -364,7 +388,14 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             setChapter(null);
             setCurrentChapterIndex(targetIndex);
             setInitialScrollProgress(0);
+            initialScrollProgressRef.current = 0;
             setScrollProgress(0);
+            scrollProgressRef.current = 0;
+            setCurrentPage(1);
+            currentPageRef.current = 1;
+            setTotalPagesState(1);
+            totalPagesRef.current = 1;
+            isFirstPageMeasurementRef.current = true;
           }
           return;
         }
@@ -436,7 +467,14 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         if (!isMounted) return;
 
         setInitialScrollProgress(nextInitialProgress);
+        initialScrollProgressRef.current = nextInitialProgress;
         setScrollProgress(nextScrollProgress);
+        scrollProgressRef.current = nextScrollProgress;
+        setCurrentPage(1);
+        currentPageRef.current = 1;
+        setTotalPagesState(1);
+        totalPagesRef.current = 1;
+        isFirstPageMeasurementRef.current = true;
         setNovel(targetNovel);
         setChapter(targetChapter);
         setCurrentChapterIndex(targetIndex);
@@ -529,6 +567,60 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     [settingsRepository],
   );
 
+  // ページ送りモード変更
+  const changePagingMode = useCallback(
+    async (nextPagingMode: ReaderPagingMode): Promise<void> => {
+      setPagingMode(nextPagingMode);
+      try {
+        await settingsRepository.updateReaderSettings({
+          pagingMode: nextPagingMode,
+        });
+      } catch (err: unknown) {
+        setError(toErrorMessage(err));
+      }
+    },
+    [settingsRepository],
+  );
+
+  // 総ページ数設定および初期復元／クランプ
+  const setTotalPages = useCallback((total: number): void => {
+    const validTotal = Math.max(
+      1,
+      Math.floor(Number.isFinite(total) ? total : 1),
+    );
+    setTotalPagesState(validTotal);
+    totalPagesRef.current = validTotal;
+
+    if (isFirstPageMeasurementRef.current) {
+      isFirstPageMeasurementRef.current = false;
+      if (initialScrollProgressRef.current > 0) {
+        const restoredPage =
+          validTotal > 1
+            ? Math.min(
+                validTotal,
+                Math.max(
+                  1,
+                  Math.round(
+                    initialScrollProgressRef.current * (validTotal - 1),
+                  ) + 1,
+                ),
+              )
+            : 1;
+        setCurrentPage(restoredPage);
+        currentPageRef.current = restoredPage;
+        return;
+      }
+    }
+
+    setCurrentPage((prevPage) => {
+      if (prevPage > validTotal) {
+        currentPageRef.current = validTotal;
+        return validTotal;
+      }
+      return prevPage;
+    });
+  }, []);
+
   // スクロール進捗率更新（0.0〜1.0 クランプ）および DB 自動保存
   const updateScrollProgress = useCallback(
     async (progress: number): Promise<void> => {
@@ -557,6 +649,34 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     },
     [novelRepository],
   );
+
+  // 指定ページへの遷移およびしおり自動保存
+  const goToPage = useCallback(
+    (targetPage: number): void => {
+      const total = totalPagesRef.current;
+      const rawTarget = Number.isFinite(targetPage)
+        ? Math.round(targetPage)
+        : 1;
+      const clampedPage = Math.max(1, Math.min(total, rawTarget));
+
+      setCurrentPage(clampedPage);
+      currentPageRef.current = clampedPage;
+
+      const progress = total > 1 ? (clampedPage - 1) / (total - 1) : 0;
+      void updateScrollProgress(progress);
+    },
+    [updateScrollProgress],
+  );
+
+  // 次のページへ遷移
+  const nextPage = useCallback((): void => {
+    goToPage(currentPageRef.current + 1);
+  }, [goToPage]);
+
+  // 前のページへ遷移
+  const prevPage = useCallback((): void => {
+    goToPage(currentPageRef.current - 1);
+  }, [goToPage]);
 
   // しおり最新値即時保存
   const flushBookmark = useCallback(async (): Promise<void> => {
@@ -653,7 +773,14 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         setChapter(targetChapter);
         setNovel(reloadedNovel);
         setInitialScrollProgress(0);
+        initialScrollProgressRef.current = 0;
         setScrollProgress(0);
+        scrollProgressRef.current = 0;
+        setCurrentPage(1);
+        currentPageRef.current = 1;
+        setTotalPagesState(1);
+        totalPagesRef.current = 1;
+        isFirstPageMeasurementRef.current = true;
         isSuccess = true;
 
         if (targetChapter && targetChapter.bodyHtml !== null && reloadedNovel) {
@@ -746,7 +873,14 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         setChapter(savedChapter ? { ...savedChapter, isRead: true } : null);
         setCurrentChapterIndex(targetChapterIdx);
         setInitialScrollProgress(0);
+        initialScrollProgressRef.current = 0;
         setScrollProgress(0);
+        scrollProgressRef.current = 0;
+        setCurrentPage(1);
+        currentPageRef.current = 1;
+        setTotalPagesState(1);
+        totalPagesRef.current = 1;
+        isFirstPageMeasurementRef.current = true;
 
         if (savedChapter && reloadedNovel) {
           startPrefetch(
@@ -759,7 +893,14 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         setNovel(savedNovel);
         setChapter(null);
         setInitialScrollProgress(0);
+        initialScrollProgressRef.current = 0;
         setScrollProgress(0);
+        scrollProgressRef.current = 0;
+        setCurrentPage(1);
+        currentPageRef.current = 1;
+        setTotalPagesState(1);
+        totalPagesRef.current = 1;
+        isFirstPageMeasurementRef.current = true;
       }
     } catch (err: unknown) {
       setError(toErrorMessage(err));
@@ -780,6 +921,10 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   const totalChapters = novel ? novel.totalChapters : 0;
   const hasPrevChapter = novel !== null && currentChapterIndex > 1;
   const hasNextChapter = novel !== null && currentChapterIndex < totalChapters;
+  const effectivePagingMode = resolveEffectivePagingMode(
+    pagingMode,
+    writingMode,
+  );
 
   return {
     novel,
@@ -792,10 +937,10 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     lineHeight,
     initialScrollProgress,
     scrollProgress,
-    pagingMode: "auto" as ReaderPagingMode,
-    effectivePagingMode: "scroll" as const,
-    currentPage: 1,
-    totalPages: 1,
+    pagingMode,
+    effectivePagingMode,
+    currentPage,
+    totalPages,
     isLoading,
     error,
     hasPrevChapter,
@@ -804,11 +949,11 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     changeTheme,
     changeFontSize,
     changeLineHeight,
-    changePagingMode: async () => {},
-    goToPage: () => {},
-    nextPage: () => {},
-    prevPage: () => {},
-    setTotalPages: () => {},
+    changePagingMode,
+    goToPage,
+    nextPage,
+    prevPage,
+    setTotalPages,
     updateScrollProgress,
     flushBookmark,
     goToChapter,

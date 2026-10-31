@@ -390,6 +390,9 @@ export interface UseReaderResult {
   changeLineHeight: (lineHeight: number) => Promise<void>;
   changePagingMode: (pagingMode: ReaderPagingMode) => Promise<void>; // 【新設: v0.4 Issue #122】
   goToPage: (targetPage: number) => void; // 【新設: v0.4 Issue #122】
+  nextPage: () => void; // 【新設: v0.4 Issue #122】
+  prevPage: () => void; // 【新設: v0.4 Issue #122】
+  setTotalPages: (total: number) => void; // 【新設: v0.4 Issue #122】
   updateScrollProgress: (progress: number) => Promise<void>;
   flushBookmark: () => Promise<void>;
   goToChapter: (targetChapterIndex: number) => Promise<boolean>;
@@ -402,7 +405,7 @@ export interface UseReaderResult {
 1. **設定の初期読み出しと変更永続化**:
    - マウント時に `settingsRepository.getReaderSettings()` を呼び出し、保存済みの `writingMode`, `theme`, `fontSizePx`（初期値 `18`）, `lineHeight`（初期値 `1.8`）, `pagingMode`（初期値 `'auto'`）を復元する。
    - `toggleWritingMode`, `changeTheme`, `changeFontSize`（`12〜32` にクランプ）, `changeLineHeight`（`1.4〜2.4` にクランプ・小数第1位丸め）, `changePagingMode`（`'auto' | 'paged' | 'scroll'`）実行時は、即座に State を更新するとともに `settingsRepository.updateReaderSettings(patch)` で非同期保存する。
-   - 実効モード `effectivePagingMode` は、`pagingMode === 'auto' ? (writingMode === 'vertical-rl' ? 'paged' : 'scroll') : pagingMode` として動的に算出する。
+   - 実効モード `effectivePagingMode` は、純粋関数 `resolveEffectivePagingMode(pagingMode, writingMode)` に基づき、`pagingMode === 'auto' ? (writingMode === 'vertical-rl' ? 'paged' : 'scroll') : pagingMode` として動的に算出する。
 2. **エピソード読み込みとキャッシュ鮮度・オンデマンド取得（`TR-03`, `TR-04`, `TR-05`）**:
    - `novelId` 指定時は `novelRepository.getNovelById(novelId)`、`novelId` 未指定時は `novelRepository.listNovels()` の先頭作品を取得する（未登録時は空状態 `novel = null, chapter = null`）。
    - 対象エピソード `chapterRepository.getChapter(targetNovel.id, targetChapterIndex)` を取得する。
@@ -416,10 +419,10 @@ export interface UseReaderResult {
    - また「次の話へ」遷移（`TR-05`）実行時にも、現在話に対して `chapterRepository.markChapterRead(targetNovel.id, currentChapterIndex, true)` を確実に実行する。
 4. **しおり（`bookmark_chapter_index`）と進捗率（`bookmark_scroll_progress`）の復元・自動保存（`SYS-REQ-12`, `TR-06`）**:
    - **エピソード表示開始時**:
-     - `targetNovel.bookmarkChapterIndex === targetChapterIndex`（保存済みしおり話と一致する場合）: 保存済みの `targetNovel.bookmarkScrollProgress`（`0.0 〜 1.0`）を `initialScrollProgress` および `scrollProgress` にセットして位置を復元する。実効 `"paged"` モード時は `targetPage = totalPages > 1 ? Math.round(initialScrollProgress * (totalPages - 1)) + 1 : 1` で現在ページを復元する。
+     - `targetNovel.bookmarkChapterIndex === targetChapterIndex`（保存済みしおり話と一致する場合）: 保存済みの `targetNovel.bookmarkScrollProgress`（`0.0 〜 1.0`）を `initialScrollProgress` および `scrollProgress` にセットして位置を復元する。実効 `"paged"` モード時は初回 `setTotalPages(validTotal)` 計測時に `targetPage = validTotal > 1 ? Math.round(initialScrollProgress * (validTotal - 1)) + 1 : 1` で現在ページを復元する（初回計測以降の総ページ数変更時は現在ページ位置を維持し範囲外クランプのみ行う）。
      - `targetNovel.bookmarkChapterIndex !== targetChapterIndex`（別話を開いた場合、または前後話遷移 `TR-05` 時）: `initialScrollProgress = 0`, `scrollProgress = 0`, `currentPage = 1` にセットし、直ちに `novelRepository.updateBookmark(targetNovel.id, targetChapterIndex, 0)` を実行してしおりを現在話の先頭へ更新する。
    - **スクロール／ページめくり操作時および画面離脱時**:
-     - ユーザースクロール時またはページ遷移時、算出された進捗率 `progress`（`0.0 〜 1.0`）で `scrollProgress` を更新し、`novelRepository.updateBookmark(novel.id, chapterIndex, clampedProgress)` で DB へ自動保存する。
+     - ユーザースクロール時またはページ遷移時（`goToPage(targetPage)` / `nextPage()` / `prevPage()`）、算出された進捗率 `progress = totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0`（`0.0 〜 1.0`）で `scrollProgress` を更新し、`novelRepository.updateBookmark(novel.id, chapterIndex, clampedProgress)` で DB へ自動保存する。
      - OS バックキー（`TR-06`）による目次復帰、または下部オーバーレイの4タブ（本棚 `TR-01b`、検索/ランキング/設定 `TR-01`）遷移時には、`flushBookmark()` により最新の `(chapterIndex, scrollProgress)` を確実に DB 保存してから画面遷移コールバックを呼び出す。
 5. **前後エピソード遷移（`goToChapter(targetChapterIndex)`、`TR-05`）**:
    - `novel === null`、または `targetChapterIndex < 1` もしくは `targetChapterIndex > totalChapters`（範囲外）が指定された場合は何もせず `false` を返す。
