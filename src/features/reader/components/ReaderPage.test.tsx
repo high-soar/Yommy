@@ -788,6 +788,17 @@ describe("ReaderPage", () => {
       const readerView = screen.getByTestId("reader-view");
 
       // 第1段階: スクロールで末尾到達
+      Object.defineProperty(readerView, "scrollWidth", {
+        value: 1000,
+        configurable: true,
+        writable: true,
+      });
+      Object.defineProperty(readerView, "clientWidth", {
+        value: 500,
+        configurable: true,
+        writable: true,
+      });
+      readerView.scrollLeft = -500;
       fireEvent.scroll(readerView);
 
       // 第2段階: 再ホイール操作
@@ -814,6 +825,17 @@ describe("ReaderPage", () => {
       const readerView = screen.getByTestId("reader-view");
 
       // 第1段階: スクロールで先頭到達
+      Object.defineProperty(readerView, "scrollWidth", {
+        value: 1000,
+        configurable: true,
+        writable: true,
+      });
+      Object.defineProperty(readerView, "clientWidth", {
+        value: 500,
+        configurable: true,
+        writable: true,
+      });
+      readerView.scrollLeft = 0;
       fireEvent.scroll(readerView);
 
       // 第2段階: 再ホイール操作

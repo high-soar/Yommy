@@ -29,6 +29,7 @@ related_tests:
   - src/features/settings/components/SettingsPage.test.tsx
   - src/features/settings/components/SettingsContainer.test.tsx
   - src/features/reader/hooks/useReader.test.ts
+  - src/features/reader/hooks/useReaderGestures.test.ts
   - src/features/reader/components/ReaderView.test.tsx
   - src/features/reader/components/ReaderPage.test.tsx
   - src/features/reader/components/ReaderContainer.test.tsx

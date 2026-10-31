@@ -9,6 +9,7 @@ import type {
 import type { BottomTab } from "../../../shared/ui/BottomTabBar";
 import { ReaderView } from "./ReaderView";
 import { ReaderBottomOverlay } from "./ReaderBottomOverlay";
+import { useReaderGestures } from "../hooks/useReaderGestures";
 
 export interface ReaderPageProps {
   /** 対象作品レコード（未登録時は null） */
@@ -97,8 +98,9 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
   onScrollProgressChange,
   onSelectTab,
   initialOverlayOpen,
+  initialSlideOffsetPx,
+  initialBoundaryHint,
 }) => {
-  void onPageChange;
   const hasNovel = novel !== null;
   const hasBodyHtml = Boolean(chapter && chapter.bodyHtml !== null);
   const isInitialOpen =
@@ -106,6 +108,7 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
     Boolean(error || (!isLoading && (!hasNovel || !hasBodyHtml)));
 
   const [isOpen, setIsOpen] = useState(isInitialOpen);
+  const mainRef = useRef<HTMLElement | null>(null);
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(
     null,
   );
@@ -126,13 +129,69 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
     }
   }, [error, isLoading, hasNovel, hasBodyHtml, initialOverlayOpen]);
 
+  // 前話遷移（遷移と同時にオーバーレイ自動非表示）
+  const handlePrevChapter = useCallback(() => {
+    setIsOpen(false);
+    onPrevChapter();
+  }, [onPrevChapter]);
+
+  // 次話遷移（遷移と同時にオーバーレイ自動非表示）
+  const handleNextChapter = useCallback(() => {
+    setIsOpen(false);
+    onNextChapter();
+  }, [onNextChapter]);
+
+  const handleToggleOverlay = useCallback(() => {
+    setIsOpen((prev) => !prev);
+  }, []);
+
+  const handleCloseOverlay = useCallback(() => {
+    setIsOpen(false);
+  }, []);
+
+  const handleScrollProgressWithOverlayClose = useCallback(
+    (progress: number) => {
+      setIsOpen(false);
+      onScrollProgressChange(progress);
+    },
+    [onScrollProgressChange],
+  );
+
+  const {
+    slideOffsetPx,
+    isAnimating,
+    boundaryHint,
+    handlePointerDown,
+    handlePointerMove,
+    handlePointerUp,
+    handlePointerCancel,
+    handleMainClick,
+    handleWheel,
+    handleScrollProgressChange,
+  } = useReaderGestures({
+    writingMode,
+    pagingMode,
+    currentPage,
+    totalPages,
+    chapterIndex,
+    totalChapters,
+    isOverlayOpen: isOpen,
+    onToggleOverlay: handleToggleOverlay,
+    onCloseOverlay: handleCloseOverlay,
+    onPageChange,
+    onPrevChapter: handlePrevChapter,
+    onNextChapter: handleNextChapter,
+    onScrollProgressChange: handleScrollProgressWithOverlayClose,
+    containerRef: mainRef,
+    initialSlideOffsetPx,
+    initialBoundaryHint,
+  });
+
   // 最下部タッチゾーン: ポインター押下
   const handleTouchZonePointerDown = useCallback((e: React.PointerEvent) => {
-    const x = e.clientX ?? 0;
-    const y = e.clientY ?? 0;
     touchStartRef.current = {
-      x,
-      y,
+      x: e.clientX,
+      y: e.clientY,
       time: Date.now(),
     };
   }, []);
@@ -140,10 +199,8 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
   // 最下部タッチゾーン: ポインター離上（スワイプ誤検知防止: 移動10px未満かつ500ms未満）
   const handleTouchZonePointerUp = useCallback((e: React.PointerEvent) => {
     if (!touchStartRef.current) return;
-    const currentX = e.clientX ?? 0;
-    const currentY = e.clientY ?? 0;
-    const dx = currentX - touchStartRef.current.x;
-    const dy = currentY - touchStartRef.current.y;
+    const dx = e.clientX - touchStartRef.current.x;
+    const dy = e.clientY - touchStartRef.current.y;
     const dt = Date.now() - touchStartRef.current.time;
     touchStartRef.current = null;
 
@@ -166,41 +223,22 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
     }
   }, []);
 
-  // 自動非表示: 本文スクロール
-  const handleScrollProgressChange = useCallback(
-    (progress: number) => {
-      setIsOpen(false);
-      onScrollProgressChange(progress);
-    },
-    [onScrollProgressChange],
-  );
-
-  // 自動非表示: 本文エリアクリック
-  const handleMainClick = useCallback(() => {
-    if (hasBodyHtml) {
-      setIsOpen(false);
-    }
-  }, [hasBodyHtml]);
-
-  // 前話遷移（遷移と同時にオーバーレイ自動非表示）
-  const handlePrevChapter = useCallback(() => {
-    setIsOpen(false);
-    onPrevChapter();
-  }, [onPrevChapter]);
-
-  // 次話遷移（遷移と同時にオーバーレイ自動非表示）
-  const handleNextChapter = useCallback(() => {
-    setIsOpen(false);
-    onNextChapter();
-  }, [onNextChapter]);
-
   return (
     <div
       data-testid="reader-page"
       className={`h-dvh w-full overflow-hidden relative select-none transition-colors duration-200 ${pageBgStyles[theme]}`}
     >
       {/* メイン本文領域（排他描画） */}
-      <main className="w-full h-full min-w-0" onClick={handleMainClick}>
+      <main
+        ref={mainRef}
+        className="w-full h-full min-w-0"
+        onClick={handleMainClick}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onWheel={handleWheel}
+      >
         {error ? (
           <div className="flex items-center justify-center h-full p-6">
             <div
@@ -253,11 +291,24 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
               pagingMode={pagingMode}
               currentPage={currentPage}
               totalPages={totalPages}
+              slideOffsetPx={slideOffsetPx}
+              isAnimating={isAnimating}
               onTotalPagesChange={onTotalPagesChange}
             />
           </div>
         )}
       </main>
+
+      {/* エピソード境界案内ヒントバッジ */}
+      {boundaryHint && (
+        <div
+          data-testid="reader-episode-boundary-hint"
+          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 px-4 py-2 rounded-full bg-slate-900/90 text-white text-sm font-medium shadow-lg pointer-events-none transition-opacity duration-150"
+          role="status"
+        >
+          {boundaryHint}
+        </div>
+      )}
 
       {/* 最下部タッチゾーン（下端約 72px） */}
       <div
