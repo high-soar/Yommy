@@ -4,10 +4,11 @@ import { SqlSettingsRepository } from "./settingsRepository";
 
 describe("SqlSettingsRepository", () => {
   let repository: SqlSettingsRepository;
+  let dbAdapter: import("../adapter/types").DatabaseAdapter;
 
   beforeEach(async () => {
-    const adapter = await resetTestDb();
-    repository = new SqlSettingsRepository(adapter);
+    dbAdapter = await resetTestDb();
+    repository = new SqlSettingsRepository(dbAdapter);
   });
 
   describe("getReaderSettings", () => {
@@ -148,6 +149,13 @@ describe("SqlSettingsRepository", () => {
         expect(await repository.getCloudSyncLastSyncedAt()).toBe(1730376000000);
 
         await repository.setCloudSyncLastSyncedAt(null);
+        expect(await repository.getCloudSyncLastSyncedAt()).toBeNull();
+      });
+
+      it("保存されている値が不正な数値文字列の場合は null を返却すること", async () => {
+        await dbAdapter.execute(
+          "INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('cloud_sync_last_synced_at', 'invalid-number', '2026-01-01');",
+        );
         expect(await repository.getCloudSyncLastSyncedAt()).toBeNull();
       });
     });

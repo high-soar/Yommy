@@ -75,6 +75,14 @@ describe("SqlAppSettingsRepository", () => {
         await repository.setCloudSyncLastSyncedAt(null);
         expect(await repository.getCloudSyncLastSyncedAt()).toBeNull();
       });
+
+      it("保存されている値が不正な数値文字列の場合は null を返却すること", async () => {
+        await repository.setSetting(
+          "cloud_sync_last_synced_at",
+          "invalid-number",
+        );
+        expect(await repository.getCloudSyncLastSyncedAt()).toBeNull();
+      });
     });
 
     describe("cloud_sync_account_email", () => {

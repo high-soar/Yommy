@@ -127,7 +127,7 @@ erDiagram
 
     deleted_novels {
         TEXT id PK "削除された作品ID (novels.id)"
-        TEXT deleted_at "削除日時 (ISO8601)"
+        INTEGER deleted_at "削除日時 (ミリ秒タイムスタンプ)"
     }
 ```
 
@@ -276,10 +276,10 @@ INSERT OR IGNORE INTO app_settings (
 
 #### クラウド同期設定キー仕様（v0.4 新設: Issue #120）
 
-| キー名 (`key`)              | 設定値の意味                                         | 例 / 初期状態                                      |
-| :-------------------------- | :--------------------------------------------------- | :------------------------------------------------- |
-| `cloud_sync_last_synced_at` | 最終同期完了日時（ISO 8601 UTC 文字列）              | `'2026-10-31T12:00:00.000Z'`（未同期 NULL/未登録） |
-| `cloud_sync_account_email`  | 連携中の Google アカウントのメールアドレス（表示用） | `'user@example.com'`（未連携 NULL/未登録）         |
+| キー名 (`key`)              | 設定値の意味                                         | 例 / 初期状態                              |
+| :-------------------------- | :--------------------------------------------------- | :----------------------------------------- |
+| `cloud_sync_last_synced_at` | 最終同期完了日時（ミリ秒タイムスタンプ文字列）       | `'1730376000000'`（未同期 NULL/未登録）    |
+| `cloud_sync_account_email`  | 連携中の Google アカウントのメールアドレス（表示用） | `'user@example.com'`（未連携 NULL/未登録） |
 
 ---
 
@@ -287,13 +287,13 @@ INSERT OR IGNORE INTO app_settings (
 
 複数端末間でのクラウド同期（Google Drive `appDataFolder`、Issue #120）において、端末 A で削除された作品が端末 B で再度復活してしまう現象を防止するため、ローカルで削除された作品 ID と削除日時（`deleted_at`）を Tombstone として記録・保持するテーブルです。
 
-- **記録契機**: `novelRepository.deleteNovel(novelId)` 呼び出し時に、該当 ID と現在時刻（ISO 8601）を本テーブルへ `INSERT OR REPLACE` します。
+- **記録契機**: `novelRepository.deleteNovel(novelId)` 呼び出し時に、該当 ID と現在時刻（ミリ秒タイムスタンプ `Date.now()`）を本テーブルへ `INSERT OR REPLACE` します。
 - **同期同期連携**: 次回 Push 時に、本テーブルの全レコードをリモートの `yommy-sync-state.json` 内 `deletedNovels` マップへ結合します。Pull 時には、リモート `deletedNovels` の削除日時がローカル作品の登録/更新日時より新しい場合にローカル作品をカスケード削除し、本テーブルにも反映します。
 
 ```sql
 CREATE TABLE IF NOT EXISTS deleted_novels (
   id TEXT PRIMARY KEY,                             -- 削除された作品ID (novels.id)
-  deleted_at TEXT NOT NULL                         -- 削除日時 (ISO 8601)
+  deleted_at INTEGER NOT NULL                      -- 削除日時 (ミリ秒タイムスタンプ)
 );
 
 CREATE INDEX IF NOT EXISTS idx_deleted_novels_deleted_at ON deleted_novels(deleted_at DESC);

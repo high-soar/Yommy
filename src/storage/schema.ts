@@ -100,7 +100,24 @@ INSERT OR IGNORE INTO app_settings (
 ) VALUES (
   'bookshelf_sort_order', 'unread_first', '2026-01-01T00:00:00.000Z'
 );
+
+CREATE TABLE IF NOT EXISTS deleted_novels (
+  id TEXT PRIMARY KEY,
+  deleted_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_deleted_novels_deleted_at ON deleted_novels(deleted_at DESC);
 `;
+
+/**
+ * 汎用設定キー名定義
+ * （docs/specs/db-schema.md §3.5 に準拠）
+ */
+export const APP_SETTING_KEYS = {
+  BOOKSHELF_SORT_ORDER: "bookshelf_sort_order",
+  CLOUD_SYNC_LAST_SYNCED_AT: "cloud_sync_last_synced_at",
+  CLOUD_SYNC_ACCOUNT_EMAIL: "cloud_sync_account_email",
+} as const;
 
 /**
  * データベースアダプターに対してスキーマ初期化 DDL およびマイグレーションを実行する
@@ -148,6 +165,22 @@ export async function migrateDatabaseSchema(
   if (!columnNames.has("latest_episode_published_at")) {
     await db.execute(
       "ALTER TABLE novels ADD COLUMN latest_episode_published_at TEXT;",
+    );
+  }
+
+  // deleted_novels テーブル（v0.4 新設: Issue #120）が存在しない場合は作成
+  const deletedNovelsTables = await db.query<{ name: string }>(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'deleted_novels';",
+  );
+  if (deletedNovelsTables.length === 0) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS deleted_novels (
+        id TEXT PRIMARY KEY,
+        deleted_at INTEGER NOT NULL
+      );
+    `);
+    await db.execute(
+      "CREATE INDEX IF NOT EXISTS idx_deleted_novels_deleted_at ON deleted_novels(deleted_at DESC);",
     );
   }
 }

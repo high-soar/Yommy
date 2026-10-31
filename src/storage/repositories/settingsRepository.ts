@@ -95,18 +95,59 @@ export class SqlSettingsRepository implements SettingsRepository {
   }
 
   async getCloudSyncLastSyncedAt(): Promise<number | null> {
-    throw new Error("getCloudSyncLastSyncedAt is not implemented yet");
+    const rows = await this.db.query<{ value: string }>(
+      "SELECT value FROM app_settings WHERE key = 'cloud_sync_last_synced_at';",
+    );
+    if (rows.length === 0) {
+      return null;
+    }
+    const num = Number(rows[0].value);
+    return Number.isNaN(num) ? null : num;
   }
 
-  async setCloudSyncLastSyncedAt(_timestamp: number | null): Promise<void> {
-    throw new Error("setCloudSyncLastSyncedAt is not implemented yet");
+  async setCloudSyncLastSyncedAt(timestamp: number | null): Promise<void> {
+    if (timestamp === null) {
+      await this.db.execute(
+        "DELETE FROM app_settings WHERE key = 'cloud_sync_last_synced_at';",
+      );
+    } else {
+      const now = new Date().toISOString();
+      await this.db.execute(
+        `INSERT INTO app_settings (key, value, updated_at)
+         VALUES ('cloud_sync_last_synced_at', ?, ?)
+         ON CONFLICT(key) DO UPDATE SET
+           value = excluded.value,
+           updated_at = excluded.updated_at;`,
+        [String(timestamp), now],
+      );
+    }
   }
 
   async getCloudSyncAccountEmail(): Promise<string | null> {
-    throw new Error("getCloudSyncAccountEmail is not implemented yet");
+    const rows = await this.db.query<{ value: string }>(
+      "SELECT value FROM app_settings WHERE key = 'cloud_sync_account_email';",
+    );
+    if (rows.length === 0) {
+      return null;
+    }
+    return rows[0].value;
   }
 
-  async setCloudSyncAccountEmail(_email: string | null): Promise<void> {
-    throw new Error("setCloudSyncAccountEmail is not implemented yet");
+  async setCloudSyncAccountEmail(email: string | null): Promise<void> {
+    if (email === null) {
+      await this.db.execute(
+        "DELETE FROM app_settings WHERE key = 'cloud_sync_account_email';",
+      );
+    } else {
+      const now = new Date().toISOString();
+      await this.db.execute(
+        `INSERT INTO app_settings (key, value, updated_at)
+         VALUES ('cloud_sync_account_email', ?, ?)
+         ON CONFLICT(key) DO UPDATE SET
+           value = excluded.value,
+           updated_at = excluded.updated_at;`,
+        [email, now],
+      );
+    }
   }
 }

@@ -20,7 +20,7 @@
     "test:vrt": "npm run build-storybook && playwright test -c playwright.vrt.config.ts",
     "test:vrt:update": "npm run build-storybook && playwright test -c playwright.vrt.config.ts --update-snapshots",
     "test:it": "npm run build && playwright test -c playwright.it.config.ts",
-    "prepare": "git config --local core.hooksPath .githooks || true"
+    "prepare": "git config --local core.hooksPath .githooks || true; node scripts/sync-env.mjs || true"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^8.1.1",
