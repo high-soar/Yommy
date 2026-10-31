@@ -200,14 +200,26 @@ describe("Android ビルド設定および署名・バージョン管理検証 (
     it("トークン失効（401）時の自動リフレッシュ・サイレント再取得ロジックが存在すること (R1-02)", () => {
       const content = fs.readFileSync(pluginPath, "utf-8");
 
-      expect(content).toMatch(/refreshAccessToken|getOrRefreshToken/);
+      expect(content).toMatch(
+        /private\s+String\s+refreshAccessToken\s*\(\s*\)/,
+      );
+      expect(content).toMatch(/private\s+String\s+getOrRefreshToken\s*\(\s*\)/);
+      // pullFile 内で findSyncFileId 呼び出し時およびダウンロード時に 401 検知で refreshAccessToken されること
+      expect(content).toMatch(
+        /pullFile[\s\S]*?findSyncFileId[\s\S]*?refreshAccessToken[\s\S]*?downloadUrl/,
+      );
+      // pushFile 内で findSyncFileId 呼び出し時およびアップロード時に 401 検知で refreshAccessToken されること
+      expect(content).toMatch(
+        /pushFile[\s\S]*?findSyncFileId[\s\S]*?refreshAccessToken[\s\S]*?uploadPatch/,
+      );
     });
 
-    it("Activity 再生成耐性のために saveCall / getSavedCall を利用していること (R1-37)", () => {
+    it("Activity 再生成耐性のために saveCall / getSavedCall / freeSavedCall を利用していること (R1-37)", () => {
       const content = fs.readFileSync(pluginPath, "utf-8");
 
       expect(content).toMatch(/saveCall\s*\(\s*call\s*\)/);
       expect(content).toMatch(/getSavedCall\s*\(\s*\)/);
+      expect(content).toMatch(/freeSavedCall\s*\(\s*\)/);
     });
 
     it("handleOnDestroy() において executor.shutdownNow() が実装されていること (R1-38)", () => {

@@ -220,31 +220,35 @@ public class CloudSyncPlugin extends Plugin {
             return;
         }
 
-        if (result.getResultCode() == Activity.RESULT_OK) {
-            Intent data = result.getData();
-            try {
-                AuthorizationResult authResult = Identity.getAuthorizationClient(getActivity())
-                    .getAuthorizationResultFromIntent(data);
-                currentAccessToken = authResult.getAccessToken();
-                extractEmailFromAuthResult(authResult);
-                saveLinkedState();
-                JSObject ret = new JSObject();
-                ret.put("status", STATUS_CONNECTED);
-                if (currentUserEmail != null && !currentUserEmail.isEmpty()) {
-                    ret.put("email", currentUserEmail);
+        try {
+            if (result.getResultCode() == Activity.RESULT_OK) {
+                Intent data = result.getData();
+                try {
+                    AuthorizationResult authResult = Identity.getAuthorizationClient(getActivity())
+                        .getAuthorizationResultFromIntent(data);
+                    currentAccessToken = authResult.getAccessToken();
+                    extractEmailFromAuthResult(authResult);
+                    saveLinkedState();
+                    JSObject ret = new JSObject();
+                    ret.put("status", STATUS_CONNECTED);
+                    if (currentUserEmail != null && !currentUserEmail.isEmpty()) {
+                        ret.put("email", currentUserEmail);
+                    }
+                    call.resolve(ret);
+                } catch (Exception e) {
+                    Log.e(TAG, "Error getting auth result from intent", e);
+                    JSObject ret = new JSObject();
+                    ret.put("status", STATUS_ERROR);
+                    ret.put("message", e.getMessage() != null ? e.getMessage() : "Failed to resolve auth");
+                    call.resolve(ret);
                 }
-                call.resolve(ret);
-            } catch (Exception e) {
-                Log.e(TAG, "Error getting auth result from intent", e);
+            } else {
                 JSObject ret = new JSObject();
-                ret.put("status", STATUS_ERROR);
-                ret.put("message", e.getMessage() != null ? e.getMessage() : "Failed to resolve auth");
+                ret.put("status", STATUS_UNLINKED);
                 call.resolve(ret);
             }
-        } else {
-            JSObject ret = new JSObject();
-            ret.put("status", STATUS_UNLINKED);
-            call.resolve(ret);
+        } finally {
+            freeSavedCall();
         }
     }
 
@@ -275,11 +279,11 @@ public class CloudSyncPlugin extends Plugin {
     @PluginMethod
     public void signOut(PluginCall call) {
         clearLinkedState();
-        executor.execute(() -> {
-            String token = currentAccessToken;
-            currentAccessToken = null;
-            currentUserEmail = null;
+        final String token = currentAccessToken;
+        currentAccessToken = null;
+        currentUserEmail = null;
 
+        executor.execute(() -> {
             if (token != null && !token.isEmpty()) {
                 HttpURLConnection conn = null;
                 try {
@@ -345,7 +349,19 @@ public class CloudSyncPlugin extends Plugin {
         executor.execute(() -> {
             try {
                 String token = getOrRefreshToken();
-                String fileId = findSyncFileId(token);
+                String fileId;
+                try {
+                    fileId = findSyncFileId(token);
+                } catch (Exception e) {
+                    if (e.getMessage() != null && e.getMessage().contains("401")) {
+                        currentAccessToken = null;
+                        token = refreshAccessToken();
+                        fileId = findSyncFileId(token);
+                    } else {
+                        throw e;
+                    }
+                }
+
                 if (fileId == null) {
                     JSObject ret = new JSObject();
                     ret.put("content", null);
@@ -425,7 +441,18 @@ public class CloudSyncPlugin extends Plugin {
         executor.execute(() -> {
             try {
                 String token = getOrRefreshToken();
-                String fileId = findSyncFileId(token);
+                String fileId;
+                try {
+                    fileId = findSyncFileId(token);
+                } catch (Exception e) {
+                    if (e.getMessage() != null && e.getMessage().contains("401")) {
+                        currentAccessToken = null;
+                        token = refreshAccessToken();
+                        fileId = findSyncFileId(token);
+                    } else {
+                        throw e;
+                    }
+                }
                 int responseCode;
 
                 if (fileId != null) {
