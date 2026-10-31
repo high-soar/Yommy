@@ -6,6 +6,7 @@ status: Approved
 updated: "2026-10-31"
 tags: [quality, bug-log, handover, dre, kaizen]
 related_specs:
+  - docs/specs/changes/issue-120-cloud-sync-google-drive.md
   - docs/index.md
   - docs/guidelines/workflow.md
   - docs/guidelines/testing.md
@@ -71,9 +72,10 @@ related_tests: []
 > - Milestone `v0.2` で解決済みの申し送り（`HO-10`〜`HO-13`）: [docs/quality/archive/v0.2-ui-ux-log.md](archive/v0.2-ui-ux-log.md)
 > - Milestone `v0.3` で解決済みの申し送り（`HO-14`, `HO-16`〜`HO-21`）: [docs/quality/archive/v0.3-search-prefetch-log.md](archive/v0.3-search-prefetch-log.md)
 
-|   ID    | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                      | 解決先（対象 Issue / 成果物）          | 完了ゲート             | 状態 (`Open` / `Resolved`) |
-| :-----: | :---------------: | :-------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------- | :--------------------- | :------------------------: |
-| `HO-15` |        #78        | Android 実機での APK 上書きインストール実証（GitHub Actions 生成 APK を実機へアンインストールなしで上書きアップデートできることの検証） | Milestone `v0.3` Step 3 人間確認タスク | 実機インストール確認時 |           `Open`           |
+|   ID    | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                                      | 解決先（対象 Issue / 成果物）          | 完了ゲート             | 状態 (`Open` / `Resolved`) |
+| :-----: | :---------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------ | :------------------------------------- | :--------------------- | :------------------------: |
+| `HO-15` |        #78        | Android 実機での APK 上書きインストール実証（GitHub Actions 生成 APK を実機へアンインストールなしで上書きアップデートできることの検証）                 | Milestone `v0.3` Step 3 人間確認タスク | 実機インストール確認時 |           `Open`           |
+| `HO-22` |       #120        | Google Drive appDataFolder クラウド同期の Android 実機 / Google Play 開発者サービス環境での OAuth 認可フローおよび `AuthorizationClient` 連携の実機検証 | Milestone `v0.4` Step 3 人間確認タスク | 実機インストール確認時 |           `Open`           |
 
 ---
 

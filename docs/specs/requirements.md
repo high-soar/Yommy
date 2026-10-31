@@ -2,7 +2,7 @@
 type: spec-requirements
 title: 全体要件定義・機能一覧・ロードマップ（App 全体正本）
 description: "Yommyのターゲット環境、小説サイト対応優先順位、全機能要件（SYS-REQ-01〜20）、およびミニMilestoneロードマップの正本。"
-status: Approved
+status: "Review (#120)"
 updated: "2026-10-31"
 tags:
   - requirements
@@ -21,7 +21,10 @@ tags:
   - prefetch
   - batch-cache
   - cache-rules
+  - cloud-sync
+  - google-drive
 related_specs:
+  - docs/specs/changes/issue-120-cloud-sync-google-drive.md
   - docs/specs/changes/archive/issue-124-settings-back-button-navigation.md
   - docs/specs/architecture.md
   - docs/specs/db-schema.md
@@ -97,7 +100,7 @@ related_tests:
 | **SYS-REQ-03** | レートリミット・バックグラウンド取得 | 読書中の自動先読み（5話先まで）や作品詳細での未取得話一括キャッシュ時は、対象サーバーへの負荷や 503 IP BAN を防ぐため、リクエスト間隔のウェイト制御（1.5秒間隔）を伴うバックグラウンド処理で順次取得し、画面遷移・離脱時の適切な中断・切り替えができる（`v0.3` Issue #81）。                                                                | `SCR-02`, `SCR-03` / `TR-05`, `TR-06`, `TR-18`                              | `AC-RD-12`, `AC-ND-11`, `AC-ND-12`                                                                                  |     `v0.3`     |
 | **SYS-REQ-04** | 更新チェック（差分取得）・ソート     | 登録済み作品の目次を再取得し、新規追加されたエピソードを検知して差分取得できる（`v0.3` Issue #80 にて本棚表示時の1時間経過作品バックグラウンド自動更新チェック、「NEW（更新あり）」表示・閲覧時解除、およびデフォルト「更新あり優先＋最近読んだ順」を含む本棚5種ソートを追加）。                                                            | `SCR-01`, `SCR-02`, `SCR-03` / `TR-02`, `TR-03`, `TR-16`, `TR-17`           | `AC-BS-08`〜`11`, `AC-ND-05`, `AC-ND-10`, `AC-RD-11`                                                                | `v0.1`〜`v0.3` |
 | **SYS-REQ-05** | キャッシュ管理・容量整理             | 作品ごと・アプリ全体のキャッシュデータ容量（Byte/MB）を確認でき、既読エピソードの本文キャッシュ削除・作品単位のキャッシュクリア・作品削除が行える。また作品詳細画面（`SCR-02`）から未取得話の一括キャッシュ取得が行える（`v0.3` Issue #81）。                                                                                               | `SCR-02`, `SCR-05` / `TR-01`, `TR-07`, `TR-18`                              | `AC-ND-06`, `AC-ND-11`〜`13`                                                                                        | `v0.1`〜`v0.4` |
-| **SYS-REQ-06** | バックアップ・復元                   | 本棚の登録作品・しおり・既読状態・設定データを JSON 等の形式でエクスポート／インポートできる。                                                                                                                                                                                                                                              | `SCR-05`                                                                    | -                                                                                                                   |     `v0.4`     |
+| **SYS-REQ-06** | クラウド同期・バックアップ           | ユーザー自身の Google Drive アプリ専用領域（`appDataFolder`）を活用し、本棚の登録作品・しおり話数・既読状態・削除情報を単一 JSON（`yommy-sync-state.json`）としてセキュアかつ自動的に双方向クラウド同期・マージできる（手動 JSON エクスポート/インポートを本機能へ統合）。                                                                  | `SCR-05` / `TR-01`                                                          | `AC-ST-08`〜`12`                                                                                                    |     `v0.4`     |
 
 ### 3.2 小説特化リーダー・組版・操作体験
 

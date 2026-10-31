@@ -2,10 +2,23 @@
 type: spec-db-schema
 title: ローカル DB スキーマ定義（App 全体正本）
 description: SQLite（novels, chapters, download_queue, reader_settings, app_settings）のER図、テーブル構造、およびDDL定義の正本。
-status: Approved
+status: "Review (#120)"
 updated: "2026-10-31"
-tags: [database, sqlite, schema, storage, settings, prefetch, cache-rules]
+tags:
+  [
+    database,
+    sqlite,
+    schema,
+    storage,
+    settings,
+    prefetch,
+    cache-rules,
+    cloud-sync,
+    google-drive,
+    tombstone,
+  ]
 related_specs:
+  - docs/specs/changes/issue-120-cloud-sync-google-drive.md
   - docs/specs/requirements.md
   - docs/specs/architecture.md
   - docs/specs/parsers/kakuyomu.md
@@ -110,6 +123,11 @@ erDiagram
         TEXT key PK "設定キー (例: bookshelf_sort_order)"
         TEXT value "設定値 (文字列)"
         TEXT updated_at "更新日時 (ISO8601)"
+    }
+
+    deleted_novels {
+        TEXT id PK "削除された作品ID (novels.id)"
+        TEXT deleted_at "削除日時 (ISO8601)"
     }
 ```
 
@@ -256,9 +274,38 @@ INSERT OR IGNORE INTO app_settings (
 | `created_at`       | 登録日順                             | `novels.created_at DESC`                                                                                                                      |
 | `title`            | タイトル順                           | `novels.title COLLATE NOCASE ASC`                                                                                                             |
 
+#### クラウド同期設定キー仕様（v0.4 新設: Issue #120）
+
+| キー名 (`key`)              | 設定値の意味                                         | 例 / 初期状態                                      |
+| :-------------------------- | :--------------------------------------------------- | :------------------------------------------------- |
+| `cloud_sync_last_synced_at` | 最終同期完了日時（ISO 8601 UTC 文字列）              | `'2026-10-31T12:00:00.000Z'`（未同期 NULL/未登録） |
+| `cloud_sync_account_email`  | 連携中の Google アカウントのメールアドレス（表示用） | `'user@example.com'`（未連携 NULL/未登録）         |
+
 ---
 
-### 3.6 スキーママイグレーション方針（v0.2 からの移行）
+### 3.6 `deleted_novels` テーブル（削除済み作品の Tombstone 追跡：v0.4〜）
 
-既存データベース（v0.2 以前）に対して `initializeDatabaseSchema` が呼び出された場合、`PRAGMA table_info(novels)` を参照し、`has_new_update` および `latest_episode_published_at` カラムが存在しない場合に `ALTER TABLE novels ADD COLUMN ...` を実行して既存データを保持したままカラムを追加します。その後、新規インデックスおよび `app_settings` テーブルを作成します。
-これにより、v0.2 からのバージョンアップ時でも既存の作品データ・キャッシュ・しおり位置を完全に維持したまま安全にスキーマ移行が完了します。
+複数端末間でのクラウド同期（Google Drive `appDataFolder`、Issue #120）において、端末 A で削除された作品が端末 B で再度復活してしまう現象を防止するため、ローカルで削除された作品 ID と削除日時（`deleted_at`）を Tombstone として記録・保持するテーブルです。
+
+- **記録契機**: `novelRepository.deleteNovel(novelId)` 呼び出し時に、該当 ID と現在時刻（ISO 8601）を本テーブルへ `INSERT OR REPLACE` します。
+- **同期同期連携**: 次回 Push 時に、本テーブルの全レコードをリモートの `yommy-sync-state.json` 内 `deletedNovels` マップへ結合します。Pull 時には、リモート `deletedNovels` の削除日時がローカル作品の登録/更新日時より新しい場合にローカル作品をカスケード削除し、本テーブルにも反映します。
+
+```sql
+CREATE TABLE IF NOT EXISTS deleted_novels (
+  id TEXT PRIMARY KEY,                             -- 削除された作品ID (novels.id)
+  deleted_at TEXT NOT NULL                         -- 削除日時 (ISO 8601)
+);
+
+CREATE INDEX IF NOT EXISTS idx_deleted_novels_deleted_at ON deleted_novels(deleted_at DESC);
+```
+
+---
+
+### 3.7 スキーママイグレーション方針（v0.2 / v0.3 からの移行）
+
+既存データベース（v0.3 以前）に対して `initializeDatabaseSchema` が呼び出された場合：
+
+1. `PRAGMA table_info(novels)` を参照し、`has_new_update` および `latest_episode_published_at` カラムが存在しない場合に `ALTER TABLE novels ADD COLUMN ...` を実行して既存データを保持したままカラムを追加します。
+2. `CREATE TABLE IF NOT EXISTS app_settings` および `CREATE TABLE IF NOT EXISTS deleted_novels` を実行し、新規テーブルおよびインデックスを追加作成します。
+
+これにより、v0.2 / v0.3 からのバージョンアップ時でも既存の作品データ・キャッシュ・しおり位置を完全に維持したまま安全にスキーマ移行が完了します。

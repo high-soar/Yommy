@@ -71,4 +71,8 @@ Phase 3 以降の PR 作業では、[.github/pull_request_template.md](../../pul
 
 - 既存の作業ツリーと同一ブランチを重複チェックアウトしない。
 - Worktree 内でテストや品質チェックを実行する際は、`node_modules` の解決を確認する。
+- **Worktree 運用における環境変数管理ルール**:
+  - 新規 Worktree を作成する際、ルートの `.env.example` を参考に必要な環境変数（`VITE_GOOGLE_CLIENT_ID` 等）を確認する。
+  - `package.json` の `prepare` スクリプト等により、メイン Worktree（`/workspaces/Yommy/.env.local`）が存在しかつカレント Worktree に `.env.local` がない場合は自動コピーして引き継ぐ。
+  - テストおよびビルドは `.env.local` の有無に関わらず 100% 決定論的に PASS することを保証する（DI モック分離・安全なフォールバック）。
 - 作業完了後は `git status` で未コミット変更がないことを確認してから `git worktree remove <path>` で削除する（`--force` は使用しない）。

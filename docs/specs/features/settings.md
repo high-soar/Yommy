@@ -2,10 +2,22 @@
 type: spec-feature
 title: "設定画面仕様書（SCR-05: Settings）"
 description: 小説リーダーの組版設定（縦書き/横書き、4カラーテーマ、文字サイズ、行間）の一括カスタマイズ・永続化、ルビ・傍点を含むサンプル文章プレビュー、および下部タブ・OSバックキー連携を提供する設定画面（SCR-05）の正本仕様。
-status: Approved
+status: "Review (#120)"
 updated: "2026-10-31"
-tags: [settings, scr-05, typography, theme, preview, bottom-nav, ui]
+tags:
+  [
+    settings,
+    scr-05,
+    typography,
+    theme,
+    preview,
+    bottom-nav,
+    ui,
+    cloud-sync,
+    google-drive,
+  ]
 related_specs:
+  - docs/specs/changes/issue-120-cloud-sync-google-drive.md
   - docs/specs/changes/archive/issue-124-settings-back-button-navigation.md
   - docs/specs/requirements.md
   - docs/specs/architecture.md
@@ -39,6 +51,7 @@ related_tests:
 
 - **対象画面**: 設定画面（`SCR-05`、ルートパス `/settings`）
 - **対応要件**:
+  - `SYS-REQ-06`（Google Drive appDataFolder による本棚・しおり・既読のクラウド同期・マージ、手動即時同期、アカウント連携/解除）
   - `SYS-REQ-07`（ルビ・傍点の正確な描画：サンプル文章プレビュー枠内でのルビ・傍点レンダリング）
   - `SYS-REQ-08`（縦書き `vertical-rl` / 横書き `horizontal-tb` 切り替え）
   - `SYS-REQ-09`（文字サイズ `12〜32px`、行間 `1.4〜2.4` のカスタマイズと永続化 ※フォント種別・余白は `v0.4`）
@@ -53,7 +66,6 @@ related_tests:
   - フォント種別（`fontFamily`）の選択および画面余白（`pageMarginPx`）の設定（Milestone `v0.4`：`SYS-REQ-09` 拡張）
   - タップ送り（`enableTapPaging`）・音量キー送り（`enableVolumeKeyPaging`）のトグル設定（Milestone `v0.4`：`SYS-REQ-11` 拡張）
   - 全体および作品別キャッシュ使用量の可視化、既読キャッシュ一括削除（Milestone `v0.4`：`SYS-REQ-05`）
-  - 設定データ・しおりのバックアップ（JSON エクスポート/インポート）（Milestone `v0.4`：`SYS-REQ-06`）
 
 ---
 
@@ -65,15 +77,20 @@ related_tests:
 src/features/settings/
 ├── hooks/
 │   ├── useSettings.ts                     # reader_settings 読み出し・更新・永続化フック
-│   └── useSettings.test.ts                # フック単体テスト（Vitest）
+│   ├── useSettings.test.ts                # フック単体テスト（Vitest）
+│   ├── useCloudSync.ts                    # Google Drive クラウド同期状態管理・操作フック（v0.4）
+│   └── useCloudSync.test.ts               # クラウド同期フック単体テスト（Vitest）
 └── components/
     ├── SampleTextPreview.tsx              # ルビ・傍点を含む固定小説文のリアルタイム組版プレビュー（Presentational）
     ├── SampleTextPreview.stories.tsx
     ├── SampleTextPreview.test.tsx
-    ├── SettingsPage.tsx                   # 設定項目（組み方向・テーマ・文字サイズ・行間）とプレビュー枠のレイアウト統合（Presentational）
+    ├── CloudSyncSection.tsx               # Google Drive クラウド同期カード（連携・解除・即時同期・状態表示）（Presentational, v0.4）
+    ├── CloudSyncSection.stories.tsx
+    ├── CloudSyncSection.test.tsx
+    ├── SettingsPage.tsx                   # 設定項目（組版・プレビュー・クラウド同期）のレイアウト統合（Presentational）
     ├── SettingsPage.stories.tsx
     ├── SettingsPage.test.tsx
-    ├── SettingsContainer.tsx              # useSettings / Router を接続する Container
+    ├── SettingsContainer.tsx              # useSettings / useCloudSync / Router を接続する Container
     ├── SettingsContainer.stories.tsx
     └── SettingsContainer.test.tsx
 ```
@@ -126,18 +143,25 @@ src/features/settings/
 
 #### プロパティ契約（`SettingsPageProps`）
 
-| プロパティ名          | 型                             | 必須 | 既定値  | 説明                                                   |
-| :-------------------- | :----------------------------- | :--- | :------ | :----------------------------------------------------- |
-| `writingMode`         | `WritingMode`                  | 必須 | -       | 現在の組み方向                                         |
-| `theme`               | `ReaderTheme`                  | 必須 | -       | 現在のカラーテーマ                                     |
-| `fontSizePx`          | `number`                       | 任意 | `18`    | 現在の文字サイズ (`12 〜 32` px)                       |
-| `lineHeight`          | `number`                       | 任意 | `1.8`   | 現在の行間倍率 (`1.4 〜 2.4`)                          |
-| `isLoading`           | `boolean`                      | 任意 | `false` | 設定読み込み中フラグ                                   |
-| `error`               | `string \| null`               | 任意 | `null`  | 設定保存・読込エラーメッセージ                         |
-| `onToggleWritingMode` | `() => void`                   | 必須 | -       | 組み方向切替ボタン押下時のコールバック                 |
-| `onChangeTheme`       | `(theme: ReaderTheme) => void` | 必須 | -       | テーマ選択ボタン押下時のコールバック                   |
-| `onChangeFontSize`    | `(nextSizePx: number) => void` | 必須 | -       | 文字サイズ変更ボタン（`−` / `＋`）押下時のコールバック |
-| `onChangeLineHeight`  | `(nextHeight: number) => void` | 必須 | -       | 行間変更ボタン（`−` / `＋`）押下時のコールバック       |
+| プロパティ名            | 型                             | 必須 | 既定値                   | 説明                                                   |
+| :---------------------- | :----------------------------- | :--- | :----------------------- | :----------------------------------------------------- |
+| `writingMode`           | `WritingMode`                  | 必須 | -                        | 現在の組み方向                                         |
+| `theme`                 | `ReaderTheme`                  | 必須 | -                        | 現在のカラーテーマ                                     |
+| `fontSizePx`            | `number`                       | 任意 | `18`                     | 現在の文字サイズ (`12 〜 32` px)                       |
+| `lineHeight`            | `number`                       | 任意 | `1.8`                    | 現在の行間倍率 (`1.4 〜 2.4`)                          |
+| `isLoading`             | `boolean`                      | 任意 | `false`                  | 設定読み込み中フラグ                                   |
+| `error`                 | `string \| null`               | 任意 | `null`                   | 設定保存・読込エラーメッセージ                         |
+| `cloudSyncAuthState`    | `CloudSyncAuthState`           | 任意 | `{ status: 'unlinked' }` | Google アカウント認証状態（v0.4）                      |
+| `cloudSyncLastSyncedAt` | `string \| null`               | 任意 | `null`                   | 最終同期完了日時（ISO 8601、v0.4）                     |
+| `isCloudSyncing`        | `boolean`                      | 任意 | `false`                  | クラウド同期処理中フラグ（v0.4）                       |
+| `cloudSyncError`        | `string \| null`               | 任意 | `null`                   | クラウド同期エラーメッセージ（v0.4）                   |
+| `onToggleWritingMode`   | `() => void`                   | 必須 | -                        | 組み方向切替ボタン押下時のコールバック                 |
+| `onChangeTheme`         | `(theme: ReaderTheme) => void` | 必須 | -                        | テーマ選択ボタン押下時のコールバック                   |
+| `onChangeFontSize`      | `(nextSizePx: number) => void` | 必須 | -                        | 文字サイズ変更ボタン（`−` / `＋`）押下時のコールバック |
+| `onChangeLineHeight`    | `(nextHeight: number) => void` | 必須 | -                        | 行間変更ボタン（`−` / `＋`）押下時のコールバック       |
+| `onSignInGoogle`        | `() => Promise<void>`          | 任意 | -                        | Google 連携ボタン押下時のコールバック（v0.4）          |
+| `onSignOutGoogle`       | `() => Promise<void>`          | 任意 | -                        | Google 連携解除ボタン押下時のコールバック（v0.4）      |
+| `onSyncNow`             | `() => Promise<void>`          | 任意 | -                        | 今すぐ同期ボタン押下時のコールバック（v0.4）           |
 
 #### 表示項目・セマンティック属性・境界制御ルール
 
@@ -161,12 +185,53 @@ src/features/settings/
   2. **プレビューセクション (`data-testid="preview-section"`)**:
      - セクション見出し「組版プレビュー」
      - `SampleTextPreview` コンポーネントを配置。
+  3. **クラウド同期セクション (`data-testid="cloud-sync-section"`, v0.4)**:
+     - セクション見出し「クラウド同期 (Google Drive)」
+     - `CloudSyncSection` コンポーネントを配置。
 
 ---
 
-### 3.3 `SettingsContainer`（設定画面 Container コンポーネント）
+### 3.3 `CloudSyncSection`（Google Drive クラウド同期 Presentational コンポーネント: v0.4）
 
-`useSettings` フックを呼び出し、`SettingsPage` に現在設定と変更ハンドラーを注入する Container コンポーネントです。
+Google Drive（`appDataFolder`）とのアカウント連携・解除、手動即時同期、および最終同期日時の表示を提供する Presentational コンポーネントです。
+
+#### プロパティ契約（`CloudSyncSectionProps`）
+
+| プロパティ名   | 型                    | 必須 | 既定値  | 説明                                                                     |
+| :------------- | :-------------------- | :--- | :------ | :----------------------------------------------------------------------- |
+| `authState`    | `CloudSyncAuthState`  | 必須 | -       | 現在の認証連携状態（`unlinked`, `authenticating`, `connected`, `error`） |
+| `lastSyncedAt` | `string \| null`      | 必須 | -       | 最終同期日時（ISO 8601 文字列、未同期は `null`）                         |
+| `isSyncing`    | `boolean`             | 必須 | `false` | 同期通信処理中フラグ                                                     |
+| `error`        | `string \| null`      | 任意 | `null`  | 同期または認証エラーメッセージ                                           |
+| `onSignIn`     | `() => Promise<void>` | 必須 | -       | 「Google アカウントと連携」ボタン押下時のコールバック                    |
+| `onSignOut`    | `() => Promise<void>` | 必須 | -       | 「連携解除」確認ダイアログ承認時のコールバック                           |
+| `onSyncNow`    | `() => Promise<void>` | 必須 | -       | 「今すぐ同期」ボタン押下時のコールバック                                 |
+
+#### 表示項目・セマンティック属性
+
+- **セクションルート**: `data-testid="cloud-sync-section"`
+- **セクションタイトル**: 「クラウド同期 (Google Drive)」
+- **説明文**: 「Google Drive のアプリ専用領域に本棚・しおりを自動保存し、複数端末間で共有します。」
+- **状態表示 (`data-testid="cloud-sync-status"`)**:
+  - `status === 'unlinked'`: 「未連携（端末内保存のみ）」
+  - `status === 'authenticating'`: 「Google 認証中...」
+  - `status === 'connected'`: 「連携中 (`${authState.email}`)」
+  - `status === 'error'`: 「認証エラー」
+- **最終同期日時 (`data-testid="cloud-sync-last-synced-at"`)**:
+  - `lastSyncedAt` がある場合: 「最終同期: YYYY/MM/DD HH:mm:ss」
+  - 未同期の場合: 「最終同期: 未同期」
+- **エラー警告枠 (`data-testid="cloud-sync-error-alert"`)**: `error` が存在する場合、`role="alert"` でエラーメッセージを表示。
+- **アクションボタン群**:
+  - 未連携時: `data-testid="cloud-sync-auth-button"`「Google アカウントと連携」
+  - 連携中:
+    - `data-testid="cloud-sync-now-button"`「今すぐ同期」（`isSyncing` 時は disabled 化しスピナーまたは「同期中...」表示）
+    - `data-testid="cloud-sync-disconnect-button"`「連携解除」（押下時に `data-testid="cloud-sync-disconnect-dialog"` 確認ダイアログを表示し、ユーザー承認時に `onSignOut` を実行）
+
+---
+
+### 3.4 `SettingsContainer`（設定画面 Container コンポーネント）
+
+`useSettings` および `useCloudSync` フックを呼び出し、`SettingsPage` に現在設定、クラウド同期状態、および各種操作ハンドラーを注入する Container コンポーネントです。
 
 #### プロパティ契約（`SettingsContainerProps`）
 
@@ -207,6 +272,35 @@ export interface UseSettingsResult {
    - 万一 `updateReaderSettings` が失敗（reject）した場合、直前の設定値に State をロールバックし、`error` を設定して画面上（`SettingsPage` ヘッダー直下）に `role="alert"`（`data-testid="settings-error-alert"`）でエラーメッセージを表示する。
    - 正常に更新された設定はリーダー画面（`SCR-03`）の `useReader` でも共有され、リーダーを開いた際に同じ設定が自動適用される。
 
+### 4.3 `useCloudSync` フック契約・同期パイプライン（v0.4 新設: Issue #120）
+
+```ts
+export interface UseCloudSyncResult {
+  authState: CloudSyncAuthState;
+  lastSyncedAt: string | null;
+  isSyncing: boolean;
+  error: string | null;
+  signIn: () => Promise<void>;
+  signOut: () => Promise<void>;
+  syncNow: () => Promise<void>;
+}
+```
+
+1. **初期化パイプライン**:
+   - `ServiceProvider` から `CloudSyncBridge`、`SyncEngine`、`AppSettingsRepository` を取得。
+   - `appSettingsRepository.getSetting('cloud_sync_last_synced_at')` より保存済みの最終同期日時を復元。
+   - `cloudSyncBridge.getAuthState()` を呼び出し、現在の接続状態（`unlinked` / `connected`）を初期化。
+2. **アカウント連携 (`signIn`)**:
+   - `cloudSyncBridge.signIn()` を呼び出す。成功時に `authState` を `connected` に更新し、その場で初回の Pull → Merge → Push 同期を自動実行する。
+3. **連携解除 (`signOut`)**:
+   - 確認ダイアログで承認後、`cloudSyncBridge.signOut()` を実行し、OS トークンキャッシュ破棄および Google サーバーへの Revoke を実行する。
+   - ローカル DB（`novels`, `chapters`）は一切削除せず安全に保持する。
+   - `authState` を `unlinked` にリセットし、`lastSyncedAt` 設定をクリアする。
+4. **手動即時同期 (`syncNow`)**:
+   - `isSyncing = true` を設定し、`syncEngine.sync()`（Pull → マージ → Push）を実行する。
+   - 完了時に `cloud_sync_last_synced_at` を現在時刻で `app_settings` へ更新し、`isSyncing = false` とする。
+   - 失敗時は直前の状態を維持し、`error` をセットして画面上に通知する。
+
 ---
 
 ## 5. 受入条件一覧（Acceptance Criteria: `AC-ST-xx`）
@@ -220,3 +314,8 @@ export interface UseSettingsResult {
 | **`AC-ST-05`** | 文字サイズ・行間ステッパー境界制御                          | 文字サイズ（`12〜32px`、`±2px` 刻み）および行間（`1.4〜2.4`、`±0.2` 刻み）の `−` / `＋` ボタンで値が変更でき、上限・下限で各ボタンが `disabled` となり、プレビュー枠および `reader_settings` へ即時反映されること。                                                                                    | `SYS-REQ-09`                   |
 | **`AC-ST-06`** | OS バックキーによる直前画面（リーダー・作品詳細・本棚）復帰 | 設定画面（`/settings`）で OS バックキー（`AppBridge` またはブラウザ戻る操作）を実行したとき、直前の画面がリーダー画面（`SCR-03`）または作品詳細画面（`SCR-02`）であればその直前画面へ復帰し、下部タブからの直接遷移時または履歴なしの場合はホームである本棚画面（`SCR-01`: `/`）へ正しく復帰すること。 | `SYS-REQ-16, 20` / `TR-12`     |
 | **`AC-ST-07`** | 設定保存失敗時のロールバックとエラー通知                    | 設定変更（組み方向・テーマ・文字サイズ・行間）の永続化処理が失敗した場合、直前の値へ状態が自動ロールバックされ、画面上部ヘッダー直下に `role="alert"`（`data-testid="settings-error-alert"`）でエラーメッセージが表示されること。                                                                      | `SYS-REQ-08, 09, 10`           |
+| **`AC-ST-08`** | Google アカウント連携と状態表示                             | 設定画面のクラウド同期セクションで「Google アカウントと連携」を押下したとき、Google 認可フローが起動し、成功時に連携中表示（メールアドレス表示）および初回の自動同期（Pull → マージ → Push）が行われること。                                                                                           | `SYS-REQ-06` / `TR-01`         |
+| **`AC-ST-09`** | 「今すぐ同期」による手動即時同期                            | 連携中状態で「今すぐ同期」ボタンを押下したとき、即座に Pull → マージ → Push が実行され、処理中はボタンが disabled となり、成功時に最終同期日時が更新されること。                                                                                                                                       | `SYS-REQ-06`                   |
+| **`AC-ST-10`** | 連携解除確認と Revoke・ローカル保持                         | 「連携解除」ボタン押下時に確認ダイアログが表示され、確定時に Google サーバーへの Revoke および OS トークン破棄が実行され、未連携状態に戻ること（端末内の登録作品・しおりデータは消去されず安全に保持されること）。                                                                                     | `SYS-REQ-06`                   |
+| **`AC-ST-11`** | 遠隔認可解除（401）検知時の未連携フォールバック             | Google アカウント管理から遠隔で権限が取り消された場合、次回通信時の 401 Unauthorized を検知して自動的に安全な未連携状態へ遷移し、セクション内にエラー通知が表示されること。                                                                                                                            | `SYS-REQ-06`                   |
+| **`AC-ST-12`** | クライアントID未設定時の安全なフォールバック                | `VITE_GOOGLE_CLIENT_ID` が未設定または空文字の場合、アプリや画面がクラッシュすることなく、連携ボタンが disabled 化されるか安全なモックモードとして振る舞うこと。                                                                                                                                       | `SYS-REQ-06`                   |

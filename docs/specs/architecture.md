@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: Approved
+status: "Review (#120)"
 updated: "2026-10-31"
 tags:
   - architecture
@@ -19,7 +19,10 @@ tags:
   - prefetch
   - batch-cache
   - cache-rules
+  - cloud-sync
+  - google-drive
 related_specs:
+  - docs/specs/changes/issue-120-cloud-sync-google-drive.md
   - docs/specs/changes/archive/issue-124-settings-back-button-navigation.md
   - docs/specs/requirements.md
   - docs/specs/db-schema.md
@@ -100,6 +103,7 @@ flowchart TB
         HttpBridge["HttpClientBridge Interface<br>(CapacitorHttp 実通信 / テスト時 Fixture モック)"]
         AppBridge["AppBridge Interface<br>(@capacitor/app システム戻るボタン・exitApp / テスト時モック)"]
         WebViewBridge["WebViewDomBridge Interface<br>(内蔵WebView DOM抽出 / テスト時モック)"]
+        CloudSyncBridge["CloudSyncBridge Interface<br>(Google Identity Services & Drive appDataFolder / テスト時モック)"]
     end
 
     Hooks --> Registry
@@ -107,6 +111,7 @@ flowchart TB
     Hooks --> HttpBridge
     Hooks --> AppBridge
     Hooks --> WebViewBridge
+    Hooks --> CloudSyncBridge
 ```
 
 ---
@@ -139,6 +144,10 @@ Yommy/
     │   │   ├── types.ts               # AppBridge, BackButtonEvent, BackButtonListener 定義
     │   │   ├── capacitorAppBridge.ts  # @capacitor/app 実装
     │   │   └── mockAppBridge.ts       # UT / Storybook / IT 用モック実装（triggerBackButton）
+    │   ├── cloud-sync/                # 【CloudSyncBridge】Google Drive appDataFolder クラウド同期（Issue #120）
+    │   │   ├── types.ts               # CloudSyncBridge, SyncAuthState, SyncFileResult 定義
+    │   │   ├── capacitorCloudSyncBridge.ts # Android ネイティブ Capacitor プラグイン実装
+    │   │   └── mockCloudSyncBridge.ts # UT / Storybook / IT 用インメモリ同期モック
     │   ├── http/
     │   │   ├── types.ts               # HttpClientBridge インターフェース定義
     │   │   ├── capacitorHttpClient.ts # CapacitorHttp 実装（CORS回避・User-Agent・タイムアウト制御）
@@ -146,6 +155,16 @@ Yommy/
     │   └── webview/
     │       ├── types.ts               # WebViewDomBridge インターフェース定義（v0.4〜）
     │       └── webviewDomBridge.ts    # 内蔵WebView DOMキャプチャ実装
+    ├── features/                      # 【機能別モジュール群】
+    │   ├── bookshelf/                 # 本棚画面（SCR-01）
+    │   ├── novel-detail/              # 作品詳細・目次画面（SCR-02）
+    │   ├── reader/                    # 小説リーダー画面（SCR-03）
+    │   ├── search/                    # 検索画面（SCR-06）
+    │   ├── ranking/                   # ランキング画面（SCR-07）
+    │   ├── settings/                  # 設定画面（SCR-05）
+    │   └── cloud-sync/                # クラウド同期（Google Drive appDataFolder・SyncEngine）（Issue #120）
+    │       ├── types.ts               # YommySyncState, SyncNovelData 等の同期データ型定義
+    │       └── services/              # スキーマ検証・競合マージ・デバウンス同期エンジン
     ├── parsers/                       # 【1. Parser Layer（スクレイピング・DOM解析層）】
     │   ├── types.ts                   # NovelParser, ParsedNovelMetadata, ParsedChapterContent, ParsedSearchResult, ParsedRankingResult 等の型契約
     │   ├── parserRegistry.ts          # URL から対応サイト（kakuyomu / narou 等）を判定・ディスパッチ
@@ -515,14 +534,64 @@ export const PREFETCH_COUNT = 5;
    - 3秒以内に取得成功した場合は新本文で DB および画面を更新する。
    - タイムアウト・オフライン・通信エラー等で失敗した場合は、**即座に既存の `bodyHtml` を使用してフォールバック表示** し（一括キャッシュ時は既存キャッシュを維持して次話へ進行）、エラー画面を表示せず読書を継続させる。
 
+### 3.7 クラウド同期（Google Drive appDataFolder）および同期エンジンアーキテクチャ（v0.4 新設）
+
+複数端末間での本棚登録作品・しおり位置・既読状態の同期、および機種変更時の引き継ぎを実現するため、Google Drive のアプリ専用領域（`appDataFolder`）に単一 JSON（`yommy-sync-state.json`）を保存・同期するアーキテクチャを導入します（Issue #120）。
+
+#### 1. `CloudSyncBridge` インターフェース契約（`src/bridges/cloud-sync/types.ts`）
+
+```ts
+export type CloudSyncAuthState =
+  | { status: "unlinked" }
+  | { status: "authenticating" }
+  | { status: "connected"; email?: string }
+  | { status: "error"; message: string };
+
+export interface CloudSyncBridge {
+  /** 現在の Google 認証状態を取得する */
+  getAuthState(): Promise<CloudSyncAuthState>;
+  /** Google アカウント連携（認可フロー実行） */
+  signIn(): Promise<CloudSyncAuthState>;
+  /** 連携解除（OS トークン破棄および Google サーバーへの Revoke 実行） */
+  signOut(): Promise<void>;
+  /** appDataFolder から yommy-sync-state.json を取得する（存在しない場合は null） */
+  pullFile(): Promise<string | null>;
+  /** appDataFolder へ yommy-sync-state.json をアップロード・保存する */
+  pushFile(content: string): Promise<void>;
+}
+```
+
+#### 2. 同期エンジン（`SyncEngine`）の競合マージとゼロトラスト検証
+
+- **ゼロトラスト検証**:
+  - 受信した JSON に対し、通信前に厳格なランタイムスキーマ検証（`version === 1`、必須フィールド、数値範囲、プロトタイプ汚染防止）を実行する。
+  - 未登録作品の自動目次取得（`upsertNovelWithToc`）前に、`canonicalUrl` を既存の `parseNovelUrl`（`https://kakuyomu.jp/works/<id>` ホワイトリスト検証）にかけ、不正な URL や未知ドメインへのリクエスト（SSRF）を遮断する。
+- **競合解決（マージ）ルール**:
+  - 新規作品の自動目次補完: リモートにのみ存在する作品は `canonicalUrl` から目次を自動取得してローカル DB に登録し、リモートのしおり話数・既読状態を即時反映する。
+  - 作品削除の伝播（Tombstone）: `deletedNovels` の削除日時がローカル作品の登録/更新日時より新しければローカル DB からカスケード削除する。ローカルで削除された作品も `deleted_novels` テーブルに Tombstone を記録し次回 Push 時に結合する。
+  - しおり話数のマージ: 同一作品が両端末にある場合、`lastReadAt` が新しい方の `bookmarkChapterIndex` を採用する（話数変更時はスクロール率を `0.0` にリセット、同一話数の場合は端末ローカルのスクロール率を維持）。
+  - 既読状態のマージ: 両端末の既読エピソード ID の和集合（Union）を採用する。
+- **自動同期トリガーとデバウンス制御**:
+  - 自動 Pull: アプリ起動時、およびバックグラウンド復帰時（休止から5分以上経過）。未送信ローカル変更がある場合はマージ後に自動 Push。
+  - 自動 Push: 本棚作品追加・削除、およびリーダー話数遷移・既読更新時に 2〜3秒（2500ms）デバウンス付き非同期実行。
+
+#### 3. ネイティブ Google Identity Services と 5 層セキュリティ設計
+
+1. **クライアント設定の非公開化**: クライアント ID 等はコードにハードコードせず、GitHub Secrets（`VITE_GOOGLE_CLIENT_ID`）および `.env.local` から注入する。
+2. **非公開 Keystore 管理**: 公開 `android/debug.keystore` の SHA-1 は GCP に登録せず、GitHub Secrets で保護された非公開 Keystore の SHA-1 のみを登録して偽造 APK のなりすましを防ぐ。
+3. **ネイティブ `AuthorizationClient` 認証**: サードパーティプラグインに依存せず、社内 Capacitor プラグイン経由で Android 公式 `Identity.getAuthorizationClient` を呼び出し、`client_secret` 排除・WebView 内トークン保存ゼロ（OS 側で短寿命アクセストークンを都度取得）とする。
+4. **最小権限スコープ（`drive.appdata` 限定）と即時 Revoke**: スコープを `drive.appdata` に限定し、連携解除時は OS トークン破棄＋Google サーバー即時 Revoke を実行。遠隔での認可解除（`401 Unauthorized`）検知時も自動で未連携状態へ安全にフォールバックする。
+5. **SSRF / インジェクション防御**: スキーマ検証と `parseNovelUrl` ホワイトリスト検証を通過したデータのみを処理する。
+
 ---
 
 ## 4. テスト環境での DI（依存性注入）と決定論的初期化
 
-- `src/app/ServiceProvider.tsx` を介して `HttpClientBridge`、`AppBridge`、各 `Repository`（および基底の `DatabaseAdapter`）を React Context 経由で提供する。
-- **Android / iOS ネイティブ実行時**: `Capacitor.isNativePlatform()` によりネイティブ環境を自動検知し、`CapacitorHttpClient`、`CapacitorAppBridge`、および `createDefaultNativeSqliteAdapter`（`CapacitorSqliteAdapter` ＋ `src/storage/schema.ts` の DDL 初期化）を注入する。
-- **Web ブラウザ / Dev 実行時**: `createInMemoryDb`（`sql.js`）および `localStorage` への Base64 バイナリバックアップ（`yommy_sqlite_db_backup`）によるハイブリッド永続化を提供し、`createDefaultMockHttpClient` および `MockAppBridge` を使用する。なお `createDefaultMockHttpClient` は任意のカクヨム作品 URL（`/^https:\/\/kakuyomu\.jp\/works\/\d+$/`）およびエピソード URL（`/^https:\/\/kakuyomu\.jp\/works\/\d+\/episodes\/\d+$/`）に対してローカルフィクスチャ HTML を返却する。
-- **UT（Vitest）/ Storybook / Playwright IT 実行時**: `MockHttpClient`（`__fixtures__/*.html` を返却）＋ `MockAppBridge`（`triggerBackButton` により安全にイベント再現）＋ `InMemoryDatabaseAdapter` を注入し、各テストの開始前に `resetTestDb()` を呼び出して 100% 決定論的な状態で検証する。
+- `src/app/ServiceProvider.tsx` を介して `HttpClientBridge`、`AppBridge`、`CloudSyncBridge`、各 `Repository`（および基底の `DatabaseAdapter`）を React Context 経由で提供する。
+- **Android / iOS ネイティブ実行時**: `Capacitor.isNativePlatform()` によりネイティブ環境を自動検知し、`CapacitorHttpClient`、`CapacitorAppBridge`、`CapacitorCloudSyncBridge`、および `createDefaultNativeSqliteAdapter`（`CapacitorSqliteAdapter` ＋ `src/storage/schema.ts` の DDL 初期化）を注入する。
+- **Web ブラウザ / Dev 実行時**: `createInMemoryDb`（`sql.js`）および `localStorage` への Base64 バイナリバックアップ（`yommy_sqlite_db_backup`）によるハイブリッド永続化を提供し、`createDefaultMockHttpClient`、`MockAppBridge`、および `MockCloudSyncBridge` を使用する。
+- **UT（Vitest）/ Storybook / Playwright IT 実行時**: `MockHttpClient` ＋ `MockAppBridge` ＋ `MockCloudSyncBridge` ＋ `InMemoryDatabaseAdapter` を注入し、各テストの開始前に `resetTestDb()` を呼び出して 100% 決定論的な状態で検証する。
+- **Worktree 運用・環境変数非依存設計**: すべてのテスト（Vitest, Storybook VRT, Playwright IT）およびビルドは、`.env.local` の有無に関わらず 100% 決定論的に PASS する設計（`ServiceProvider` による DI モック分離と安全なフォールバック）を必須とし、テスト実行時に環境変数未定義によるスキップや挙動のブレを生じさせない。
 
 ---
 
@@ -540,3 +609,8 @@ Android Debug APK の継続的な検証と上書きインストール（`INSTALL
 - `android/app/build.gradle` の `defaultConfig` において、CI 環境変数（`BUILD_NUMBER`）および Gradle プロパティ（`versionCode` / `versionName`）から動的にバージョンを解決する。
 - GitHub Actions（`.github/workflows/build-android.yml`）では `BUILD_NUMBER: ${{ github.run_number }}` を注入し、ビルドごとに `versionCode` を単調増加させる。
 - ローカルビルド時はフォールバック値（`versionCode 1`、`versionName "0.3.0"`）を採用し、開発作業の利便性を損なわない構成とする。
+
+### 5.3 Google OAuth 用署名鍵の秘密管理と SHA-1 なりすまし防止
+
+- 公開 `android/debug.keystore` の SHA-1 は GCP に登録しない（第三者による偽造 APK の OAuth なりすまし防止）。
+- GitHub Secrets（`ANDROID_KEYSTORE_BASE64` 等）に保管した非公開 Keystore の SHA-1 とパッケージ名（`com.yommy.app`）のみを GCP の Android OAuth クライアントに登録し、CI APK ビルド時に署名する。Secrets 未設定のローカル/PR 環境のみ `android/debug.keystore` へフォールバックする。

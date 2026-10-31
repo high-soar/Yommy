@@ -101,6 +101,18 @@ flowchart TB
   - **ルーティング同一パスガード（no-op 制御）**: 下部タブバー等のナビゲーション操作において、既に表示中の同一パスへの遷移要求は重複して `history.pushState` を行わず no-op とし、OS バックキーの直前画面復帰（`TR-12` 等）の履歴破壊を防止すること。
   - DevContainer と GitHub Actions で同一の日本語フォント環境を使用し、Storybook 全 Story に対して **1280px / 375px の VRT（視覚的回帰テスト）** を実行して組版崩れを機械的に検知する。
 
+### 2.4 Worktree 運用・環境変数依存排除と DI モック分離規律
+
+Git Worktree を用いた並行開発やフォーク環境において、環境変数の設定漏れによるテスト失敗や開発速度の低下を防止するため、以下の原則を厳格に順守します。
+
+1. **ゼロコンフィグでのテスト・ビルド PASS 保証**:
+   - リポジトリ内のすべての自動テスト（`npm run typecheck`, `npm run lint`, `npm run test:unit`, `npm run test:coverage`, `npm run test:vrt`, `npm run test:it`）および Web 本番ビルド（`npm run build`）は、**`.env.local` が存在しない初期状態でも 100% エラーなく決定論的に PASS する設計** とする。
+   - `ServiceProvider` において外部サービス連携（Google Drive クラウド同期の `VITE_GOOGLE_CLIENT_ID` 等）のモックアダプター（`MockCloudSyncBridge` 等）を適切に DI 分離し、環境変数が未設定の場合は安全なモックまたは非活性モードにフォールバックさせる。
+2. **テスト実行時の環境変数非依存性**:
+   - ローカル開発環境に `.env.local` が存在する場合でも、テスト実行時（Vitest / Playwright）は決定論的なモック挙動を強制し、実環境変数の有無によってテスト結果がブレないようにする。
+3. **`.env.example` の保守**:
+   - アプリケーションで新たに環境変数を導入する際は、必ずリポジトリルートの `.env.example` に用途・デフォルト値・設定手順を明記し、開発者への周知を怠らない。
+
 ---
 
 ## 3. 単体テスト（UT / VRT）と結合テスト（IT）の責務マトリクス
