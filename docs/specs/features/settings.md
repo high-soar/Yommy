@@ -80,7 +80,7 @@ related_tests:
 src/features/settings/
 ├── hooks/
 │   ├── useSettings.ts                     # reader_settings 読み出し・更新・永続化フック
-│   ├── useSettings.test.ts                # フック単体テスト（Vitest）
+│   ├── useSettings.test.tsx               # フック単体テスト（Vitest）
 │   ├── useCloudSync.ts                    # Google Drive クラウド同期状態管理・操作フック（v0.4）
 │   └── useCloudSync.test.ts               # クラウド同期フック単体テスト（Vitest）
 └── components/
