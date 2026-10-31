@@ -30,7 +30,7 @@ MK 作業はファイル編集数やテスト・VRT 実行ログが多く、メ�
 対象 Issue #XX のうち、[担当モジュール/コンポーネント名] の TDD 実装および単体テスト・VRT 作成を行ってください。
 
 1. 必読正本:
-   - `docs/guidelines/testing.md`（TDDコミット規約、3層責務境界、1対1 Story/UT、親子分離、C0/C1 100%、VRT、原因D設計同期）
+   - `docs/guidelines/testing.md`（TDDコミット規約、3層責務境界、1対1 Story/UT、親子分離、C0/C1 100%、VRT、原因D設計同期、Worktree環境変数・DIモック分離規律）
    - `docs/specs/...`（対象の設計正本・受け入れ条件 AC-xx）
 2. 作業手順:
    - Red（失敗確認） → Green（最小実装） → Refactor の各ステップで個別にコミット（英語 type + 日本語要約）を刻むこと。
@@ -38,6 +38,7 @@ MK 作業はファイル編集数やテスト・VRT 実行ログが多く、メ�
    - Green 以降や検証中に不備を見つけた場合は `docs/quality/bug-and-handover-log.md` に記録し、原因分類 `D`（設計不備）の場合は必ず `docs/specs/` も同時修正すること。
 3. 完了前検証:
    - `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run test:coverage`（C0/C1/Functions 100%）を実行し PASS を確認すること。
+   - `.env.local` の有無に関わらずテスト・ビルドが 100% 決定論的に PASS することを確認すること（モック DI 徹底）。
    - UI/Story 変更時は `npm run test:vrt:update` および `npm run test:vrt`（1280px / 375px）を実行し PASS を確認すること。
 4. 報告内容:
    - 作成したコミット SHA 一覧、カバレッジ・VRT 検証結果、記録した不備（L/S/D/B/A）と申し送り（HO-xx）を報告してください（※push や PR 作成は親が行います）。

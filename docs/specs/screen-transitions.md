@@ -2,7 +2,7 @@
 type: spec-screen-transition
 title: 全体画面一覧・画面遷移の骨格（App 全体正本）
 description: "主要7画面（SCR-01〜SCR-07）の役割・ルート定義と、4タブ・画面間遷移（TR-01〜TR-18）の全体マップ正本。"
-status: Approved
+status: "Review (#120)"
 updated: "2026-10-31"
 tags:
   - screens
@@ -15,7 +15,10 @@ tags:
   - prefetch
   - batch-cache
   - cache-rules
+  - cloud-sync
+  - google-drive
 related_specs:
+  - docs/specs/changes/issue-120-cloud-sync-google-drive.md
   - docs/specs/changes/archive/issue-124-settings-back-button-navigation.md
   - docs/specs/requirements.md
   - docs/specs/architecture.md
@@ -60,7 +63,7 @@ Yommy は以下の 7 画面で構成されます。ルーティング基盤（`s
 | **`SCR-02`** | **作品詳細・目次画面**<br>(Novel Detail & TOC)            | `/novels/:novelId`                        |           `v0.1 MVP`           | ・作品情報・あらすじ表示（トグル化は `Issue #51`）、目次更新（再取得・差分話数通知）<br>・未取得話を一括キャッシュ（1.5秒レートリミット順次取得・進捗表示・手動中断、`v0.3`）<br>・章見出し＋エピソード一覧（キャッシュ済みバッジ・既読状態・しおりマーク）<br>・エピソード選択 / 「最初から・続きから読む」によるリーダー遷移<br>・ヘッダー固定＋目次一覧内部スクロール＋下部タブ固定（`100dvh` シェル適合）<br>・OS バックキー操作時に直前の遷移元（本棚/検索/ランキング）へ論理復帰                                                                                                                                                                                     | `docs/specs/features/novel-detail.md`   | `SYS-REQ-01, 02, 03, 04, 05, 12, 16, 19, 20` |
 | **`SCR-03`** | **小説リーダー画面**<br>(Novel Reader)                    | `/novels/:novelId/chapters/:chapterIndex` | `v0.1 MVP`<br>(v0.2で全画面化) | ・全画面本文組版描画（100dvh、縦書き `vertical-rl` / 横書き `horizontal-tb`、`<ruby>`・傍点描画）<br>・読書中5話自動先読み（1.5秒ウェイト順次取得・話数移動/離脱時AbortControllerキャンセル、`v0.3`）<br>・キャッシュTTL 7日間（7日以内通信スキップ）＋7日経過後の3秒短タイムアウト再取得と既存キャッシュフォールバック（`v0.3`）<br>・画面最下部タッチによる下部オーバーレイ（`ReaderBottomOverlay`：前後話ナビ ＋ 4タブ）のスライドイン展開<br>・前後話ナビによる前話/次話連続移動（未キャッシュ時はオンデマンド取得）<br>・しおり・スクロール進捗率の自動保存・復元<br>・OS バックキー操作時にしおりを自動保存（`flushBookmark`）して目次画面（`SCR-02`）へ論理階層復帰 | `docs/specs/features/reader-view.md`    | `SYS-REQ-02, 03, 04, 07〜12, 16, 20`         |
 | **`SCR-04`** | **内蔵ブラウザ・DOMインポート画面**<br>(WebView Fallback) | `/browser?url=...`                        |             `v0.4`             | ・対象小説ページを内蔵 WebView で直接表示（Cloudflare回避・ログイン対応）<br>・「表示中ページをキャッシュに取り込む（DOMインポート）」アクションボタン<br>・取り込み完了後に作品詳細（`SCR-02`）またはリーダー（`SCR-03`）へ遷移                                                                                                                                                                                                                                                                                                                                                                                                                                           | `docs/specs/features/webview-import.md` | `SYS-REQ-13, 14`                             |
-| **`SCR-05`** | **設定画面**<br>(Settings)                                | `/settings`                               |             `v0.2`             | ・組版・表示設定（縦横切替、4カラーテーマ、文字サイズ `12〜32px`、行間 `1.4〜2.4`）の一括カスタマイズと永続化<br>・ルビ・傍点を含むサンプル小説文のリアルタイムプレビュー枠<br>・下部4タブバー（「設定」アクティブ表示）および OS バックキー（本棚ホーム復帰）連携<br>・キャッシュ容量整理・データバックアップ（`v0.4`）                                                                                                                                                                                                                                                                                                                                                   | `docs/specs/features/settings.md`       | `SYS-REQ-08, 09, 10, 16, 20`                 |
+| **`SCR-05`** | **設定画面**<br>(Settings)                                | `/settings`                               |             `v0.2`             | ・組版・表示設定（縦横切替、4カラーテーマ、文字サイズ `12〜32px`、行間 `1.4〜2.4`）の一括カスタマイズと永続化<br>・ルビ・傍点を含むサンプル小説文のリアルタイムプレビュー枠<br>・Google Drive クラウド同期（アカウント連携・解除、最終同期日時表示、今すぐ同期、`v0.4` Issue #120）<br>・下部4タブバー（「設定」アクティブ表示）および OS バックキー（直前画面/本棚ホーム復帰）連携<br>・キャッシュ容量整理（`v0.4`）                                                                                                                                                                                                                                                      | `docs/specs/features/settings.md`       | `SYS-REQ-06, 08, 09, 10, 16, 20`             |
 | **`SCR-06`** | **検索画面**<br>(Novel Search)                            | `/search`                                 |             `v0.3`             | ・対象サイト選択ピル（カクヨム、将来なろう追加）<br>・キーワード入力、並び順4種（週間/累計/更新/新作）、連載状態、ジャンルフィルタ<br>・検索結果作品カード一覧（「＋ 本棚に追加」ボタン、登録済みバッジ、次ページ取得）<br>・未登録カードタップ時の自動追加＆目次遷移、登録済みカードタップ時の目次遷移                                                                                                                                                                                                                                                                                                                                                                    | `docs/specs/features/search.md`         | `SYS-REQ-17, 19, 20`                         |
 | **`SCR-07`** | **ランキング画面**<br>(Novel Ranking)                     | `/ranking`                                |             `v0.3`             | ・対象サイト選択ピル（カクヨム）<br>・集計期間（日間/週間/月間/累計）× ジャンル（総合＋主要12ジャンル）切替<br>・順位バッジ強調表示（1〜3位メダル調バッジ、4位以降番号バッジ）<br>・作品カード一覧（「＋ 本棚に追加」ボタン、登録済みバッジ、目次遷移）                                                                                                                                                                                                                                                                                                                                                                                                                    | `docs/specs/features/ranking.md`        | `SYS-REQ-18, 19, 20`                         |
 
