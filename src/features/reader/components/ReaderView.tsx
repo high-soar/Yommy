@@ -38,6 +38,90 @@ function clampProgress(value: number): number {
 }
 
 /**
+ * ページめくり表示における横スライド変位量（translateX）を算出する純粋関数
+ */
+function calculateSlideTranslateX(
+  isVertical: boolean,
+  currentPage: number,
+  pageWidth: number,
+  slideOffsetPx: number,
+): number {
+  if (pageWidth <= 0) return 0;
+  return isVertical
+    ? (currentPage - 1) * pageWidth + slideOffsetPx
+    : -(currentPage - 1) * pageWidth + slideOffsetPx;
+}
+
+/**
+ * コンテナ寸法から総ページ数を算出する純粋関数
+ */
+function calculateMeasuredTotalPages(
+  scrollWidth: number,
+  clientWidth: number,
+): number {
+  return clientWidth > 0
+    ? Math.max(1, Math.ceil(scrollWidth / clientWidth))
+    : 1;
+}
+
+/**
+ * スクロールコンテナの進捗率（0.0 〜 1.0）を算出する純粋関数
+ */
+function calculateScrollProgress(
+  el: HTMLElement,
+  writingMode: WritingMode,
+): number {
+  if (writingMode === "horizontal-tb") {
+    const maxScroll = el.scrollHeight - el.clientHeight;
+    return maxScroll > 0 ? clampProgress(el.scrollTop / maxScroll) : 0;
+  }
+  const maxScroll = el.scrollWidth - el.clientWidth;
+  return maxScroll > 0 ? clampProgress(Math.abs(el.scrollLeft) / maxScroll) : 0;
+}
+
+/**
+ * スクロールコンテナの表示位置を進捗率に基づいて復元する純粋関数
+ */
+function restoreScrollPosition(
+  el: HTMLElement,
+  writingMode: WritingMode,
+  initialScrollProgress: number,
+): void {
+  const clampedProgress = clampProgress(initialScrollProgress);
+  if (writingMode === "horizontal-tb") {
+    const maxScroll = el.scrollHeight - el.clientHeight;
+    el.scrollTop = maxScroll > 0 ? clampedProgress * maxScroll : 0;
+  } else {
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    el.scrollLeft = maxScroll > 0 ? -clampedProgress * maxScroll : 0;
+  }
+}
+
+/**
+ * 1ページ組版およびスライドアニメーションのインラインスタイルを生成する純粋関数
+ */
+function getPagedContentStyle(
+  isPaged: boolean,
+  isVertical: boolean,
+  slideTranslateX: number,
+  slideOffsetPx: number,
+): React.CSSProperties | undefined {
+  if (!isPaged) return undefined;
+  return {
+    transform: `translateX(${slideTranslateX}px)`,
+    transition: slideOffsetPx !== 0 ? "none" : "transform 200ms ease-out",
+    ...(isVertical
+      ? {}
+      : {
+          columns: "1",
+          columnWidth: "100%",
+          columnGap: "0px",
+          columnFill: "auto",
+        }),
+  };
+}
+
+/**
  * 小説本文の全画面（h-full w-full）縦書き/横書き組版表示、ルビ・傍点、カラーテーマ描画、
  * 1ページ組版・横スライドアニメーション・ページインジケーター表示、
  * および縦横双方のスクロール進捗率算出・初期位置復元を担う Presentational コンポーネント
@@ -90,9 +174,10 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     const el = containerRef.current;
     if (!el) return;
 
-    const { scrollWidth, clientWidth } = el;
-    const measuredPages =
-      clientWidth > 0 ? Math.max(1, Math.ceil(scrollWidth / clientWidth)) : 1;
+    const measuredPages = calculateMeasuredTotalPages(
+      el.scrollWidth,
+      el.clientWidth,
+    );
     onTotalPagesChange?.(measuredPages);
   }, [
     isPaged,
@@ -111,15 +196,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     if (!el) return;
     if (!onScrollProgressChange) return;
 
-    let progress = 0;
-    if (writingMode === "horizontal-tb") {
-      const maxScroll = el.scrollHeight - el.clientHeight;
-      progress = maxScroll > 0 ? clampProgress(el.scrollTop / maxScroll) : 0;
-    } else {
-      const maxScroll = el.scrollWidth - el.clientWidth;
-      progress =
-        maxScroll > 0 ? clampProgress(Math.abs(el.scrollLeft) / maxScroll) : 0;
-    }
+    const progress = calculateScrollProgress(el, writingMode);
     onScrollProgressChange(progress);
   }, [isPaged, writingMode, onScrollProgressChange]);
 
@@ -129,24 +206,17 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     const el = containerRef.current;
     if (!el) return;
 
-    const clampedProgress = clampProgress(initialScrollProgress);
-    if (writingMode === "horizontal-tb") {
-      const maxScroll = el.scrollHeight - el.clientHeight;
-      el.scrollTop = maxScroll > 0 ? clampedProgress * maxScroll : 0;
-    } else {
-      const maxScroll = el.scrollWidth - el.clientWidth;
-      el.scrollLeft = maxScroll > 0 ? -clampedProgress * maxScroll : 0;
-    }
+    restoreScrollPosition(el, writingMode, initialScrollProgress);
   }, [isPaged, initialScrollProgress, bodyHtml, writingMode, pagingMode]);
 
   // pageWidth はコンテナの clientWidth（取得できない場合は 0）
   const pageWidth = containerRef.current?.clientWidth ?? containerWidth;
-  const slideTranslateX =
-    pageWidth > 0
-      ? isVertical
-        ? (currentPage - 1) * pageWidth + slideOffsetPx
-        : -(currentPage - 1) * pageWidth + slideOffsetPx
-      : 0;
+  const slideTranslateX = calculateSlideTranslateX(
+    isVertical,
+    currentPage,
+    pageWidth,
+    slideOffsetPx,
+  );
 
   // 将来のジェスチャー遷移連携・アニメーション中制御のために参照
   void isAnimating;
@@ -181,23 +251,12 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       <div
         data-testid="reader-content"
         className={`h-full w-full ${isPaged ? "p-6" : ""}`}
-        style={
-          isPaged
-            ? {
-                transform: `translateX(${slideTranslateX}px)`,
-                transition:
-                  slideOffsetPx !== 0 ? "none" : "transform 200ms ease-out",
-                ...(isVertical
-                  ? {}
-                  : {
-                      columns: "1",
-                      columnWidth: "100%",
-                      columnGap: "0px",
-                      columnFill: "auto",
-                    }),
-              }
-            : undefined
-        }
+        style={getPagedContentStyle(
+          isPaged,
+          isVertical,
+          slideTranslateX,
+          slideOffsetPx,
+        )}
       >
         {(title || chapterTitle) && (
           <header
