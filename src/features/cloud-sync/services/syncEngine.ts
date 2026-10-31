@@ -4,6 +4,7 @@ import type { ParserRegistry } from "../../../parsers/parserRegistry";
 import type {
   AppSettingsRepository,
   ChapterRepository,
+  NovelRecord,
   NovelRepository,
 } from "../../../storage/types";
 import type { SyncNovelData, YommySyncState } from "../types";
@@ -302,6 +303,158 @@ export class SyncEngine {
     }
   }
 
+  private extractPendingHandlers(): {
+    resolve: (() => void) | null;
+    reject: ((err: unknown) => void) | null;
+  } {
+    if (this.debounceTimer !== null) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+    const resolve = this.pendingResolve;
+    const reject = this.pendingReject;
+    this.pendingPromise = null;
+    this.pendingResolve = null;
+    this.pendingReject = null;
+    return { resolve, reject };
+  }
+
+  private async propagateTombstones(
+    deletedNovels: Record<string, string>,
+  ): Promise<void> {
+    for (const [novelId, deletedAtStr] of Object.entries(deletedNovels)) {
+      const remoteDeletedAt = Date.parse(deletedAtStr);
+      const localNovel = await this.deps.novelRepository.getNovelById(novelId);
+      if (localNovel) {
+        const localCreated = Date.parse(localNovel.createdAt);
+        const localUpdated = Date.parse(localNovel.updatedAt);
+        if (remoteDeletedAt > Math.max(localCreated, localUpdated)) {
+          await this.deps.novelRepository.deleteNovel(novelId);
+        }
+      }
+    }
+  }
+
+  private async mergeNewNovel(
+    novelId: string,
+    remoteNovel: SyncNovelData,
+  ): Promise<void> {
+    // 新規作品の自動目次補完
+    const parsedUrl = parseNovelUrl(remoteNovel.canonicalUrl);
+    if (!parsedUrl) {
+      return; // SSRF ガードによりスキップ
+    }
+
+    const parser = this.deps.parserRegistry.getParser(remoteNovel.canonicalUrl);
+    if (!parser) {
+      return;
+    }
+
+    const res = await this.deps.httpClient.getHtml({
+      url: remoteNovel.canonicalUrl,
+    });
+    const parsedIndex = parser.parseNovelIndex(
+      res.html,
+      remoteNovel.canonicalUrl,
+    );
+    await this.deps.novelRepository.upsertNovelWithToc(
+      parsedIndex,
+      new Date().toISOString(),
+    );
+
+    if (remoteNovel.bookmarkChapterIndex !== null) {
+      await this.deps.novelRepository.updateBookmark(
+        novelId,
+        remoteNovel.bookmarkChapterIndex,
+        0.0,
+      );
+    }
+
+    if (remoteNovel.readChapterIds.length > 0) {
+      const chapters =
+        await this.deps.chapterRepository.listChaptersByNovelId(novelId);
+      const readSet = new Set(remoteNovel.readChapterIds);
+      for (const ch of chapters) {
+        if (readSet.has(ch.remoteChapterId)) {
+          await this.deps.chapterRepository.markChapterRead(
+            novelId,
+            ch.chapterIndex,
+            true,
+          );
+        }
+      }
+    }
+  }
+
+  private async mergeExistingNovel(
+    novelId: string,
+    remoteNovel: SyncNovelData,
+    localNovel: NovelRecord,
+  ): Promise<void> {
+    // 既存作品のしおりマージ
+    const remoteLastRead = remoteNovel.lastReadAt
+      ? Date.parse(remoteNovel.lastReadAt)
+      : 0;
+    const localLastRead = localNovel.lastReadAt
+      ? Date.parse(localNovel.lastReadAt)
+      : 0;
+
+    if (remoteLastRead > localLastRead) {
+      if (
+        remoteNovel.bookmarkChapterIndex !== null &&
+        remoteNovel.bookmarkChapterIndex !== localNovel.bookmarkChapterIndex
+      ) {
+        await this.deps.novelRepository.updateBookmark(
+          novelId,
+          remoteNovel.bookmarkChapterIndex,
+          0.0,
+        );
+      }
+    }
+
+    // 既読エピソードの和集合マージ
+    const chapters =
+      await this.deps.chapterRepository.listChaptersByNovelId(novelId);
+    const remoteReadSet = new Set(remoteNovel.readChapterIds);
+    for (const ch of chapters) {
+      if (!ch.isRead && remoteReadSet.has(ch.remoteChapterId)) {
+        await this.deps.chapterRepository.markChapterRead(
+          novelId,
+          ch.chapterIndex,
+          true,
+        );
+      }
+    }
+  }
+
+  private async mergeNovels(
+    novels: Record<string, SyncNovelData>,
+  ): Promise<void> {
+    const localTombstones =
+      (await this.deps.novelRepository.getDeletedNovels?.()) ?? [];
+    const localTombstoneMap = new Map(
+      localTombstones.map((t) => [t.id, t.deletedAt]),
+    );
+
+    for (const [novelId, remoteNovel] of Object.entries(novels)) {
+      // ローカルの削除がリモートの更新より新しい場合は復元しない
+      const localDeletedAt = localTombstoneMap.get(novelId);
+      if (
+        localDeletedAt !== undefined &&
+        localDeletedAt > Date.parse(remoteNovel.updatedAt)
+      ) {
+        continue;
+      }
+
+      const localNovel = await this.deps.novelRepository.getNovelById(novelId);
+      if (!localNovel) {
+        await this.mergeNewNovel(novelId, remoteNovel);
+      } else {
+        await this.mergeExistingNovel(novelId, remoteNovel, localNovel);
+      }
+    }
+  }
+
   async pullAndMerge(): Promise<{ pulled: boolean; mergedNovels: number }> {
     let rawContent: string | null;
     try {
@@ -318,123 +471,10 @@ export class SyncEngine {
     const remoteState = validateSyncState(rawContent);
 
     // 1. Tombstone 削除伝播（Remote -> Local）
-    for (const [novelId, deletedAtStr] of Object.entries(
-      remoteState.deletedNovels,
-    )) {
-      const remoteDeletedAt = Date.parse(deletedAtStr);
-      const localNovel = await this.deps.novelRepository.getNovelById(novelId);
-      if (localNovel) {
-        const localCreated = Date.parse(localNovel.createdAt);
-        const localUpdated = Date.parse(localNovel.updatedAt);
-        if (remoteDeletedAt > Math.max(localCreated, localUpdated)) {
-          await this.deps.novelRepository.deleteNovel(novelId);
-        }
-      }
-    }
+    await this.propagateTombstones(remoteState.deletedNovels);
 
     // 2. 作品マージ
-    const localTombstones =
-      (await this.deps.novelRepository.getDeletedNovels?.()) ?? [];
-    const localTombstoneMap = new Map(
-      localTombstones.map((t) => [t.id, t.deletedAt]),
-    );
-
-    for (const [novelId, remoteNovel] of Object.entries(remoteState.novels)) {
-      // ローカルの削除がリモートの更新より新しい場合は復元しない
-      const localDeletedAt = localTombstoneMap.get(novelId);
-      if (
-        localDeletedAt !== undefined &&
-        localDeletedAt > Date.parse(remoteNovel.updatedAt)
-      ) {
-        continue;
-      }
-
-      const localNovel = await this.deps.novelRepository.getNovelById(novelId);
-      if (!localNovel) {
-        // 新規作品の自動目次補完
-        const parsedUrl = parseNovelUrl(remoteNovel.canonicalUrl);
-        if (!parsedUrl) {
-          continue; // SSRF ガードによりスキップ
-        }
-
-        const parser = this.deps.parserRegistry.getParser(
-          remoteNovel.canonicalUrl,
-        );
-        if (!parser) {
-          continue;
-        }
-
-        const res = await this.deps.httpClient.getHtml({
-          url: remoteNovel.canonicalUrl,
-        });
-        const parsedIndex = parser.parseNovelIndex(
-          res.html,
-          remoteNovel.canonicalUrl,
-        );
-        await this.deps.novelRepository.upsertNovelWithToc(
-          parsedIndex,
-          new Date().toISOString(),
-        );
-
-        if (remoteNovel.bookmarkChapterIndex !== null) {
-          await this.deps.novelRepository.updateBookmark(
-            novelId,
-            remoteNovel.bookmarkChapterIndex,
-            0.0,
-          );
-        }
-
-        if (remoteNovel.readChapterIds.length > 0) {
-          const chapters =
-            await this.deps.chapterRepository.listChaptersByNovelId(novelId);
-          const readSet = new Set(remoteNovel.readChapterIds);
-          for (const ch of chapters) {
-            if (readSet.has(ch.remoteChapterId)) {
-              await this.deps.chapterRepository.markChapterRead(
-                novelId,
-                ch.chapterIndex,
-                true,
-              );
-            }
-          }
-        }
-      } else {
-        // 既存作品のしおりマージ
-        const remoteLastRead = remoteNovel.lastReadAt
-          ? Date.parse(remoteNovel.lastReadAt)
-          : 0;
-        const localLastRead = localNovel.lastReadAt
-          ? Date.parse(localNovel.lastReadAt)
-          : 0;
-
-        if (remoteLastRead > localLastRead) {
-          if (
-            remoteNovel.bookmarkChapterIndex !== null &&
-            remoteNovel.bookmarkChapterIndex !== localNovel.bookmarkChapterIndex
-          ) {
-            await this.deps.novelRepository.updateBookmark(
-              novelId,
-              remoteNovel.bookmarkChapterIndex,
-              0.0,
-            );
-          }
-        }
-
-        // 既読エピソードの和集合マージ
-        const chapters =
-          await this.deps.chapterRepository.listChaptersByNovelId(novelId);
-        const remoteReadSet = new Set(remoteNovel.readChapterIds);
-        for (const ch of chapters) {
-          if (!ch.isRead && remoteReadSet.has(ch.remoteChapterId)) {
-            await this.deps.chapterRepository.markChapterRead(
-              novelId,
-              ch.chapterIndex,
-              true,
-            );
-          }
-        }
-      }
-    }
+    await this.mergeNovels(remoteState.novels);
 
     const now = Date.now();
     await this.deps.appSettingsRepository.setCloudSyncLastSyncedAt?.(now);
@@ -445,66 +485,77 @@ export class SyncEngine {
     };
   }
 
-  async pushCurrentState(): Promise<void> {
+  private async buildSyncNovels(): Promise<Record<string, SyncNovelData>> {
+    const novels = await this.deps.novelRepository.listNovels();
+    const syncNovels: Record<string, SyncNovelData> = {};
+
+    for (const n of novels) {
+      const full = await this.deps.novelRepository.getNovelById(n.id);
+      if (!full) continue;
+
+      const chapters = await this.deps.chapterRepository.listChaptersByNovelId(
+        n.id,
+      );
+      const readChapterIds = chapters
+        .filter((c) => c.isRead)
+        .map((c) => c.remoteChapterId);
+
+      syncNovels[n.id] = {
+        id: full.id,
+        siteType: full.siteType,
+        remoteWorkId: full.remoteWorkId,
+        canonicalUrl: full.canonicalUrl,
+        title: full.title,
+        author: full.author,
+        synopsis: full.synopsis,
+        totalChapters: full.totalChapters,
+        isFavorite: full.isFavorite ? 1 : 0,
+        hasNewUpdate: full.hasNewUpdate ? 1 : 0,
+        latestEpisodePublishedAt: full.latestEpisodePublishedAt ?? null,
+        bookmarkChapterIndex: full.bookmarkChapterIndex,
+        lastReadAt: full.lastReadAt,
+        readChapterIds,
+        createdAt: full.createdAt,
+        updatedAt: full.updatedAt,
+      };
+    }
+    return syncNovels;
+  }
+
+  private async buildMergedTombstones(): Promise<Record<string, string>> {
+    const localTombstones =
+      (await this.deps.novelRepository.getDeletedNovels?.()) ?? [];
+    const mergedDeletedNovels: Record<string, string> = {};
+    for (const t of localTombstones) {
+      mergedDeletedNovels[t.id] = new Date(t.deletedAt).toISOString();
+    }
+
+    // リモートの既存 Tombstone と和集合をとる
     try {
-      const novels = await this.deps.novelRepository.listNovels();
-      const syncNovels: Record<string, SyncNovelData> = {};
-
-      for (const n of novels) {
-        const full = await this.deps.novelRepository.getNovelById(n.id);
-        if (!full) continue;
-
-        const chapters =
-          await this.deps.chapterRepository.listChaptersByNovelId(n.id);
-        const readChapterIds = chapters
-          .filter((c) => c.isRead)
-          .map((c) => c.remoteChapterId);
-
-        syncNovels[n.id] = {
-          id: full.id,
-          siteType: full.siteType,
-          remoteWorkId: full.remoteWorkId,
-          canonicalUrl: full.canonicalUrl,
-          title: full.title,
-          author: full.author,
-          synopsis: full.synopsis,
-          totalChapters: full.totalChapters,
-          isFavorite: full.isFavorite ? 1 : 0,
-          hasNewUpdate: full.hasNewUpdate ? 1 : 0,
-          latestEpisodePublishedAt: full.latestEpisodePublishedAt ?? null,
-          bookmarkChapterIndex: full.bookmarkChapterIndex,
-          lastReadAt: full.lastReadAt,
-          readChapterIds,
-          createdAt: full.createdAt,
-          updatedAt: full.updatedAt,
-        };
-      }
-
-      const localTombstones =
-        (await this.deps.novelRepository.getDeletedNovels?.()) ?? [];
-      const mergedDeletedNovels: Record<string, string> = {};
-      for (const t of localTombstones) {
-        mergedDeletedNovels[t.id] = new Date(t.deletedAt).toISOString();
-      }
-
-      // リモートの既存 Tombstone と和集合をとる
-      try {
-        const remoteRaw = await this.deps.bridge.pullFile();
-        if (remoteRaw) {
-          const parsed = validateSyncState(remoteRaw);
-          for (const [id, dateStr] of Object.entries(parsed.deletedNovels)) {
-            if (
-              !mergedDeletedNovels[id] ||
-              Date.parse(dateStr) > Date.parse(mergedDeletedNovels[id])
-            ) {
-              mergedDeletedNovels[id] = dateStr;
-            }
+      const remoteRaw = await this.deps.bridge.pullFile();
+      if (remoteRaw) {
+        const parsed = validateSyncState(remoteRaw);
+        for (const [id, dateStr] of Object.entries(parsed.deletedNovels)) {
+          if (
+            !mergedDeletedNovels[id] ||
+            Date.parse(dateStr) > Date.parse(mergedDeletedNovels[id])
+          ) {
+            mergedDeletedNovels[id] = dateStr;
           }
         }
-      } catch (err) {
-        await this.handleUnauthorized(err);
-        throw err;
       }
+    } catch (err) {
+      await this.handleUnauthorized(err);
+      throw err;
+    }
+
+    return mergedDeletedNovels;
+  }
+
+  async pushCurrentState(): Promise<void> {
+    try {
+      const syncNovels = await this.buildSyncNovels();
+      const mergedDeletedNovels = await this.buildMergedTombstones();
 
       const state: YommySyncState = {
         version: 1,
@@ -543,12 +594,7 @@ export class SyncEngine {
     }
 
     this.debounceTimer = setTimeout(async () => {
-      this.debounceTimer = null;
-      const resolve = this.pendingResolve;
-      const reject = this.pendingReject;
-      this.pendingPromise = null;
-      this.pendingResolve = null;
-      this.pendingReject = null;
+      const { resolve, reject } = this.extractPendingHandlers();
 
       try {
         await this.pushCurrentState();
@@ -562,24 +608,12 @@ export class SyncEngine {
   }
 
   cancelDebouncedPush(): void {
-    if (this.debounceTimer !== null) {
-      clearTimeout(this.debounceTimer);
-      this.debounceTimer = null;
-    }
-    this.pendingPromise = null;
-    this.pendingResolve = null;
-    this.pendingReject = null;
+    this.extractPendingHandlers();
   }
 
   async flushDebouncedPush(): Promise<void> {
     if (this.debounceTimer !== null) {
-      clearTimeout(this.debounceTimer);
-      this.debounceTimer = null;
-      const resolve = this.pendingResolve;
-      const reject = this.pendingReject;
-      this.pendingPromise = null;
-      this.pendingResolve = null;
-      this.pendingReject = null;
+      const { resolve, reject } = this.extractPendingHandlers();
 
       try {
         await this.pushCurrentState();
