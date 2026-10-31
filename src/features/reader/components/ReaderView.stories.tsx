@@ -124,3 +124,42 @@ export const VerticalLongContent: Story = {
     bodyHtml: longBodyHtml,
   },
 };
+
+/**
+ * 縦書きページめくり表示
+ */
+export const VerticalPaged: Story = {
+  name: "縦書き・ページめくり",
+  args: {
+    writingMode: "vertical-rl",
+    pagingMode: "paged",
+    currentPage: 1,
+    totalPages: 5,
+  },
+};
+
+/**
+ * 横書きページめくり表示
+ */
+export const HorizontalPaged: Story = {
+  name: "横書き・ページめくり",
+  args: {
+    writingMode: "horizontal-tb",
+    pagingMode: "paged",
+    currentPage: 2,
+    totalPages: 6,
+  },
+};
+
+/**
+ * ページインジケーター表示
+ */
+export const PageIndicator: Story = {
+  name: "ページインジケーター表示",
+  args: {
+    writingMode: "vertical-rl",
+    pagingMode: "paged",
+    currentPage: 3,
+    totalPages: 12,
+  },
+};

@@ -1,7 +1,11 @@
 import React, { useEffect, useCallback } from "react";
-import type { WritingMode, ReaderTheme } from "../../../storage/types";
+import type {
+  WritingMode,
+  ReaderTheme,
+  ReaderPagingMode,
+} from "../../../storage/types";
 
-export type { WritingMode, ReaderTheme };
+export type { WritingMode, ReaderTheme, ReaderPagingMode };
 
 export interface ReaderViewProps {
   title?: string;
@@ -13,6 +17,12 @@ export interface ReaderViewProps {
   lineHeight?: number;
   initialScrollProgress?: number;
   onScrollProgressChange?: (progress: number) => void;
+  pagingMode?: ReaderPagingMode;
+  currentPage?: number;
+  totalPages?: number;
+  slideOffsetPx?: number;
+  isAnimating?: boolean;
+  onTotalPagesChange?: (totalPages: number) => void;
 }
 
 const themeStyles: Record<ReaderTheme, string> = {
@@ -40,9 +50,21 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   lineHeight = 1.8,
   initialScrollProgress = 0,
   onScrollProgressChange,
+  pagingMode = "auto",
+  currentPage = 1,
+  totalPages = 1,
+  slideOffsetPx = 0,
+  isAnimating = false,
+  onTotalPagesChange,
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const isVertical = writingMode === "vertical-rl";
+  void pagingMode;
+  void currentPage;
+  void totalPages;
+  void slideOffsetPx;
+  void isAnimating;
+  void onTotalPagesChange;
 
   // スクロール操作時の進捗率（0.0 〜 1.0）算出
   const handleScroll = useCallback(() => {
