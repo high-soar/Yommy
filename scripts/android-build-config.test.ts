@@ -97,13 +97,39 @@ describe("Android ビルド設定および署名・バージョン管理検証 (
     });
   });
 
-  describe("CI ワークフロー設定検証 (AC-APK-02)", () => {
+  describe("CI ワークフロー設定検証 (AC-APK-02, R1-04, R1-20)", () => {
+    const ciWorkflowPath = path.resolve(rootDir, ".github/workflows/ci.yml");
+
     it("build-android.yml の Build Android Debug APK ステップに BUILD_NUMBER が注入されていること", () => {
       const content = fs.readFileSync(workflowPath, "utf-8");
 
       expect(content).toMatch(
         /name:\s*Build Android Debug APK[\s\S]*?env:\s*[\s\S]*?BUILD_NUMBER:\s*\$\{\{\s*github\.run_number\s*\}\}/,
       );
+    });
+
+    it("build-android.yml の Build Android Debug APK ステップに Keystore Secrets が注入されていること (R1-04)", () => {
+      const content = fs.readFileSync(workflowPath, "utf-8");
+
+      expect(content).toMatch(
+        /ANDROID_KEYSTORE_BASE64:\s*\$\{\{\s*secrets\.ANDROID_KEYSTORE_BASE64\s*\}\}/,
+      );
+      expect(content).toMatch(
+        /ANDROID_KEYSTORE_PASSWORD:\s*\$\{\{\s*secrets\.ANDROID_KEYSTORE_PASSWORD\s*\}\}/,
+      );
+      expect(content).toMatch(
+        /ANDROID_KEY_ALIAS:\s*\$\{\{\s*secrets\.ANDROID_KEY_ALIAS\s*\}\}/,
+      );
+      expect(content).toMatch(
+        /ANDROID_KEY_PASSWORD:\s*\$\{\{\s*secrets\.ANDROID_KEY_PASSWORD\s*\}\}/,
+      );
+    });
+
+    it("ci.yml に Android Java コンパイル検査ジョブが存在し quality-gate に含まれていること (R1-20)", () => {
+      const content = fs.readFileSync(ciWorkflowPath, "utf-8");
+
+      expect(content).toMatch(/compileDebugJavaWithJavac/);
+      expect(content).toMatch(/needs:\s*\[[\s\S]*?android-compile[\s\S]*?\]/);
     });
   });
 
@@ -144,6 +170,59 @@ describe("Android ビルド設定および署名・バージョン管理検証 (
 
       expect(content).toMatch(/toGoogleSignInAccount\(\)/);
       expect(content).toMatch(/getEmail\(\)/);
+    });
+
+    it("マルチスレッド共有変数（currentAccessToken, currentUserEmail）に volatile が付与されていること (R1-25)", () => {
+      const content = fs.readFileSync(pluginPath, "utf-8");
+
+      expect(content).toMatch(
+        /private\s+volatile\s+String\s+currentAccessToken/,
+      );
+      expect(content).toMatch(/private\s+volatile\s+String\s+currentUserEmail/);
+    });
+
+    it("SharedPreferences により連携状態（is_cloud_sync_enabled / cloud_sync_email）を永続化していること (R1-03)", () => {
+      const content = fs.readFileSync(pluginPath, "utf-8");
+
+      expect(content).toMatch(/getSharedPreferences\(/);
+      expect(content).toMatch(/is_cloud_sync_enabled/);
+      expect(content).toMatch(/cloud_sync_email/);
+    });
+
+    it("getAuthState() においてサイレント再認可によるセッション復元を行うロジックが存在すること (R1-01)", () => {
+      const content = fs.readFileSync(pluginPath, "utf-8");
+
+      expect(content).toMatch(
+        /public\s+void\s+getAuthState\s*\(\s*PluginCall\s+call\s*\)[\s\S]*?authorize\(/,
+      );
+    });
+
+    it("トークン失効（401）時の自動リフレッシュ・サイレント再取得ロジックが存在すること (R1-02)", () => {
+      const content = fs.readFileSync(pluginPath, "utf-8");
+
+      expect(content).toMatch(/refreshAccessToken|getOrRefreshToken/);
+    });
+
+    it("Activity 再生成耐性のために saveCall / getSavedCall を利用していること (R1-37)", () => {
+      const content = fs.readFileSync(pluginPath, "utf-8");
+
+      expect(content).toMatch(/saveCall\s*\(\s*call\s*\)/);
+      expect(content).toMatch(/getSavedCall\s*\(\s*\)/);
+    });
+
+    it("handleOnDestroy() において executor.shutdownNow() が実装されていること (R1-38)", () => {
+      const content = fs.readFileSync(pluginPath, "utf-8");
+
+      expect(content).toMatch(
+        /protected\s+void\s+handleOnDestroy\s*\(\s*\)[\s\S]*?executor\.shutdownNow\(\)/,
+      );
+    });
+
+    it("新規ファイル作成時に multipart/related（uploadType=multipart）で送信していること (R1-06)", () => {
+      const content = fs.readFileSync(pluginPath, "utf-8");
+
+      expect(content).toMatch(/uploadType=multipart/);
+      expect(content).toMatch(/multipart\/related/);
     });
   });
 });
