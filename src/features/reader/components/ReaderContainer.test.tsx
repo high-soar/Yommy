@@ -27,8 +27,14 @@ import type {
 import type { HttpClientBridge } from "../../../bridges/http/types";
 import type { ParserRegistry } from "../../../parsers/parserRegistry";
 
-const { Default, WithBookmark, Loading, Empty, WithCustomCallbacks } =
-  composeStories(stories);
+const {
+  Default,
+  WithBookmark,
+  Loading,
+  Empty,
+  WithCustomCallbacks,
+  PagedMode,
+} = composeStories(stories);
 
 const sampleNovel: NovelRecord = {
   id: "kakuyomu:16817330658027210412",
@@ -162,7 +168,9 @@ function createMockChapterRepo(
   return { repo, markChapterReadSpy };
 }
 
-function createMockSettingsRepo(): SettingsRepository {
+function createMockSettingsRepo(
+  initial?: Partial<ReaderSettings>,
+): SettingsRepository {
   let current: ReaderSettings = {
     writingMode: "vertical-rl",
     theme: "light",
@@ -174,6 +182,7 @@ function createMockSettingsRepo(): SettingsRepository {
     enableVolumeKeyPaging: false,
     pagingMode: "auto",
     updatedAt: "2026-10-26T00:00:00Z",
+    ...initial,
   };
   return {
     getReaderSettings: async () => current,
@@ -376,6 +385,23 @@ describe("ReaderContainer", () => {
         screen.getByTestId("reader-bottom-touch-zone"),
       ).toBeInTheDocument();
       expect(screen.getByTestId("reader-bottom-overlay")).toBeInTheDocument();
+    });
+
+    it("PagedMode ストーリーでページ送りモード（paged）の設定が ReaderPage に伝播されること (AC-RD-15)", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      render(<PagedMode />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            pagingMode: "paged",
+            currentPage: 1,
+            totalPages: 1,
+          }),
+          undefined,
+        );
+      });
     });
   });
 
@@ -827,6 +853,9 @@ describe("ReaderContainer", () => {
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
+      const settingsRepository = createMockSettingsRepo({
+        pagingMode: "scroll",
+      });
 
       render(
         <TestWrapper
@@ -834,6 +863,7 @@ describe("ReaderContainer", () => {
           chapterIndex={1}
           novelRepository={novelRepository}
           chapterRepository={chapterRepository}
+          settingsRepository={settingsRepository}
         />,
       );
 
@@ -916,6 +946,151 @@ describe("ReaderContainer", () => {
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
             activeTab: "search",
+          }),
+          undefined,
+        );
+      });
+    });
+  });
+
+  describe("ページネーション状態・コールバックの ReaderPage への接続検証 (AC-RD-15, AC-RD-16, AC-RD-20)", () => {
+    it("ReaderContainer は useReader の pagingMode, currentPage, totalPages, goToPage, setTotalPages を ReaderPage に接続すること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
+      const { repo: chapterRepository } = createMockChapterRepo();
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            pagingMode: "auto",
+            currentPage: 1,
+            totalPages: 1,
+            onPageChange: expect.any(Function),
+            onTotalPagesChange: expect.any(Function),
+          }),
+          undefined,
+        );
+      });
+    });
+
+    it("settingsRepository の pagingMode が paged の場合、ReaderPage に pagingMode='paged' が渡されること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
+      const { repo: chapterRepository } = createMockChapterRepo();
+      const settingsRepository = createMockSettingsRepo({
+        pagingMode: "paged",
+      });
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+          settingsRepository={settingsRepository}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            pagingMode: "paged",
+          }),
+          undefined,
+        );
+      });
+    });
+
+    it("ReaderPage に渡された onTotalPagesChange が呼ばれた際、totalPages が更新されること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
+      const { repo: chapterRepository } = createMockChapterRepo();
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
+      });
+
+      // 直近の呼び出しから onTotalPagesChange を取得して発火
+      const lastCallProps = pageSpy.mock.lastCall?.[0];
+      expect(lastCallProps?.onTotalPagesChange).toBeDefined();
+
+      act(() => {
+        lastCallProps?.onTotalPagesChange?.(12);
+      });
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            totalPages: 12,
+          }),
+          undefined,
+        );
+      });
+    });
+
+    it("ReaderPage に渡された onPageChange が呼ばれた際、currentPage が更新されること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
+      const { repo: chapterRepository } = createMockChapterRepo();
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
+      });
+
+      // 先に totalPages を設定
+      const firstProps = pageSpy.mock.lastCall?.[0];
+      act(() => {
+        firstProps?.onTotalPagesChange?.(10);
+      });
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ totalPages: 10 }),
+          undefined,
+        );
+      });
+
+      // onPageChange でページ移動
+      const updatedProps = pageSpy.mock.lastCall?.[0];
+      expect(updatedProps?.onPageChange).toBeDefined();
+
+      act(() => {
+        updatedProps?.onPageChange?.(4);
+      });
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            currentPage: 4,
           }),
           undefined,
         );

@@ -4,6 +4,7 @@ import type {
   ChapterRecord,
   WritingMode,
   ReaderTheme,
+  ReaderPagingMode,
 } from "../../../storage/types";
 import type { BottomTab } from "../../../shared/ui/BottomTabBar";
 import { ReaderView } from "./ReaderView";
@@ -19,11 +20,16 @@ export interface ReaderPageProps {
   fontSizePx: number;
   lineHeight: number;
   initialScrollProgress: number;
+  pagingMode?: ReaderPagingMode;
+  currentPage?: number;
+  totalPages?: number;
   isLoading: boolean;
   error?: string | null;
   activeTab?: BottomTab;
   onPrevChapter: () => void;
   onNextChapter: () => void;
+  onPageChange?: (targetPage: number) => void;
+  onTotalPagesChange?: (totalPages: number) => void;
   onScrollProgressChange: (progress: number) => void;
   onSelectTab?: (tab: BottomTab) => void;
   initialOverlayOpen?: boolean;
@@ -52,15 +58,25 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
   fontSizePx,
   lineHeight,
   initialScrollProgress,
+  pagingMode = "auto",
+  currentPage = 1,
+  totalPages = 1,
   isLoading,
   error,
   activeTab = "bookshelf",
   onPrevChapter,
   onNextChapter,
+  onPageChange,
+  onTotalPagesChange,
   onScrollProgressChange,
   onSelectTab,
   initialOverlayOpen,
 }) => {
+  void pagingMode;
+  void currentPage;
+  void totalPages;
+  void onPageChange;
+  void onTotalPagesChange;
   const hasNovel = novel !== null;
   const hasBodyHtml = Boolean(chapter && chapter.bodyHtml !== null);
   const isInitialOpen =
