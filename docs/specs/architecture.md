@@ -56,6 +56,8 @@ related_tests:
   - src/bridges/app/mockAppBridge.test.ts
   - src/bridges/app/index.test.ts
   - src/storage/repositories/appSettingsRepository.test.ts
+  - src/storage/repositories/novelRepository.test.ts
+  - src/storage/repositories/settingsRepository.test.ts
   - src/shared/utils/cache.test.ts
   - src/shared/constants/cache.test.ts
   - scripts/generate-icons.test.ts
@@ -400,6 +402,11 @@ DB テーブル構造の詳細は [docs/specs/db-schema.md](db-schema.md) を正
 export type BookshelfSortOrder =
   "unread_first" | "last_read" | "latest_published" | "created_at" | "title";
 
+export interface DeletedNovelRecord {
+  id: string;
+  deletedAt: number;
+}
+
 export interface NovelRepository {
   listNovels(sortOrder?: BookshelfSortOrder): Promise<NovelSummary[]>;
   getNovelById(novelId: string): Promise<NovelRecord | null>;
@@ -415,11 +422,17 @@ export interface NovelRepository {
   deleteNovel(novelId: string): Promise<void>;
   clearNewUpdate(novelId: string): Promise<void>;
   updateLastCheckedAt(novelId: string, checkedAt: string): Promise<void>;
+  getDeletedNovels?(): Promise<DeletedNovelRecord[]>;
+  purgeDeletedNovels?(idList: string[]): Promise<void>;
 }
 
 export interface AppSettingsRepository {
   getSetting(key: string): Promise<string | null>;
   setSetting(key: string, value: string): Promise<void>;
+  getCloudSyncLastSyncedAt?(): Promise<number | null>;
+  setCloudSyncLastSyncedAt?(timestamp: number | null): Promise<void>;
+  getCloudSyncAccountEmail?(): Promise<string | null>;
+  setCloudSyncAccountEmail?(email: string | null): Promise<void>;
 }
 
 export interface ChapterRepository {
@@ -448,6 +461,10 @@ export interface ChapterRepository {
 export interface SettingsRepository {
   getReaderSettings(): Promise<ReaderSettings>;
   updateReaderSettings(patch: Partial<ReaderSettings>): Promise<ReaderSettings>;
+  getCloudSyncLastSyncedAt?(): Promise<number | null>;
+  setCloudSyncLastSyncedAt?(timestamp: number | null): Promise<void>;
+  getCloudSyncAccountEmail?(): Promise<string | null>;
+  setCloudSyncAccountEmail?(email: string | null): Promise<void>;
 }
 ```
 
