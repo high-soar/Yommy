@@ -5,6 +5,7 @@ import type {
   ChapterRecord,
   WritingMode,
   ReaderTheme,
+  ReaderPagingMode,
 } from "../../../storage/types";
 import {
   SHORT_TIMEOUT_MS,
@@ -19,6 +20,16 @@ import {
 } from "../../../shared/utils/cache";
 
 export { isChapterFresh, delay, toErrorMessage };
+
+/**
+ * ページ送りモードと組み方向から実効動作モード（"paged" | "scroll"）を算出する純粋関数
+ */
+export function resolveEffectivePagingMode(
+  _pagingMode: ReaderPagingMode,
+  _writingMode: WritingMode,
+): "paged" | "scroll" {
+  throw new Error("resolveEffectivePagingMode is not implemented yet");
+}
 
 /**
  * デフォルトの検証用カクヨム作品URL
@@ -43,6 +54,10 @@ export interface UseReaderResult {
   lineHeight: number;
   initialScrollProgress: number;
   scrollProgress: number;
+  pagingMode: ReaderPagingMode;
+  effectivePagingMode: "paged" | "scroll";
+  currentPage: number;
+  totalPages: number;
   isLoading: boolean;
   error: string | null;
   hasPrevChapter: boolean;
@@ -51,6 +66,11 @@ export interface UseReaderResult {
   changeTheme: (theme: ReaderTheme) => Promise<void>;
   changeFontSize: (fontSizePx: number) => Promise<void>;
   changeLineHeight: (lineHeight: number) => Promise<void>;
+  changePagingMode: (pagingMode: ReaderPagingMode) => Promise<void>;
+  goToPage: (targetPage: number) => void;
+  nextPage: () => void;
+  prevPage: () => void;
+  setTotalPages: (total: number) => void;
   updateScrollProgress: (progress: number) => Promise<void>;
   flushBookmark: () => Promise<void>;
   goToChapter: (targetChapterIndex: number) => Promise<boolean>;
@@ -772,6 +792,10 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     lineHeight,
     initialScrollProgress,
     scrollProgress,
+    pagingMode: "auto" as ReaderPagingMode,
+    effectivePagingMode: "scroll" as const,
+    currentPage: 1,
+    totalPages: 1,
     isLoading,
     error,
     hasPrevChapter,
@@ -780,6 +804,11 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     changeTheme,
     changeFontSize,
     changeLineHeight,
+    changePagingMode: async () => {},
+    goToPage: () => {},
+    nextPage: () => {},
+    prevPage: () => {},
+    setTotalPages: () => {},
     updateScrollProgress,
     flushBookmark,
     goToChapter,
