@@ -55,8 +55,13 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
     fontSizePx,
     lineHeight,
     initialScrollProgress,
+    pagingMode,
+    currentPage,
+    totalPages,
     isLoading,
     error,
+    goToPage,
+    setTotalPages,
     updateScrollProgress,
     flushBookmark,
     goToChapter,
@@ -146,11 +151,16 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
       fontSizePx={fontSizePx}
       lineHeight={lineHeight}
       initialScrollProgress={initialScrollProgress}
+      pagingMode={pagingMode}
+      currentPage={currentPage}
+      totalPages={totalPages}
       isLoading={isLoading}
       error={error}
       activeTab={activeTab}
       onPrevChapter={handlePrevChapter}
       onNextChapter={handleNextChapter}
+      onPageChange={goToPage}
+      onTotalPagesChange={setTotalPages}
       onScrollProgressChange={handleScrollProgressChange}
       onSelectTab={handleSelectTab}
     />
