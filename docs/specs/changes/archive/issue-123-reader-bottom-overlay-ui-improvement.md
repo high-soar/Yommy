@@ -3,7 +3,7 @@ type: spec-delta
 title: "リーダー下部オーバーレイ（ReaderBottomOverlay）のUI改善（✕閉じるボタン廃止・スマホでのタブ改行解消）"
 description: "Issue #123 に対する差分仕様、影響する全体正本、テスト計画、および実装Sub-issue分割計画。"
 issue: "#123"
-status: "Review (#123)"
+status: "Completed (Archived)"
 updated: "2026-10-31"
 tags:
   - delta
