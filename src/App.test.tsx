@@ -547,6 +547,84 @@ describe("App コンポーネント", () => {
       });
     });
 
+    it("リーダー画面 (SCR-03) から下部オーバーレイ経由で設定画面 (SCR-05) へ遷移後、戻るボタン押下時にリーダー画面へ復帰すること (AC-AB-04, TR-12)", async () => {
+      const user = userEvent.setup();
+      const mockAppBridge = new MockAppBridge();
+      render(
+        <App
+          initialPath="/novels/kakuyomu:16817330658027210412/chapters/1"
+          appBridge={mockAppBridge}
+        />,
+      );
+
+      await waitFor(
+        () => {
+          expect(
+            screen.getByTestId("reader-bottom-touch-zone"),
+          ).toBeInTheDocument();
+        },
+        { timeout: 3000 },
+      );
+
+      // 下部オーバーレイを表示
+      await user.click(screen.getByTestId("reader-bottom-touch-zone"));
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("reader-bottom-tab-settings"),
+        ).toBeInTheDocument();
+      });
+
+      // 設定タブをクリック
+      await user.click(screen.getByTestId("reader-bottom-tab-settings"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+      });
+
+      // 戻るボタンを押下
+      await act(async () => {
+        await mockAppBridge.triggerBackButton();
+      });
+
+      // リーダー画面へ復帰することをアサート
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
+      });
+    });
+
+    it("作品詳細画面 (SCR-02) から下部タブ経由で設定画面 (SCR-05) へ遷移後、戻るボタン押下時に作品詳細画面へ復帰すること (AC-AB-04, TR-12)", async () => {
+      const user = userEvent.setup();
+      const mockAppBridge = new MockAppBridge();
+      render(
+        <App
+          initialPath="/novels/kakuyomu:16817330658027210412"
+          appBridge={mockAppBridge}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
+      });
+
+      // 設定タブをクリック
+      await user.click(screen.getByTestId("tab-settings"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+      });
+
+      // 戻るボタンを押下
+      await act(async () => {
+        await mockAppBridge.triggerBackButton();
+      });
+
+      // 作品詳細画面へ復帰することをアサート
+      await waitFor(() => {
+        expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
+      });
+    });
+
     it("検索画面 (SCR-06) で戻るボタン押下時、ホーム本棚画面 (SCR-01) へ復帰すること (TR-12)", async () => {
       const mockAppBridge = new MockAppBridge();
       render(<App initialPath="/search" appBridge={mockAppBridge} />);

@@ -626,7 +626,127 @@ describe("router", () => {
         );
       });
 
-      it("設定画面 (SCR-05) から back() を呼んだとき、ホーム本棚画面 (/) へ復帰すること (TR-12)", () => {
+      it("リーダー画面 (/novels/:novelId/chapters/:chapterIndex) から設定画面へ遷移後、back() でリーダー画面へ復帰すること (TR-12)", () => {
+        render(
+          <RouterProvider initialPath="/novels/kakuyomu:16817330658027210412/chapters/5">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-settings").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/settings",
+        );
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "settings",
+        );
+
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/novels/kakuyomu:16817330658027210412/chapters/5",
+        );
+        expect(screen.getByTestId("route-display")).toHaveTextContent("reader");
+      });
+
+      it("作品詳細画面 (/novels/:novelId) から設定画面へ遷移後、back() で作品詳細画面へ復帰すること (TR-12)", () => {
+        render(
+          <RouterProvider initialPath="/novels/kakuyomu:16817330658027210412">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-settings").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/settings",
+        );
+
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/novels/kakuyomu:16817330658027210412",
+        );
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "novel-detail",
+        );
+      });
+
+      it("本棚画面 (/) から設定画面へ遷移後、back() で本棚画面 (/) へ復帰すること (TR-12)", () => {
+        render(
+          <RouterProvider initialPath="/">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-settings").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/settings",
+        );
+
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent("/");
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "bookshelf",
+        );
+      });
+
+      it("検索画面 (/search) から設定画面へ遷移後、back() で本棚画面 (/) へ復帰すること (TR-12)", () => {
+        render(
+          <RouterProvider initialPath="/search">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-settings").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/settings",
+        );
+
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent("/");
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "bookshelf",
+        );
+      });
+
+      it("ランキング画面 (/ranking) から設定画面へ遷移後、back() で本棚画面 (/) へ復帰すること (TR-12)", () => {
+        render(
+          <RouterProvider initialPath="/ranking">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-settings").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/settings",
+        );
+
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent("/");
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "bookshelf",
+        );
+      });
+
+      it("初期パス /settings で起動時（履歴なし）、back() で本棚画面 (/) へ復帰すること (TR-12)", () => {
         render(
           <RouterProvider initialPath="/settings">
             <TestConsumer />
@@ -640,6 +760,98 @@ describe("router", () => {
         expect(screen.getByTestId("route-display")).toHaveTextContent(
           "bookshelf",
         );
+      });
+
+      it("リーダー画面から設定画面へ遷移した後に別のタブ（例: /ranking）へ遷移した場合、settingsOrigin がリセットされ、ランキングからの back() は本棚 (/) へ遷移すること", () => {
+        render(
+          <RouterProvider initialPath="/novels/kakuyomu:16817330658027210412/chapters/5">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        // リーダー -> 設定
+        act(() => {
+          screen.getByTestId("btn-settings").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/settings",
+        );
+
+        // 設定 -> ランキング
+        act(() => {
+          screen.getByTestId("btn-ranking").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/ranking",
+        );
+
+        // ランキング -> back() -> 本棚
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent("/");
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "bookshelf",
+        );
+      });
+
+      it("検索画面 (/search) から作品詳細・リーダーへ遷移後、設定画面を開いて back() でリーダーへ戻り、リーダーから back() で作品詳細へ戻り、作品詳細から back() で検索画面 (/search) へ戻れること（novelOrigin 探索元コンテキスト保護）", () => {
+        render(
+          <RouterProvider initialPath="/search">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        // 検索 -> 作品詳細 (origin: /search)
+        act(() => {
+          screen.getByTestId("btn-detail").click();
+        });
+        expect(screen.getByTestId("origin-display")).toHaveTextContent(
+          "/search",
+        );
+
+        // 作品詳細 -> リーダー
+        act(() => {
+          screen.getByTestId("btn-reader").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/novels/kakuyomu%3A16817330658027210412/chapters/5",
+        );
+
+        // リーダー -> 設定
+        act(() => {
+          screen.getByTestId("btn-settings").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/settings",
+        );
+
+        // 設定 -> back() -> リーダー復帰
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/novels/kakuyomu%3A16817330658027210412/chapters/5",
+        );
+        expect(screen.getByTestId("route-display")).toHaveTextContent("reader");
+
+        // リーダー -> back() -> 作品詳細復帰 (TR-06)
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/novels/kakuyomu%3A16817330658027210412",
+        );
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "novel-detail",
+        );
+
+        // 作品詳細 -> back() -> 探索元 /search 復帰 (TR-07)
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent("/search");
+        expect(screen.getByTestId("route-display")).toHaveTextContent("search");
       });
 
       it("検索画面 (SCR-06) から back() を呼んだとき、ホーム本棚画面 (/) へ復帰すること (TR-12)", () => {
@@ -792,7 +1004,7 @@ describe("router", () => {
           );
         });
 
-        it("探索元から詳細を経てリーダーへ進んだ際も novelOrigin が維持され、設定画面へ遷移すると null にリセットされること", () => {
+        it("探索元から詳細を経てリーダーへ進んだ際も novelOrigin が維持され、設定画面へ一時退避しても保持され、本棚画面へ遷移すると null にリセットされること", () => {
           render(
             <RouterProvider initialPath="/search">
               <TestConsumer />
@@ -813,8 +1025,17 @@ describe("router", () => {
             "/search",
           );
 
+          // 設定画面へ遷移しても探索元コンテキストは保持される
           act(() => {
             screen.getByTestId("btn-settings").click();
+          });
+          expect(screen.getByTestId("origin-display")).toHaveTextContent(
+            "/search",
+          );
+
+          // 本棚画面へ遷移するとリセットされる
+          act(() => {
+            screen.getByTestId("btn-bookshelf").click();
           });
           expect(screen.getByTestId("origin-display")).toHaveTextContent(
             "null",
