@@ -57,6 +57,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     parserRegistry,
     novelRepository,
     chapterRepository,
+    syncEngine,
     isReady,
   } = useServices();
 
@@ -417,6 +418,9 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     let isSuccess = false;
     try {
       await novelRepository.deleteNovel(novelId);
+      if (syncEngine) {
+        syncEngine.notifyChanged().catch(() => {});
+      }
       setIsDeleteDialogOpen(false);
       isSuccess = true;
     } catch (err: unknown) {
@@ -426,7 +430,14 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
       setIsDeleting(false);
     }
     return isSuccess;
-  }, [isDeleting, isRefreshing, isBatchCaching, novelRepository, novelId]);
+  }, [
+    isDeleting,
+    isRefreshing,
+    isBatchCaching,
+    novelRepository,
+    syncEngine,
+    novelId,
+  ]);
 
   return {
     novel,
