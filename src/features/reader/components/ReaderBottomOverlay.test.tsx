@@ -274,27 +274,7 @@ describe("ReaderBottomOverlay", () => {
       ).resolves.not.toThrow();
     });
 
-    it("onClose が指定されている場合に閉じるボタンが表示され、クリックで呼び出されること", async () => {
-      const user = userEvent.setup();
-      const onClose = vi.fn();
-      render(
-        <ReaderBottomOverlay
-          isOpen={true}
-          chapterIndex={2}
-          totalChapters={5}
-          onPrevChapter={vi.fn()}
-          onNextChapter={vi.fn()}
-          onClose={onClose}
-        />,
-      );
-
-      const closeButton = screen.getByTestId("reader-bottom-overlay-close");
-      expect(closeButton).toBeInTheDocument();
-      await user.click(closeButton);
-      expect(onClose).toHaveBeenCalledTimes(1);
-    });
-
-    it("onClose が未指定の場合に閉じるボタンが表示されないこと", () => {
+    it("閉じるボタン（✕）は描画されず、本文タップ非表示に一本化されていること", () => {
       render(
         <ReaderBottomOverlay
           isOpen={true}
@@ -308,6 +288,32 @@ describe("ReaderBottomOverlay", () => {
       expect(
         screen.queryByTestId("reader-bottom-overlay-close"),
       ).not.toBeInTheDocument();
+    });
+
+    it("下部タブの各ボタンがスマホ幅での改行を防止するスタイル（whitespace-nowrap, flex-col sm:flex-row）を持つこと", () => {
+      render(
+        <ReaderBottomOverlay
+          isOpen={true}
+          chapterIndex={2}
+          totalChapters={5}
+          onPrevChapter={vi.fn()}
+          onNextChapter={vi.fn()}
+        />,
+      );
+
+      const tabIds = [
+        "reader-bottom-tab-bookshelf",
+        "reader-bottom-tab-search",
+        "reader-bottom-tab-ranking",
+        "reader-bottom-tab-settings",
+      ];
+
+      for (const tabId of tabIds) {
+        const tab = screen.getByTestId(tabId);
+        expect(tab).toHaveClass("whitespace-nowrap");
+        expect(tab).toHaveClass("flex-col");
+        expect(tab).toHaveClass("sm:flex-row");
+      }
     });
   });
 });

@@ -21,7 +21,6 @@ const meta: Meta<typeof ReaderBottomOverlay> = {
     onPrevChapter: fn(),
     onNextChapter: fn(),
     onSelectTab: fn(),
-    onClose: fn(),
   },
 };
 

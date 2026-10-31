@@ -390,18 +390,6 @@ describe("ReaderPage", () => {
       expect(overlay).toHaveAttribute("aria-hidden", "true");
     });
 
-    it("オーバーレイの閉じるボタン（✕）をクリックした際にオーバーレイが閉じること", async () => {
-      const user = userEvent.setup();
-      render(
-        <ReaderPage {...createDefaultProps({ initialOverlayOpen: true })} />,
-      );
-      const overlay = screen.getByTestId("reader-bottom-overlay");
-      expect(overlay).toHaveAttribute("aria-hidden", "false");
-
-      await user.click(screen.getByTestId("reader-bottom-overlay-close"));
-      expect(overlay).toHaveAttribute("aria-hidden", "true");
-    });
-
     it("下部タブ（本棚 / 設定）をクリックした際に onSelectTab が呼ばれること", async () => {
       const user = userEvent.setup();
       const onSelectTab = vi.fn();

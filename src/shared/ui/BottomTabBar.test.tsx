@@ -237,5 +237,29 @@ describe("BottomTabBar", () => {
       expect(nav).toHaveClass("border-t");
       expect(nav).toHaveClass("grid-cols-4");
     });
+
+    it("各タブボタンがスマホ幅での改行を防止するスタイル（whitespace-nowrap, flex-col sm:flex-row）を持つこと", () => {
+      render(
+        <BottomTabBar
+          activeTab="bookshelf"
+          onSelectBookshelf={vi.fn()}
+          onSelectSettings={vi.fn()}
+        />,
+      );
+
+      const tabIds = [
+        "tab-bookshelf",
+        "tab-search",
+        "tab-ranking",
+        "tab-settings",
+      ];
+
+      for (const tabId of tabIds) {
+        const tab = screen.getByTestId(tabId);
+        expect(tab).toHaveClass("whitespace-nowrap");
+        expect(tab).toHaveClass("flex-col");
+        expect(tab).toHaveClass("sm:flex-row");
+      }
+    });
   });
 });
