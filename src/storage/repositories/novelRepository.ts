@@ -287,10 +287,19 @@ export class SqlNovelRepository implements NovelRepository {
   }
 
   /**
-   * 作品および紐づくエピソード・ダウンロードキュー（CASCADE）を削除する
+   * 作品および紐づくエピソード・ダウンロードキュー（CASCADE）を削除し、
+   * クラウド同期用の Tombstone（deleted_novels テーブル）に削除日時を記録する
+   * （docs/specs/features/bookshelf.md AC-BS-13 および docs/specs/db-schema.md §3.6 に準拠）
    */
   async deleteNovel(novelId: string): Promise<void> {
-    await this.db.execute("DELETE FROM novels WHERE id = ?;", [novelId]);
+    const deletedAt = Date.now();
+    await this.db.runTransaction(async () => {
+      await this.db.execute(
+        `INSERT OR REPLACE INTO deleted_novels (id, deleted_at) VALUES (?, ?);`,
+        [novelId, deletedAt],
+      );
+      await this.db.execute("DELETE FROM novels WHERE id = ?;", [novelId]);
+    });
   }
 
   /**
@@ -314,16 +323,29 @@ export class SqlNovelRepository implements NovelRepository {
   }
 
   /**
-   * 削除済み作品の Tombstone レコード一覧を取得する（Red スタブ）
+   * 削除済み作品の Tombstone レコード一覧を削除日時の降順で取得する
    */
   async getDeletedNovels(): Promise<DeletedNovelRecord[]> {
-    throw new Error("getDeletedNovels is not implemented yet");
+    const rows = await this.db.query<{ id: string; deleted_at: number }>(
+      "SELECT id, deleted_at FROM deleted_novels ORDER BY deleted_at DESC;",
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      deletedAt: Number(r.deleted_at),
+    }));
   }
 
   /**
-   * 指定された作品 ID の Tombstone を削除（パージ）する（Red スタブ）
+   * 指定された作品 ID の Tombstone を削除（パージ）する
    */
-  async purgeDeletedNovels(_idList: string[]): Promise<void> {
-    throw new Error("purgeDeletedNovels is not implemented yet");
+  async purgeDeletedNovels(idList: string[]): Promise<void> {
+    if (idList.length === 0) {
+      return;
+    }
+    const placeholders = idList.map(() => "?").join(", ");
+    await this.db.execute(
+      `DELETE FROM deleted_novels WHERE id IN (${placeholders});`,
+      idList,
+    );
   }
 }

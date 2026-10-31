@@ -44,18 +44,36 @@ export class SqlAppSettingsRepository implements AppSettingsRepository {
   }
 
   async getCloudSyncLastSyncedAt(): Promise<number | null> {
-    throw new Error("getCloudSyncLastSyncedAt is not implemented yet");
+    const raw = await this.getSetting("cloud_sync_last_synced_at");
+    if (raw === null) {
+      return null;
+    }
+    const num = Number(raw);
+    return Number.isNaN(num) ? null : num;
   }
 
-  async setCloudSyncLastSyncedAt(_timestamp: number | null): Promise<void> {
-    throw new Error("setCloudSyncLastSyncedAt is not implemented yet");
+  async setCloudSyncLastSyncedAt(timestamp: number | null): Promise<void> {
+    if (timestamp === null) {
+      await this.db.execute(
+        "DELETE FROM app_settings WHERE key = 'cloud_sync_last_synced_at';",
+      );
+    } else {
+      await this.setSetting("cloud_sync_last_synced_at", String(timestamp));
+    }
   }
 
   async getCloudSyncAccountEmail(): Promise<string | null> {
-    throw new Error("getCloudSyncAccountEmail is not implemented yet");
+    const raw = await this.getSetting("cloud_sync_account_email");
+    return raw;
   }
 
-  async setCloudSyncAccountEmail(_email: string | null): Promise<void> {
-    throw new Error("setCloudSyncAccountEmail is not implemented yet");
+  async setCloudSyncAccountEmail(email: string | null): Promise<void> {
+    if (email === null) {
+      await this.db.execute(
+        "DELETE FROM app_settings WHERE key = 'cloud_sync_account_email';",
+      );
+    } else {
+      await this.setSetting("cloud_sync_account_email", email);
+    }
   }
 }
