@@ -3,7 +3,7 @@ type: spec-delta
 title: "設定画面からのOSバックキー直前画面復帰（リーダー・作品詳細・本棚）"
 description: "Issue #124 に対する差分仕様、影響する全体正本、テスト計画、および実装Sub-issue分割計画。"
 issue: "#124"
-status: "Review (#124)"
+status: "Completed (Archived)"
 updated: "2026-10-31"
 tags:
   - delta

@@ -2,7 +2,7 @@
 type: spec-requirements
 title: 全体要件定義・機能一覧・ロードマップ（App 全体正本）
 description: "Yommyのターゲット環境、小説サイト対応優先順位、全機能要件（SYS-REQ-01〜20）、およびミニMilestoneロードマップの正本。"
-status: "Review (#124)"
+status: Approved
 updated: "2026-10-31"
 tags:
   - requirements
@@ -22,7 +22,7 @@ tags:
   - batch-cache
   - cache-rules
 related_specs:
-  - docs/specs/changes/issue-124-settings-back-button-navigation.md
+  - docs/specs/changes/archive/issue-124-settings-back-button-navigation.md
   - docs/specs/architecture.md
   - docs/specs/db-schema.md
   - docs/specs/screen-transitions.md

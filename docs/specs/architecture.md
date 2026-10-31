@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Review (#124)"
+status: Approved
 updated: "2026-10-31"
 tags:
   - architecture
@@ -20,7 +20,7 @@ tags:
   - batch-cache
   - cache-rules
 related_specs:
-  - docs/specs/changes/issue-124-settings-back-button-navigation.md
+  - docs/specs/changes/archive/issue-124-settings-back-button-navigation.md
   - docs/specs/requirements.md
   - docs/specs/db-schema.md
   - docs/specs/screen-transitions.md

@@ -514,8 +514,19 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     );
     await expect(page.getByTestId("novel-detail-page")).toBeVisible();
 
-    // 11. どこからでも下部タブ「本棚」をタップした際、本棚トップ（/）へ直行することの確認
-    // 目次画面で「設定」タブをタップ
+    // 11. 目次画面（SCR-02）から設定画面（SCR-05）へ遷移し、ブラウザ戻る操作で目次画面へ復帰することを確認（TR-12 改善）
+    await tabSettings.click();
+    await expect(page).toHaveURL("/settings");
+    await expect(tabSettings).toHaveAttribute("aria-selected", "true");
+
+    await page.goBack();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
+    );
+    await expect(page.getByTestId("novel-detail-page")).toBeVisible();
+
+    // どこからでも下部タブ「本棚」をタップした際、本棚トップ（/）へ直行することの確認（TR-01b）
+    // 再度目次画面から「設定」タブをタップ
     await tabSettings.click();
     await expect(page).toHaveURL("/settings");
     await expect(tabSettings).toHaveAttribute("aria-selected", "true");
