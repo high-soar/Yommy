@@ -4,16 +4,19 @@ import android.app.Activity;
 import android.content.Intent;
 import android.util.Log;
 import androidx.activity.result.ActivityResult;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.IntentSenderRequest;
+import androidx.activity.result.contract.ActivityResultContracts;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
-import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.google.android.gms.auth.api.identity.AuthorizationClient;
 import com.google.android.gms.auth.api.identity.AuthorizationRequest;
 import com.google.android.gms.auth.api.identity.AuthorizationResult;
 import com.google.android.gms.auth.api.identity.Identity;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.common.api.Scope;
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -51,13 +54,26 @@ public class CloudSyncPlugin extends Plugin {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private String currentAccessToken = null;
     private String currentUserEmail = null;
+    private ActivityResultLauncher<IntentSenderRequest> authLauncher;
+    private PluginCall pendingSignInCall;
+
+    @Override
+    public void load() {
+        super.load();
+        authLauncher = getActivity().registerForActivityResult(
+            new ActivityResultContracts.StartIntentSenderForResult(),
+            this::handleAuthActivityResult
+        );
+    }
 
     @PluginMethod
     public void getAuthState(PluginCall call) {
         JSObject ret = new JSObject();
         if (currentAccessToken != null && !currentAccessToken.isEmpty()) {
             ret.put("status", STATUS_CONNECTED);
-            ret.put("email", currentUserEmail != null ? currentUserEmail : "");
+            if (currentUserEmail != null && !currentUserEmail.isEmpty()) {
+                ret.put("email", currentUserEmail);
+            }
         } else {
             ret.put("status", STATUS_UNLINKED);
         }
@@ -75,12 +91,25 @@ public class CloudSyncPlugin extends Plugin {
             client.authorize(request)
                 .addOnSuccessListener(result -> {
                     if (result.hasResolution()) {
-                        startActivityForResult(call, result.getPendingIntent().getIntentSender(), "handleAuthResolution");
+                        if (authLauncher != null) {
+                            pendingSignInCall = call;
+                            IntentSenderRequest intentSenderRequest = new IntentSenderRequest.Builder(result.getPendingIntent()).build();
+                            authLauncher.launch(intentSenderRequest);
+                        } else {
+                            Log.e(TAG, "authLauncher is not initialized");
+                            JSObject ret = new JSObject();
+                            ret.put("status", STATUS_ERROR);
+                            ret.put("message", "Activity result launcher not initialized");
+                            call.resolve(ret);
+                        }
                     } else {
                         currentAccessToken = result.getAccessToken();
+                        extractEmailFromAuthResult(result);
                         JSObject ret = new JSObject();
                         ret.put("status", STATUS_CONNECTED);
-                        ret.put("email", currentUserEmail != null ? currentUserEmail : "");
+                        if (currentUserEmail != null && !currentUserEmail.isEmpty()) {
+                            ret.put("email", currentUserEmail);
+                        }
                         call.resolve(ret);
                     }
                 })
@@ -100,18 +129,36 @@ public class CloudSyncPlugin extends Plugin {
         }
     }
 
-    @ActivityCallback
-    private void handleAuthResolution(PluginCall call, ActivityResult result) {
-        if (call == null) return;
+    private void extractEmailFromAuthResult(AuthorizationResult result) {
+        try {
+            GoogleSignInAccount account = result.toGoogleSignInAccount();
+            if (account != null && account.getEmail() != null && !account.getEmail().isEmpty()) {
+                currentUserEmail = account.getEmail();
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Could not extract email from AuthorizationResult", e);
+        }
+    }
+
+    private void handleAuthActivityResult(ActivityResult result) {
+        PluginCall call = pendingSignInCall;
+        pendingSignInCall = null;
+        if (call == null) {
+            return;
+        }
+
         if (result.getResultCode() == Activity.RESULT_OK) {
             Intent data = result.getData();
             try {
                 AuthorizationResult authResult = Identity.getAuthorizationClient(getActivity())
                     .getAuthorizationResultFromIntent(data);
                 currentAccessToken = authResult.getAccessToken();
+                extractEmailFromAuthResult(authResult);
                 JSObject ret = new JSObject();
                 ret.put("status", STATUS_CONNECTED);
-                ret.put("email", currentUserEmail != null ? currentUserEmail : "");
+                if (currentUserEmail != null && !currentUserEmail.isEmpty()) {
+                    ret.put("email", currentUserEmail);
+                }
                 call.resolve(ret);
             } catch (Exception e) {
                 Log.e(TAG, "Error getting auth result from intent", e);

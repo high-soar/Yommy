@@ -35,7 +35,10 @@ function formatAuthStateResponse(
   fallbackErrorMessage: string,
 ): CloudSyncAuthState {
   if (res.status === "connected") {
-    return { status: "connected", email: res.email };
+    return {
+      status: "connected",
+      email: res.email ? res.email : undefined,
+    };
   }
   if (res.status === "authenticating") {
     return { status: "authenticating" };

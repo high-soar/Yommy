@@ -54,6 +54,20 @@ describe("CapacitorCloudSyncBridge", () => {
       });
     });
 
+    it("connected 状態で email が空文字の場合に undefined に正規化されること", async () => {
+      vi.mocked(mockPlugin.getAuthState).mockResolvedValue({
+        status: "connected",
+        email: "",
+      });
+      const bridge = new CapacitorCloudSyncBridge(mockPlugin);
+      const state = await bridge.getAuthState();
+
+      expect(state).toEqual({
+        status: "connected",
+        email: undefined,
+      });
+    });
+
     it("authenticating 状態を正しく返すこと", async () => {
       vi.mocked(mockPlugin.getAuthState).mockResolvedValue({
         status: "authenticating",
@@ -138,6 +152,20 @@ describe("CapacitorCloudSyncBridge", () => {
       expect(state).toEqual({
         status: "connected",
         email: "user@example.com",
+      });
+    });
+
+    it("connected 状態で email が空文字の場合に undefined に正規化されること", async () => {
+      vi.mocked(mockPlugin.signIn).mockResolvedValue({
+        status: "connected",
+        email: "",
+      });
+      const bridge = new CapacitorCloudSyncBridge(mockPlugin);
+      const state = await bridge.signIn();
+
+      expect(state).toEqual({
+        status: "connected",
+        email: undefined,
       });
     });
 
