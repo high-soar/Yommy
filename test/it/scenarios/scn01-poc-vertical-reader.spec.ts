@@ -237,10 +237,101 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(readerView).toHaveAttribute("data-font-size", "20");
     await expect(readerView).toHaveAttribute("data-line-height", "2");
 
+    // デフォルト縦書き時のページめくりモード初期有効化・行途切れなし（overflow-hidden）・ページインジケーター（1 / N）の検証（AC-RD-15, AC-RD-16）
+    await expect(readerView).toHaveAttribute("data-paging-mode", "auto");
+    await expect(readerView).toHaveAttribute(
+      "data-effective-paging-mode",
+      "paged",
+    );
+    await expect(readerView).toHaveAttribute("data-current-page", "1");
+    await expect(readerView).toHaveAttribute("data-total-pages", "2");
+    await expect(readerView).toHaveClass(/overflow-hidden/);
+
+    const pageIndicator = page.getByTestId("reader-page-indicator");
+    await expect(pageIndicator).toBeVisible();
+    await expect(pageIndicator).toHaveText("1 / 2");
+
     // 6. 全画面テキスト表示化（AC-RD-09）: 初期状態では下部オーバーレイが画面外（translate-y-full）に退避していることを確認
     const overlay = page.getByTestId("reader-bottom-overlay");
     await expect(overlay).toHaveClass(/translate-y-full/);
 
+    const readerBox = await readerView.boundingBox();
+    expect(readerBox).not.toBeNull();
+
+    // Kindle様式: 画面中央領域タップ（幅20%〜80%領域）で下部オーバーレイが開閉すること（AC-RD-17）
+    if (readerBox) {
+      await page.mouse.click(
+        readerBox.x + readerBox.width * 0.5,
+        readerBox.y + readerBox.height * 0.4,
+      );
+    }
+    await expect(overlay).toHaveClass(/translate-y-0/);
+
+    // 再度中央領域タップでオーバーレイが閉じること
+    if (readerBox) {
+      await page.mouse.click(
+        readerBox.x + readerBox.width * 0.5,
+        readerBox.y + readerBox.height * 0.4,
+      );
+    }
+    await expect(overlay).toHaveClass(/translate-y-full/);
+
+    // Kindle様式: 画面左端タップ（幅約20% / 縦書き次ページ）によるページめくり・インジケーター更新（AC-RD-17）
+    if (readerBox) {
+      await page.mouse.click(
+        readerBox.x + readerBox.width * 0.1,
+        readerBox.y + readerBox.height * 0.4,
+      );
+    }
+    await expect(readerView).toHaveAttribute("data-current-page", "2");
+    await expect(pageIndicator).toHaveText("2 / 2");
+
+    // Kindle様式: 画面右端タップ（幅約20% / 縦書き前ページ）によるページめくり・インジケーター更新（AC-RD-17）
+    if (readerBox) {
+      await page.mouse.click(
+        readerBox.x + readerBox.width * 0.9,
+        readerBox.y + readerBox.height * 0.4,
+      );
+    }
+    await expect(readerView).toHaveAttribute("data-current-page", "1");
+    await expect(pageIndicator).toHaveText("1 / 2");
+
+    // 再度左端タップで最終ページ（第2ページ）へ移動
+    if (readerBox) {
+      await page.mouse.click(
+        readerBox.x + readerBox.width * 0.1,
+        readerBox.y + readerBox.height * 0.4,
+      );
+    }
+    await expect(readerView).toHaveAttribute("data-current-page", "2");
+    await expect(pageIndicator).toHaveText("2 / 2");
+
+    // 最終ページでのドラッグ離上によるシームレス次話遷移（第2話、AC-RD-18, TR-05）
+    // 画面幅の30%以上左から右（→）へドラッグしてヒントバッジが表示されることを確認
+    const boundaryHint = page.getByTestId("reader-episode-boundary-hint");
+    if (readerBox) {
+      const startX = readerBox.x + 100;
+      const startY = readerBox.y + readerBox.height * 0.4;
+      const dragDistance = readerBox.width * 0.35;
+      await page.mouse.move(startX, startY);
+      await page.mouse.down();
+      await page.mouse.move(startX + dragDistance, startY, { steps: 10 });
+      await expect(boundaryHint).toBeVisible();
+      await expect(boundaryHint).toHaveText("指を離して次の話へ");
+
+      // 指（ポインター）を離すことで第2話へシームレス遷移することを確認
+      await page.mouse.up();
+    }
+
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/2/,
+    );
+    await expect(boundaryHint).not.toBeVisible();
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "第1話 見知らぬ空",
+    );
+
+    // 下部オーバーレイの「前の話へ」ボタンで第1話へ戻る（TR-05）
     const touchZone = page.getByTestId("reader-bottom-touch-zone");
     await expect(touchZone).toBeVisible();
 
@@ -256,37 +347,17 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       await expect(overlay).toHaveClass(/translate-y-full/);
     }
 
-    // 画面最下部ゾーン（reader-bottom-touch-zone）をタップしてオーバーレイをスライドイン表示（AC-RD-10）
+    // 画面最下部ゾーンをタップしてオーバーレイをスライドイン表示（AC-RD-10）
     await touchZone.click();
     await expect(overlay).toHaveClass(/translate-y-0/);
-
-    // 外側タップ: オーバーレイ外の本文エリア（reader-view）をタップしてオーバーレイが自動非表示（translate-y-full）になることを確認（AC-RD-10）
-    await readerView.click({ position: { x: 100, y: 100 } });
-    await expect(overlay).toHaveClass(/translate-y-full/);
-
-    // 再度最下部ゾーンをタップしてオーバーレイを再表示
-    await touchZone.click();
-    await expect(overlay).toHaveClass(/translate-y-0/);
+    await expect(page.getByTestId("reader-chapter-indicator")).toHaveText(
+      "第 2 話 / 全 4 話",
+    );
+    await expect(page.getByTestId("reader-prev-chapter")).toBeEnabled();
 
     // 閉じるボタン（reader-bottom-overlay-close）は廃止され非表示/非存在であることを確認
     const overlayCloseButton = page.getByTestId("reader-bottom-overlay-close");
     await expect(overlayCloseButton).not.toBeAttached();
-
-    // 本文エリアタップでオーバーレイが自動非表示（translate-y-full）になることを確認
-    await readerView.click({ position: { x: 100, y: 100 } });
-    await expect(overlay).toHaveClass(/translate-y-full/);
-
-    // 再度最下部ゾーンをタップしてオーバーレイを表示
-    await touchZone.click();
-    await expect(overlay).toHaveClass(/translate-y-0/);
-    const chapterIndicator = page.getByTestId("reader-chapter-indicator");
-    await expect(chapterIndicator).toBeVisible();
-    await expect(chapterIndicator).toHaveText("第 1 話 / 全 4 話");
-
-    const prevChapterButton = page.getByTestId("reader-prev-chapter");
-    const nextChapterButton = page.getByTestId("reader-next-chapter");
-    await expect(prevChapterButton).toBeDisabled();
-    await expect(nextChapterButton).toBeEnabled();
 
     // リーダー下部オーバーレイ内のタブ（本棚・検索・ランキング・設定）が表示されていることを確認
     await expect(page.getByTestId("reader-bottom-tab-bookshelf")).toBeVisible();
@@ -294,7 +365,57 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(page.getByTestId("reader-bottom-tab-ranking")).toBeVisible();
     await expect(page.getByTestId("reader-bottom-tab-settings")).toBeVisible();
 
-    // 7. 本文内の <ruby>（ルビ）および <em class="bouten">（傍点）が可視状態で正しくレンダリングされていることを確認
+    // 「前の話へ」で第1話へ戻る
+    await page.getByTestId("reader-prev-chapter").click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1/,
+    );
+    await expect(overlay).toHaveClass(/translate-y-full/);
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "プロローグ：目覚め",
+    );
+
+    // 7. リーダー画面下部オーバーレイから設定画面（SCR-05）への遷移導線（TR-12）および戻り先保証（R1-03, R1-21）
+    await touchZone.click();
+    await expect(overlay).toHaveClass(/translate-y-0/);
+    const readerSettingsTab = page.getByTestId("reader-bottom-tab-settings");
+    await expect(readerSettingsTab).toBeVisible();
+    await readerSettingsTab.click();
+
+    // 設定画面（/settings）へ遷移すること（TR-12）
+    await expect(page).toHaveURL("/settings");
+    await expect(settingsPage).toBeVisible();
+    await expect(tabSettings).toHaveAttribute("aria-selected", "true");
+
+    // 設定画面（SCR-05）での「スクロール」切替およびリーダーでの連続スクロール表示切替検証（AC-RD-15, AC-ST-13）
+    const pagingModeSelect = page.getByTestId("paging-mode-select");
+    await expect(pagingModeSelect).toBeVisible();
+    await expect(pagingModeSelect).toHaveValue("auto");
+    await pagingModeSelect.selectOption("scroll");
+    await expect(pagingModeSelect).toHaveValue("scroll");
+
+    // 設定画面で選択中の「設定」タブを再タップしても重複履歴が追加されないことを確認（R1-21）
+    await tabSettings.click();
+    await expect(page).toHaveURL("/settings");
+
+    // ブラウザ戻る操作（TR-12）1回でリーダー画面（SCR-03）へ正しく復帰することを確認（R1-03, R1-21）
+    await page.goBack();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1/,
+    );
+    await expect(readerView).toBeVisible();
+
+    // 設定画面での「スクロール」切替がリーダーに反映され、連続スクロール表示（overflow-x-auto）へ切り替わっていることを確認
+    await expect(readerView).toHaveAttribute("data-paging-mode", "scroll");
+    await expect(readerView).toHaveAttribute(
+      "data-effective-paging-mode",
+      "scroll",
+    );
+    await expect(readerView).toHaveClass(/overflow-x-auto/);
+    // 連続スクロールモードではページインジケーター（reader-page-indicator）が非表示であること
+    await expect(page.getByTestId("reader-page-indicator")).not.toBeAttached();
+
+    // 8. 本文内の <ruby>（ルビ）および <em class="bouten">（傍点）が可視状態で正しくレンダリングされていることを確認
     const rubyElement = readerView.locator("ruby").first();
     await expect(rubyElement).toBeVisible();
 
@@ -302,8 +423,11 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(boutenElement).toBeVisible();
     await expect(boutenElement).toHaveText("信じがたい光景");
 
-    // 縦書き時に scrollWidth > clientWidth となっており、左方向（負の scrollLeft）へスクロールして進捗を保存できることを確認（AC-RD-08, R1-01）
+    // 縦書き連続スクロール時に scrollWidth > clientWidth となっており、左方向（負の scrollLeft）へスクロールして進捗を保存できることを確認（AC-RD-08, R1-01）
     // スクロール操作によりオーバーレイが自動非表示（translate-y-full）になることを確認（AC-RD-10）
+    await touchZone.click();
+    await expect(overlay).toHaveClass(/translate-y-0/);
+
     const verticalMaxScroll = await page.evaluate(() => {
       const el = document.querySelector('[data-testid="reader-view"]');
       if (!el) return 0;
@@ -350,67 +474,19 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       })
       .toBeLessThan(0);
 
-    // リーダー画面下部オーバーレイから設定画面（SCR-05）への遷移導線（TR-12）および戻り先保証（R1-03, R1-21）
+    // 最下部タッチゾーンをタップしてオーバーレイを再表示し、「次の話へ」（reader-next-chapter）で第2話へ遷移（TR-05 / AC-RD-06）
     await touchZone.click();
     await expect(overlay).toHaveClass(/translate-y-0/);
-    const readerSettingsTab = page.getByTestId("reader-bottom-tab-settings");
-    await expect(readerSettingsTab).toBeVisible();
-    await readerSettingsTab.click();
-
-    // 設定画面（/settings）へ遷移すること（TR-12）
-    await expect(page).toHaveURL("/settings");
-    await expect(settingsPage).toBeVisible();
-    await expect(tabSettings).toHaveAttribute("aria-selected", "true");
-
-    // 設定画面で選択中の「設定」タブを再タップしても重複履歴が追加されないことを確認（R1-21）
-    await tabSettings.click();
-    await expect(page).toHaveURL("/settings");
-
-    // ブラウザ戻る操作（TR-12）1回でリーダー画面（SCR-03）へ正しく復帰することを確認（R1-03, R1-21）
-    await page.goBack();
-    await expect(page).toHaveURL(
-      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1/,
-    );
-    await expect(readerView).toBeVisible();
-
-    // 8. 最下部タッチゾーンをタップしてオーバーレイを再表示し、「次の話へ」（reader-next-chapter）で第2話へ遷移（TR-05 / AC-RD-06）
-    await touchZone.click();
-    await expect(overlay).toHaveClass(/translate-y-0/);
+    const nextChapterButton = page.getByTestId("reader-next-chapter");
     await expect(nextChapterButton).toBeEnabled();
     await nextChapterButton.click();
 
     await expect(page).toHaveURL(
       /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/2/,
     );
-    // 遷移後はオーバーレイが自動非表示となること
     await expect(overlay).toHaveClass(/translate-y-full/);
-
-    // 第2話のタイトルを確認
-    const ch2Title = page.getByTestId("reader-chapter-title");
-    await expect(ch2Title).toBeVisible();
-    await expect(ch2Title).toHaveText("第1話 見知らぬ空");
-
-    // タッチゾーンをタップしてオーバーレイを表示し、インジケーターと「前の話へ」が有効であることを確認
-    await touchZone.click();
-    await expect(overlay).toHaveClass(/translate-y-0/);
-    await expect(page.getByTestId("reader-chapter-indicator")).toHaveText(
-      "第 2 話 / 全 4 話",
-    );
-    await expect(page.getByTestId("reader-prev-chapter")).toBeEnabled();
-
-    // 「前の話へ」で第1話へ戻る（TR-05）
-    await page.getByTestId("reader-prev-chapter").click();
-    await expect(page).toHaveURL(
-      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1/,
-    );
-    await expect(overlay).toHaveClass(/translate-y-full/);
-
-    // 再度タッチゾーンをタップして「次の話へ」で第2話へ進む
-    await touchZone.click();
-    await expect(overlay).toHaveClass(/translate-y-0/);
-    await page.getByTestId("reader-next-chapter").click();
-    await expect(page).toHaveURL(
-      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/2/,
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "第1話 見知らぬ空",
     );
 
     // スクロール操作により進捗率を更新（縦書き時の負の scrollLeft または横書き時の scrollTop）
