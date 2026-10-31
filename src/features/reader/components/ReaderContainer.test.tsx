@@ -538,6 +538,74 @@ describe("ReaderContainer", () => {
         );
       });
     });
+
+    it("下部オーバーレイの「検索」タブクリック時、flushBookmark が実行されルーターの navigateToSearch が呼び出されること", async () => {
+      const user = userEvent.setup();
+      const { repo: novelRepository, updateBookmarkSpy } =
+        createMockNovelRepo(sampleNovel);
+      const { repo: chapterRepository } = createMockChapterRepo();
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+      });
+
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
+
+      const searchTab = screen.getByTestId("reader-bottom-tab-search");
+      await user.click(searchTab);
+
+      await waitFor(() => {
+        expect(updateBookmarkSpy).toHaveBeenCalled();
+        expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+          "/search",
+        );
+      });
+    });
+
+    it("下部オーバーレイの「ランキング」タブクリック時、flushBookmark が実行されルーターの navigateToRanking が呼び出されること", async () => {
+      const user = userEvent.setup();
+      const { repo: novelRepository, updateBookmarkSpy } =
+        createMockNovelRepo(sampleNovel);
+      const { repo: chapterRepository } = createMockChapterRepo();
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+      });
+
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
+
+      const rankingTab = screen.getByTestId("reader-bottom-tab-ranking");
+      await user.click(rankingTab);
+
+      await waitFor(() => {
+        expect(updateBookmarkSpy).toHaveBeenCalled();
+        expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+          "/ranking",
+        );
+      });
+    });
   });
 
   describe("OS バックキーおよび画面離脱時のしおり自動保存 (AC-RD-08, TR-06)", () => {
@@ -1027,7 +1095,7 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
       // 直近の呼び出しから onTotalPagesChange を取得して発火
@@ -1063,7 +1131,7 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
       // 先に totalPages を設定

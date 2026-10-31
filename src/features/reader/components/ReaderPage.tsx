@@ -72,11 +72,7 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
   onSelectTab,
   initialOverlayOpen,
 }) => {
-  void pagingMode;
-  void currentPage;
-  void totalPages;
   void onPageChange;
-  void onTotalPagesChange;
   const hasNovel = novel !== null;
   const hasBodyHtml = Boolean(chapter && chapter.bodyHtml !== null);
   const isInitialOpen =
@@ -228,6 +224,10 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
               lineHeight={lineHeight}
               initialScrollProgress={initialScrollProgress}
               onScrollProgressChange={handleScrollProgressChange}
+              pagingMode={pagingMode}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onTotalPagesChange={onTotalPagesChange}
             />
           </div>
         )}
