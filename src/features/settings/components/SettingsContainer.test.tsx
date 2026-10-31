@@ -6,6 +6,8 @@ import * as stories from "./SettingsContainer.stories";
 import { SettingsContainer } from "./SettingsContainer";
 import { ServiceProvider } from "../../../app/ServiceProvider";
 import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
+import type { CloudSyncBridge } from "../../../bridges/cloud-sync/types";
+import type { SyncEngine } from "../../cloud-sync/services/syncEngine";
 
 const { Default, WithCustomClass } = composeStories(stories);
 
@@ -233,6 +235,49 @@ describe("SettingsContainer", () => {
         expect(alert).toBeInTheDocument();
         expect(alert).toHaveTextContent("DB保存エラー");
       });
+    });
+
+    it("クラウド同期セクションが描画され、連携および同期操作がコンテナ経由で実行できること (AC-ST-08〜12)", async () => {
+      const user = userEvent.setup();
+      const mockBridge = {
+        getAuthState: vi.fn().mockResolvedValue({
+          status: "connected",
+          email: "container-user@example.com",
+        }),
+        signIn: vi.fn().mockResolvedValue({
+          status: "connected",
+          email: "container-user@example.com",
+        }),
+        signOut: vi.fn().mockResolvedValue(undefined),
+        pullFile: vi.fn().mockResolvedValue(null),
+        pushFile: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const mockSyncEngine = {
+        sync: vi.fn().mockResolvedValue({ pulled: true, mergedNovels: 0 }),
+      };
+
+      render(
+        <ServiceProvider
+          services={{
+            cloudSyncBridge: mockBridge as unknown as CloudSyncBridge,
+            syncEngine: mockSyncEngine as unknown as SyncEngine,
+          }}
+        >
+          <SettingsContainer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("cloud-sync-section")).toBeInTheDocument();
+        expect(screen.getByTestId("cloud-sync-status")).toHaveTextContent(
+          "連携中 (container-user@example.com)",
+        );
+      });
+
+      const syncBtn = screen.getByTestId("cloud-sync-now-button");
+      await user.click(syncBtn);
+      expect(mockSyncEngine.sync).toHaveBeenCalled();
     });
   });
 });

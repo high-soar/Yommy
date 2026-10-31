@@ -12,6 +12,7 @@ const {
   MaxBoundaries,
   Loading,
   WithError,
+  CloudSyncConnected,
 } = composeStories(stories);
 
 describe("SettingsPage", () => {
@@ -385,6 +386,19 @@ describe("SettingsPage", () => {
       );
     });
 
+    it("CloudSyncConnected: クラウド同期セクションが連携中状態で描画されること (AC-ST-08, AC-ST-09)", () => {
+      render(<CloudSyncConnected />);
+
+      expect(screen.getByTestId("cloud-sync-section")).toBeInTheDocument();
+      expect(screen.getByTestId("cloud-sync-status")).toHaveTextContent(
+        "連携中 (user@example.com)",
+      );
+      expect(screen.getByTestId("cloud-sync-now-button")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("cloud-sync-disconnect-button"),
+      ).toBeInTheDocument();
+    });
+
     it("error が null または未指定の場合、エラーアラートが表示されないこと", () => {
       render(
         <SettingsPage
@@ -402,6 +416,66 @@ describe("SettingsPage", () => {
       expect(
         screen.queryByTestId("settings-error-alert"),
       ).not.toBeInTheDocument();
+    });
+
+    it("クラウド同期セクションが統合され、連携・同期・解除コールバックが正しく呼び出されること (AC-ST-08〜12)", async () => {
+      const onSignInGoogle = vi.fn().mockResolvedValue(undefined);
+      const onSignOutGoogle = vi.fn().mockResolvedValue(undefined);
+      const onSyncNow = vi.fn().mockResolvedValue(undefined);
+      const user = userEvent.setup();
+
+      // 未連携表示
+      const { rerender } = render(
+        <SettingsPage
+          writingMode="vertical-rl"
+          theme="light"
+          cloudSyncAuthState={{ status: "unlinked" }}
+          onToggleWritingMode={vi.fn()}
+          onChangeTheme={vi.fn()}
+          onChangeFontSize={vi.fn()}
+          onChangeLineHeight={vi.fn()}
+          onSignInGoogle={onSignInGoogle}
+          onSignOutGoogle={onSignOutGoogle}
+          onSyncNow={onSyncNow}
+        />,
+      );
+
+      expect(screen.getByTestId("cloud-sync-section")).toBeInTheDocument();
+      const authBtn = screen.getByTestId("cloud-sync-auth-button");
+      await user.click(authBtn);
+      expect(onSignInGoogle).toHaveBeenCalledTimes(1);
+
+      // 連携中表示
+      rerender(
+        <SettingsPage
+          writingMode="vertical-rl"
+          theme="light"
+          cloudSyncAuthState={{
+            status: "connected",
+            email: "test@example.com",
+          }}
+          cloudSyncLastSyncedAt="2026-10-31T12:00:00.000Z"
+          onToggleWritingMode={vi.fn()}
+          onChangeTheme={vi.fn()}
+          onChangeFontSize={vi.fn()}
+          onChangeLineHeight={vi.fn()}
+          onSignInGoogle={onSignInGoogle}
+          onSignOutGoogle={onSignOutGoogle}
+          onSyncNow={onSyncNow}
+        />,
+      );
+
+      const syncBtn = screen.getByTestId("cloud-sync-now-button");
+      await user.click(syncBtn);
+      expect(onSyncNow).toHaveBeenCalledTimes(1);
+
+      const disconnectBtn = screen.getByTestId("cloud-sync-disconnect-button");
+      await user.click(disconnectBtn);
+      const confirmBtn = screen.getByTestId(
+        "cloud-sync-disconnect-confirm-button",
+      );
+      await user.click(confirmBtn);
+      expect(onSignOutGoogle).toHaveBeenCalledTimes(1);
     });
   });
 });

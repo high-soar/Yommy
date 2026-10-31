@@ -345,7 +345,7 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           appBridge: services?.appBridge ?? new MockAppBridge(),
           cloudSyncBridge:
             services?.cloudSyncBridge ?? new MockCloudSyncBridge(),
-          syncEngine: undefined,
+          syncEngine: services?.syncEngine,
           isReady: false,
           error: null,
         }

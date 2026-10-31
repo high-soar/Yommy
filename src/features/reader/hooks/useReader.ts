@@ -77,6 +77,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     novelRepository,
     chapterRepository,
     settingsRepository,
+    syncEngine,
     isReady,
   } = useServices();
 
@@ -392,6 +393,9 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             true,
           );
           targetChapter = { ...targetChapter, isRead: true };
+          if (syncEngine) {
+            syncEngine.notifyChanged().catch(() => {});
+          }
         }
 
         // しおり・スクロール進捗率の復元・自動更新
@@ -448,6 +452,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     resolveChapterBody,
     startPrefetch,
     stopPrefetch,
+    syncEngine,
   ]);
 
   // 縦書き・横書き組み方向切替
@@ -542,11 +547,14 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           currentChapterIndexRef.current,
           scrollProgressRef.current,
         );
+        if (syncEngine) {
+          syncEngine.notifyChanged().catch(() => {});
+        }
       } catch (err: unknown) {
         setError(toErrorMessage(err));
       }
     }
-  }, [novelRepository]);
+  }, [novelRepository, syncEngine]);
 
   // 前後エピソード遷移
   const goToChapter = useCallback(
@@ -616,6 +624,10 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           currentNovel.id,
         );
 
+        if (syncEngine) {
+          syncEngine.notifyChanged().catch(() => {});
+        }
+
         // 6. State 更新
         setCurrentChapterIndex(targetChapterIndex);
         setChapter(targetChapter);
@@ -645,6 +657,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       resolveChapterBody,
       startPrefetch,
       stopPrefetch,
+      syncEngine,
     ],
   );
 
