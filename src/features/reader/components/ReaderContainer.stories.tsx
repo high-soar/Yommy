@@ -8,6 +8,8 @@ import type {
   ChapterRecord,
   NovelRepository,
   ChapterRepository,
+  SettingsRepository,
+  ReaderSettings,
 } from "../../../storage/types";
 
 const sampleNovel: NovelRecord = {
@@ -133,6 +135,31 @@ function createMockChapterRepository(
       }
     },
     deleteCachedBodies: async () => 0,
+  };
+}
+
+function createMockSettingsRepo(
+  initial?: Partial<ReaderSettings>,
+): SettingsRepository {
+  let current: ReaderSettings = {
+    writingMode: "vertical-rl",
+    theme: "light",
+    fontFamily: "mincho",
+    fontSizePx: 18,
+    lineHeight: 1.8,
+    pageMarginPx: 16,
+    enableTapPaging: false,
+    enableVolumeKeyPaging: false,
+    pagingMode: "auto",
+    updatedAt: "2026-10-26T00:00:00Z",
+    ...initial,
+  };
+  return {
+    getReaderSettings: async () => current,
+    updateReaderSettings: async (patch) => {
+      current = { ...current, ...patch };
+      return current;
+    },
   };
 }
 
@@ -289,6 +316,38 @@ export const WithCustomCallbacks: Story = {
           sampleChapter2,
           sampleChapter3,
         ]),
+      }}
+    >
+      <RouterProvider
+        initialPath={`/novels/${args.novelId}/chapters/${args.chapterIndex}`}
+      >
+        <ReaderContainer {...args} />
+      </RouterProvider>
+    </ServiceProvider>
+  ),
+};
+
+/**
+ * ページめくりモード（paged）設定時のリーダー表示
+ */
+export const PagedMode: Story = {
+  name: "ページめくりモード表示（paged）",
+  args: {
+    novelId: sampleNovel.id,
+    chapterIndex: 1,
+  },
+  render: (args) => (
+    <ServiceProvider
+      services={{
+        novelRepository: createMockNovelRepository(sampleNovel),
+        chapterRepository: createMockChapterRepository([
+          sampleChapter1,
+          sampleChapter2,
+          sampleChapter3,
+        ]),
+        settingsRepository: createMockSettingsRepo({
+          pagingMode: "paged",
+        }),
       }}
     >
       <RouterProvider

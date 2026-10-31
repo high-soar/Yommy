@@ -1,7 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { fn } from "@storybook/test";
 import { ReaderPage } from "./ReaderPage";
-import type { NovelRecord, ChapterRecord } from "../../../storage/types";
+import type {
+  NovelRecord,
+  ChapterRecord,
+  ReaderPagingMode,
+} from "../../../storage/types";
 
 const sampleNovel: NovelRecord = {
   id: "kakuyomu:16817330658027210412",
@@ -56,10 +60,15 @@ const meta: Meta<typeof ReaderPage> = {
     fontSizePx: 18,
     lineHeight: 1.8,
     initialScrollProgress: 0,
+    pagingMode: "auto" as ReaderPagingMode,
+    currentPage: 1,
+    totalPages: 1,
     isLoading: false,
     error: null,
     onPrevChapter: fn(),
     onNextChapter: fn(),
+    onPageChange: fn(),
+    onTotalPagesChange: fn(),
     onScrollProgressChange: fn(),
     onSelectTab: fn(),
   },
@@ -138,5 +147,27 @@ export const Empty: Story = {
     chapter: null,
     isLoading: false,
     error: null,
+  },
+};
+
+/**
+ * ページめくりモード表示（実効 paged・2ページ目 / 全5ページ）
+ */
+export const Paged: Story = {
+  name: "ページめくりモード（2ページ目 / 全5ページ）",
+  args: {
+    pagingMode: "paged" as ReaderPagingMode,
+    currentPage: 2,
+    totalPages: 5,
+  },
+};
+
+/**
+ * 連続スクロールモード表示（実効 scroll）
+ */
+export const ScrollMode: Story = {
+  name: "連続スクロールモード（scroll）",
+  args: {
+    pagingMode: "scroll" as ReaderPagingMode,
   },
 };

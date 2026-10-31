@@ -6,8 +6,16 @@ import * as stories from "./ReaderPage.stories";
 import { ReaderPage, type ReaderPageProps } from "./ReaderPage";
 import type { NovelRecord, ChapterRecord } from "../../../storage/types";
 
-const { Default, OverlayOpen, HorizontalSepia, Loading, ErrorState, Empty } =
-  composeStories(stories);
+const {
+  Default,
+  OverlayOpen,
+  HorizontalSepia,
+  Loading,
+  ErrorState,
+  Empty,
+  Paged,
+  ScrollMode,
+} = composeStories(stories);
 
 const sampleNovel: NovelRecord = {
   id: "kakuyomu:16817330658027210412",
@@ -57,10 +65,15 @@ function createDefaultProps(
     fontSizePx: 18,
     lineHeight: 1.8,
     initialScrollProgress: 0,
+    pagingMode: "auto",
+    currentPage: 1,
+    totalPages: 1,
     isLoading: false,
     error: null,
     onPrevChapter: vi.fn(),
     onNextChapter: vi.fn(),
+    onPageChange: vi.fn(),
+    onTotalPagesChange: vi.fn(),
     onScrollProgressChange: vi.fn(),
     onSelectTab: vi.fn(),
     ...overrides,
@@ -154,6 +167,29 @@ describe("ReaderPage", () => {
       const overlay = screen.getByTestId("reader-bottom-overlay");
       expect(overlay).toHaveAttribute("aria-hidden", "false");
       expect(overlay).toHaveClass("translate-y-0");
+    });
+
+    it("Paged ストーリーでページめくり組版およびページインジケーター（2 / 5）が表示されること（AC-RD-15, AC-RD-16）", () => {
+      render(<Paged />);
+      const view = screen.getByTestId("reader-view");
+      expect(view).toHaveAttribute("data-paging-mode", "paged");
+      expect(view).toHaveAttribute("data-effective-paging-mode", "paged");
+      expect(view).toHaveAttribute("data-current-page", "2");
+      expect(view).toHaveAttribute("data-total-pages", "5");
+
+      const indicator = screen.getByTestId("reader-page-indicator");
+      expect(indicator).toBeInTheDocument();
+      expect(indicator).toHaveTextContent("2 / 5");
+    });
+
+    it("ScrollMode ストーリーで連続スクロールモードとして描画されること（AC-RD-15）", () => {
+      render(<ScrollMode />);
+      const view = screen.getByTestId("reader-view");
+      expect(view).toHaveAttribute("data-paging-mode", "scroll");
+      expect(view).toHaveAttribute("data-effective-paging-mode", "scroll");
+      expect(
+        screen.queryByTestId("reader-page-indicator"),
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -308,6 +344,7 @@ describe("ReaderPage", () => {
       render(
         <ReaderPage
           {...createDefaultProps({
+            pagingMode: "scroll",
             initialOverlayOpen: true,
             onScrollProgressChange,
           })}
@@ -445,6 +482,77 @@ describe("ReaderPage", () => {
         "aria-selected",
         "false",
       );
+    });
+  });
+
+  describe("ページネーション状態・コールバックの伝播検証 (AC-RD-15, AC-RD-16)", () => {
+    it("明示的な pagingMode, currentPage, totalPages が ReaderView に伝播されること", () => {
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            pagingMode: "paged",
+            currentPage: 3,
+            totalPages: 10,
+          })}
+        />,
+      );
+
+      const view = screen.getByTestId("reader-view");
+      expect(view).toHaveAttribute("data-paging-mode", "paged");
+      expect(view).toHaveAttribute("data-current-page", "3");
+      expect(view).toHaveAttribute("data-total-pages", "10");
+
+      const indicator = screen.getByTestId("reader-page-indicator");
+      expect(indicator).toHaveTextContent("3 / 10");
+    });
+
+    it("pagingMode, currentPage, totalPages 未指定時に既定値（auto, 1, 1）が適用されること", () => {
+      const props = createDefaultProps();
+      delete (props as Partial<ReaderPageProps>).pagingMode;
+      delete (props as Partial<ReaderPageProps>).currentPage;
+      delete (props as Partial<ReaderPageProps>).totalPages;
+
+      render(<ReaderPage {...props} />);
+
+      const view = screen.getByTestId("reader-view");
+      expect(view).toHaveAttribute("data-paging-mode", "auto");
+      // vertical-rl のため実効 paged となり 1 / 1
+      expect(view).toHaveAttribute("data-current-page", "1");
+      expect(view).toHaveAttribute("data-total-pages", "1");
+      expect(screen.getByTestId("reader-page-indicator")).toHaveTextContent(
+        "1 / 1",
+      );
+    });
+
+    it("ReaderView からの onTotalPagesChange イベントが親へ伝播されること", () => {
+      const onTotalPagesChange = vi.fn();
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            pagingMode: "paged",
+            onTotalPagesChange,
+          })}
+        />,
+      );
+
+      // ReaderView のマウント時 useEffect で clientWidth/scrollWidth に基づく onTotalPagesChange が発火
+      expect(onTotalPagesChange).toHaveBeenCalled();
+    });
+
+    it("onPageChange コールバックが渡された場合も正常に保持されること", () => {
+      const onPageChange = vi.fn();
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            pagingMode: "paged",
+            currentPage: 2,
+            totalPages: 5,
+            onPageChange,
+          })}
+        />,
+      );
+
+      expect(screen.getByTestId("reader-page")).toBeInTheDocument();
     });
   });
 });
