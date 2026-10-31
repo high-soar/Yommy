@@ -11,27 +11,49 @@ import { ReaderView } from "./ReaderView";
 import { ReaderBottomOverlay } from "./ReaderBottomOverlay";
 
 export interface ReaderPageProps {
+  /** 対象作品レコード（未登録時は null） */
   novel: NovelRecord | null;
+  /** 対象エピソードレコード（未取得時は null） */
   chapter: ChapterRecord | null;
+  /** 現在表示中のエピソード連番（1始まり） */
   chapterIndex: number;
+  /** 作品の全エピソード数 */
   totalChapters: number;
+  /** 組み方向（縦書き: vertical-rl, 横書き: horizontal-tb） */
   writingMode: WritingMode;
+  /** カラーテーマ（light, sepia, dark, black） */
   theme: ReaderTheme;
+  /** 文字サイズ（px） */
   fontSizePx: number;
+  /** 行間倍率 */
   lineHeight: number;
+  /** 初期復元する進捗率（0.0 〜 1.0） */
   initialScrollProgress: number;
+  /** ページ送りモード（auto / paged / scroll、省略時: 'auto'） */
   pagingMode?: ReaderPagingMode;
+  /** ページめくり表示時の現在ページ番号（省略時: 1） */
   currentPage?: number;
+  /** ページめくり表示時の総ページ数（省略時: 1） */
   totalPages?: number;
+  /** エピソード読み込み中フラグ */
   isLoading: boolean;
+  /** エラーメッセージ文字列（null時はエラーなし） */
   error?: string | null;
+  /** リーダー画面のアクティブタブ（省略時: "bookshelf"） */
   activeTab?: BottomTab;
+  /** 「前の話へ」ボタン押下時のコールバック */
   onPrevChapter: () => void;
+  /** 「次の話へ」ボタン押下時のコールバック */
   onNextChapter: () => void;
+  /** ページ送り確定時のコールバック */
   onPageChange?: (targetPage: number) => void;
+  /** DOM寸法計測により総ページ数が変化した際のコールバック */
   onTotalPagesChange?: (totalPages: number) => void;
+  /** 本文スクロール／ページ進捗変化時のコールバック */
   onScrollProgressChange: (progress: number) => void;
+  /** 下部タブ押下時のコールバック */
   onSelectTab?: (tab: BottomTab) => void;
+  /** 下部オーバーレイの初期展開フラグ（省略時はエラー/空状態時に true） */
   initialOverlayOpen?: boolean;
 }
 
