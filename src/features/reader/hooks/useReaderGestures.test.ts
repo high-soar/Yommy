@@ -679,5 +679,535 @@ describe("useReaderGestures", () => {
 
       expect(defaultOptions.onNextChapter).toHaveBeenCalled();
     });
+
+    it("先頭到達後に新しいポインタードラッグ操作を開始した場合に前話遷移すること", () => {
+      const { result } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          pagingMode: "scroll",
+          writingMode: "vertical-rl",
+        }),
+      );
+
+      // 第1段階: 先頭到達
+      act(() => {
+        result.current.handleScrollProgressChange(0.0);
+      });
+
+      // 第2段階: 新規ポインター操作で右方向へスワイプ（戻る方向: dx > 30）
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 150, clientY: 100 }),
+        );
+      });
+
+      expect(defaultOptions.onPrevChapter).toHaveBeenCalled();
+    });
+
+    it("横書き連続スクロールモードでの2段階スワイプ（dy < -30 で次話、dy > 30 で前話）", () => {
+      const onNextChapter = vi.fn();
+      const onPrevChapter = vi.fn();
+      const { result } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          pagingMode: "scroll",
+          writingMode: "horizontal-tb",
+          onNextChapter,
+          onPrevChapter,
+        }),
+      );
+
+      // 末尾到達後、上スワイプ（dy < -30）で次話
+      act(() => {
+        result.current.handleScrollProgressChange(1.0);
+      });
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 200 }),
+        );
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 100, clientY: 150 }),
+        );
+      });
+      expect(onNextChapter).toHaveBeenCalled();
+
+      // 先頭到達後、下スワイプ（dy > 30）で前話
+      act(() => {
+        result.current.handleScrollProgressChange(0.0);
+      });
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 100, clientY: 150 }),
+        );
+      });
+      expect(onPrevChapter).toHaveBeenCalled();
+    });
+
+    it("連続スクロールモードで作品端話（chapterIndex=totalChapters / chapterIndex=1）のときは遷移しないこと", () => {
+      const onNextChapter = vi.fn();
+      const onPrevChapter = vi.fn();
+      const { result } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          pagingMode: "scroll",
+          chapterIndex: 5,
+          totalChapters: 5,
+          onNextChapter,
+          onPrevChapter,
+        }),
+      );
+
+      act(() => {
+        result.current.handleScrollProgressChange(1.0);
+      });
+      act(() => {
+        result.current.handleWheel(createWheelEvent({ deltaY: 20 }));
+      });
+      expect(onNextChapter).not.toHaveBeenCalled();
+
+      const { result: firstResult } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          pagingMode: "scroll",
+          chapterIndex: 1,
+          totalChapters: 5,
+          onNextChapter,
+          onPrevChapter,
+        }),
+      );
+
+      act(() => {
+        firstResult.current.handleScrollProgressChange(0.0);
+      });
+      act(() => {
+        firstResult.current.handleWheel(createWheelEvent({ deltaY: -20 }));
+      });
+      expect(onPrevChapter).not.toHaveBeenCalled();
+    });
+
+    it("縦書きスクロールモードで deltaX による水平ホイール操作で遷移すること", () => {
+      const onNextChapter = vi.fn();
+      const onPrevChapter = vi.fn();
+      const { result } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          pagingMode: "scroll",
+          writingMode: "vertical-rl",
+          onNextChapter,
+          onPrevChapter,
+        }),
+      );
+
+      act(() => {
+        result.current.handleScrollProgressChange(1.0);
+      });
+      act(() => {
+        result.current.handleWheel(createWheelEvent({ deltaX: -30 }));
+      });
+      expect(onNextChapter).toHaveBeenCalled();
+
+      act(() => {
+        result.current.handleScrollProgressChange(0.0);
+      });
+      act(() => {
+        result.current.handleWheel(createWheelEvent({ deltaX: 30 }));
+      });
+      expect(onPrevChapter).toHaveBeenCalled();
+    });
+
+    it("横書きスクロールモードで deltaY によるホイール操作で遷移すること", () => {
+      const onNextChapter = vi.fn();
+      const onPrevChapter = vi.fn();
+      const { result } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          pagingMode: "scroll",
+          writingMode: "horizontal-tb",
+          onNextChapter,
+          onPrevChapter,
+        }),
+      );
+
+      act(() => {
+        result.current.handleScrollProgressChange(1.0);
+      });
+      act(() => {
+        result.current.handleWheel(createWheelEvent({ deltaY: 30 }));
+      });
+      expect(onNextChapter).toHaveBeenCalled();
+
+      act(() => {
+        result.current.handleScrollProgressChange(0.0);
+      });
+      act(() => {
+        result.current.handleWheel(createWheelEvent({ deltaY: -30 }));
+      });
+      expect(onPrevChapter).toHaveBeenCalled();
+    });
+
+    it("scrollモードで pointercancel および pointerup が発生した場合は状態がリセットされること", () => {
+      const { result } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          pagingMode: "scroll",
+        }),
+      );
+
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+      });
+      act(() => {
+        result.current.handlePointerCancel();
+      });
+      expect(result.current.slideOffsetPx).toBe(0);
+
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+      });
+      act(() => {
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 100, clientY: 100 }),
+        );
+      });
+      expect(result.current.slideOffsetPx).toBe(0);
+    });
+
+    it("pagedモード時、handleWheel は無視されること", () => {
+      const onNextChapter = vi.fn();
+      const { result } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          pagingMode: "paged",
+          onNextChapter,
+        }),
+      );
+
+      act(() => {
+        result.current.handleWheel(createWheelEvent({ deltaY: 50 }));
+      });
+      expect(onNextChapter).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("追加エッジケース・分岐網羅の検証", () => {
+    it("touchStartRef が null の状態で handlePointerMove や handlePointerUp が呼ばれても安全に無視されること", () => {
+      const { result } = renderHook(() => useReaderGestures(defaultOptions));
+
+      act(() => {
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 150, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 150, clientY: 100 }),
+        );
+      });
+
+      expect(defaultOptions.onPageChange).not.toHaveBeenCalled();
+      expect(result.current.slideOffsetPx).toBe(0);
+    });
+
+    it("handleMainClick はタップ直後は無視され、それ以外では onCloseOverlay が呼ばれること", () => {
+      const onCloseOverlay = vi.fn();
+      const { result } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          onCloseOverlay,
+        }),
+      );
+
+      // タップ直前は onCloseOverlay が呼ばれる
+      act(() => {
+        result.current.handleMainClick();
+      });
+      expect(onCloseOverlay).toHaveBeenCalledTimes(1);
+
+      // タップ操作発生
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 150, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 150, clientY: 100 }),
+        );
+      });
+
+      // タップ直後の handleMainClick はスキップされる
+      act(() => {
+        result.current.handleMainClick();
+      });
+      expect(onCloseOverlay).toHaveBeenCalledTimes(1);
+
+      // タイマー経過後は再度 onCloseOverlay が呼べる
+      vi.advanceTimersByTime(150);
+      act(() => {
+        result.current.handleMainClick();
+      });
+      expect(onCloseOverlay).toHaveBeenCalledTimes(2);
+    });
+
+    it("縦書き端ページ（currentPage=totalPagesまたはcurrentPage=1）でのタップ時は範囲外へのページ送りを抑制すること", () => {
+      const onPageChange = vi.fn();
+      const { result } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          currentPage: 4,
+          totalPages: 4,
+          onPageChange,
+        }),
+      );
+
+      // 最終ページで左端タップ（次ページ送り）
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 30, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 30, clientY: 100 }),
+        );
+      });
+      expect(onPageChange).not.toHaveBeenCalled();
+
+      // 第1ページで右端タップ（前ページ送り）
+      const { result: firstResult } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          currentPage: 1,
+          totalPages: 4,
+          onPageChange,
+        }),
+      );
+
+      act(() => {
+        firstResult.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 270, clientY: 100 }),
+        );
+        firstResult.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 270, clientY: 100 }),
+        );
+      });
+      expect(onPageChange).not.toHaveBeenCalled();
+    });
+
+    it("横書き端ページでのタップ時は範囲外へのページ送りを抑制すること", () => {
+      const onPageChange = vi.fn();
+      const { result } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          writingMode: "horizontal-tb",
+          currentPage: 4,
+          totalPages: 4,
+          onPageChange,
+        }),
+      );
+
+      // 横書き最終ページで右端タップ（次ページ送り）
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 270, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 270, clientY: 100 }),
+        );
+      });
+      expect(onPageChange).not.toHaveBeenCalled();
+
+      // 横書き第1ページで左端タップ（前ページ送り）
+      const { result: firstResult } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          writingMode: "horizontal-tb",
+          currentPage: 1,
+          totalPages: 4,
+          onPageChange,
+        }),
+      );
+
+      act(() => {
+        firstResult.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 30, clientY: 100 }),
+        );
+        firstResult.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 30, clientY: 100 }),
+        );
+      });
+      expect(onPageChange).not.toHaveBeenCalled();
+    });
+
+    it("横書きモードでのドラッグ境界遷移およびエピソード内前ページめくり", () => {
+      const onNextChapter = vi.fn();
+      const onPrevChapter = vi.fn();
+      const onPageChange = vi.fn();
+
+      // 横書き最終ページで次へドラッグ（dx < -90）
+      const { result: nextResult } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          writingMode: "horizontal-tb",
+          currentPage: 4,
+          totalPages: 4,
+          chapterIndex: 2,
+          totalChapters: 5,
+          onNextChapter,
+        }),
+      );
+
+      act(() => {
+        nextResult.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 200, clientY: 100 }),
+        );
+        nextResult.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 80, clientY: 100 }), // dx = -120
+        );
+      });
+      expect(nextResult.current.boundaryHint).toBe("指を離して次の話へ");
+
+      act(() => {
+        nextResult.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 80, clientY: 100 }),
+        );
+      });
+      expect(onNextChapter).toHaveBeenCalled();
+
+      // 横書き第1ページで前へドラッグ（dx > 90）
+      const { result: prevResult } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          writingMode: "horizontal-tb",
+          currentPage: 1,
+          totalPages: 4,
+          chapterIndex: 2,
+          totalChapters: 5,
+          onPrevChapter,
+        }),
+      );
+
+      act(() => {
+        prevResult.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+        prevResult.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 220, clientY: 100 }), // dx = +120
+        );
+      });
+      expect(prevResult.current.boundaryHint).toBe("指を離して前の話へ");
+
+      act(() => {
+        prevResult.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 220, clientY: 100 }),
+        );
+      });
+      expect(onPrevChapter).toHaveBeenCalled();
+
+      // 横書きエピソード内で前ページ送り（dx > 90）
+      const { result: pageResult } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          writingMode: "horizontal-tb",
+          currentPage: 3,
+          totalPages: 4,
+          onPageChange,
+        }),
+      );
+
+      act(() => {
+        pageResult.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+        pageResult.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 200, clientY: 100 }), // dx = +100
+        );
+        pageResult.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 200, clientY: 100 }),
+        );
+      });
+      expect(onPageChange).toHaveBeenCalledWith(2);
+    });
+
+    it("ページめくり確定時およびスナップバック時の isAnimating アニメーションタイマー動作", () => {
+      const { result } = renderHook(() => useReaderGestures(defaultOptions));
+
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 200, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 200, clientY: 100 }),
+        );
+      });
+
+      expect(result.current.isAnimating).toBe(true);
+
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(result.current.isAnimating).toBe(false);
+
+      // スナップバック時
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 120, clientY: 100 }),
+        );
+        vi.advanceTimersByTime(400);
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 120, clientY: 100 }),
+        );
+      });
+
+      expect(result.current.isAnimating).toBe(true);
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(result.current.isAnimating).toBe(false);
+    });
+
+    it("containerRef がない場合でもフォールバック幅（window.innerWidth または 375）で動作すること", () => {
+      const onToggleOverlay = vi.fn();
+      const { result } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          containerRef: undefined,
+          onToggleOverlay,
+        }),
+      );
+
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 150, clientY: 100 }),
+        );
+      });
+
+      expect(result.current.slideOffsetPx).toBe(50);
+
+      // タップ操作時も containerRef がない場合 e.clientX がそのまま使用される
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 500, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 500, clientY: 100 }),
+        );
+      });
+      // 500 / 1024 = 0.488 (中央60%)
+      expect(onToggleOverlay).toHaveBeenCalled();
+    });
   });
 });

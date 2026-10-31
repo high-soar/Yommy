@@ -110,7 +110,9 @@ related_tests:
 src/features/reader/
 ├── hooks/
 │   ├── useReader.ts                       # エピソード取得・オンデマンド通信・既読/しおり保存・組版設定永続化フック
-│   └── useReader.test.ts                  # フック単体テスト（Vitest）
+│   ├── useReader.test.ts                  # フック単体テスト（Vitest）
+│   ├── useReaderGestures.ts               # 【新設】Kindle様式ジェスチャー・指追従・スナップバック・エピソード境界遷移フック
+│   └── useReaderGestures.test.ts          # フック単体テスト（Vitest）
 └── components/
     ├── ReaderBottomOverlay.tsx            # 【新設】前後話ナビ＋下部タブを統合したスライドインオーバーレイ（Presentational）
     ├── ReaderBottomOverlay.stories.tsx    # 【新設】Storybookストーリー（表示/非表示/第1話/最終話）
@@ -275,30 +277,32 @@ src/features/reader/
 
 #### プロパティ契約（`ReaderPageProps`）
 
-| プロパティ名             | 型                             | 必須 | 説明                                                  |
-| :----------------------- | :----------------------------- | :--- | :---------------------------------------------------- |
-| `novel`                  | `NovelRecord \| null`          | 必須 | 現在の作品レコード                                    |
-| `chapter`                | `ChapterRecord \| null`        | 必須 | 現在のエピソードレコード                              |
-| `chapterIndex`           | `number`                       | 必須 | 現在のエピソード連番（1始まり）                       |
-| `totalChapters`          | `number`                       | 必須 | 作品の全エピソード数                                  |
-| `writingMode`            | `WritingMode`                  | 必須 | 現在の組み方向                                        |
-| `theme`                  | `ReaderTheme`                  | 必須 | 現在のカラーテーマ                                    |
-| `fontSizePx`             | `number`                       | 必須 | 現在の文字サイズ (px)                                 |
-| `lineHeight`             | `number`                       | 必須 | 現在の行間倍率                                        |
-| `initialScrollProgress`  | `number`                       | 必須 | 初期復元する進捗率（`0.0 〜 1.0`）                    |
-| `pagingMode`             | `ReaderPagingMode`             | 任意 | ページ送りモード（省略時: `'auto'`、v0.4 Issue #122） |
-| `currentPage`            | `number`                       | 任意 | ページめくり表示時の現在ページ番号（省略時: `1`）     |
-| `totalPages`             | `number`                       | 任意 | ページめくり表示時の総ページ数（省略時: `1`）         |
-| `isLoading`              | `boolean`                      | 必須 | 読み込み・通信中フラグ                                |
-| `error`                  | `string \| null`               | 任意 | エラーメッセージ文字列                                |
-| `activeTab`              | `BottomTab`                    | 任意 | リーダー画面の論理所属タブ（既定値: `"bookshelf"`）   |
-| `onPrevChapter`          | `() => void`                   | 必須 | 「前の話へ」押下時（`TR-05`）                         |
-| `onNextChapter`          | `() => void`                   | 必須 | 「次の話へ」押下時（`TR-05`）                         |
-| `onPageChange`           | `(targetPage: number) => void` | 任意 | タップ・スワイプによるページ送り確定時のコールバック  |
-| `onTotalPagesChange`     | `(totalPages: number) => void` | 任意 | 総ページ数確定・変化時のコールバック                  |
-| `onScrollProgressChange` | `(progress: number) => void`   | 必須 | 本文スクロール／ページ進捗変化時                      |
-| `onSelectTab`            | `(tab: BottomTab) => void`     | 任意 | 下部タブ押下時                                        |
-| `initialOverlayOpen`     | `boolean`                      | 任意 | `false`（エラー/空状態時は `true`）                   |
+| プロパティ名             | 型                             | 必須 | 説明                                                   |
+| :----------------------- | :----------------------------- | :--- | :----------------------------------------------------- |
+| `novel`                  | `NovelRecord \| null`          | 必須 | 現在の作品レコード                                     |
+| `chapter`                | `ChapterRecord \| null`        | 必須 | 現在のエピソードレコード                               |
+| `chapterIndex`           | `number`                       | 必須 | 現在のエピソード連番（1始まり）                        |
+| `totalChapters`          | `number`                       | 必須 | 作品の全エピソード数                                   |
+| `writingMode`            | `WritingMode`                  | 必須 | 現在の組み方向                                         |
+| `theme`                  | `ReaderTheme`                  | 必須 | 現在のカラーテーマ                                     |
+| `fontSizePx`             | `number`                       | 必須 | 現在の文字サイズ (px)                                  |
+| `lineHeight`             | `number`                       | 必須 | 現在の行間倍率                                         |
+| `initialScrollProgress`  | `number`                       | 必須 | 初期復元する進捗率（`0.0 〜 1.0`）                     |
+| `pagingMode`             | `ReaderPagingMode`             | 任意 | ページ送りモード（省略時: `'auto'`、v0.4 Issue #122）  |
+| `currentPage`            | `number`                       | 任意 | ページめくり表示時の現在ページ番号（省略時: `1`）      |
+| `totalPages`             | `number`                       | 任意 | ページめくり表示時の総ページ数（省略時: `1`）          |
+| `isLoading`              | `boolean`                      | 必須 | 読み込み・通信中フラグ                                 |
+| `error`                  | `string \| null`               | 任意 | エラーメッセージ文字列                                 |
+| `activeTab`              | `BottomTab`                    | 任意 | リーダー画面の論理所属タブ（既定値: `"bookshelf"`）    |
+| `onPrevChapter`          | `() => void`                   | 必須 | 「前の話へ」押下時（`TR-05`）                          |
+| `onNextChapter`          | `() => void`                   | 必須 | 「次の話へ」押下時（`TR-05`）                          |
+| `onPageChange`           | `(targetPage: number) => void` | 任意 | タップ・スワイプによるページ送り確定時のコールバック   |
+| `onTotalPagesChange`     | `(totalPages: number) => void` | 任意 | 総ページ数確定・変化時のコールバック                   |
+| `onScrollProgressChange` | `(progress: number) => void`   | 必須 | 本文スクロール／ページ進捗変化時                       |
+| `onSelectTab`            | `(tab: BottomTab) => void`     | 任意 | 下部タブ押下時                                         |
+| `initialOverlayOpen`     | `boolean`                      | 任意 | `false`（エラー/空状態時は `true`）                    |
+| `initialSlideOffsetPx`   | `number`                       | 任意 | 初期スライド変位量（px、Storybook/VRT/テスト用）       |
+| `initialBoundaryHint`    | `string \| null`               | 任意 | 初期境界案内ヒントメッセージ（Storybook/VRT/テスト用） |
 
 #### セマンティック属性とレイアウト・ジェスチャー仕様
 
