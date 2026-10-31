@@ -8,6 +8,8 @@ import {
   isChapterFresh,
   delay,
   resolveEffectivePagingMode,
+  calculateProgressFromPage,
+  calculatePageFromProgress,
 } from "./useReader";
 import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
 import { SqlNovelRepository } from "../../../storage/repositories/novelRepository";
@@ -2639,6 +2641,47 @@ describe("useReader", () => {
             "horizontal-tb",
           ),
         ).toBe("scroll");
+      });
+    });
+
+    describe("calculateProgressFromPage", () => {
+      it("totalPages が 1 以下の場合は 0 を返すこと", () => {
+        expect(calculateProgressFromPage(1, 1)).toBe(0);
+        expect(calculateProgressFromPage(1, 0)).toBe(0);
+        expect(calculateProgressFromPage(1, -5)).toBe(0);
+      });
+
+      it("totalPages > 1 の場合、(currentPage - 1) / (totalPages - 1) で進捗率を算出すること", () => {
+        expect(calculateProgressFromPage(1, 5)).toBe(0);
+        expect(calculateProgressFromPage(3, 5)).toBe(0.5);
+        expect(calculateProgressFromPage(5, 5)).toBe(1);
+      });
+
+      it("currentPage が範囲外の場合は [1, totalPages] にクランプして算出すること", () => {
+        expect(calculateProgressFromPage(0, 5)).toBe(0);
+        expect(calculateProgressFromPage(-10, 5)).toBe(0);
+        expect(calculateProgressFromPage(100, 5)).toBe(1);
+      });
+    });
+
+    describe("calculatePageFromProgress", () => {
+      it("totalPages が 1 以下の場合は常に 1 を返すこと", () => {
+        expect(calculatePageFromProgress(0.5, 1)).toBe(1);
+        expect(calculatePageFromProgress(0.5, 0)).toBe(1);
+        expect(calculatePageFromProgress(0.5, -5)).toBe(1);
+      });
+
+      it("進捗率から対応するページ番号を復元できること", () => {
+        expect(calculatePageFromProgress(0, 5)).toBe(1);
+        expect(calculatePageFromProgress(0.5, 5)).toBe(3);
+        expect(calculatePageFromProgress(1, 5)).toBe(5);
+        expect(calculatePageFromProgress(0.5, 11)).toBe(6);
+      });
+
+      it("進捗率が範囲外または非数の場合はクランプして復元すること", () => {
+        expect(calculatePageFromProgress(-0.5, 5)).toBe(1);
+        expect(calculatePageFromProgress(1.5, 5)).toBe(5);
+        expect(calculatePageFromProgress(Number.NaN, 5)).toBe(1);
       });
     });
 
