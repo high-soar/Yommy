@@ -34,6 +34,39 @@ export function resolveEffectivePagingMode(
 }
 
 /**
+ * 現在ページ番号と総ページ数から進捗率（0.0〜1.0）を算出する純粋関数
+ */
+export function calculateProgressFromPage(
+  currentPage: number,
+  totalPages: number,
+): number {
+  if (totalPages <= 1) return 0;
+  const clampedPage = Math.max(
+    1,
+    Math.min(totalPages, Math.round(currentPage)),
+  );
+  return (clampedPage - 1) / (totalPages - 1);
+}
+
+/**
+ * 保存された進捗率（0.0〜1.0）と総ページ数から復元ページ番号（1始まり）を算出する純粋関数
+ */
+export function calculatePageFromProgress(
+  progress: number,
+  totalPages: number,
+): number {
+  if (totalPages <= 1) return 1;
+  const clampedProgress = Math.max(
+    0,
+    Math.min(1, Number.isFinite(progress) ? progress : 0),
+  );
+  return Math.min(
+    totalPages,
+    Math.max(1, Math.round(clampedProgress * (totalPages - 1)) + 1),
+  );
+}
+
+/**
  * デフォルトの検証用カクヨム作品URL
  */
 export const DEFAULT_KAKUYOMU_URL =
@@ -91,6 +124,8 @@ export interface UseReaderResult {
  * 6. 手動作品取得・更新パイプライン（fetchNovelFromUrl）
  * 7. 読書中5話自動先読みパイプライン（AC-RD-12: 1.5秒レートリミット・直列取得・AbortController制御）
  * 8. キャッシュ鮮度管理とフォールバック（AC-RD-13: TTL 7日・3秒短タイムアウト再取得・既存本文フォールバック）
+ * 9. ページ送りモード（auto / paged / scroll）と実効モード（effectivePagingMode）の算出・永続化（AC-RD-15）
+ * 10. ページネーション状態管理（currentPage, totalPages, goToPage, nextPage, prevPage）としおり進捗率の相互変換・復元（AC-RD-20）
  */
 export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   const {
@@ -158,6 +193,24 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   useEffect(() => {
     initialScrollProgressRef.current = initialScrollProgress;
   }, [initialScrollProgress]);
+
+  /**
+   * エピソード切替時または初期読み込み時にページネーション状態を初期化する内部関数
+   */
+  const resetPaginationState = useCallback(
+    (initialProgress: number = 0, currentProgress: number = 0): void => {
+      setInitialScrollProgress(initialProgress);
+      initialScrollProgressRef.current = initialProgress;
+      setScrollProgress(currentProgress);
+      scrollProgressRef.current = currentProgress;
+      setCurrentPage(1);
+      currentPageRef.current = 1;
+      setTotalPagesState(1);
+      totalPagesRef.current = 1;
+      isFirstPageMeasurementRef.current = true;
+    },
+    [],
+  );
 
   /**
    * 進行中の自動先読み処理を即座に中断する内部関数
@@ -387,15 +440,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             setNovel(null);
             setChapter(null);
             setCurrentChapterIndex(targetIndex);
-            setInitialScrollProgress(0);
-            initialScrollProgressRef.current = 0;
-            setScrollProgress(0);
-            scrollProgressRef.current = 0;
-            setCurrentPage(1);
-            currentPageRef.current = 1;
-            setTotalPagesState(1);
-            totalPagesRef.current = 1;
-            isFirstPageMeasurementRef.current = true;
+            resetPaginationState(0, 0);
           }
           return;
         }
@@ -466,15 +511,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
 
         if (!isMounted) return;
 
-        setInitialScrollProgress(nextInitialProgress);
-        initialScrollProgressRef.current = nextInitialProgress;
-        setScrollProgress(nextScrollProgress);
-        scrollProgressRef.current = nextScrollProgress;
-        setCurrentPage(1);
-        currentPageRef.current = 1;
-        setTotalPagesState(1);
-        totalPagesRef.current = 1;
-        isFirstPageMeasurementRef.current = true;
+        resetPaginationState(nextInitialProgress, nextScrollProgress);
         setNovel(targetNovel);
         setChapter(targetChapter);
         setCurrentChapterIndex(targetIndex);
@@ -508,6 +545,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     chapterRepository,
     settingsRepository,
     resolveChapterBody,
+    resetPaginationState,
     startPrefetch,
     stopPrefetch,
     syncEngine,
@@ -594,18 +632,10 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     if (isFirstPageMeasurementRef.current) {
       isFirstPageMeasurementRef.current = false;
       if (initialScrollProgressRef.current > 0) {
-        const restoredPage =
-          validTotal > 1
-            ? Math.min(
-                validTotal,
-                Math.max(
-                  1,
-                  Math.round(
-                    initialScrollProgressRef.current * (validTotal - 1),
-                  ) + 1,
-                ),
-              )
-            : 1;
+        const restoredPage = calculatePageFromProgress(
+          initialScrollProgressRef.current,
+          validTotal,
+        );
         setCurrentPage(restoredPage);
         currentPageRef.current = restoredPage;
         return;
@@ -662,7 +692,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       setCurrentPage(clampedPage);
       currentPageRef.current = clampedPage;
 
-      const progress = total > 1 ? (clampedPage - 1) / (total - 1) : 0;
+      const progress = calculateProgressFromPage(clampedPage, total);
       void updateScrollProgress(progress);
     },
     [updateScrollProgress],
@@ -772,15 +802,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         setCurrentChapterIndex(targetChapterIndex);
         setChapter(targetChapter);
         setNovel(reloadedNovel);
-        setInitialScrollProgress(0);
-        initialScrollProgressRef.current = 0;
-        setScrollProgress(0);
-        scrollProgressRef.current = 0;
-        setCurrentPage(1);
-        currentPageRef.current = 1;
-        setTotalPagesState(1);
-        totalPagesRef.current = 1;
-        isFirstPageMeasurementRef.current = true;
+        resetPaginationState(0, 0);
         isSuccess = true;
 
         if (targetChapter && targetChapter.bodyHtml !== null && reloadedNovel) {
@@ -801,6 +823,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     [
       chapterRepository,
       novelRepository,
+      resetPaginationState,
       resolveChapterBody,
       startPrefetch,
       stopPrefetch,
@@ -872,15 +895,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         setNovel(reloadedNovel);
         setChapter(savedChapter ? { ...savedChapter, isRead: true } : null);
         setCurrentChapterIndex(targetChapterIdx);
-        setInitialScrollProgress(0);
-        initialScrollProgressRef.current = 0;
-        setScrollProgress(0);
-        scrollProgressRef.current = 0;
-        setCurrentPage(1);
-        currentPageRef.current = 1;
-        setTotalPagesState(1);
-        totalPagesRef.current = 1;
-        isFirstPageMeasurementRef.current = true;
+        resetPaginationState(0, 0);
 
         if (savedChapter && reloadedNovel) {
           startPrefetch(
@@ -892,15 +907,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       } else {
         setNovel(savedNovel);
         setChapter(null);
-        setInitialScrollProgress(0);
-        initialScrollProgressRef.current = 0;
-        setScrollProgress(0);
-        scrollProgressRef.current = 0;
-        setCurrentPage(1);
-        currentPageRef.current = 1;
-        setTotalPagesState(1);
-        totalPagesRef.current = 1;
-        isFirstPageMeasurementRef.current = true;
+        resetPaginationState(0, 0);
       }
     } catch (err: unknown) {
       setError(toErrorMessage(err));
@@ -914,6 +921,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     novelRepository,
     chapterRepository,
     fetchAndSaveChapterBody,
+    resetPaginationState,
     startPrefetch,
     stopPrefetch,
   ]);
