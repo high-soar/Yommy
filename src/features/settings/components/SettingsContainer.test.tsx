@@ -174,6 +174,28 @@ describe("SettingsContainer", () => {
       );
     });
 
+    it("ページ送りモードセレクターを操作したとき、設定が変更・永続化されること (AC-ST-13)", async () => {
+      const user = userEvent.setup();
+      render(<Default />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+      });
+
+      const select = screen.getByTestId("paging-mode-select");
+      expect(select).toHaveValue("auto");
+
+      await user.selectOptions(select, "paged");
+      await waitFor(() => {
+        expect(select).toHaveValue("paged");
+      });
+
+      await user.selectOptions(select, "scroll");
+      await waitFor(() => {
+        expect(select).toHaveValue("scroll");
+      });
+    });
+
     it("WithCustomClass ストーリーでカスタムクラスがルート要素に渡されること", async () => {
       render(<WithCustomClass />);
 

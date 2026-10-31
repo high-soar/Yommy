@@ -1,5 +1,9 @@
 import React from "react";
-import type { WritingMode, ReaderTheme } from "../../../storage/types";
+import type {
+  WritingMode,
+  ReaderTheme,
+  ReaderPagingMode,
+} from "../../../storage/types";
 import type { CloudSyncAuthState } from "../../../bridges/cloud-sync/types";
 import { SampleTextPreview } from "./SampleTextPreview";
 import { CloudSyncSection } from "./CloudSyncSection";
@@ -13,6 +17,8 @@ export interface SettingsPageProps {
   fontSizePx?: number;
   /** 現在の行間倍率（省略時: 1.8） */
   lineHeight?: number;
+  /** 現在のページ送りモード（省略時: "auto"、v0.4 Issue #122） */
+  pagingMode?: ReaderPagingMode;
   /** 設定読み込み中フラグ（省略時: false） */
   isLoading?: boolean;
   /** 組み方向切替ボタン押下時のコールバック */
@@ -23,6 +29,8 @@ export interface SettingsPageProps {
   onChangeFontSize: (nextSizePx: number) => void;
   /** 行間変更ボタン押下時のコールバック */
   onChangeLineHeight: (nextHeight: number) => void;
+  /** ページ送りモード変更時のコールバック（v0.4 Issue #122） */
+  onChangePagingMode?: (mode: ReaderPagingMode) => void;
   /** Google アカウント認証状態（v0.4） */
   cloudSyncAuthState?: CloudSyncAuthState;
   /** 最終同期完了日時（ISO 8601、v0.4） */
@@ -115,6 +123,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   theme,
   fontSizePx = 18,
   lineHeight = 1.8,
+  pagingMode: _pagingMode = "auto",
   isLoading = false,
   error = null,
   cloudSyncAuthState = { status: "unlinked" },
@@ -125,6 +134,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onChangeTheme,
   onChangeFontSize,
   onChangeLineHeight,
+  onChangePagingMode: _onChangePagingMode,
   onSignInGoogle,
   onSignOutGoogle,
   onSyncNow,

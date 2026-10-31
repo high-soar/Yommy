@@ -21,6 +21,7 @@ export function createMockSettingsRepository(
     pageMarginPx: 16,
     enableTapPaging: true,
     enableVolumeKeyPaging: false,
+    pagingMode: "auto",
     updatedAt: "2026-10-27T00:00:00Z",
     ...initialSettings,
   };

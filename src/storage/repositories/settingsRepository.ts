@@ -32,6 +32,8 @@ export class SqlSettingsRepository implements SettingsRepository {
       pageMarginPx: row.page_margin_px,
       enableTapPaging: row.enable_tap_paging === 1,
       enableVolumeKeyPaging: row.enable_volume_key_paging === 1,
+      pagingMode: (row as { paging_mode?: ReaderSettings["pagingMode"] })
+        .paging_mode as ReaderSettings["pagingMode"],
       updatedAt: row.updated_at,
     };
   }

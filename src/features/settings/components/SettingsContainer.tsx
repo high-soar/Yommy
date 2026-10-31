@@ -24,12 +24,14 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
     theme,
     fontSizePx,
     lineHeight,
+    pagingMode,
     isLoading,
     error,
     toggleWritingMode,
     changeTheme,
     changeFontSize,
     changeLineHeight,
+    changePagingMode,
   } = useSettings();
 
   const {
@@ -48,6 +50,7 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
       theme={theme}
       fontSizePx={fontSizePx}
       lineHeight={lineHeight}
+      pagingMode={pagingMode}
       isLoading={isLoading}
       error={error}
       cloudSyncAuthState={cloudSyncAuthState}
@@ -58,6 +61,7 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
       onChangeTheme={changeTheme}
       onChangeFontSize={changeFontSize}
       onChangeLineHeight={changeLineHeight}
+      onChangePagingMode={changePagingMode}
       onSignInGoogle={onSignInGoogle}
       onSignOutGoogle={onSignOutGoogle}
       onSyncNow={onSyncNow}

@@ -55,6 +55,15 @@ describe("storage/schema", () => {
     expect(DDL_STATEMENTS).toContain("'bookshelf_sort_order', 'unread_first'");
   });
 
+  it("reader_settings テーブルに paging_mode カラム（CHECK制約付き）および初期行投入が定義されていること (AC-ST-13 / db-schema)", () => {
+    expect(DDL_STATEMENTS).toContain(
+      "paging_mode TEXT NOT NULL DEFAULT 'auto' CHECK (paging_mode IN ('auto', 'paged', 'scroll'))",
+    );
+    expect(DDL_STATEMENTS).toContain(
+      "1, 'vertical-rl', 'light', 'biz-ud-mincho', 18, 1.8, 20, 1, 0, 'auto', '2026-01-01T00:00:00.000Z'",
+    );
+  });
+
   it("deleted_novels テーブルに id, deleted_at カラムおよびインデックスが定義されていること (db-schema)", () => {
     expect(DDL_STATEMENTS).toContain(
       "CREATE TABLE IF NOT EXISTS deleted_novels",
@@ -140,6 +149,19 @@ describe("storage/schema", () => {
     );
     expect(settings).toHaveLength(1);
     expect(settings[0].value).toBe("unread_first");
+
+    // reader_settings テーブル初期行および paging_mode カラム検証 (AC-ST-13)
+    const readerSettingsColumns = await db.query<{ name: string }>(
+      "PRAGMA table_info(reader_settings);",
+    );
+    const readerColumnNames = readerSettingsColumns.map((c) => c.name);
+    expect(readerColumnNames).toContain("paging_mode");
+
+    const readerSettingsRows = await db.query<{ paging_mode: string }>(
+      "SELECT paging_mode FROM reader_settings WHERE id = 1;",
+    );
+    expect(readerSettingsRows).toHaveLength(1);
+    expect(readerSettingsRows[0].paging_mode).toBe("auto");
 
     // deleted_novels テーブル存在およびカラム型検証
     const deletedNovelsColumns = await db.query<{
@@ -266,5 +288,56 @@ describe("storage/schema", () => {
       "SELECT id, deleted_at FROM deleted_novels ORDER BY deleted_at DESC;",
     );
     expect(rows).toEqual([{ id: "kakuyomu:del_1", deleted_at: 1730376000000 }]);
+  });
+
+  it("既存の v0.3 スキーマ（paging_mode なしの旧 reader_settings）から migrateDatabaseSchema を実行した際、paging_mode カラムが安全に追加されること (AC-ST-13 / db-schema)", async () => {
+    const db = await resetTestDb();
+    // reader_settings を paging_mode なしの旧スキーマで再作成
+    await db.execute("DROP TABLE IF EXISTS reader_settings;");
+    await db.execute(`
+      CREATE TABLE reader_settings (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        writing_mode TEXT NOT NULL DEFAULT 'vertical-rl',
+        theme TEXT NOT NULL DEFAULT 'light',
+        font_family TEXT NOT NULL DEFAULT 'biz-ud-mincho',
+        font_size_px INTEGER NOT NULL DEFAULT 18,
+        line_height REAL NOT NULL DEFAULT 1.8,
+        page_margin_px INTEGER NOT NULL DEFAULT 20,
+        enable_tap_paging INTEGER NOT NULL DEFAULT 1,
+        enable_volume_key_paging INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await db.execute(`
+      INSERT INTO reader_settings (
+        id, writing_mode, theme, font_family, font_size_px, line_height, page_margin_px, enable_tap_paging, enable_volume_key_paging, updated_at
+      ) VALUES (
+        1, 'horizontal-tb', 'sepia', 'gothic', 20, 2.0, 24, 0, 0, '2026-01-01T00:00:00.000Z'
+      );
+    `);
+
+    // マイグレーション実行
+    await migrateDatabaseSchema(db);
+
+    const columns = await db.query<{ name: string }>(
+      "PRAGMA table_info(reader_settings);",
+    );
+    expect(columns.map((c) => c.name)).toContain("paging_mode");
+
+    // 既存の設定値が維持され、paging_mode の初期値 'auto' が適用されること
+    const rows = await db.query<{
+      writing_mode: string;
+      theme: string;
+      paging_mode: string;
+    }>(
+      "SELECT writing_mode, theme, paging_mode FROM reader_settings WHERE id = 1;",
+    );
+    expect(rows).toEqual([
+      {
+        writing_mode: "horizontal-tb",
+        theme: "sepia",
+        paging_mode: "auto",
+      },
+    ]);
   });
 });

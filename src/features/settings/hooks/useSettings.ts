@@ -1,18 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { useServices } from "../../../app/ServiceProvider";
-import type { ReaderTheme, WritingMode } from "../../../storage/types";
+import type {
+  ReaderPagingMode,
+  ReaderTheme,
+  WritingMode,
+} from "../../../storage/types";
 
 export interface UseSettingsResult {
   writingMode: WritingMode;
   theme: ReaderTheme;
   fontSizePx: number;
   lineHeight: number;
+  pagingMode: ReaderPagingMode;
   isLoading: boolean;
   error: string | null;
   toggleWritingMode: () => Promise<void>;
   changeTheme: (theme: ReaderTheme) => Promise<void>;
   changeFontSize: (fontSizePx: number) => Promise<void>;
   changeLineHeight: (lineHeight: number) => Promise<void>;
+  changePagingMode: (pagingMode: ReaderPagingMode) => Promise<void>;
 }
 
 function toErrorMessage(error: unknown): string {
@@ -139,5 +145,7 @@ export function useSettings(): UseSettingsResult {
     changeTheme,
     changeFontSize,
     changeLineHeight,
+    pagingMode: "auto" as ReaderPagingMode,
+    changePagingMode: async () => {},
   };
 }

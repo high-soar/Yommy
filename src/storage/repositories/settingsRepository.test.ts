@@ -24,6 +24,7 @@ describe("SqlSettingsRepository", () => {
         pageMarginPx: 20,
         enableTapPaging: true,
         enableVolumeKeyPaging: false,
+        pagingMode: "auto",
         updatedAt: expect.any(String),
       });
     });
@@ -55,6 +56,7 @@ describe("SqlSettingsRepository", () => {
       expect(updated.pageMarginPx).toBe(20);
       expect(updated.enableTapPaging).toBe(true);
       expect(updated.enableVolumeKeyPaging).toBe(false);
+      expect(updated.pagingMode).toBe("auto");
 
       // getReaderSettings でも更新値が取得できること
       const reFetched = await repository.getReaderSettings();
@@ -72,6 +74,7 @@ describe("SqlSettingsRepository", () => {
         pageMarginPx: 32,
         enableTapPaging: false,
         enableVolumeKeyPaging: true,
+        pagingMode: "paged",
         updatedAt: customUpdatedAt,
       });
 
@@ -84,8 +87,27 @@ describe("SqlSettingsRepository", () => {
         pageMarginPx: 32,
         enableTapPaging: false,
         enableVolumeKeyPaging: true,
+        pagingMode: "paged",
         updatedAt: customUpdatedAt,
       });
+    });
+
+    it("pagingMode を更新できること (AC-ST-13)", async () => {
+      const updated = await repository.updateReaderSettings({
+        pagingMode: "paged",
+      });
+      expect(updated.pagingMode).toBe("paged");
+
+      const reFetched = await repository.getReaderSettings();
+      expect(reFetched.pagingMode).toBe("paged");
+
+      const updatedToScroll = await repository.updateReaderSettings({
+        pagingMode: "scroll",
+      });
+      expect(updatedToScroll.pagingMode).toBe("scroll");
+
+      const reFetchedScroll = await repository.getReaderSettings();
+      expect(reFetchedScroll.pagingMode).toBe("scroll");
     });
 
     it("空のパッチを渡した場合に既存の設定値が維持されること", async () => {

@@ -172,6 +172,7 @@ function createMockSettingsRepo(): SettingsRepository {
     pageMarginPx: 16,
     enableTapPaging: false,
     enableVolumeKeyPaging: false,
+    pagingMode: "auto",
     updatedAt: "2026-10-26T00:00:00Z",
   };
   return {
