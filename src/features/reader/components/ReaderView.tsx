@@ -1,9 +1,10 @@
-import React, { useEffect, useCallback } from "react";
+import React, { useEffect, useCallback, useState } from "react";
 import type {
   WritingMode,
   ReaderTheme,
   ReaderPagingMode,
 } from "../../../storage/types";
+import { resolveEffectivePagingMode } from "../hooks/useReader";
 
 export type { WritingMode, ReaderTheme, ReaderPagingMode };
 
@@ -38,6 +39,7 @@ function clampProgress(value: number): number {
 
 /**
  * 小説本文の全画面（h-full w-full）縦書き/横書き組版表示、ルビ・傍点、カラーテーマ描画、
+ * 1ページ組版・横スライドアニメーション・ページインジケーター表示、
  * および縦横双方のスクロール進捗率算出・初期位置復元を担う Presentational コンポーネント
  */
 export const ReaderView: React.FC<ReaderViewProps> = ({
@@ -59,17 +61,55 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const isVertical = writingMode === "vertical-rl";
-  void pagingMode;
-  void currentPage;
-  void totalPages;
-  void slideOffsetPx;
-  void isAnimating;
-  void onTotalPagesChange;
+  const effectivePagingMode = resolveEffectivePagingMode(
+    pagingMode,
+    writingMode,
+  );
+  const isPaged = effectivePagingMode === "paged";
 
-  // スクロール操作時の進捗率（0.0 〜 1.0）算出
-  const handleScroll = useCallback(() => {
+  // コンテナ幅の動的追従（リサイズおよび初期計測）
+  const [containerWidth, setContainerWidth] = useState<number>(0);
+
+  useEffect(() => {
     const el = containerRef.current;
-    if (!el || !onScrollProgressChange) return;
+    if (!el) return;
+    setContainerWidth(el.clientWidth);
+
+    const handleResize = () => {
+      if (containerRef.current) {
+        setContainerWidth(containerRef.current.clientWidth);
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // DOM 寸法計測（総ページ数算出）: マウント時および bodyHtml, writingMode, fontSizePx, lineHeight, pagingMode 変更時
+  useEffect(() => {
+    if (!isPaged) return;
+    const el = containerRef.current;
+    if (!el) return;
+
+    const { scrollWidth, clientWidth } = el;
+    const measuredPages =
+      clientWidth > 0 ? Math.max(1, Math.ceil(scrollWidth / clientWidth)) : 1;
+    onTotalPagesChange?.(measuredPages);
+  }, [
+    isPaged,
+    bodyHtml,
+    writingMode,
+    fontSizePx,
+    lineHeight,
+    pagingMode,
+    onTotalPagesChange,
+  ]);
+
+  // スクロール操作時の進捗率（0.0 〜 1.0）算出（実効 scroll 時）
+  const handleScroll = useCallback(() => {
+    if (isPaged) return;
+    const el = containerRef.current;
+    if (!el) return;
+    if (!onScrollProgressChange) return;
 
     let progress = 0;
     if (writingMode === "horizontal-tb") {
@@ -81,10 +121,11 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         maxScroll > 0 ? clampProgress(Math.abs(el.scrollLeft) / maxScroll) : 0;
     }
     onScrollProgressChange(progress);
-  }, [writingMode, onScrollProgressChange]);
+  }, [isPaged, writingMode, onScrollProgressChange]);
 
-  // マウント時および bodyHtml / writingMode / initialScrollProgress 変化時の位置復元
+  // マウント時および bodyHtml / writingMode / initialScrollProgress / pagingMode 変化時のスクロール位置復元（実効 scroll 時）
   useEffect(() => {
+    if (isPaged) return;
     const el = containerRef.current;
     if (!el) return;
 
@@ -96,7 +137,19 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       const maxScroll = el.scrollWidth - el.clientWidth;
       el.scrollLeft = maxScroll > 0 ? -clampedProgress * maxScroll : 0;
     }
-  }, [initialScrollProgress, bodyHtml, writingMode]);
+  }, [isPaged, initialScrollProgress, bodyHtml, writingMode, pagingMode]);
+
+  // pageWidth はコンテナの clientWidth（取得できない場合は 0）
+  const pageWidth = containerRef.current?.clientWidth ?? containerWidth;
+  const slideTranslateX =
+    pageWidth > 0
+      ? isVertical
+        ? (currentPage - 1) * pageWidth + slideOffsetPx
+        : -(currentPage - 1) * pageWidth + slideOffsetPx
+      : 0;
+
+  // 将来のジェスチャー遷移連携・アニメーション中制御のために参照
+  void isAnimating;
 
   return (
     <div
@@ -106,49 +159,88 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       data-theme={theme}
       data-font-size={String(fontSizePx)}
       data-line-height={String(lineHeight)}
+      data-paging-mode={pagingMode}
+      data-effective-paging-mode={effectivePagingMode}
+      data-current-page={isPaged ? String(currentPage) : undefined}
+      data-total-pages={isPaged ? String(totalPages) : undefined}
       onScroll={handleScroll}
-      className={`h-full w-full max-w-full p-6 font-serif transition-colors duration-200 ${
+      className={`h-full w-full max-w-full font-serif transition-colors duration-200 relative ${
         themeStyles[theme]
-      } ${
-        isVertical
-          ? "writing-vertical-rl overflow-x-auto overflow-y-hidden leading-loose"
-          : "writing-horizontal-tb overflow-y-auto overflow-x-hidden leading-relaxed"
+      } ${isVertical ? "writing-vertical-rl" : "writing-horizontal-tb"} ${
+        isPaged
+          ? "overflow-hidden"
+          : isVertical
+            ? "overflow-x-auto overflow-y-hidden leading-loose p-6"
+            : "overflow-y-auto overflow-x-hidden leading-relaxed p-6"
       }`}
       style={{
         fontSize: `${fontSizePx}px`,
         lineHeight,
       }}
     >
-      {(title || chapterTitle) && (
-        <header
-          className={`mb-6 pb-4 border-b ${
-            isVertical ? "border-l border-b-0 pl-4 mr-6" : "border-b pb-4 mb-6"
-          } opacity-80`}
-        >
-          {title && (
-            <h2
-              data-testid="reader-title"
-              className="text-xs font-semibold tracking-wider uppercase mb-1"
-            >
-              {title}
-            </h2>
-          )}
-          {chapterTitle && (
-            <h1
-              data-testid="reader-chapter-title"
-              className="text-lg md:text-xl font-bold tracking-tight"
-            >
-              {chapterTitle}
-            </h1>
-          )}
-        </header>
-      )}
-
       <div
-        data-testid="reader-body"
-        className="novel-content"
-        dangerouslySetInnerHTML={{ __html: bodyHtml }}
-      />
+        data-testid="reader-content"
+        className={`h-full w-full ${isPaged ? "p-6" : ""}`}
+        style={
+          isPaged
+            ? {
+                transform: `translateX(${slideTranslateX}px)`,
+                transition:
+                  slideOffsetPx !== 0 ? "none" : "transform 200ms ease-out",
+                ...(isVertical
+                  ? {}
+                  : {
+                      columns: "1",
+                      columnWidth: "100%",
+                      columnGap: "0px",
+                      columnFill: "auto",
+                    }),
+              }
+            : undefined
+        }
+      >
+        {(title || chapterTitle) && (
+          <header
+            className={`mb-6 pb-4 border-b ${
+              isVertical
+                ? "border-l border-b-0 pl-4 mr-6"
+                : "border-b pb-4 mb-6"
+            } opacity-80`}
+          >
+            {title && (
+              <h2
+                data-testid="reader-title"
+                className="text-xs font-semibold tracking-wider uppercase mb-1"
+              >
+                {title}
+              </h2>
+            )}
+            {chapterTitle && (
+              <h1
+                data-testid="reader-chapter-title"
+                className="text-lg md:text-xl font-bold tracking-tight"
+              >
+                {chapterTitle}
+              </h1>
+            )}
+          </header>
+        )}
+
+        <div
+          data-testid="reader-body"
+          className="novel-content"
+          dangerouslySetInnerHTML={{ __html: bodyHtml }}
+        />
+      </div>
+
+      {isPaged && (
+        <div
+          data-testid="reader-page-indicator"
+          className="absolute bottom-3 right-4 pointer-events-none select-none text-xs opacity-60 tabular-nums font-sans"
+        >
+          {currentPage} / {totalPages}
+        </div>
+      )}
     </div>
   );
 };

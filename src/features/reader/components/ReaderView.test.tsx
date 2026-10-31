@@ -671,6 +671,100 @@ describe("ReaderView", () => {
         transform: "translateX(0px)",
       });
     });
+
+    it("ウィンドウリサイズ時にコンテナ幅が再追従されること", () => {
+      render(
+        <ReaderView
+          bodyHtml="<p>本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="paged"
+          currentPage={2}
+          totalPages={4}
+        />,
+      );
+
+      const container = screen.getByTestId("reader-view");
+      mockElementDimensions(container, { clientWidth: 600 });
+      fireEvent(window, new Event("resize"));
+
+      const content = screen.getByTestId("reader-content");
+      expect(content).toHaveStyle({
+        transform: "translateX(600px)",
+      });
+    });
+
+    it("containerRef.current が null の状態でマウントされても早期リターンされること", () => {
+      const mockRef = {};
+      Object.defineProperty(mockRef, "current", {
+        get: () => null,
+        set: () => {},
+        configurable: true,
+      });
+
+      // 1. 実効 paged
+      const useRefSpy1 = vi
+        .spyOn(React, "useRef")
+        .mockReturnValueOnce(
+          mockRef as unknown as React.RefObject<HTMLDivElement | null>,
+        );
+      expect(() => {
+        render(
+          <ReaderView
+            bodyHtml="<p>本文</p>"
+            writingMode="vertical-rl"
+            pagingMode="paged"
+          />,
+        );
+      }).not.toThrow();
+      useRefSpy1.mockRestore();
+
+      // 2. 実効 scroll
+      const useRefSpy2 = vi
+        .spyOn(React, "useRef")
+        .mockReturnValueOnce(
+          mockRef as unknown as React.RefObject<HTMLDivElement | null>,
+        );
+      expect(() => {
+        render(
+          <ReaderView
+            bodyHtml="<p>本文</p>"
+            writingMode="horizontal-tb"
+            pagingMode="scroll"
+          />,
+        );
+      }).not.toThrow();
+      useRefSpy2.mockRestore();
+    });
+
+    it("handleScroll 実行時に containerRef.current が null の場合早期リターンされること", () => {
+      const onProgress = vi.fn();
+      const mockRef = {};
+      Object.defineProperty(mockRef, "current", {
+        get: () => null,
+        set: () => {},
+        configurable: true,
+      });
+      const useRefSpy = vi
+        .spyOn(React, "useRef")
+        .mockReturnValue(
+          mockRef as unknown as React.RefObject<HTMLDivElement | null>,
+        );
+
+      render(
+        <ReaderView
+          bodyHtml="<p>本文</p>"
+          writingMode="horizontal-tb"
+          pagingMode="scroll"
+          onScrollProgressChange={onProgress}
+        />,
+      );
+
+      const container = screen.getByTestId("reader-view");
+      fireEvent.scroll(container);
+      expect(onProgress).not.toHaveBeenCalled();
+
+      useRefSpy.mockRestore();
+    });
   });
 
   describe("DOM 寸法計測と総ページ数算出（onTotalPagesChange）の検証", () => {
@@ -752,6 +846,22 @@ describe("ReaderView", () => {
       );
 
       expect(onTotalPagesChange).not.toHaveBeenCalled();
+    });
+
+    it("実効 paged モードのときに scroll イベントが発生しても onScrollProgressChange は呼び出されないこと", () => {
+      const onProgress = vi.fn();
+      render(
+        <ReaderView
+          bodyHtml="<p>本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="paged"
+          onScrollProgressChange={onProgress}
+        />,
+      );
+
+      const container = screen.getByTestId("reader-view");
+      fireEvent.scroll(container);
+      expect(onProgress).not.toHaveBeenCalled();
     });
   });
 
