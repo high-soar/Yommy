@@ -261,7 +261,7 @@ export interface UseBookshelfResult {
 6. **クラウド同期連携（自動 Pull / 自動 Push / Tombstone 記録: v0.4 Issue #120）**:
    - アプリ起動時およびバックグラウンド復帰時（休止から5分以上経過時）に、`SyncEngine.pull()` がバックグラウンド実行され、リモートの新規作品・更新されたしおり話数が本棚一覧へ自動反映される。未登録作品は `upsertNovelWithToc` により目次が自動取得される。
    - 作品の追加（検索/ランキングからの登録）および作品の削除時に、`SyncEngine.notifyChanged()` が呼び出され、2〜3秒デバウンス付きで自動 Push される。
-   - 作品削除時（`novelRepository.deleteNovel`）は、カスケード削除と同時に `deleted_novels` テーブルへ該当 ID と削除日時（ISO 8601）を記録し、次回 Push 時にリモート Tombstone へ結合する。
+   - 作品削除時（`novelRepository.deleteNovel`）は、カスケード削除と同時に `deleted_novels` テーブルへ該当 ID と削除日時（ミリ秒タイムスタンプ `Date.now()`）を記録し、次回 Push 時にリモート Tombstone へ結合する。
 
 ---
 
