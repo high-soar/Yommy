@@ -71,6 +71,11 @@ export interface AppSettingRecord {
   updatedAt: string;
 }
 
+export interface DeletedNovelRecord {
+  id: string;
+  deletedAt: number;
+}
+
 export interface NovelRepository {
   listNovels(sortOrder?: BookshelfSortOrder): Promise<NovelSummary[]>;
   getNovelById(novelId: string): Promise<NovelRecord | null>;
@@ -86,11 +91,17 @@ export interface NovelRepository {
   deleteNovel(novelId: string): Promise<void>;
   clearNewUpdate(novelId: string): Promise<void>;
   updateLastCheckedAt(novelId: string, checkedAt: string): Promise<void>;
+  getDeletedNovels?(): Promise<DeletedNovelRecord[]>;
+  purgeDeletedNovels?(idList: string[]): Promise<void>;
 }
 
 export interface AppSettingsRepository {
   getSetting(key: string): Promise<string | null>;
   setSetting(key: string, value: string): Promise<void>;
+  getCloudSyncLastSyncedAt?(): Promise<number | null>;
+  setCloudSyncLastSyncedAt?(timestamp: number | null): Promise<void>;
+  getCloudSyncAccountEmail?(): Promise<string | null>;
+  setCloudSyncAccountEmail?(email: string | null): Promise<void>;
 }
 
 export interface ChapterRepository {
@@ -119,4 +130,8 @@ export interface ChapterRepository {
 export interface SettingsRepository {
   getReaderSettings(): Promise<ReaderSettings>;
   updateReaderSettings(patch: Partial<ReaderSettings>): Promise<ReaderSettings>;
+  getCloudSyncLastSyncedAt?(): Promise<number | null>;
+  setCloudSyncLastSyncedAt?(timestamp: number | null): Promise<void>;
+  getCloudSyncAccountEmail?(): Promise<string | null>;
+  setCloudSyncAccountEmail?(email: string | null): Promise<void>;
 }

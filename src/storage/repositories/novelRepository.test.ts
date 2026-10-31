@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { resetTestDb, initTestDb } from "../adapter/inMemoryDb";
 import { SqlNovelRepository } from "./novelRepository";
 import type { ParsedNovelIndex } from "../../parsers/types";
@@ -646,7 +646,7 @@ describe("SqlNovelRepository", () => {
     });
   });
 
-  describe("deleteNovel", () => {
+  describe("deleteNovel / Tombstone tracking", () => {
     it("作品削除時に CASCADE により紐づく chapters および download_queue も削除されること", async () => {
       await repository.upsertNovelWithToc(
         sampleParsedIndex,
@@ -680,6 +680,97 @@ describe("SqlNovelRepository", () => {
         "SELECT * FROM download_queue WHERE novel_id = 'kakuyomu:1177354054881162325';",
       );
       expect(queue).toHaveLength(0);
+    });
+
+    it("作品削除時に deleted_novels へ Tombstone (id, deleted_at) が記録されること (AC-BS-13 / db-schema)", async () => {
+      const now = 1730376000000;
+      const dateNowSpy = vi.spyOn(Date, "now").mockReturnValue(now);
+
+      await repository.upsertNovelWithToc(
+        sampleParsedIndex,
+        "2026-01-01T00:00:00Z",
+      );
+
+      await repository.deleteNovel("kakuyomu:1177354054881162325");
+
+      const deleted = await repository.getDeletedNovels();
+      expect(deleted).toEqual([
+        {
+          id: "kakuyomu:1177354054881162325",
+          deletedAt: now,
+        },
+      ]);
+
+      dateNowSpy.mockRestore();
+    });
+
+    it("同一作品を複数回削除した場合に deleted_novels の deleted_at が最新時刻で更新（UPSERT）されること (AC-BS-13)", async () => {
+      const firstTime = 1730376000000;
+      const secondTime = 1730380000000;
+
+      const dateNowSpy = vi.spyOn(Date, "now").mockReturnValue(firstTime);
+      await repository.deleteNovel("kakuyomu:1177354054881162325");
+
+      let deleted = await repository.getDeletedNovels();
+      expect(deleted).toEqual([
+        { id: "kakuyomu:1177354054881162325", deletedAt: firstTime },
+      ]);
+
+      dateNowSpy.mockReturnValue(secondTime);
+      await repository.deleteNovel("kakuyomu:1177354054881162325");
+
+      deleted = await repository.getDeletedNovels();
+      expect(deleted).toHaveLength(1);
+      expect(deleted[0]).toEqual({
+        id: "kakuyomu:1177354054881162325",
+        deletedAt: secondTime,
+      });
+
+      dateNowSpy.mockRestore();
+    });
+
+    it("getDeletedNovels は deletedAt の降順（新しい順）でレコードを返却すること", async () => {
+      const db = await initTestDb();
+      await db.execute(
+        `INSERT INTO deleted_novels (id, deleted_at) VALUES
+          ('kakuyomu:old', 1000),
+          ('kakuyomu:new', 3000),
+          ('kakuyomu:mid', 2000);`,
+      );
+
+      const deleted = await repository.getDeletedNovels();
+      expect(deleted).toEqual([
+        { id: "kakuyomu:new", deletedAt: 3000 },
+        { id: "kakuyomu:mid", deletedAt: 2000 },
+        { id: "kakuyomu:old", deletedAt: 1000 },
+      ]);
+    });
+
+    it("purgeDeletedNovels で指定した作品IDリストの Tombstone のみが削除されること", async () => {
+      const db = await initTestDb();
+      await db.execute(
+        `INSERT INTO deleted_novels (id, deleted_at) VALUES
+          ('kakuyomu:1', 1000),
+          ('kakuyomu:2', 2000),
+          ('kakuyomu:3', 3000);`,
+      );
+
+      await repository.purgeDeletedNovels(["kakuyomu:1", "kakuyomu:3"]);
+
+      const remaining = await repository.getDeletedNovels();
+      expect(remaining).toEqual([{ id: "kakuyomu:2", deletedAt: 2000 }]);
+    });
+
+    it("purgeDeletedNovels に空配列を渡した場合はエラーにならず既存の Tombstone が維持されること", async () => {
+      const db = await initTestDb();
+      await db.execute(
+        `INSERT INTO deleted_novels (id, deleted_at) VALUES ('kakuyomu:1', 1000);`,
+      );
+
+      await repository.purgeDeletedNovels([]);
+
+      const remaining = await repository.getDeletedNovels();
+      expect(remaining).toEqual([{ id: "kakuyomu:1", deletedAt: 1000 }]);
     });
   });
 });

@@ -1,6 +1,7 @@
 import type { DatabaseAdapter } from "../adapter/types";
 import type {
   BookshelfSortOrder,
+  DeletedNovelRecord,
   NovelRecord,
   NovelRepository,
   NovelSummary,
@@ -310,5 +311,19 @@ export class SqlNovelRepository implements NovelRepository {
       "UPDATE novels SET last_checked_at = ? WHERE id = ?;",
       [checkedAt, novelId],
     );
+  }
+
+  /**
+   * 削除済み作品の Tombstone レコード一覧を取得する（Red スタブ）
+   */
+  async getDeletedNovels(): Promise<DeletedNovelRecord[]> {
+    throw new Error("getDeletedNovels is not implemented yet");
+  }
+
+  /**
+   * 指定された作品 ID の Tombstone を削除（パージ）する（Red スタブ）
+   */
+  async purgeDeletedNovels(_idList: string[]): Promise<void> {
+    throw new Error("purgeDeletedNovels is not implemented yet");
   }
 }
