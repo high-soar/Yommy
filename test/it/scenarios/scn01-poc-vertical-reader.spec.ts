@@ -268,10 +268,12 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await touchZone.click();
     await expect(overlay).toHaveClass(/translate-y-0/);
 
-    // 閉じるボタン（reader-bottom-overlay-close）でオーバーレイが閉じることを確認
+    // 閉じるボタン（reader-bottom-overlay-close）は廃止され非表示/非存在であることを確認
     const overlayCloseButton = page.getByTestId("reader-bottom-overlay-close");
-    await expect(overlayCloseButton).toBeVisible();
-    await overlayCloseButton.click();
+    await expect(overlayCloseButton).not.toBeAttached();
+
+    // 本文エリアタップでオーバーレイが自動非表示（translate-y-full）になることを確認
+    await readerView.click({ position: { x: 100, y: 100 } });
     await expect(overlay).toHaveClass(/translate-y-full/);
 
     // 再度最下部ゾーンをタップしてオーバーレイを表示
