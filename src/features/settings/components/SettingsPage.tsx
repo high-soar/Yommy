@@ -115,8 +115,8 @@ const STEPPER_BUTTON_BASE =
   "w-9 h-9 flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-xs";
 
 /**
- * 設定画面（SCR-05）の Presentational コンポーネント（AC-ST-03, AC-ST-04, AC-ST-05）
- * ヘッダー、組版設定項目（組み方向・テーマ・文字サイズ・行間）、および組版プレビューを配置する
+ * 設定画面（SCR-05）の Presentational コンポーネント（AC-ST-03, AC-ST-04, AC-ST-05, AC-ST-13）
+ * ヘッダー、組版設定項目（組み方向・ページ送り・テーマ・文字サイズ・行間）、および組版プレビューを配置する
  */
 export const SettingsPage: React.FC<SettingsPageProps> = ({
   writingMode,

@@ -28,6 +28,9 @@ function toErrorMessage(error: unknown): string {
   return String(error);
 }
 
+/**
+ * リーダー設定の読み出し・更新・永続化を行うカスタムフック（SCR-05 / AC-ST-03〜05, AC-ST-13）
+ */
 export function useSettings(): UseSettingsResult {
   const { settingsRepository, isReady } = useServices();
 
