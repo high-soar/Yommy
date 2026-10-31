@@ -2,7 +2,13 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import React from "react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { ServiceProvider } from "../../../app/ServiceProvider";
-import { useReader, toErrorMessage, isChapterFresh, delay } from "./useReader";
+import {
+  useReader,
+  toErrorMessage,
+  isChapterFresh,
+  delay,
+  resolveEffectivePagingMode,
+} from "./useReader";
 import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
 import { SqlNovelRepository } from "../../../storage/repositories/novelRepository";
 import { SqlChapterRepository } from "../../../storage/repositories/chapterRepository";
@@ -13,6 +19,7 @@ import type {
   ChapterRecord,
   NovelRecord,
   SettingsRepository,
+  ReaderPagingMode,
 } from "../../../storage/types";
 import type { SyncEngine } from "../../cloud-sync/services/syncEngine";
 import {
@@ -2586,6 +2593,767 @@ describe("useReader", () => {
       });
 
       expect(result.current.chapterIndex).toBe(2);
+    });
+  });
+
+  describe("ページ送りモード・ページネーション状態管理 (v0.4 Issue #122, #150)", () => {
+    describe("resolveEffectivePagingMode", () => {
+      it("pagingMode が 'paged' の場合、組み方向に関わらず 'paged' を返すこと", () => {
+        expect(resolveEffectivePagingMode("paged", "vertical-rl")).toBe(
+          "paged",
+        );
+        expect(resolveEffectivePagingMode("paged", "horizontal-tb")).toBe(
+          "paged",
+        );
+      });
+
+      it("pagingMode が 'scroll' の場合、組み方向に関わらず 'scroll' を返すこと", () => {
+        expect(resolveEffectivePagingMode("scroll", "vertical-rl")).toBe(
+          "scroll",
+        );
+        expect(resolveEffectivePagingMode("scroll", "horizontal-tb")).toBe(
+          "scroll",
+        );
+      });
+
+      it("pagingMode が 'auto' かつ縦書き（vertical-rl）の場合、'paged' を返すこと (AC-RD-15)", () => {
+        expect(resolveEffectivePagingMode("auto", "vertical-rl")).toBe("paged");
+      });
+
+      it("pagingMode が 'auto' かつ横書き（horizontal-tb）の場合、'scroll' を返すこと (AC-RD-15)", () => {
+        expect(resolveEffectivePagingMode("auto", "horizontal-tb")).toBe(
+          "scroll",
+        );
+      });
+
+      it("想定外の pagingMode 値が渡された場合、組み方向判定にフォールバックすること", () => {
+        expect(
+          resolveEffectivePagingMode(
+            "invalid" as unknown as ReaderPagingMode,
+            "vertical-rl",
+          ),
+        ).toBe("paged");
+        expect(
+          resolveEffectivePagingMode(
+            "invalid" as unknown as ReaderPagingMode,
+            "horizontal-tb",
+          ),
+        ).toBe("scroll");
+      });
+    });
+
+    describe("useReader による pagingMode / effectivePagingMode 状態管理", () => {
+      it("settingsRepository から保存された pagingMode を初期読み込みできること", async () => {
+        const db = await resetTestDb();
+        const settingsRepo = new SqlSettingsRepository(db);
+        await settingsRepo.updateReaderSettings({ pagingMode: "paged" });
+
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo);
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              settingsRepository: settingsRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        expect(result.current.pagingMode).toBe("paged");
+        expect(result.current.effectivePagingMode).toBe("paged");
+      });
+
+      it("settingsRepository の pagingMode が未設定の場合は初期値 'auto' となること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo);
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        expect(result.current.pagingMode).toBe("auto");
+        // デフォルト縦書き vertical-rl のため effectivePagingMode は paged
+        expect(result.current.effectivePagingMode).toBe("paged");
+      });
+
+      it("changePagingMode を呼び出して pagingMode を変更し settingsRepository に永続化できること", async () => {
+        const db = await resetTestDb();
+        const settingsRepo = new SqlSettingsRepository(db);
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo);
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              settingsRepository: settingsRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        await act(async () => {
+          await result.current.changePagingMode("scroll");
+        });
+
+        expect(result.current.pagingMode).toBe("scroll");
+        expect(result.current.effectivePagingMode).toBe("scroll");
+
+        const updatedSettings = await settingsRepo.getReaderSettings();
+        expect(updatedSettings.pagingMode).toBe("scroll");
+      });
+
+      it("changePagingMode 時に settingsRepository.updateReaderSettings が失敗した場合、error がセットされること", async () => {
+        const db = await resetTestDb();
+        const settingsRepo = new SqlSettingsRepository(db);
+        vi.spyOn(settingsRepo, "updateReaderSettings").mockRejectedValueOnce(
+          new Error("DB更新エラー"),
+        );
+
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo);
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              settingsRepository: settingsRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        await act(async () => {
+          await result.current.changePagingMode("paged");
+        });
+
+        expect(result.current.error).toBe("DB更新エラー");
+      });
+
+      it("組み方向（toggleWritingMode）を変更した際、pagingMode が 'auto' であれば effectivePagingMode が連動して切り替わること (AC-RD-15)", async () => {
+        const db = await resetTestDb();
+        const settingsRepo = new SqlSettingsRepository(db);
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo);
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              settingsRepository: settingsRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        expect(result.current.writingMode).toBe("vertical-rl");
+        expect(result.current.pagingMode).toBe("auto");
+        expect(result.current.effectivePagingMode).toBe("paged");
+
+        await act(async () => {
+          await result.current.toggleWritingMode();
+        });
+
+        expect(result.current.writingMode).toBe("horizontal-tb");
+        expect(result.current.effectivePagingMode).toBe("scroll");
+
+        await act(async () => {
+          await result.current.toggleWritingMode();
+        });
+
+        expect(result.current.writingMode).toBe("vertical-rl");
+        expect(result.current.effectivePagingMode).toBe("paged");
+      });
+    });
+
+    describe("ページネーション操作・進捗率相互変換 (AC-RD-20)", () => {
+      it("初期状態では currentPage = 1, totalPages = 1 であること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo);
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        expect(result.current.currentPage).toBe(1);
+        expect(result.current.totalPages).toBe(1);
+      });
+
+      it("setTotalPages で総ページ数を設定でき、1未満の値や非数は 1 にクランプされること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo);
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        act(() => {
+          result.current.setTotalPages(10);
+        });
+        expect(result.current.totalPages).toBe(10);
+
+        act(() => {
+          result.current.setTotalPages(0);
+        });
+        expect(result.current.totalPages).toBe(1);
+
+        act(() => {
+          result.current.setTotalPages(-5);
+        });
+        expect(result.current.totalPages).toBe(1);
+
+        act(() => {
+          result.current.setTotalPages(Number.NaN);
+        });
+        expect(result.current.totalPages).toBe(1);
+      });
+
+      it("setTotalPages で currentPage が総ページ数を超えた場合、総ページ数にクランプされること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo);
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        act(() => {
+          result.current.setTotalPages(10);
+        });
+        act(() => {
+          result.current.goToPage(8);
+        });
+        expect(result.current.currentPage).toBe(8);
+
+        act(() => {
+          result.current.setTotalPages(5);
+        });
+        expect(result.current.currentPage).toBe(5);
+        expect(result.current.totalPages).toBe(5);
+      });
+
+      it("goToPage で指定ページへ遷移し、進捗率が正しく算出されてしおりが更新されること (AC-RD-20)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo);
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        act(() => {
+          result.current.setTotalPages(5);
+        });
+
+        // 5ページ中の3ページ目: (3 - 1) / (5 - 1) = 2 / 4 = 0.5
+        await act(async () => {
+          result.current.goToPage(3);
+        });
+
+        expect(result.current.currentPage).toBe(3);
+        expect(result.current.scrollProgress).toBe(0.5);
+
+        const reloadedNovel = await novelRepo.getNovelById(seeded.id);
+        expect(reloadedNovel?.bookmarkChapterIndex).toBe(1);
+        expect(reloadedNovel?.bookmarkScrollProgress).toBe(0.5);
+      });
+
+      it("goToPage で第1ページ（1）に遷移した場合、進捗率は 0.0 となること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo);
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        act(() => {
+          result.current.setTotalPages(5);
+        });
+
+        await act(async () => {
+          result.current.goToPage(1);
+        });
+
+        expect(result.current.currentPage).toBe(1);
+        expect(result.current.scrollProgress).toBe(0);
+      });
+
+      it("goToPage で最終ページに遷移した場合、進捗率は 1.0 となること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo);
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        act(() => {
+          result.current.setTotalPages(5);
+        });
+
+        await act(async () => {
+          result.current.goToPage(5);
+        });
+
+        expect(result.current.currentPage).toBe(5);
+        expect(result.current.scrollProgress).toBe(1.0);
+      });
+
+      it("totalPages が 1 の場合、goToPage の進捗率は常に 0.0 となること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo);
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        act(() => {
+          result.current.setTotalPages(1);
+        });
+
+        await act(async () => {
+          result.current.goToPage(1);
+        });
+
+        expect(result.current.currentPage).toBe(1);
+        expect(result.current.scrollProgress).toBe(0);
+      });
+
+      it("goToPage で範囲外の値（1未満・超過・NaN）が渡された場合、[1, totalPages] にクランプされること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo);
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        act(() => {
+          result.current.setTotalPages(5);
+        });
+
+        await act(async () => {
+          result.current.goToPage(0);
+        });
+        expect(result.current.currentPage).toBe(1);
+
+        await act(async () => {
+          result.current.goToPage(-10);
+        });
+        expect(result.current.currentPage).toBe(1);
+
+        await act(async () => {
+          result.current.goToPage(100);
+        });
+        expect(result.current.currentPage).toBe(5);
+
+        await act(async () => {
+          result.current.goToPage(Number.NaN);
+        });
+        expect(result.current.currentPage).toBe(1);
+      });
+
+      it("nextPage で次のページへ進み、最終ページではそれ以上進まないこと", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo);
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        act(() => {
+          result.current.setTotalPages(3);
+        });
+
+        await act(async () => {
+          result.current.nextPage();
+        });
+        expect(result.current.currentPage).toBe(2);
+
+        await act(async () => {
+          result.current.nextPage();
+        });
+        expect(result.current.currentPage).toBe(3);
+
+        await act(async () => {
+          result.current.nextPage();
+        });
+        expect(result.current.currentPage).toBe(3);
+      });
+
+      it("prevPage で前のページへ戻り、第1ページではそれ以上戻らないこと", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo);
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        act(() => {
+          result.current.setTotalPages(3);
+        });
+
+        await act(async () => {
+          result.current.goToPage(3);
+        });
+        expect(result.current.currentPage).toBe(3);
+
+        await act(async () => {
+          result.current.prevPage();
+        });
+        expect(result.current.currentPage).toBe(2);
+
+        await act(async () => {
+          result.current.prevPage();
+        });
+        expect(result.current.currentPage).toBe(1);
+
+        await act(async () => {
+          result.current.prevPage();
+        });
+        expect(result.current.currentPage).toBe(1);
+      });
+    });
+
+    describe("しおり進捗率の復元とページネーション連動 (AC-RD-20)", () => {
+      it("保存されたしおり進捗率（initialScrollProgress > 0）が存在する場合、初回 setTotalPages 時に対応するページ番号へ復元されること (AC-RD-20)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          bookmarkChapterIndex: 1,
+          bookmarkScrollProgress: 0.5,
+        });
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        expect(result.current.initialScrollProgress).toBe(0.5);
+        expect(result.current.scrollProgress).toBe(0.5);
+
+        // 総ページ数 11 の場合: Math.round(0.5 * (11 - 1)) + 1 = 5 + 1 = 6 ページ
+        act(() => {
+          result.current.setTotalPages(11);
+        });
+
+        expect(result.current.currentPage).toBe(6);
+      });
+
+      it("初回 setTotalPages 後に再度 setTotalPages が呼ばれた場合は初期進捗率による復元を行わず、現在のページ位置を維持すること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          bookmarkChapterIndex: 1,
+          bookmarkScrollProgress: 0.5,
+        });
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        act(() => {
+          result.current.setTotalPages(11);
+        });
+        expect(result.current.currentPage).toBe(6);
+
+        // ユーザーがページ 7 へ移動
+        await act(async () => {
+          result.current.goToPage(7);
+        });
+        expect(result.current.currentPage).toBe(7);
+
+        // ウィンドウリサイズ等で再度 setTotalPages が呼ばれても、現在のページ 7 を維持（初期進捗率 0.5 で 6 に戻らない）
+        act(() => {
+          result.current.setTotalPages(15);
+        });
+        expect(result.current.currentPage).toBe(7);
+      });
+
+      it("保存されたしおり進捗率が 0.0 の場合、初回 setTotalPages 時も currentPage = 1 を維持すること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          bookmarkChapterIndex: 1,
+          bookmarkScrollProgress: 0,
+        });
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        act(() => {
+          result.current.setTotalPages(10);
+        });
+        expect(result.current.currentPage).toBe(1);
+      });
+
+      it("別話を開いた場合（targetNovel.bookmarkChapterIndex !== targetIndex）、currentPage = 1, initialScrollProgress = 0, scrollProgress = 0 となること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 2,
+          cachedCount: 2,
+          bookmarkChapterIndex: 1,
+          bookmarkScrollProgress: 0.8,
+        });
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 2 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        expect(result.current.currentPage).toBe(1);
+        expect(result.current.initialScrollProgress).toBe(0);
+        expect(result.current.scrollProgress).toBe(0);
+
+        act(() => {
+          result.current.setTotalPages(10);
+        });
+        expect(result.current.currentPage).toBe(1);
+      });
+
+      it("goToChapter で次話へ遷移した際、currentPage = 1, totalPages = 1, initialScrollProgress = 0, scrollProgress = 0 にリセットされること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 2,
+          cachedCount: 2,
+          bookmarkChapterIndex: 1,
+          bookmarkScrollProgress: 0.5,
+        });
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        act(() => {
+          result.current.setTotalPages(11);
+        });
+        expect(result.current.currentPage).toBe(6);
+
+        await act(async () => {
+          const success = await result.current.goToChapter(2);
+          expect(success).toBe(true);
+        });
+
+        expect(result.current.currentPage).toBe(1);
+        expect(result.current.totalPages).toBe(1);
+        expect(result.current.initialScrollProgress).toBe(0);
+        expect(result.current.scrollProgress).toBe(0);
+
+        act(() => {
+          result.current.setTotalPages(8);
+        });
+        expect(result.current.currentPage).toBe(1);
+      });
     });
   });
 });
