@@ -12,6 +12,7 @@ interface ReaderSettingsRow {
   page_margin_px: number;
   enable_tap_paging: number;
   enable_volume_key_paging: number;
+  paging_mode: ReaderSettings["pagingMode"];
   updated_at: string;
 }
 
@@ -32,8 +33,7 @@ export class SqlSettingsRepository implements SettingsRepository {
       pageMarginPx: row.page_margin_px,
       enableTapPaging: row.enable_tap_paging === 1,
       enableVolumeKeyPaging: row.enable_volume_key_paging === 1,
-      pagingMode: (row as { paging_mode?: ReaderSettings["pagingMode"] })
-        .paging_mode as ReaderSettings["pagingMode"],
+      pagingMode: row.paging_mode,
       updatedAt: row.updated_at,
     };
   }
@@ -85,6 +85,10 @@ export class SqlSettingsRepository implements SettingsRepository {
     if (patch.enableVolumeKeyPaging !== undefined) {
       fields.push("enable_volume_key_paging = ?");
       values.push(patch.enableVolumeKeyPaging ? 1 : 0);
+    }
+    if (patch.pagingMode !== undefined) {
+      fields.push("paging_mode = ?");
+      values.push(patch.pagingMode);
     }
 
     if (fields.length > 0) {

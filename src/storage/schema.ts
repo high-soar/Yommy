@@ -80,13 +80,14 @@ CREATE TABLE IF NOT EXISTS reader_settings (
   page_margin_px INTEGER NOT NULL DEFAULT 20,
   enable_tap_paging INTEGER NOT NULL DEFAULT 1,
   enable_volume_key_paging INTEGER NOT NULL DEFAULT 0,
+  paging_mode TEXT NOT NULL DEFAULT 'auto' CHECK (paging_mode IN ('auto', 'paged', 'scroll')),
   updated_at TEXT NOT NULL
 );
 
 INSERT OR IGNORE INTO reader_settings (
-  id, writing_mode, theme, font_family, font_size_px, line_height, page_margin_px, enable_tap_paging, enable_volume_key_paging, updated_at
+  id, writing_mode, theme, font_family, font_size_px, line_height, page_margin_px, enable_tap_paging, enable_volume_key_paging, paging_mode, updated_at
 ) VALUES (
-  1, 'vertical-rl', 'light', 'biz-ud-mincho', 18, 1.8, 20, 1, 0, '2026-01-01T00:00:00.000Z'
+  1, 'vertical-rl', 'light', 'biz-ud-mincho', 18, 1.8, 20, 1, 0, 'auto', '2026-01-01T00:00:00.000Z'
 );
 
 CREATE TABLE IF NOT EXISTS app_settings (
@@ -166,6 +167,19 @@ export async function migrateDatabaseSchema(
     await db.execute(
       "ALTER TABLE novels ADD COLUMN latest_episode_published_at TEXT;",
     );
+  }
+
+  // reader_settings テーブル（v0.4 新設: Issue #122）の paging_mode カラムマイグレーション
+  const readerSettingsColumns = await db.query<ColumnInfo>(
+    "PRAGMA table_info(reader_settings);",
+  );
+  if (readerSettingsColumns.length > 0) {
+    const readerColumnNames = new Set(readerSettingsColumns.map((c) => c.name));
+    if (!readerColumnNames.has("paging_mode")) {
+      await db.execute(
+        "ALTER TABLE reader_settings ADD COLUMN paging_mode TEXT NOT NULL DEFAULT 'auto' CHECK (paging_mode IN ('auto', 'paged', 'scroll'));",
+      );
+    }
   }
 
   // deleted_novels テーブル（v0.4 新設: Issue #120）が存在しない場合は作成

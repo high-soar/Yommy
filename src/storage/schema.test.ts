@@ -118,17 +118,31 @@ describe("storage/schema", () => {
   it("migrateDatabaseSchema は対象カラムが既に存在する場合は ALTER TABLE を実行しないこと", async () => {
     const mockDb: DatabaseAdapter = {
       execute: vi.fn(),
-      query: vi.fn(async () => [
-        { name: "id" },
-        { name: "has_new_update" },
-        { name: "latest_episode_published_at" },
-      ]) as unknown as DatabaseAdapter["query"],
+      query: vi.fn(async (sql: string) => {
+        if (sql.includes("table_info(novels)")) {
+          return [
+            { name: "id" },
+            { name: "has_new_update" },
+            { name: "latest_episode_published_at" },
+          ];
+        }
+        if (sql.includes("table_info(reader_settings)")) {
+          return [{ name: "id" }, { name: "paging_mode" }];
+        }
+        if (sql.includes("sqlite_master")) {
+          return [{ name: "deleted_novels" }];
+        }
+        return [];
+      }) as unknown as DatabaseAdapter["query"],
       runTransaction: vi.fn(),
       close: vi.fn(),
     };
 
     await migrateDatabaseSchema(mockDb);
     expect(mockDb.query).toHaveBeenCalledWith("PRAGMA table_info(novels);");
+    expect(mockDb.query).toHaveBeenCalledWith(
+      "PRAGMA table_info(reader_settings);",
+    );
     expect(mockDb.execute).not.toHaveBeenCalled();
   });
 
