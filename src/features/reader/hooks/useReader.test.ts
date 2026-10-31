@@ -3204,6 +3204,39 @@ describe("useReader", () => {
         expect(result.current.currentPage).toBe(6);
       });
 
+      it("保存されたしおり進捗率（initialScrollProgress > 0）が存在し、初回 setTotalPages(1) の場合、currentPage = 1 に復元されること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          bookmarkChapterIndex: 1,
+          bookmarkScrollProgress: 0.5,
+        });
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        expect(result.current.initialScrollProgress).toBe(0.5);
+
+        // 総ページ数 1 の場合: validTotal <= 1 のため 1 に復元
+        act(() => {
+          result.current.setTotalPages(1);
+        });
+
+        expect(result.current.currentPage).toBe(1);
+      });
+
       it("初回 setTotalPages 後に再度 setTotalPages が呼ばれた場合は初期進捗率による復元を行わず、現在のページ位置を維持すること", async () => {
         const db = await resetTestDb();
         const novelRepo = new SqlNovelRepository(db);
