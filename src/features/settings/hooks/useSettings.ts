@@ -1,18 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { useServices } from "../../../app/ServiceProvider";
-import type { ReaderTheme, WritingMode } from "../../../storage/types";
+import type {
+  ReaderPagingMode,
+  ReaderTheme,
+  WritingMode,
+} from "../../../storage/types";
 
 export interface UseSettingsResult {
   writingMode: WritingMode;
   theme: ReaderTheme;
   fontSizePx: number;
   lineHeight: number;
+  pagingMode: ReaderPagingMode;
   isLoading: boolean;
   error: string | null;
   toggleWritingMode: () => Promise<void>;
   changeTheme: (theme: ReaderTheme) => Promise<void>;
   changeFontSize: (fontSizePx: number) => Promise<void>;
   changeLineHeight: (lineHeight: number) => Promise<void>;
+  changePagingMode: (pagingMode: ReaderPagingMode) => Promise<void>;
 }
 
 function toErrorMessage(error: unknown): string {
@@ -22,6 +28,9 @@ function toErrorMessage(error: unknown): string {
   return String(error);
 }
 
+/**
+ * リーダー設定の読み出し・更新・永続化を行うカスタムフック（SCR-05 / AC-ST-03〜05, AC-ST-13）
+ */
 export function useSettings(): UseSettingsResult {
   const { settingsRepository, isReady } = useServices();
 
@@ -29,6 +38,7 @@ export function useSettings(): UseSettingsResult {
   const [theme, setTheme] = useState<ReaderTheme>("light");
   const [fontSizePx, setFontSizePx] = useState<number>(18);
   const [lineHeight, setLineHeight] = useState<number>(1.8);
+  const [pagingMode, setPagingMode] = useState<ReaderPagingMode>("auto");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,6 +59,9 @@ export function useSettings(): UseSettingsResult {
           setTheme(settings.theme);
           setFontSizePx(settings.fontSizePx);
           setLineHeight(settings.lineHeight);
+          if (settings.pagingMode) {
+            setPagingMode(settings.pagingMode);
+          }
         }
       } catch {
         // 初期読み込み失敗時は既定値を維持
@@ -128,16 +141,35 @@ export function useSettings(): UseSettingsResult {
     [lineHeight, settingsRepository],
   );
 
+  const changePagingMode = useCallback(
+    async (nextPagingMode: ReaderPagingMode): Promise<void> => {
+      const prevPagingMode = pagingMode;
+      setPagingMode(nextPagingMode);
+      try {
+        await settingsRepository.updateReaderSettings({
+          pagingMode: nextPagingMode,
+        });
+        setError(null);
+      } catch (err: unknown) {
+        setPagingMode(prevPagingMode);
+        setError(toErrorMessage(err));
+      }
+    },
+    [pagingMode, settingsRepository],
+  );
+
   return {
     writingMode,
     theme,
     fontSizePx,
     lineHeight,
+    pagingMode,
     isLoading,
     error,
     toggleWritingMode,
     changeTheme,
     changeFontSize,
     changeLineHeight,
+    changePagingMode,
   };
 }

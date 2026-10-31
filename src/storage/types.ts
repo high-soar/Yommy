@@ -50,6 +50,14 @@ export type ReaderTheme = "light" | "sepia" | "dark" | "black";
 export type ReaderFontFamily =
   "mincho" | "gothic" | "biz-ud-mincho" | "biz-ud-gothic" | "klee";
 
+/**
+ * ページ送り動作モード（v0.4 Issue #122）
+ * - auto: 自動（縦書き時はページめくり、横書き時はスクロール）
+ * - paged: 常に 1 画面単位のページめくり
+ * - scroll: 常に連続スクロール
+ */
+export type ReaderPagingMode = "auto" | "paged" | "scroll";
+
 export interface ReaderSettings {
   writingMode: WritingMode;
   theme: ReaderTheme;
@@ -59,6 +67,7 @@ export interface ReaderSettings {
   pageMarginPx: number;
   enableTapPaging: boolean;
   enableVolumeKeyPaging: boolean;
+  pagingMode: ReaderPagingMode;
   updatedAt: string;
 }
 

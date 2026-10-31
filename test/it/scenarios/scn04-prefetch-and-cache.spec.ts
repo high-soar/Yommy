@@ -29,6 +29,11 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
       );
     });
     await page.reload();
+    await page.waitForFunction(
+      () =>
+        typeof window.__yommyServices !== "undefined" &&
+        window.__yommyServices.isReady,
+    );
 
     // 2. 本棚から作品詳細画面へ遷移
     const novelCardSelect = page.getByTestId("novel-card-select");
@@ -90,6 +95,11 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
       );
     });
     await page.reload();
+    await page.waitForFunction(
+      () =>
+        typeof window.__yommyServices !== "undefined" &&
+        window.__yommyServices.isReady,
+    );
 
     // 2. 作品詳細画面へ遷移
     await page.getByTestId("novel-card-select").click();
@@ -268,6 +278,11 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
       { oldDate: oldDateStr, bodyHtml: staleContentHtml },
     );
     await page.reload();
+    await page.waitForFunction(
+      () =>
+        typeof window.__yommyServices !== "undefined" &&
+        window.__yommyServices.isReady,
+    );
 
     // 2. HTTP クライアントのエピソード取得をモックし、SHORT_TIMEOUT_MS（3秒）を超える遅延（3500ms）を発生させる
     await page.evaluate(() => {

@@ -13,6 +13,7 @@ const {
   Loading,
   WithError,
   CloudSyncConnected,
+  PagingModeSelection,
 } = composeStories(stories);
 
 describe("SettingsPage", () => {
@@ -45,6 +46,12 @@ describe("SettingsPage", () => {
       const toggleButton = screen.getByTestId("toggle-orientation");
       expect(toggleButton).toHaveTextContent("横書き表示に切替");
       expect(toggleButton).toBeEnabled();
+
+      // ページ送りモードセレクター（初期値: auto） (AC-ST-13)
+      const pagingModeSelect = screen.getByTestId("paging-mode-select");
+      expect(pagingModeSelect).toBeInTheDocument();
+      expect(pagingModeSelect).toHaveValue("auto");
+      expect(pagingModeSelect).toBeEnabled();
 
       // カラーテーマ選択（ライトが選択中）
       const lightThemeBtn = screen.getByTestId("theme-light");
@@ -164,6 +171,17 @@ describe("SettingsPage", () => {
       // 行間ステッパーボタン
       expect(screen.getByTestId("line-height-decrease")).toBeDisabled();
       expect(screen.getByTestId("line-height-increase")).toBeDisabled();
+
+      // ページ送りモードセレクター
+      expect(screen.getByTestId("paging-mode-select")).toBeDisabled();
+    });
+
+    it("PagingModeSelection: ページ送りモードで paged が選択状態として反映されること (AC-ST-13)", () => {
+      render(<PagingModeSelection />);
+
+      const pagingModeSelect = screen.getByTestId("paging-mode-select");
+      expect(pagingModeSelect).toBeInTheDocument();
+      expect(pagingModeSelect).toHaveValue("paged");
     });
   });
 
@@ -187,6 +205,36 @@ describe("SettingsPage", () => {
       await user.click(button);
 
       expect(onToggleWritingMode).toHaveBeenCalledTimes(1);
+    });
+
+    it("ページ送りモードセレクター変更時に onChangePagingMode が呼び出されること (AC-ST-13)", async () => {
+      const user = userEvent.setup();
+      const onChangePagingMode = vi.fn();
+
+      render(
+        <SettingsPage
+          writingMode="vertical-rl"
+          theme="light"
+          pagingMode="auto"
+          onToggleWritingMode={vi.fn()}
+          onChangeTheme={vi.fn()}
+          onChangeFontSize={vi.fn()}
+          onChangeLineHeight={vi.fn()}
+          onChangePagingMode={onChangePagingMode}
+        />,
+      );
+
+      const select = screen.getByTestId("paging-mode-select");
+      await user.selectOptions(select, "paged");
+      expect(onChangePagingMode).toHaveBeenLastCalledWith("paged");
+
+      await user.selectOptions(select, "scroll");
+      expect(onChangePagingMode).toHaveBeenLastCalledWith("scroll");
+
+      await user.selectOptions(select, "auto");
+      expect(onChangePagingMode).toHaveBeenLastCalledWith("auto");
+
+      expect(onChangePagingMode).toHaveBeenCalledTimes(3);
     });
 
     it("各テーマボタン押下時に onChangeTheme が対応するテーマで呼び出されること (AC-ST-04)", async () => {

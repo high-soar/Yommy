@@ -10,11 +10,13 @@ const meta: Meta<typeof SettingsPage> = {
     theme: "light",
     fontSizePx: 18,
     lineHeight: 1.8,
+    pagingMode: "auto",
     isLoading: false,
     onToggleWritingMode: fn(),
     onChangeTheme: fn(),
     onChangeFontSize: fn(),
     onChangeLineHeight: fn(),
+    onChangePagingMode: fn(),
   },
 };
 
@@ -126,5 +128,20 @@ export const CloudSyncConnected: Story = {
     },
     cloudSyncLastSyncedAt: "2026-10-31T12:00:00.000Z",
     isCloudSyncing: false,
+  },
+};
+
+/**
+ * ページ送りモードセレクター表示（paged: ページめくり選択時）
+ */
+export const PagingModeSelection: Story = {
+  name: "ページ送りモード選択（ページめくり）",
+  args: {
+    writingMode: "vertical-rl",
+    theme: "light",
+    fontSizePx: 18,
+    lineHeight: 1.8,
+    pagingMode: "paged",
+    isLoading: false,
   },
 };

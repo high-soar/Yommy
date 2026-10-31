@@ -33,6 +33,7 @@ function createMockServices(
     pageMarginPx: 16,
     enableTapPaging: true,
     enableVolumeKeyPaging: false,
+    pagingMode: "auto",
     updatedAt: "2026-10-27T00:00:00Z",
   };
 
@@ -91,6 +92,7 @@ describe("useSettings", () => {
             pageMarginPx: 16,
             enableTapPaging: true,
             enableVolumeKeyPaging: false,
+            pagingMode: "paged",
             updatedAt: "2026-10-27T10:00:00Z",
           }),
         },
@@ -110,6 +112,7 @@ describe("useSettings", () => {
       expect(result.current.theme).toBe("sepia");
       expect(result.current.fontSizePx).toBe(22);
       expect(result.current.lineHeight).toBe(2.0);
+      expect(result.current.pagingMode).toBe("paged");
       expect(result.current.error).toBeNull();
     });
 
@@ -289,6 +292,62 @@ describe("useSettings", () => {
       });
       expect(result.current.lineHeight).toBe(2.4);
       expect(updateReaderSettings).toHaveBeenCalledWith({ lineHeight: 2.4 });
+    });
+  });
+
+  describe("ページ送りモード変更 (changePagingMode)", () => {
+    it("pagingMode を更新し、settingsRepository.updateReaderSettings が呼び出されること (AC-ST-13)", async () => {
+      const updateReaderSettings = vi.fn().mockResolvedValue({});
+      const services = createMockServices({
+        settingsRepoOverrides: { updateReaderSettings },
+      });
+
+      const { result } = renderHook(() => useSettings(), {
+        wrapper: createWrapper(services),
+      });
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      await act(async () => {
+        await result.current.changePagingMode("paged");
+      });
+
+      expect(result.current.pagingMode).toBe("paged");
+      expect(updateReaderSettings).toHaveBeenCalledWith({
+        pagingMode: "paged",
+      });
+
+      await act(async () => {
+        await result.current.changePagingMode("scroll");
+      });
+
+      expect(result.current.pagingMode).toBe("scroll");
+      expect(updateReaderSettings).toHaveBeenCalledWith({
+        pagingMode: "scroll",
+      });
+    });
+
+    it("設定保存時に例外が発生した場合、エラーメッセージが設定され直前の pagingMode にロールバックされること (AC-ST-07, AC-ST-13)", async () => {
+      const updateReaderSettings = vi
+        .fn()
+        .mockRejectedValue(new Error("Paging mode save error"));
+      const services = createMockServices({
+        settingsRepoOverrides: { updateReaderSettings },
+      });
+
+      const { result } = renderHook(() => useSettings(), {
+        wrapper: createWrapper(services),
+      });
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.pagingMode).toBe("auto");
+
+      await act(async () => {
+        await result.current.changePagingMode("paged");
+      });
+
+      expect(result.current.error).toBe("Paging mode save error");
+      expect(result.current.pagingMode).toBe("auto");
     });
   });
 

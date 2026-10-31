@@ -1,5 +1,9 @@
 import React from "react";
-import type { WritingMode, ReaderTheme } from "../../../storage/types";
+import type {
+  WritingMode,
+  ReaderTheme,
+  ReaderPagingMode,
+} from "../../../storage/types";
 import type { CloudSyncAuthState } from "../../../bridges/cloud-sync/types";
 import { SampleTextPreview } from "./SampleTextPreview";
 import { CloudSyncSection } from "./CloudSyncSection";
@@ -13,6 +17,8 @@ export interface SettingsPageProps {
   fontSizePx?: number;
   /** 現在の行間倍率（省略時: 1.8） */
   lineHeight?: number;
+  /** 現在のページ送りモード（省略時: "auto"、v0.4 Issue #122） */
+  pagingMode?: ReaderPagingMode;
   /** 設定読み込み中フラグ（省略時: false） */
   isLoading?: boolean;
   /** 組み方向切替ボタン押下時のコールバック */
@@ -23,6 +29,8 @@ export interface SettingsPageProps {
   onChangeFontSize: (nextSizePx: number) => void;
   /** 行間変更ボタン押下時のコールバック */
   onChangeLineHeight: (nextHeight: number) => void;
+  /** ページ送りモード変更時のコールバック（v0.4 Issue #122） */
+  onChangePagingMode?: (mode: ReaderPagingMode) => void;
   /** Google アカウント認証状態（v0.4） */
   cloudSyncAuthState?: CloudSyncAuthState;
   /** 最終同期完了日時（ISO 8601、v0.4） */
@@ -107,14 +115,15 @@ const STEPPER_BUTTON_BASE =
   "w-9 h-9 flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-xs";
 
 /**
- * 設定画面（SCR-05）の Presentational コンポーネント（AC-ST-03, AC-ST-04, AC-ST-05）
- * ヘッダー、組版設定項目（組み方向・テーマ・文字サイズ・行間）、および組版プレビューを配置する
+ * 設定画面（SCR-05）の Presentational コンポーネント（AC-ST-03, AC-ST-04, AC-ST-05, AC-ST-13）
+ * ヘッダー、組版設定項目（組み方向・ページ送り・テーマ・文字サイズ・行間）、および組版プレビューを配置する
  */
 export const SettingsPage: React.FC<SettingsPageProps> = ({
   writingMode,
   theme,
   fontSizePx = 18,
   lineHeight = 1.8,
+  pagingMode = "auto",
   isLoading = false,
   error = null,
   cloudSyncAuthState = { status: "unlinked" },
@@ -125,6 +134,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onChangeTheme,
   onChangeFontSize,
   onChangeLineHeight,
+  onChangePagingMode,
   onSignInGoogle,
   onSignOutGoogle,
   onSyncNow,
@@ -209,6 +219,36 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 ? "横書き表示に切替"
                 : "縦書き表示に切替"}
             </button>
+          </div>
+
+          <div className="flex items-center justify-between py-3 border-b border-slate-200 dark:border-slate-800">
+            <div>
+              <label
+                htmlFor="paging-mode-select"
+                className="text-sm font-medium text-slate-700 dark:text-slate-300"
+              >
+                ページ送り
+              </label>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                読書時のページ送り方法を設定します
+              </p>
+            </div>
+            <select
+              id="paging-mode-select"
+              data-testid="paging-mode-select"
+              disabled={isLoading}
+              value={pagingMode}
+              onChange={(e) =>
+                onChangePagingMode?.(e.target.value as ReaderPagingMode)
+              }
+              className="text-xs md:text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 text-slate-700 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
+            >
+              <option value="auto">
+                自動（縦書き: めくり / 横書き: スクロール）
+              </option>
+              <option value="paged">ページめくり</option>
+              <option value="scroll">連続スクロール</option>
+            </select>
           </div>
 
           <div className="py-3 border-b border-slate-200 dark:border-slate-800">
