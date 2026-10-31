@@ -2,19 +2,26 @@ import { registerPlugin } from "@capacitor/core";
 import type { CloudSyncAuthState, CloudSyncBridge } from "./types";
 
 /**
+ * Capacitor ネイティブプラグインの応答ステータス
+ */
+export type CloudSyncPluginResponseStatus =
+  "unlinked" | "authenticating" | "connected" | "error";
+
+/**
+ * Capacitor ネイティブプラグインの認証応答
+ */
+export interface CloudSyncPluginAuthResponse {
+  status: CloudSyncPluginResponseStatus;
+  email?: string;
+  message?: string;
+}
+
+/**
  * Capacitor ネイティブプラグインのインターフェース契約
  */
 export interface CloudSyncNativePlugin {
-  getAuthState(): Promise<{
-    status: "unlinked" | "authenticating" | "connected" | "error";
-    email?: string;
-    message?: string;
-  }>;
-  signIn(): Promise<{
-    status: "unlinked" | "authenticating" | "connected" | "error";
-    email?: string;
-    message?: string;
-  }>;
+  getAuthState(): Promise<CloudSyncPluginAuthResponse>;
+  signIn(): Promise<CloudSyncPluginAuthResponse>;
   signOut(): Promise<void>;
   pullFile(): Promise<{ content: string | null }>;
   pushFile(options: { content: string }): Promise<void>;
@@ -22,6 +29,32 @@ export interface CloudSyncNativePlugin {
 
 export const CloudSyncNative =
   registerPlugin<CloudSyncNativePlugin>("CloudSyncPlugin");
+
+function formatAuthStateResponse(
+  res: CloudSyncPluginAuthResponse,
+  fallbackErrorMessage: string,
+): CloudSyncAuthState {
+  if (res.status === "connected") {
+    return { status: "connected", email: res.email };
+  }
+  if (res.status === "authenticating") {
+    return { status: "authenticating" };
+  }
+  if (res.status === "error") {
+    return {
+      status: "error",
+      message: res.message || fallbackErrorMessage,
+    };
+  }
+  return { status: "unlinked" };
+}
+
+function toErrorAuthState(err: unknown): CloudSyncAuthState {
+  return {
+    status: "error",
+    message: err instanceof Error ? err.message : String(err),
+  };
+}
 
 /**
  * Android 実機実行用の Capacitor CloudSync プラグインラッパー実装
@@ -36,45 +69,18 @@ export class CapacitorCloudSyncBridge implements CloudSyncBridge {
   async getAuthState(): Promise<CloudSyncAuthState> {
     try {
       const res = await this._plugin.getAuthState();
-      if (res.status === "connected") {
-        return { status: "connected", email: res.email };
-      }
-      if (res.status === "authenticating") {
-        return { status: "authenticating" };
-      }
-      if (res.status === "error") {
-        return { status: "error", message: res.message || "Unknown error" };
-      }
-      return { status: "unlinked" };
+      return formatAuthStateResponse(res, "Unknown error");
     } catch (err) {
-      return {
-        status: "error",
-        message: err instanceof Error ? err.message : String(err),
-      };
+      return toErrorAuthState(err);
     }
   }
 
   async signIn(): Promise<CloudSyncAuthState> {
     try {
       const res = await this._plugin.signIn();
-      if (res.status === "connected") {
-        return { status: "connected", email: res.email };
-      }
-      if (res.status === "authenticating") {
-        return { status: "authenticating" };
-      }
-      if (res.status === "error") {
-        return {
-          status: "error",
-          message: res.message || "Authentication failed",
-        };
-      }
-      return { status: "unlinked" };
+      return formatAuthStateResponse(res, "Authentication failed");
     } catch (err) {
-      return {
-        status: "error",
-        message: err instanceof Error ? err.message : String(err),
-      };
+      return toErrorAuthState(err);
     }
   }
 
@@ -110,7 +116,7 @@ export class CapacitorCloudSyncBridge implements CloudSyncBridge {
       try {
         await this.signOut();
       } catch {
-        // signOut 自体のエラーは握りつぶし、元のエラーをスローさせる
+        // signOut 自体の例外は破棄し、呼び出し元の元のエラーをリスローさせる
       }
     }
   }
