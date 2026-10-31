@@ -130,6 +130,12 @@ export function validateSyncState(jsonStringOrObj: unknown): YommySyncState {
       throw new Error("Invalid remoteWorkId: must be a non-empty string");
     }
 
+    if (n.id !== `${n.siteType}:${n.remoteWorkId}`) {
+      throw new Error(
+        `ID format mismatch for novel: expected "${n.siteType}:${n.remoteWorkId}", got "${String(n.id)}"`,
+      );
+    }
+
     if (typeof n.canonicalUrl !== "string" || !n.canonicalUrl) {
       throw new Error("Invalid canonicalUrl: must be a non-empty string");
     }
@@ -220,12 +226,17 @@ export function validateSyncState(jsonStringOrObj: unknown): YommySyncState {
   for (const [novelId, deletedAt] of Object.entries(raw.deletedNovels)) {
     if (
       typeof novelId !== "string" ||
+      !novelId.trim() ||
       typeof deletedAt !== "string" ||
       isNaN(Date.parse(deletedAt))
     ) {
       throw new Error(
-        `Invalid deletedNovels entry for "${novelId}": must be a valid ISO 8601 string`,
+        `Invalid deletedNovels entry for "${novelId}": key must be non-empty and deletedAt must be a valid ISO 8601 string`,
       );
+    }
+    // 本棚現存作品のキーが deletedNovels に重複している場合は安全に除外
+    if (novels[novelId]) {
+      continue;
     }
     deletedNovels[novelId] = deletedAt;
   }
@@ -294,7 +305,36 @@ export class SyncEngine {
   private pendingResolve: (() => void) | null = null;
   private pendingReject: ((err: unknown) => void) | null = null;
 
+  private activeOperations = 0;
+  private syncLock: Promise<void> = Promise.resolve();
+  private activeSync: Promise<{
+    pulled: boolean;
+    mergedNovels: number;
+  }> | null = null;
+
   constructor(private readonly deps: SyncEngineDependencies) {}
+
+  get isSyncing(): boolean {
+    return this.activeOperations > 0;
+  }
+
+  private async runExclusive<T>(fn: () => Promise<T>): Promise<T> {
+    const previousLock = this.syncLock;
+    let release: () => void;
+    this.syncLock = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    await previousLock;
+
+    this.activeOperations++;
+    try {
+      return await fn();
+    } finally {
+      this.activeOperations--;
+      release!();
+    }
+  }
 
   private async handleUnauthorized(err: unknown): Promise<void> {
     if (isUnauthorizedError(err)) {
@@ -321,9 +361,18 @@ export class SyncEngine {
 
   private async propagateTombstones(
     deletedNovels: Record<string, string>,
+    remoteNovels?: Record<string, SyncNovelData>,
   ): Promise<void> {
     for (const [novelId, deletedAtStr] of Object.entries(deletedNovels)) {
       const remoteDeletedAt = Date.parse(deletedAtStr);
+      if (remoteNovels && remoteNovels[novelId]) {
+        const remoteNovelUpdatedAt = Date.parse(
+          remoteNovels[novelId].updatedAt,
+        );
+        if (remoteNovelUpdatedAt >= remoteDeletedAt) {
+          continue; // リモート再登録作品と判定してローカル削除伝播をスキップ
+        }
+      }
       const localNovel = await this.deps.novelRepository.getNovelById(novelId);
       if (localNovel) {
         const localCreated = Date.parse(localNovel.createdAt);
@@ -345,17 +394,24 @@ export class SyncEngine {
       return; // SSRF ガードによりスキップ
     }
 
-    const parser = this.deps.parserRegistry.getParser(remoteNovel.canonicalUrl);
+    if (
+      parsedUrl.workId !== remoteNovel.remoteWorkId ||
+      parsedUrl.siteType !== remoteNovel.siteType
+    ) {
+      return; // canonicalUrl と remoteWorkId / siteType の不整合を遮断
+    }
+
+    const parser = this.deps.parserRegistry.getParser(parsedUrl.canonicalUrl);
     if (!parser) {
       return;
     }
 
     const res = await this.deps.httpClient.getHtml({
-      url: remoteNovel.canonicalUrl,
+      url: parsedUrl.canonicalUrl,
     });
     const parsedIndex = parser.parseNovelIndex(
       res.html,
-      remoteNovel.canonicalUrl,
+      parsedUrl.canonicalUrl,
     );
     await this.deps.novelRepository.upsertNovelWithToc(
       parsedIndex,
@@ -455,7 +511,10 @@ export class SyncEngine {
     }
   }
 
-  async pullAndMerge(): Promise<{ pulled: boolean; mergedNovels: number }> {
+  private async doPullAndMerge(): Promise<{
+    pulled: boolean;
+    mergedNovels: number;
+  }> {
     let rawContent: string | null;
     try {
       rawContent = await this.deps.bridge.pullFile();
@@ -471,10 +530,21 @@ export class SyncEngine {
     const remoteState = validateSyncState(rawContent);
 
     // 1. Tombstone 削除伝播（Remote -> Local）
-    await this.propagateTombstones(remoteState.deletedNovels);
+    await this.propagateTombstones(
+      remoteState.deletedNovels,
+      remoteState.novels,
+    );
 
     // 2. 作品マージ
     await this.mergeNovels(remoteState.novels);
+
+    // 3. 現存作品の古いローカル Tombstone を清掃
+    const localNovels = await this.deps.novelRepository.listNovels();
+    if (localNovels.length > 0) {
+      await this.deps.novelRepository.purgeDeletedNovels?.(
+        localNovels.map((n) => n.id),
+      );
+    }
 
     const now = Date.now();
     await this.deps.appSettingsRepository.setCloudSyncLastSyncedAt?.(now);
@@ -483,6 +553,10 @@ export class SyncEngine {
       pulled: true,
       mergedNovels: Object.keys(remoteState.novels).length,
     };
+  }
+
+  async pullAndMerge(): Promise<{ pulled: boolean; mergedNovels: number }> {
+    return this.runExclusive(() => this.doPullAndMerge());
   }
 
   private async buildSyncNovels(): Promise<Record<string, SyncNovelData>> {
@@ -522,7 +596,9 @@ export class SyncEngine {
     return syncNovels;
   }
 
-  private async buildMergedTombstones(): Promise<Record<string, string>> {
+  private async buildMergedTombstones(
+    syncNovels: Record<string, SyncNovelData>,
+  ): Promise<Record<string, string>> {
     const localTombstones =
       (await this.deps.novelRepository.getDeletedNovels?.()) ?? [];
     const mergedDeletedNovels: Record<string, string> = {};
@@ -549,13 +625,22 @@ export class SyncEngine {
       throw err;
     }
 
+    // 本棚に現存する作品は Tombstone から除外
+    for (const id of Object.keys(syncNovels)) {
+      delete mergedDeletedNovels[id];
+    }
+
     return mergedDeletedNovels;
   }
 
-  async pushCurrentState(): Promise<void> {
+  private async doPushCurrentState(): Promise<void> {
     try {
       const syncNovels = await this.buildSyncNovels();
-      const mergedDeletedNovels = await this.buildMergedTombstones();
+      const existingNovelIds = Object.keys(syncNovels);
+      if (existingNovelIds.length > 0) {
+        await this.deps.novelRepository.purgeDeletedNovels?.(existingNovelIds);
+      }
+      const mergedDeletedNovels = await this.buildMergedTombstones(syncNovels);
 
       const state: YommySyncState = {
         version: 1,
@@ -574,10 +659,26 @@ export class SyncEngine {
     }
   }
 
+  async pushCurrentState(): Promise<void> {
+    return this.runExclusive(() => this.doPushCurrentState());
+  }
+
   async sync(): Promise<{ pulled: boolean; mergedNovels: number }> {
-    const pullResult = await this.pullAndMerge();
-    await this.pushCurrentState();
-    return pullResult;
+    if (this.activeSync) {
+      return this.activeSync;
+    }
+    this.activeSync = (async () => {
+      this.activeOperations++;
+      try {
+        const pullResult = await this.pullAndMerge();
+        await this.pushCurrentState();
+        return pullResult;
+      } finally {
+        this.activeOperations--;
+        this.activeSync = null;
+      }
+    })();
+    return this.activeSync;
   }
 
   scheduleDebouncedPush(delayMs = 2500): Promise<void> {
@@ -591,6 +692,8 @@ export class SyncEngine {
         this.pendingResolve = resolve;
         this.pendingReject = reject;
       });
+      // 外部が未監視の場合でも unhandledRejection が漏洩しないよう内部で catch ハンドラを登録
+      this.pendingPromise.catch(() => {});
     }
 
     this.debounceTimer = setTimeout(async () => {

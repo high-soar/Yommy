@@ -130,6 +130,23 @@ describe("syncEngine", () => {
       expect(() => validateSyncState(invalidNovels)).toThrow(/ID mismatch/i);
     });
 
+    it("novels 内の作品データで ID が `${siteType}:${remoteWorkId}` 形式と一致しない場合に例外を送出すること", () => {
+      const invalidNovels = {
+        ...validState,
+        novels: {
+          "kakuyomu:mismatched-id": {
+            ...validState.novels["kakuyomu:16817330658027210412"],
+            id: "kakuyomu:mismatched-id",
+            siteType: "kakuyomu" as const,
+            remoteWorkId: "different-id",
+          },
+        },
+      };
+      expect(() => validateSyncState(invalidNovels)).toThrow(
+        /ID format mismatch/i,
+      );
+    });
+
     it("novels 内の作品データで siteType が kakuyomu, narou, generic のいずれも許容されること", () => {
       const narouState = {
         ...validState,
@@ -138,6 +155,7 @@ describe("syncEngine", () => {
             ...validState.novels["kakuyomu:16817330658027210412"],
             id: "narou:n1234a",
             siteType: "narou" as const,
+            remoteWorkId: "n1234a",
           },
         },
       };
@@ -152,6 +170,7 @@ describe("syncEngine", () => {
             ...validState.novels["kakuyomu:16817330658027210412"],
             id: "generic:gen1",
             siteType: "generic" as const,
+            remoteWorkId: "gen1",
           },
         },
       };
@@ -326,6 +345,40 @@ describe("syncEngine", () => {
           deletedNovels: { "kakuyomu:123": "invalid-date" },
         }),
       ).toThrow(/deletedNovels/i);
+    });
+
+    it("deletedNovels のキーが空文字または空白文字の場合に例外を送出すること", () => {
+      expect(() =>
+        validateSyncState({
+          ...validState,
+          deletedNovels: { "": "2026-10-31T00:00:00.000Z" },
+        }),
+      ).toThrow(/key must be non-empty/i);
+
+      expect(() =>
+        validateSyncState({
+          ...validState,
+          deletedNovels: { "   ": "2026-10-31T00:00:00.000Z" },
+        }),
+      ).toThrow(/key must be non-empty/i);
+    });
+
+    it("raw.novels と raw.deletedNovels の双方に同一キーが存在する場合は本棚現存を優先し deletedNovels から安全に除外すること", () => {
+      const stateWithDuplicateKey = {
+        ...validState,
+        deletedNovels: {
+          "kakuyomu:16817330658027210412": "2026-10-25T08:00:00.000Z",
+          "kakuyomu:other-deleted": "2026-10-20T08:00:00.000Z",
+        },
+      };
+      const result = validateSyncState(stateWithDuplicateKey);
+      expect(result.novels["kakuyomu:16817330658027210412"]).toBeDefined();
+      expect(
+        result.deletedNovels["kakuyomu:16817330658027210412"],
+      ).toBeUndefined();
+      expect(result.deletedNovels["kakuyomu:other-deleted"]).toBe(
+        "2026-10-20T08:00:00.000Z",
+      );
     });
 
     it("オブジェクト直接入力で constructor プロパティ等の汚染が検知された場合に例外を送出すること", () => {
@@ -597,6 +650,78 @@ describe("syncEngine", () => {
       expect(await novelRepo.listNovels()).toHaveLength(0);
     });
 
+    it("pullAndMerge: リモート作品の canonicalUrl の workId または siteType が remoteNovel と不整合な場合、目次取得をスキップすること", async () => {
+      const getHtmlSpy = vi.spyOn(httpClient, "getHtml");
+      const mismatchedRemoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: "2026-10-31T12:00:00.000Z",
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            id: "kakuyomu:16817330658027210412",
+            siteType: "kakuyomu",
+            remoteWorkId: "16817330658027210412",
+            canonicalUrl: "https://kakuyomu.jp/works/9999999999999999999", // workId 不整合
+            title: "不整合作品",
+            author: "攻撃者",
+            synopsis: "ID偽装",
+            totalChapters: 1,
+            isFavorite: 0,
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: null,
+            bookmarkChapterIndex: null,
+            lastReadAt: null,
+            readChapterIds: [],
+            createdAt: "2026-10-01T00:00:00.000Z",
+            updatedAt: "2026-10-01T00:00:00.000Z",
+          },
+        },
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(mismatchedRemoteState));
+
+      const result = await engine.pullAndMerge();
+      expect(result.pulled).toBe(true);
+      expect(getHtmlSpy).not.toHaveBeenCalled();
+      expect(await novelRepo.listNovels()).toHaveLength(0);
+    });
+
+    it("pullAndMerge: canonicalUrl に末尾スラッシュがある場合でも正規化された canonicalUrl で通信及びパースが行われること", async () => {
+      const getHtmlSpy = vi.spyOn(httpClient, "getHtml");
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: "2026-10-31T12:00:00.000Z",
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            id: "kakuyomu:16817330658027210412",
+            siteType: "kakuyomu",
+            remoteWorkId: "16817330658027210412",
+            canonicalUrl: "https://kakuyomu.jp/works/16817330658027210412/", // 末尾スラッシュ付き
+            title: "境界迷宮と異界の魔術師",
+            author: "小野崎",
+            synopsis: "あらすじ本文",
+            totalChapters: 3,
+            isFavorite: 0,
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: null,
+            bookmarkChapterIndex: null,
+            lastReadAt: null,
+            readChapterIds: [],
+            createdAt: "2026-10-01T00:00:00.000Z",
+            updatedAt: "2026-10-01T00:00:00.000Z",
+          },
+        },
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      const result = await engine.pullAndMerge();
+      expect(result.pulled).toBe(true);
+      expect(getHtmlSpy).toHaveBeenCalledWith({
+        url: "https://kakuyomu.jp/works/16817330658027210412",
+      });
+      expect(await novelRepo.listNovels()).toHaveLength(1);
+    });
+
     it("pullAndMerge: リモートの deletedNovels に含まれる作品の削除日時がローカル作品より新しい場合、ローカル DB からカスケード削除されること (Tombstone 伝播)", async () => {
       const parser = parserRegistry.requireParser(
         "https://kakuyomu.jp/works/16817330658027210412",
@@ -647,6 +772,119 @@ describe("syncEngine", () => {
       expect(
         await novelRepo.getNovelById("kakuyomu:16817330658027210412"),
       ).not.toBeNull();
+    });
+
+    it("pullAndMerge: リモートの deletedNovels に含まれる作品でも remoteState.novels に存在し updatedAt >= deletedAt である場合はリモート再登録作品と判定してローカル削除伝播をスキップすること", async () => {
+      const parser = parserRegistry.requireParser(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      const index = parser.parseNovelIndex(
+        workIndexHtml,
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      await novelRepo.upsertNovelWithToc(index, "2026-10-10T00:00:00.000Z");
+
+      // リモート側で過去に削除されたが、その後再登録・更新されたケース
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: "2026-10-31T12:00:00.000Z",
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            id: "kakuyomu:16817330658027210412",
+            siteType: "kakuyomu",
+            remoteWorkId: "16817330658027210412",
+            canonicalUrl: "https://kakuyomu.jp/works/16817330658027210412",
+            title: "境界迷宮と異界の魔術師",
+            author: "小野崎",
+            synopsis: "あらすじ本文",
+            totalChapters: 3,
+            isFavorite: 1,
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: "2026-10-25T10:00:00.000Z",
+            bookmarkChapterIndex: 1,
+            lastReadAt: "2026-10-26T10:00:00.000Z",
+            readChapterIds: [],
+            createdAt: "2026-10-25T00:00:00.000Z",
+            updatedAt: "2026-10-26T10:00:00.000Z", // updatedAt > deletedAt
+          },
+        },
+        deletedNovels: {
+          "kakuyomu:other-deleted": "2026-10-20T00:00:00.000Z",
+        },
+      };
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      await engine.pullAndMerge();
+      expect(
+        await novelRepo.getNovelById("kakuyomu:16817330658027210412"),
+      ).not.toBeNull();
+    });
+
+    it("pullAndMerge: 完了時にローカル現存作品 ID に対して purgeDeletedNovels が呼び出されること", async () => {
+      const purgeSpy = vi.spyOn(novelRepo, "purgeDeletedNovels");
+      const parser = parserRegistry.requireParser(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      const index = parser.parseNovelIndex(
+        workIndexHtml,
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      await novelRepo.upsertNovelWithToc(index, "2026-10-10T00:00:00.000Z");
+
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: "2026-10-31T12:00:00.000Z",
+        novels: {},
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      await engine.pullAndMerge();
+      expect(purgeSpy).toHaveBeenCalledWith(["kakuyomu:16817330658027210412"]);
+    });
+
+    it("propagateTombstones: remoteNovels に該当作品が存在する場合、updatedAt と deletedAt の新旧比較に従って削除制御を行うこと", async () => {
+      const parser = parserRegistry.requireParser(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      const index = parser.parseNovelIndex(
+        workIndexHtml,
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      await novelRepo.upsertNovelWithToc(index, "2026-10-10T00:00:00.000Z");
+
+      const engineWithPrivates = engine as unknown as {
+        propagateTombstones: (
+          deletedNovels: Record<string, string>,
+          remoteNovels?: Record<string, { updatedAt: string }>,
+        ) => Promise<void>;
+      };
+
+      // 1. updatedAt >= deletedAt の場合 -> 削除スキップ
+      await engineWithPrivates.propagateTombstones(
+        { "kakuyomu:16817330658027210412": "2026-10-15T00:00:00.000Z" },
+        {
+          "kakuyomu:16817330658027210412": {
+            updatedAt: "2026-10-15T12:00:00.000Z",
+          },
+        },
+      );
+      expect(
+        await novelRepo.getNovelById("kakuyomu:16817330658027210412"),
+      ).not.toBeNull();
+
+      // 2. updatedAt < deletedAt の場合 -> ローカル削除伝播が実行される
+      await engineWithPrivates.propagateTombstones(
+        { "kakuyomu:16817330658027210412": "2026-10-20T00:00:00.000Z" },
+        {
+          "kakuyomu:16817330658027210412": {
+            updatedAt: "2026-10-12T00:00:00.000Z",
+          },
+        },
+      );
+      expect(
+        await novelRepo.getNovelById("kakuyomu:16817330658027210412"),
+      ).toBeNull();
     });
 
     it("pullAndMerge: ローカルに Tombstone が存在し削除日時がリモート更新日時より新しい場合、リモート作品を復元せずスキップすること", async () => {
@@ -1049,6 +1287,40 @@ describe("syncEngine", () => {
       ).toBeDefined();
     });
 
+    it("pushCurrentState: 本棚に現存する作品の作品 ID が Tombstone に含まれていても除外され、purgeDeletedNovels が実行されること", async () => {
+      const purgeSpy = vi.spyOn(novelRepo, "purgeDeletedNovels");
+      const parser = parserRegistry.requireParser(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      const index = parser.parseNovelIndex(
+        workIndexHtml,
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      await novelRepo.upsertNovelWithToc(index, "2026-10-10T00:00:00.000Z");
+
+      // リモート側に該当作品の古い Tombstone が残存している状態をシミュレート
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: "2026-10-20T12:00:00.000Z",
+        novels: {},
+        deletedNovels: {
+          "kakuyomu:16817330658027210412": "2026-10-05T00:00:00.000Z",
+          "kakuyomu:deleted-other": "2026-10-05T00:00:00.000Z",
+        },
+      };
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      await engine.pushCurrentState();
+
+      expect(purgeSpy).toHaveBeenCalledWith(["kakuyomu:16817330658027210412"]);
+      const pushedContent = bridge.getFileContent();
+      const state = JSON.parse(pushedContent!) as YommySyncState;
+      expect(
+        state.deletedNovels["kakuyomu:16817330658027210412"],
+      ).toBeUndefined();
+      expect(state.deletedNovels["kakuyomu:deleted-other"]).toBeDefined();
+    });
+
     it("pushCurrentState: 401 エラー発生時に連携解除へ自動フォールバックすること", async () => {
       bridge.setSimulate401(true);
       bridge.setAuthState({ status: "connected", email: "user@example.com" });
@@ -1357,6 +1629,107 @@ describe("syncEngine", () => {
       promise.catch(() => {});
       await expect(engine.flushDebouncedPush()).rejects.toThrow("Flush error");
       vi.useRealTimers();
+    });
+
+    it("scheduleDebouncedPush: 呼び出し元が未監視の場合でも push 失敗時の未処理例外が漏洩しないこと", async () => {
+      vi.useFakeTimers();
+      const unhandledRejections: unknown[] = [];
+      const onUnhandled = (reason: unknown) => {
+        unhandledRejections.push(reason);
+      };
+      process.on("unhandledRejection", onUnhandled);
+
+      try {
+        vi.spyOn(engine, "pushCurrentState").mockRejectedValue(
+          new Error("Background push failed"),
+        );
+
+        // await / catch しない未監視呼び出し
+        engine.scheduleDebouncedPush(2500);
+
+        vi.advanceTimersByTime(2500);
+        await Promise.resolve(); // マイクロタスク進行
+
+        expect(unhandledRejections).toHaveLength(0);
+      } finally {
+        process.off("unhandledRejection", onUnhandled);
+        vi.useRealTimers();
+      }
+    });
+
+    it("SyncEngine: isSyncing が同期実行中に true となり、完了後に false に戻ること", async () => {
+      expect(engine.isSyncing).toBe(false);
+
+      let wasSyncingDuringPull = false;
+      vi.spyOn(bridge, "pullFile").mockImplementation(async () => {
+        wasSyncingDuringPull = engine.isSyncing;
+        return null;
+      });
+
+      await engine.pullAndMerge();
+      expect(wasSyncingDuringPull).toBe(true);
+      expect(engine.isSyncing).toBe(false);
+    });
+
+    it("SyncEngine: sync の多重並行呼び出し時に Single-flight 制御により同一 Promise を共有し重複実行されないこと", async () => {
+      const pullSpy = vi.spyOn(engine, "pullAndMerge");
+      const pushSpy = vi.spyOn(engine, "pushCurrentState");
+
+      let pullFileCallCount = 0;
+      let pushFileCallCount = 0;
+      vi.spyOn(bridge, "pullFile").mockImplementation(async () => {
+        pullFileCallCount++;
+        await new Promise((r) => setTimeout(r, 20));
+        return null;
+      });
+      vi.spyOn(bridge, "pushFile").mockImplementation(async () => {
+        pushFileCallCount++;
+        await new Promise((r) => setTimeout(r, 20));
+      });
+
+      const [res1, res2, res3] = await Promise.all([
+        engine.sync(),
+        engine.sync(),
+        engine.sync(),
+      ]);
+
+      expect(pullSpy).toHaveBeenCalledTimes(1);
+      expect(pushSpy).toHaveBeenCalledTimes(1);
+      // pullAndMerge で 1 回、pushCurrentState の Tombstone マージで 1 回の計 2 回
+      expect(pullFileCallCount).toBe(2);
+      expect(pushFileCallCount).toBe(1);
+      expect(res1).toEqual(res2);
+      expect(res2).toEqual(res3);
+      expect(engine.isSyncing).toBe(false);
+    });
+
+    it("SyncEngine: pullAndMerge と pushCurrentState が並行実行された場合に排他ロックにより直列化されること", async () => {
+      const executionOrder: string[] = [];
+
+      vi.spyOn(bridge, "pullFile").mockImplementation(async () => {
+        executionOrder.push("pullFile:start");
+        await new Promise((r) => setTimeout(r, 20));
+        executionOrder.push("pullFile:end");
+        return null;
+      });
+
+      vi.spyOn(bridge, "pushFile").mockImplementation(async () => {
+        executionOrder.push("pushFile:start");
+        await new Promise((r) => setTimeout(r, 10));
+        executionOrder.push("pushFile:end");
+      });
+
+      await Promise.all([engine.pullAndMerge(), engine.pushCurrentState()]);
+
+      expect(executionOrder).toEqual([
+        "pullFile:start",
+        "pullFile:end",
+        "pullFile:start",
+        "pullFile:end",
+        "pushFile:start",
+        "pushFile:end",
+      ]);
+      expect(engine.isSyncing).toBe(false);
     });
   });
 
