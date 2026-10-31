@@ -106,4 +106,44 @@ describe("Android ビルド設定および署名・バージョン管理検証 (
       );
     });
   });
+
+  describe("CloudSyncPlugin.java 認可フローおよび契約検証 (AC-AUTH-02)", () => {
+    const pluginPath = path.resolve(
+      rootDir,
+      "android/app/src/main/java/com/yommy/app/CloudSyncPlugin.java",
+    );
+
+    it("CloudSyncPlugin.java が存在すること", () => {
+      expect(fs.existsSync(pluginPath)).toBe(true);
+    });
+
+    it("ActivityResultContracts.StartIntentSenderForResult を load() 内で登録していること", () => {
+      const content = fs.readFileSync(pluginPath, "utf-8");
+
+      expect(content).toMatch(/public\s+void\s+load\(\)/);
+      expect(content).toMatch(
+        /registerForActivityResult\(\s*new\s+ActivityResultContracts\.StartIntentSenderForResult\(\)/,
+      );
+      expect(content).toMatch(/ActivityResultLauncher<IntentSenderRequest>/);
+    });
+
+    it("result.hasResolution 時に IntentSenderRequest を構築して launch していること", () => {
+      const content = fs.readFileSync(pluginPath, "utf-8");
+
+      expect(content).toMatch(
+        /new\s+IntentSenderRequest\.Builder\(result\.getPendingIntent\(\)\)\.build\(\)/,
+      );
+      expect(content).toMatch(/authLauncher\.launch\(/);
+      expect(content).not.toMatch(
+        /startActivityForResult\(\s*call,\s*result\.getPendingIntent\(\)\.getIntentSender\(\)/,
+      );
+    });
+
+    it("GoogleSignInAccount からメールアドレスを取得・設定するロジックが存在すること", () => {
+      const content = fs.readFileSync(pluginPath, "utf-8");
+
+      expect(content).toMatch(/toGoogleSignInAccount\(\)/);
+      expect(content).toMatch(/getEmail\(\)/);
+    });
+  });
 });
