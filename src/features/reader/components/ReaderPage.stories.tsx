@@ -171,3 +171,35 @@ export const ScrollMode: Story = {
     pagingMode: "scroll" as ReaderPagingMode,
   },
 };
+
+/**
+ * エピソード境界案内ヒント（次話へ）表示
+ */
+export const BoundaryHintNext: Story = {
+  name: "エピソード境界ヒント（次話へ）",
+  args: {
+    pagingMode: "paged" as ReaderPagingMode,
+    currentPage: 3,
+    totalPages: 3,
+    chapterIndex: 1,
+    totalChapters: 3,
+    initialBoundaryHint: "指を離して次の話へ",
+    initialSlideOffsetPx: 40,
+  },
+};
+
+/**
+ * エピソード境界案内ヒント（前話へ）表示
+ */
+export const BoundaryHintPrev: Story = {
+  name: "エピソード境界ヒント（前話へ）",
+  args: {
+    pagingMode: "paged" as ReaderPagingMode,
+    currentPage: 1,
+    totalPages: 3,
+    chapterIndex: 2,
+    totalChapters: 3,
+    initialBoundaryHint: "指を離して前の話へ",
+    initialSlideOffsetPx: -40,
+  },
+};
