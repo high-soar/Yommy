@@ -773,6 +773,7 @@ describe("useNovelRanking", () => {
       settingsRepository: {} as never,
       appSettingsRepository: {} as never,
       appBridge: {} as never,
+      cloudSyncBridge: {} as never,
       isReady: true,
       error: null,
     });

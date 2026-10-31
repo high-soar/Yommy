@@ -17,6 +17,7 @@ import { Capacitor } from "@capacitor/core";
 import { SQLiteConnection } from "@capacitor-community/sqlite";
 import { resetTestDb } from "../storage/adapter/inMemoryDb";
 import { CapacitorAppBridge, MockAppBridge } from "../bridges/app";
+import { MockCloudSyncBridge } from "../bridges/cloud-sync/mockCloudSyncBridge";
 
 const { Default, CustomMockServices } = composeStories(stories);
 
@@ -645,6 +646,61 @@ describe("ServiceProvider", () => {
 
       await waitFor(() => {
         expect(settingValue).toBe("title");
+      });
+    });
+
+    it("デフォルトで MockCloudSyncBridge および SyncEngine が初期化されること", async () => {
+      let syncBridgeInstance: unknown = null;
+      let syncEngineInstance: unknown = null;
+
+      const TestConsumer: React.FC = () => {
+        const services = useServices();
+        syncBridgeInstance = services.cloudSyncBridge;
+        syncEngineInstance = services.syncEngine;
+        return <div data-testid="consumer-ready">OK</div>;
+      };
+
+      render(
+        <ServiceProvider>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("consumer-ready")).toBeInTheDocument();
+      });
+
+      expect(syncBridgeInstance).toBeInstanceOf(MockCloudSyncBridge);
+      expect(syncEngineInstance).toBeDefined();
+    });
+
+    it("カスタムの cloudSyncBridge が services プロパティから正しく注入されること", async () => {
+      const customBridge = new MockCloudSyncBridge({
+        defaultEmail: "custom-sync@example.com",
+      });
+      let syncBridgeInstance: unknown = null;
+
+      const TestConsumer: React.FC = () => {
+        const services = useServices();
+        syncBridgeInstance = services.cloudSyncBridge;
+        return <div data-testid="consumer-ready">OK</div>;
+      };
+
+      render(
+        <ServiceProvider services={{ cloudSyncBridge: customBridge }}>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("consumer-ready")).toBeInTheDocument();
+      });
+
+      expect(syncBridgeInstance).toBe(customBridge);
+      const auth = await (syncBridgeInstance as MockCloudSyncBridge).signIn();
+      expect(auth).toEqual({
+        status: "connected",
+        email: "custom-sync@example.com",
       });
     });
   });

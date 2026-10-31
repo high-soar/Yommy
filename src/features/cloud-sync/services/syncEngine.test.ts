@@ -11,7 +11,12 @@ import { SqlChapterRepository } from "../../../storage/repositories/chapterRepos
 import { SqlAppSettingsRepository } from "../../../storage/repositories/appSettingsRepository";
 import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 import type { YommySyncState } from "../types";
-import { SyncEngine, validateSyncState, parseNovelUrl } from "./syncEngine";
+import {
+  SyncEngine,
+  validateSyncState,
+  parseNovelUrl,
+  isUnauthorizedError,
+} from "./syncEngine";
 
 describe("syncEngine", () => {
   describe("validateSyncState (スキーマ検証)", () => {
@@ -123,6 +128,36 @@ describe("syncEngine", () => {
         },
       };
       expect(() => validateSyncState(invalidNovels)).toThrow(/ID mismatch/i);
+    });
+
+    it("novels 内の作品データで siteType が kakuyomu, narou, generic のいずれも許容されること", () => {
+      const narouState = {
+        ...validState,
+        novels: {
+          "narou:n1234a": {
+            ...validState.novels["kakuyomu:16817330658027210412"],
+            id: "narou:n1234a",
+            siteType: "narou" as const,
+          },
+        },
+      };
+      expect(
+        validateSyncState(narouState).novels["narou:n1234a"].siteType,
+      ).toBe("narou");
+
+      const genericState = {
+        ...validState,
+        novels: {
+          "generic:gen1": {
+            ...validState.novels["kakuyomu:16817330658027210412"],
+            id: "generic:gen1",
+            siteType: "generic" as const,
+          },
+        },
+      };
+      expect(
+        validateSyncState(genericState).novels["generic:gen1"].siteType,
+      ).toBe("generic");
     });
 
     it("novels 内の作品データで siteType が不正な場合に例外を送出すること", () => {
@@ -292,6 +327,79 @@ describe("syncEngine", () => {
         }),
       ).toThrow(/deletedNovels/i);
     });
+
+    it("オブジェクト直接入力で constructor プロパティ等の汚染が検知された場合に例外を送出すること", () => {
+      const maliciousObj = {
+        ...validState,
+        constructor: "polluted",
+      };
+      expect(() => validateSyncState(maliciousObj)).toThrow(
+        /Prototype pollution/i,
+      );
+
+      const maliciousNestedArray = {
+        ...validState,
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            ...validState.novels["kakuyomu:16817330658027210412"],
+            readChapterIds: [
+              { constructor: "polluted" },
+            ] as unknown as string[],
+          },
+        },
+      };
+      expect(() => validateSyncState(maliciousNestedArray)).toThrow(
+        /Prototype pollution/i,
+      );
+    });
+
+    it("novels 内の各作品データで配列が渡された場合や空文字の場合に例外を送出すること", () => {
+      const arrayNovel = {
+        ...validState,
+        novels: {
+          "kakuyomu:16817330658027210412":
+            [] as unknown as (typeof validState.novels)[string],
+        },
+      };
+      expect(() => validateSyncState(arrayNovel)).toThrow(
+        /Invalid novel entry/i,
+      );
+
+      const emptyWorkId = {
+        ...validState,
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            ...validState.novels["kakuyomu:16817330658027210412"],
+            remoteWorkId: "",
+          },
+        },
+      };
+      expect(() => validateSyncState(emptyWorkId)).toThrow(/remoteWorkId/i);
+
+      const emptyCanonicalUrl = {
+        ...validState,
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            ...validState.novels["kakuyomu:16817330658027210412"],
+            canonicalUrl: "",
+          },
+        },
+      };
+      expect(() => validateSyncState(emptyCanonicalUrl)).toThrow(
+        /canonicalUrl/i,
+      );
+
+      const invalidSynopsis = {
+        ...validState,
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            ...validState.novels["kakuyomu:16817330658027210412"],
+            synopsis: 123 as unknown as string,
+          },
+        },
+      };
+      expect(() => validateSyncState(invalidSynopsis)).toThrow(/synopsis/i);
+    });
   });
 
   describe("parseNovelUrl (SSRF ガードとホワイトリスト検証)", () => {
@@ -422,7 +530,7 @@ describe("syncEngine", () => {
             latestEpisodePublishedAt: "2026-10-30T10:00:00.000Z",
             bookmarkChapterIndex: 2,
             lastReadAt: "2026-10-31T10:00:00.000Z",
-            readChapterIds: ["16817330658027210413"],
+            readChapterIds: ["1177354054881162326"],
             createdAt: "2026-10-01T00:00:00.000Z",
             updatedAt: "2026-10-31T10:00:00.000Z",
           },
@@ -448,7 +556,7 @@ describe("syncEngine", () => {
       );
       expect(chapters.length).toBeGreaterThan(0);
       const readChapter = chapters.find(
-        (c) => c.remoteChapterId === "16817330658027210413",
+        (c) => c.remoteChapterId === "1177354054881162326",
       );
       expect(readChapter?.isRead).toBe(true);
 
@@ -614,10 +722,10 @@ describe("syncEngine", () => {
             hasNewUpdate: 0,
             latestEpisodePublishedAt: "2026-10-10T10:00:00.000Z",
             bookmarkChapterIndex: 2,
-            lastReadAt: "2026-10-30T10:00:00.000Z",
+            lastReadAt: "2026-11-01T10:00:00.000Z",
             readChapterIds: [],
             createdAt: "2026-10-10T00:00:00.000Z",
-            updatedAt: "2026-10-30T10:00:00.000Z",
+            updatedAt: "2026-11-01T10:00:00.000Z",
           },
         },
         deletedNovels: {},
@@ -660,10 +768,10 @@ describe("syncEngine", () => {
             hasNewUpdate: 0,
             latestEpisodePublishedAt: "2026-10-10T10:00:00.000Z",
             bookmarkChapterIndex: 2,
-            lastReadAt: "2026-10-30T10:00:00.000Z",
+            lastReadAt: "2026-11-01T10:00:00.000Z",
             readChapterIds: [],
             createdAt: "2026-10-10T00:00:00.000Z",
-            updatedAt: "2026-10-30T10:00:00.000Z",
+            updatedAt: "2026-11-01T10:00:00.000Z",
           },
         },
         deletedNovels: {},
@@ -747,10 +855,13 @@ describe("syncEngine", () => {
         true,
       );
 
-      // リモートでは第2話（エピソードID）が既読
+      // リモートでは第1話（既にローカルで既読）と第2話（エピソードID）が既読
       const chapters = await chapterRepo.listChaptersByNovelId(
         "kakuyomu:16817330658027210412",
       );
+      const firstEpId = chapters.find(
+        (c) => c.chapterIndex === 1,
+      )?.remoteChapterId;
       const secondEpId = chapters.find(
         (c) => c.chapterIndex === 2,
       )?.remoteChapterId;
@@ -773,7 +884,7 @@ describe("syncEngine", () => {
             latestEpisodePublishedAt: "2026-10-10T10:00:00.000Z",
             bookmarkChapterIndex: 1,
             lastReadAt: "2026-10-10T10:00:00.000Z",
-            readChapterIds: [secondEpId!],
+            readChapterIds: [firstEpId!, secondEpId!],
             createdAt: "2026-10-10T00:00:00.000Z",
             updatedAt: "2026-10-10T00:00:00.000Z",
           },
@@ -796,6 +907,54 @@ describe("syncEngine", () => {
       expect(mergedChapters.find((c) => c.chapterIndex === 3)?.isRead).toBe(
         false,
       );
+    });
+
+    it("pullAndMerge: 既存作品でリモート・ローカル共に lastReadAt が null の場合、しおり更新を行わないこと", async () => {
+      const parser = parserRegistry.requireParser(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      const index = parser.parseNovelIndex(
+        workIndexHtml,
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      await novelRepo.upsertNovelWithToc(index, "2026-10-10T00:00:00.000Z");
+      await db.execute(
+        "UPDATE novels SET bookmark_chapter_index = 1, bookmark_scroll_progress = 0.3, last_read_at = NULL WHERE id = ?;",
+        ["kakuyomu:16817330658027210412"],
+      );
+
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: "2026-10-31T12:00:00.000Z",
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            id: "kakuyomu:16817330658027210412",
+            siteType: "kakuyomu",
+            remoteWorkId: "16817330658027210412",
+            canonicalUrl: "https://kakuyomu.jp/works/16817330658027210412",
+            title: "境界迷宮と異界の魔術師",
+            author: "小野崎",
+            synopsis: "あらすじ本文",
+            totalChapters: 3,
+            isFavorite: 1,
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: null,
+            bookmarkChapterIndex: 2,
+            lastReadAt: null,
+            readChapterIds: [],
+            createdAt: "2026-10-10T00:00:00.000Z",
+            updatedAt: "2026-10-10T00:00:00.000Z",
+          },
+        },
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      await engine.pullAndMerge();
+      const local = await novelRepo.getNovelById(
+        "kakuyomu:16817330658027210412",
+      );
+      expect(local?.bookmarkChapterIndex).toBe(1);
     });
 
     it("pullAndMerge: 401 Unauthorized エラー発生時に連携解除（signOut および setCloudSyncAccountEmail(null)）へ自動フォールバックすること", async () => {
@@ -966,6 +1125,265 @@ describe("syncEngine", () => {
       expect(pullSpy).toHaveBeenCalledTimes(1);
       expect(pushSpy).toHaveBeenCalledTimes(1);
       expect(result).toEqual({ pulled: true, mergedNovels: 1 });
+    });
+
+    it("pullAndMerge: パーサーが見つからないリモート作品は安全にスキップされること", async () => {
+      vi.spyOn(parserRegistry, "getParser").mockReturnValue(undefined);
+
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: "2026-10-31T12:00:00.000Z",
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            id: "kakuyomu:16817330658027210412",
+            siteType: "kakuyomu",
+            remoteWorkId: "16817330658027210412",
+            canonicalUrl: "https://kakuyomu.jp/works/16817330658027210412",
+            title: "未対応パーサー作品",
+            author: "作者",
+            synopsis: "あらすじ",
+            totalChapters: 1,
+            isFavorite: 0,
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: null,
+            bookmarkChapterIndex: null,
+            lastReadAt: null,
+            readChapterIds: [],
+            createdAt: "2026-10-01T00:00:00.000Z",
+            updatedAt: "2026-10-01T00:00:00.000Z",
+          },
+        },
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      const result = await engine.pullAndMerge();
+      expect(result.pulled).toBe(true);
+      expect(await novelRepo.listNovels()).toHaveLength(0);
+    });
+
+    it("pullAndMerge: 既存作品でリモートの bookmarkChapterIndex が null の場合、しおり更新を行わないこと", async () => {
+      const parser = parserRegistry.requireParser(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      const index = parser.parseNovelIndex(
+        workIndexHtml,
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      await novelRepo.upsertNovelWithToc(index, "2026-10-10T00:00:00.000Z");
+      await novelRepo.updateBookmark("kakuyomu:16817330658027210412", 2, 0.5);
+
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: "2026-10-31T12:00:00.000Z",
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            id: "kakuyomu:16817330658027210412",
+            siteType: "kakuyomu",
+            remoteWorkId: "16817330658027210412",
+            canonicalUrl: "https://kakuyomu.jp/works/16817330658027210412",
+            title: "境界迷宮と異界の魔術師",
+            author: "小野崎",
+            synopsis: "あらすじ本文",
+            totalChapters: 3,
+            isFavorite: 1,
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: "2026-10-10T10:00:00.000Z",
+            bookmarkChapterIndex: null,
+            lastReadAt: "2026-11-01T10:00:00.000Z",
+            readChapterIds: [],
+            createdAt: "2026-10-10T00:00:00.000Z",
+            updatedAt: "2026-11-01T10:00:00.000Z",
+          },
+        },
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      await engine.pullAndMerge();
+      const local = await novelRepo.getNovelById(
+        "kakuyomu:16817330658027210412",
+      );
+      expect(local?.bookmarkChapterIndex).toBe(2);
+      expect(local?.bookmarkScrollProgress).toBe(0.5);
+    });
+
+    it("pushCurrentState: お気に入り・新着・最新話公開日時を含む作品が正しくマッピングされること", async () => {
+      const parser = parserRegistry.requireParser(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      const index = parser.parseNovelIndex(
+        workIndexHtml,
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      await novelRepo.upsertNovelWithToc(index, "2026-10-10T00:00:00.000Z");
+
+      // is_favorite = 1, has_new_update = 1, latest_episode_published_at を設定
+      await db.execute(
+        `UPDATE novels
+         SET is_favorite = 1, has_new_update = 1, latest_episode_published_at = '2026-10-31T00:00:00.000Z'
+         WHERE id = ?;`,
+        ["kakuyomu:16817330658027210412"],
+      );
+
+      await engine.pushCurrentState();
+      const pushedContent = bridge.getFileContent();
+      const state = JSON.parse(pushedContent!) as YommySyncState;
+      const pushed = state.novels["kakuyomu:16817330658027210412"];
+      expect(pushed.isFavorite).toBe(1);
+      expect(pushed.hasNewUpdate).toBe(1);
+      expect(pushed.latestEpisodePublishedAt).toBe("2026-10-31T00:00:00.000Z");
+
+      // latest_episode_published_at が null のケースも検証
+      await db.execute(
+        "UPDATE novels SET latest_episode_published_at = NULL WHERE id = ?;",
+        ["kakuyomu:16817330658027210412"],
+      );
+      await engine.pushCurrentState();
+      const pushedState2 = JSON.parse(
+        bridge.getFileContent()!,
+      ) as YommySyncState;
+      expect(
+        pushedState2.novels["kakuyomu:16817330658027210412"]
+          .latestEpisodePublishedAt,
+      ).toBeNull();
+    });
+
+    it("novelRepository.getDeletedNovels が未定義の場合でも pullAndMerge および pushCurrentState が正常に動作すること", async () => {
+      const customNovelRepo = Object.create(novelRepo);
+      customNovelRepo.getDeletedNovels = undefined;
+
+      const customEngine = new SyncEngine({
+        bridge,
+        novelRepository: customNovelRepo,
+        chapterRepository: chapterRepo,
+        appSettingsRepository: appSettingsRepo,
+        parserRegistry,
+        httpClient,
+      });
+
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: "2026-10-31T12:00:00.000Z",
+        novels: {},
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      const pullRes = await customEngine.pullAndMerge();
+      expect(pullRes.pulled).toBe(true);
+
+      await customEngine.pushCurrentState();
+      const pushedContent = bridge.getFileContent();
+      const state = JSON.parse(pushedContent!) as YommySyncState;
+      expect(state.deletedNovels).toEqual({});
+    });
+
+    it("pushCurrentState: getNovelById が null を返した場合はその作品をスキップすること", async () => {
+      vi.spyOn(novelRepo, "listNovels").mockResolvedValue([
+        {
+          id: "kakuyomu:deleted_midway",
+          siteType: "kakuyomu",
+          remoteWorkId: "deleted_midway",
+          canonicalUrl: "https://kakuyomu.jp/works/deleted_midway",
+          title: "削除途中",
+          author: "作者",
+          totalChapters: 1,
+          cachedChapters: 0,
+          totalByteSize: 0,
+          bookmarkChapterIndex: null,
+          bookmarkScrollProgress: 0,
+          isFavorite: false,
+          lastCheckedAt: null,
+          lastReadAt: null,
+          createdAt: "2026-10-01T00:00:00.000Z",
+          updatedAt: "2026-10-01T00:00:00.000Z",
+        },
+      ]);
+      vi.spyOn(novelRepo, "getNovelById").mockResolvedValue(null);
+
+      await engine.pushCurrentState();
+      const pushedContent = bridge.getFileContent();
+      const state = JSON.parse(pushedContent!) as YommySyncState;
+      expect(Object.keys(state.novels)).toHaveLength(0);
+    });
+
+    it("pushCurrentState: リモートの Tombstone がローカルの Tombstone より古い場合はローカルの日時を維持すること", async () => {
+      // リモートの古い Tombstone をセット
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: "2026-10-31T12:00:00.000Z",
+        novels: {},
+        deletedNovels: {
+          "kakuyomu:tombstone-test": "2026-10-01T00:00:00.000Z",
+        },
+      };
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      // ローカルの新しい Tombstone
+      vi.spyOn(novelRepo, "getDeletedNovels").mockResolvedValue([
+        {
+          id: "kakuyomu:tombstone-test",
+          deletedAt: new Date("2026-10-15T00:00:00.000Z").getTime(),
+        },
+      ]);
+
+      await engine.pushCurrentState();
+      const pushedContent = bridge.getFileContent();
+      const state = JSON.parse(pushedContent!) as YommySyncState;
+      expect(state.deletedNovels["kakuyomu:tombstone-test"]).toBe(
+        new Date("2026-10-15T00:00:00.000Z").toISOString(),
+      );
+    });
+
+    it("scheduleDebouncedPush: タイマー実行時に pushCurrentState が失敗した場合は Promise が reject されること", async () => {
+      vi.useFakeTimers();
+      const error = new Error("Push network error");
+      vi.spyOn(engine, "pushCurrentState").mockRejectedValue(error);
+
+      const promise = engine.scheduleDebouncedPush(2500);
+      vi.advanceTimersByTime(2500);
+
+      await expect(promise).rejects.toThrow("Push network error");
+      vi.useRealTimers();
+    });
+
+    it("flushDebouncedPush: pushCurrentState が失敗した場合は例外が再スローされること", async () => {
+      vi.useFakeTimers();
+      const error = new Error("Flush error");
+      vi.spyOn(engine, "pushCurrentState").mockRejectedValue(error);
+
+      const promise = engine.scheduleDebouncedPush(2500);
+      promise.catch(() => {});
+      await expect(engine.flushDebouncedPush()).rejects.toThrow("Flush error");
+      vi.useRealTimers();
+    });
+  });
+
+  describe("isUnauthorizedError (401 判定)", () => {
+    it("falsy な値では false を返すこと", () => {
+      expect(isUnauthorizedError(null)).toBe(false);
+      expect(isUnauthorizedError(undefined)).toBe(false);
+      expect(isUnauthorizedError("")).toBe(false);
+    });
+
+    it("オブジェクトの status が 401 の場合に true、それ以外で false を返すこと", () => {
+      expect(isUnauthorizedError({ status: 401 })).toBe(true);
+      expect(isUnauthorizedError({ status: 500 })).toBe(false);
+    });
+
+    it("Error インスタンスの message に 401 または Unauthorized が含まれる場合に true を返すこと", () => {
+      expect(
+        isUnauthorizedError(new Error("Request failed with status code 401")),
+      ).toBe(true);
+      expect(isUnauthorizedError(new Error("Unauthorized access"))).toBe(true);
+      expect(isUnauthorizedError(new Error("Network timeout"))).toBe(false);
+    });
+
+    it("文字列に 401 または Unauthorized が含まれる場合に true を返すこと", () => {
+      expect(isUnauthorizedError("HTTP 401 error")).toBe(true);
+      expect(isUnauthorizedError("Unauthorized response")).toBe(true);
+      expect(isUnauthorizedError("Internal Server Error 500")).toBe(false);
     });
   });
 });

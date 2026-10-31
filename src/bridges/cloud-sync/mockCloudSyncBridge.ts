@@ -1,7 +1,7 @@
 import type { CloudSyncAuthState, CloudSyncBridge } from "./types";
 
 /**
- * UT / Storybook / IT 用のインメモリ CloudSyncBridge モック実装（Red スタブ）
+ * UT / Storybook / IT 用のインメモリ CloudSyncBridge モック実装
  */
 export class MockCloudSyncBridge implements CloudSyncBridge {
   private authState: CloudSyncAuthState = { status: "unlinked" };
@@ -26,27 +26,34 @@ export class MockCloudSyncBridge implements CloudSyncBridge {
   }
 
   async getAuthState(): Promise<CloudSyncAuthState> {
-    void this.authState;
-    void this.defaultEmail;
-    throw new Error("getAuthState is not implemented yet");
+    return this.authState;
   }
 
   async signIn(): Promise<CloudSyncAuthState> {
-    throw new Error("signIn is not implemented yet");
+    this.authState = { status: "connected", email: this.defaultEmail };
+    return this.authState;
   }
 
   async signOut(): Promise<void> {
-    throw new Error("signOut is not implemented yet");
+    this.authState = { status: "unlinked" };
   }
 
   async pullFile(): Promise<string | null> {
-    void this.simulate401;
-    throw new Error("pullFile is not implemented yet");
+    if (this.simulate401) {
+      const err = new Error("401 Unauthorized");
+      (err as unknown as { status: number }).status = 401;
+      throw err;
+    }
+    return this.fileContent;
   }
 
-  async pushFile(_content: string): Promise<void> {
-    void this.simulate401;
-    throw new Error("pushFile is not implemented yet");
+  async pushFile(content: string): Promise<void> {
+    if (this.simulate401) {
+      const err = new Error("401 Unauthorized");
+      (err as unknown as { status: number }).status = 401;
+      throw err;
+    }
+    this.fileContent = content;
   }
 
   setAuthState(state: CloudSyncAuthState): void {
