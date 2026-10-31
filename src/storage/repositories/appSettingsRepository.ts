@@ -1,4 +1,5 @@
 import type { DatabaseAdapter } from "../adapter/types";
+import { APP_SETTING_KEYS } from "../schema";
 import type { AppSettingsRepository } from "../types";
 
 interface AppSettingRow {
@@ -44,7 +45,9 @@ export class SqlAppSettingsRepository implements AppSettingsRepository {
   }
 
   async getCloudSyncLastSyncedAt(): Promise<number | null> {
-    const raw = await this.getSetting("cloud_sync_last_synced_at");
+    const raw = await this.getSetting(
+      APP_SETTING_KEYS.CLOUD_SYNC_LAST_SYNCED_AT,
+    );
     if (raw === null) {
       return null;
     }
@@ -54,26 +57,31 @@ export class SqlAppSettingsRepository implements AppSettingsRepository {
 
   async setCloudSyncLastSyncedAt(timestamp: number | null): Promise<void> {
     if (timestamp === null) {
-      await this.db.execute(
-        "DELETE FROM app_settings WHERE key = 'cloud_sync_last_synced_at';",
-      );
+      await this.db.execute("DELETE FROM app_settings WHERE key = ?;", [
+        APP_SETTING_KEYS.CLOUD_SYNC_LAST_SYNCED_AT,
+      ]);
     } else {
-      await this.setSetting("cloud_sync_last_synced_at", String(timestamp));
+      await this.setSetting(
+        APP_SETTING_KEYS.CLOUD_SYNC_LAST_SYNCED_AT,
+        String(timestamp),
+      );
     }
   }
 
   async getCloudSyncAccountEmail(): Promise<string | null> {
-    const raw = await this.getSetting("cloud_sync_account_email");
+    const raw = await this.getSetting(
+      APP_SETTING_KEYS.CLOUD_SYNC_ACCOUNT_EMAIL,
+    );
     return raw;
   }
 
   async setCloudSyncAccountEmail(email: string | null): Promise<void> {
     if (email === null) {
-      await this.db.execute(
-        "DELETE FROM app_settings WHERE key = 'cloud_sync_account_email';",
-      );
+      await this.db.execute("DELETE FROM app_settings WHERE key = ?;", [
+        APP_SETTING_KEYS.CLOUD_SYNC_ACCOUNT_EMAIL,
+      ]);
     } else {
-      await this.setSetting("cloud_sync_account_email", email);
+      await this.setSetting(APP_SETTING_KEYS.CLOUD_SYNC_ACCOUNT_EMAIL, email);
     }
   }
 }
