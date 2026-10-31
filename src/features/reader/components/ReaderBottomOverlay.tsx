@@ -19,8 +19,6 @@ export interface ReaderBottomOverlayProps {
   onNextChapter: () => void;
   /** 下部タブ選択時のコールバック */
   onSelectTab?: (tab: BottomTab) => void;
-  /** オーバーレイを閉じる要求コールバック */
-  onClose?: () => void;
 }
 
 interface ReaderTabItem {
@@ -71,7 +69,6 @@ export const ReaderBottomOverlay: React.FC<ReaderBottomOverlayProps> = ({
   onPrevChapter,
   onNextChapter,
   onSelectTab,
-  onClose,
 }) => {
   return (
     <div
@@ -81,18 +78,6 @@ export const ReaderBottomOverlay: React.FC<ReaderBottomOverlayProps> = ({
         isOpen ? "translate-y-0" : "translate-y-full pointer-events-none"
       }`}
     >
-      {onClose && (
-        <button
-          type="button"
-          data-testid="reader-bottom-overlay-close"
-          aria-label="オーバーレイを閉じる"
-          onClick={onClose}
-          className="absolute top-2 right-2 p-1.5 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 rounded-full transition-colors cursor-pointer text-xs leading-none z-10"
-        >
-          ✕
-        </button>
-      )}
-
       {/* 上段: 前後話ナビゲーション */}
       <div className="p-3 pb-2 max-w-4xl mx-auto w-full">
         <ReaderChapterNav
@@ -121,7 +106,7 @@ export const ReaderBottomOverlay: React.FC<ReaderBottomOverlayProps> = ({
               data-testid={tab.testId}
               aria-selected={isActive}
               onClick={() => onSelectTab?.(tab.id)}
-              className={`flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium transition-colors cursor-pointer ${
+              className={`flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 sm:py-3 px-1 sm:px-4 text-xs sm:text-sm font-medium transition-colors cursor-pointer select-none whitespace-nowrap ${
                 isActive
                   ? "text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50/50 dark:bg-emerald-950/20"
                   : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"

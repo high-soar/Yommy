@@ -86,7 +86,7 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({
             data-testid={tab.testId}
             aria-selected={isActive}
             onClick={tab.onSelect}
-            className={`flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium transition-colors cursor-pointer select-none focus:outline-hidden focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+            className={`flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 sm:py-3 px-1 sm:px-4 text-xs sm:text-sm font-medium transition-colors cursor-pointer select-none whitespace-nowrap focus:outline-hidden focus-visible:ring-2 focus-visible:ring-emerald-500 ${
               isActive
                 ? "text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50/50 dark:bg-emerald-950/20"
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
