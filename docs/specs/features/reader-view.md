@@ -2,7 +2,7 @@
 type: spec-feature
 title: "小説リーダー画面仕様書（SCR-03: Novel Reader）"
 description: "小説本文の全画面（100dvh）縦書き・横書き組版表示、最下部タッチによる下部オーバーレイ（ReaderBottomOverlay: 前後話ナビ＋下部タブ）、ルビ・傍点描画、4カラーテーマ・文字サイズ・行間設定の永続化、前後エピソード遷移、未キャッシュ話のオンデマンド取得、既読・しおり・スクロール進捗率の自動保存/復元、およびSCN-01統合シナリオの正本仕様。"
-status: Approved
+status: "Review (#123)"
 updated: "2026-10-31"
 tags:
   - reader
@@ -31,6 +31,7 @@ related_specs:
   - docs/specs/features/novel-detail.md
   - docs/specs/features/settings.md
   - docs/specs/parsers/kakuyomu.md
+  - docs/specs/changes/issue-123-reader-bottom-overlay-ui-improvement.md
   - docs/specs/changes/archive/issue-79-four-tabs-search-ranking.md
   - docs/specs/changes/archive/issue-80-bookshelf-update-check-and-sort.md
   - docs/specs/changes/archive/issue-81-prefetch-and-cache-rules.md
@@ -175,15 +176,14 @@ src/features/reader/
 | `onPrevChapter` | `() => void`               | 必須 | -             | 「前の話へ」ボタン押下時のコールバック                                            |
 | `onNextChapter` | `() => void`               | 必須 | -             | 「次の話へ」ボタン押下時のコールバック                                            |
 | `onSelectTab`   | `(tab: BottomTab) => void` | 任意 | -             | 下部タブ（本棚 / 検索 / ランキング / 設定）押下時のコールバック                   |
-| `onClose`       | `() => void`               | 任意 | -             | オーバーレイを閉じる要求コールバック                                              |
 
 #### セマンティック属性とスタイル仕様
 
 - **ルート要素**: `data-testid="reader-bottom-overlay"`、`aria-hidden={!isOpen}`
-- **閉じるボタン**: `data-testid="reader-bottom-overlay-close"`（`onClose` 提供時に描画、`aria-label="オーバーレイを閉じる"`）
+- **閉じる操作の一本化**: 旧仕様の閉じるボタン（`reader-bottom-overlay-close`）および `onClose` プロパティは廃止され、本文エリアタップによるオーバーレイ自動非表示に一本化される。
 - **配置・アニメーション**: 画面下端固定（`fixed bottom-0 left-0 right-0 z-40`）、背景にはテーマに合わせた半透明または不透明背景（例: `bg-white/95 dark:bg-zinc-900/95 shadow-lg border-t border-zinc-200 dark:border-zinc-800`）、開閉時のなめらかなスライド（`transition-transform duration-200 ease-in-out`、`isOpen ? 'translate-y-0' : 'translate-y-full'`）。
 - **上段（エピソードナビ）**: `ReaderChapterNav`（`data-testid="reader-chapter-nav"`）を描画し、前話/次話遷移と話数インジケーターを提供。
-- **下段（下部タブバー）**: `data-testid="reader-bottom-tabs"`（`role="tablist"`）を描画し、各タブボタン `data-testid="reader-bottom-tab-bookshelf"`（「本棚」/ activeTab に応じて `aria-selected="true"` 表示）、`data-testid="reader-bottom-tab-search"`（「検索」）、`data-testid="reader-bottom-tab-ranking"`（「ランキング」）、`data-testid="reader-bottom-tab-settings"`（「設定」）を表示。
+- **下段（下部タブバー）**: `data-testid="reader-bottom-tabs"`（`role="tablist"`）を描画し、各タブボタン `data-testid="reader-bottom-tab-bookshelf"`（「本棚」/ activeTab に応じて `aria-selected="true"` 表示）、`data-testid="reader-bottom-tab-search"`（「検索」）、`data-testid="reader-bottom-tab-ranking"`（「ランキング」）、`data-testid="reader-bottom-tab-settings"`（「設定」）を表示。各タブボタンはモバイル（375px等）でのテキスト折り返しを防止するため、上アイコン・下テキスト（縦並び `flex-col sm:flex-row` ＋ `whitespace-nowrap`、`text-xs sm:text-sm`）でスタイリングされる。
 
 ---
 
