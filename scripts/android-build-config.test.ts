@@ -59,6 +59,22 @@ describe("Android ビルド設定および署名・バージョン管理検証 (
         /buildTypes\s*\{[\s\S]*?debug\s*\{[\s\S]*?signingConfig\s+signingConfigs\.debug/,
       );
     });
+
+    it("CI署名設定として ANDROID_KEYSTORE_BASE64 が存在する場合のデコードと未設定時フォールバック構成が含まれること (AC-APK-03)", () => {
+      const content = fs.readFileSync(buildGradlePath, "utf-8");
+
+      expect(content).toMatch(/ANDROID_KEYSTORE_BASE64/);
+      expect(content).toMatch(/decodeBase64\(\)/);
+      expect(content).toMatch(/signingConfigs\s*\{[\s\S]*?release\s*\{/);
+    });
+
+    it("dependencies に Google Play Services Auth が定義されていること (AC-AUTH-01)", () => {
+      const content = fs.readFileSync(buildGradlePath, "utf-8");
+
+      expect(content).toMatch(
+        /implementation\s+['"]com\.google\.android\.gms:play-services-auth:21\.3\.0['"]/,
+      );
+    });
   });
 
   describe("android/app/build.gradle バージョン解決検証 (AC-APK-02)", () => {

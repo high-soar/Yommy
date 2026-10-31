@@ -18,6 +18,7 @@ import { SQLiteConnection } from "@capacitor-community/sqlite";
 import { resetTestDb } from "../storage/adapter/inMemoryDb";
 import { CapacitorAppBridge, MockAppBridge } from "../bridges/app";
 import { MockCloudSyncBridge } from "../bridges/cloud-sync/mockCloudSyncBridge";
+import { CapacitorCloudSyncBridge } from "../bridges/cloud-sync/capacitorCloudSyncBridge";
 
 const { Default, CustomMockServices } = composeStories(stories);
 
@@ -541,6 +542,9 @@ describe("ServiceProvider", () => {
       expect(
         (serviceValue as ServiceContextValue | null)?.appBridge,
       ).toBeInstanceOf(CapacitorAppBridge);
+      expect(
+        (serviceValue as ServiceContextValue | null)?.cloudSyncBridge,
+      ).toBeInstanceOf(CapacitorCloudSyncBridge);
 
       createConnectionSpy.mockRestore();
       isNativeSpy.mockRestore();

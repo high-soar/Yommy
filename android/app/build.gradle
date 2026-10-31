@@ -22,12 +22,44 @@ android {
         }
     }
     // AC-APK-01: 上書きインストール互換性を保つための共通固定デバッグ署名
+    // CI 署名設定: 環境変数（ANDROID_KEYSTORE_BASE64 等）が存在する場合は Base64 デコードされた Keystore で署名し、未設定時は debug.keystore へ安全にフォールバック
+    def keystoreBase64 = System.getenv("ANDROID_KEYSTORE_BASE64")
+    def defaultDebugKeystore = file('../debug.keystore')
+    def resolvedKeystore = defaultDebugKeystore
+    def resolvedStorePassword = 'android'
+    def resolvedKeyAlias = 'androiddebugkey'
+    def resolvedKeyPassword = 'android'
+
+    if (keystoreBase64) {
+        def ciKeystoreFile = file("${buildDir}/ci-signing.keystore")
+        if (!ciKeystoreFile.parentFile.exists()) {
+            ciKeystoreFile.parentFile.mkdirs()
+        }
+        ciKeystoreFile.bytes = keystoreBase64.decodeBase64()
+        resolvedKeystore = ciKeystoreFile
+        resolvedStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: 'android'
+        resolvedKeyAlias = System.getenv("ANDROID_KEY_ALIAS") ?: 'androiddebugkey'
+        resolvedKeyPassword = System.getenv("ANDROID_KEY_PASSWORD") ?: resolvedStorePassword
+    }
+
     signingConfigs {
         debug {
             storeFile file('../debug.keystore')
             storePassword 'android'
             keyAlias 'androiddebugkey'
             keyPassword 'android'
+            if (keystoreBase64) {
+                storeFile resolvedKeystore
+                storePassword resolvedStorePassword
+                keyAlias resolvedKeyAlias
+                keyPassword resolvedKeyPassword
+            }
+        }
+        release {
+            storeFile resolvedKeystore
+            storePassword resolvedStorePassword
+            keyAlias resolvedKeyAlias
+            keyPassword resolvedKeyPassword
         }
     }
     buildTypes {
@@ -35,6 +67,7 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
@@ -53,6 +86,7 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
+    implementation "com.google.android.gms:play-services-auth:21.3.0"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

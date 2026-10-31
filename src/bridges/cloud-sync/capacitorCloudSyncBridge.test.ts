@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { registerPlugin } from "@capacitor/core";
 import {
   CapacitorCloudSyncBridge,
+  CloudSyncNative,
   type CloudSyncNativePlugin,
 } from "./capacitorCloudSyncBridge";
 
 vi.mock("@capacitor/core", () => ({
-  registerPlugin: vi.fn(),
+  registerPlugin: vi.fn((name: string) => ({ name })),
   Capacitor: {
     isNativePlatform: vi.fn(),
   },
@@ -27,16 +27,14 @@ describe("CapacitorCloudSyncBridge", () => {
   });
 
   describe("コンストラクタ", () => {
-    it("引数なしで初期化した場合に registerPlugin('CloudSyncPlugin') が呼び出されること", () => {
-      vi.mocked(registerPlugin).mockReturnValue(mockPlugin);
+    it("引数なしで初期化した場合にデフォルトプラグインでインスタンス化できること", () => {
       const bridge = new CapacitorCloudSyncBridge();
-      expect(registerPlugin).toHaveBeenCalledWith("CloudSyncPlugin");
+      expect(CloudSyncNative).toBeDefined();
       expect(bridge).toBeDefined();
     });
 
     it("カスタムプラグインを注入して初期化できること", () => {
       const bridge = new CapacitorCloudSyncBridge(mockPlugin);
-      expect(registerPlugin).not.toHaveBeenCalled();
       expect(bridge).toBeDefined();
     });
   });

@@ -28,6 +28,7 @@ import { SqlSettingsRepository } from "../storage/repositories/settingsRepositor
 import { SqlAppSettingsRepository } from "../storage/repositories/appSettingsRepository";
 import type { CloudSyncBridge } from "../bridges/cloud-sync/types";
 import { MockCloudSyncBridge } from "../bridges/cloud-sync/mockCloudSyncBridge";
+import { CapacitorCloudSyncBridge } from "../bridges/cloud-sync/capacitorCloudSyncBridge";
 import { SyncEngine } from "../features/cloud-sync/services/syncEngine";
 import workIndexHtml from "../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 import episodeContentHtml from "../parsers/kakuyomu/__fixtures__/episode_content.html?raw";
@@ -246,7 +247,10 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           (isNative ? new CapacitorAppBridge() : new MockAppBridge());
 
         const cloudSyncBridge =
-          services?.cloudSyncBridge ?? new MockCloudSyncBridge();
+          services?.cloudSyncBridge ??
+          (isNative
+            ? new CapacitorCloudSyncBridge()
+            : new MockCloudSyncBridge());
 
         const syncEngine =
           services?.syncEngine ??
