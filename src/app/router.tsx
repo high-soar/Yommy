@@ -25,6 +25,7 @@ export interface RouterContextValue {
   currentPath: string;
   previousPath?: string;
   novelOrigin: string | null;
+  settingsOrigin: string | null;
   route: AppRoute;
   navigate: (path: string) => void;
   navigateToBookshelf: () => void;
@@ -174,6 +175,8 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
   );
   const [novelOrigin, setNovelOrigin] = useState<string | null>(null);
   const novelOriginRef = useRef<string | null>(null);
+  const [settingsOrigin, setSettingsOrigin] = useState<string | null>(null);
+  const settingsOriginRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (initialPath !== undefined) {
@@ -182,6 +185,8 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
         novelOriginRef.current = null;
         setNovelOrigin(null);
       }
+      settingsOriginRef.current = null;
+      setSettingsOrigin(null);
       setCurrentPath(initialPath);
     }
   }, [initialPath]);
@@ -193,6 +198,10 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
       if (!nextPath.startsWith("/novels/")) {
         novelOriginRef.current = null;
         setNovelOrigin(null);
+      }
+      if (nextPath !== "/settings") {
+        settingsOriginRef.current = null;
+        setSettingsOrigin(null);
       }
       setCurrentPath((prev) => {
         setPreviousPath(prev);
@@ -211,12 +220,31 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
       return;
     }
     const current = currentPathRef.current;
+
+    // settingsOrigin 管理: /settings への遷移時、直前が /novels/ (SCR-02 or SCR-03) であれば保持
+    if (to === "/settings") {
+      if (current.startsWith("/novels/")) {
+        settingsOriginRef.current = current;
+        setSettingsOrigin(current);
+      } else {
+        settingsOriginRef.current = null;
+        setSettingsOrigin(null);
+      }
+    } else {
+      settingsOriginRef.current = null;
+      setSettingsOrigin(null);
+    }
+
+    // novelOrigin (TR-07 探索元) 管理:
+    // to が /novels/ の場合: 直前が /search または /ranking であれば探索元としてセット
+    // ※ただし、/settings から /novels/ への復帰時は novelOrigin を上書きしない
     if (to.startsWith("/novels/")) {
-      if (!current.startsWith("/novels/")) {
+      if (!current.startsWith("/novels/") && current !== "/settings") {
         novelOriginRef.current = current;
         setNovelOrigin(current);
       }
-    } else {
+    } else if (to !== "/settings") {
+      // /settings への一時退避以外で /novels/ から離脱した場合は探索元をクリア
       novelOriginRef.current = null;
       setNovelOrigin(null);
     }
@@ -268,10 +296,14 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
         setPreviousPath(detailPath);
         novelOriginRef.current = "/";
         setNovelOrigin("/");
+        settingsOriginRef.current = null;
+        setSettingsOrigin(null);
         setCurrentPath(targetPath);
       } else if (options?.replace) {
         window.history.replaceState(null, "", targetPath);
         currentPathRef.current = targetPath;
+        settingsOriginRef.current = null;
+        setSettingsOrigin(null);
         setCurrentPath(targetPath);
       } else {
         navigate(targetPath);
@@ -308,17 +340,31 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
       return;
     }
 
-    // 3. 下部タブ（設定 SCR-05, 検索 SCR-06, ランキング SCR-07） -> ホーム本棚画面 "/" (TR-12)
-    if (
-      route.name === "settings" ||
-      route.name === "search" ||
-      route.name === "ranking"
-    ) {
+    // 3. 設定画面 (SCR-05) -> 直前画面（リーダー SCR-03、作品詳細 SCR-02）またはホーム本棚画面 "/" (TR-12)
+    if (route.name === "settings") {
+      if (
+        settingsOriginRef.current &&
+        settingsOriginRef.current.startsWith("/novels/")
+      ) {
+        const origin = settingsOriginRef.current;
+        settingsOriginRef.current = null;
+        setSettingsOrigin(null);
+        navigate(origin);
+        return;
+      }
+      settingsOriginRef.current = null;
+      setSettingsOrigin(null);
       navigate("/");
       return;
     }
 
-    // 4. 本棚画面 (SCR-01: bookshelf) -> ルート（何もしない、TR-13）
+    // 4. 検索画面 (SCR-06) / ランキング画面 (SCR-07) -> ホーム本棚画面 "/" (TR-12)
+    if (route.name === "search" || route.name === "ranking") {
+      navigate("/");
+      return;
+    }
+
+    // 5. 本棚画面 (SCR-01: bookshelf) -> ルート（何もしない、TR-13）
   }, [route, navigate]);
 
   const contextValue = useMemo<RouterContextValue>(
@@ -326,6 +372,7 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
       currentPath,
       previousPath,
       novelOrigin,
+      settingsOrigin,
       route,
       navigate,
       navigateToBookshelf,
@@ -340,6 +387,7 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
       currentPath,
       previousPath,
       novelOrigin,
+      settingsOrigin,
       route,
       navigate,
       navigateToBookshelf,

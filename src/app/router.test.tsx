@@ -1004,7 +1004,7 @@ describe("router", () => {
           );
         });
 
-        it("探索元から詳細を経てリーダーへ進んだ際も novelOrigin が維持され、設定画面へ遷移すると null にリセットされること", () => {
+        it("探索元から詳細を経てリーダーへ進んだ際も novelOrigin が維持され、設定画面へ一時退避しても保持され、本棚画面へ遷移すると null にリセットされること", () => {
           render(
             <RouterProvider initialPath="/search">
               <TestConsumer />
@@ -1025,8 +1025,17 @@ describe("router", () => {
             "/search",
           );
 
+          // 設定画面へ遷移しても探索元コンテキストは保持される
           act(() => {
             screen.getByTestId("btn-settings").click();
+          });
+          expect(screen.getByTestId("origin-display")).toHaveTextContent(
+            "/search",
+          );
+
+          // 本棚画面へ遷移するとリセットされる
+          act(() => {
+            screen.getByTestId("btn-bookshelf").click();
           });
           expect(screen.getByTestId("origin-display")).toHaveTextContent(
             "null",
