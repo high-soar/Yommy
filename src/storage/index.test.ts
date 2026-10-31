@@ -7,6 +7,7 @@ describe("storage/index", () => {
     expect(storage.SqlChapterRepository).toBeDefined();
     expect(storage.SqlSettingsRepository).toBeDefined();
     expect(storage.SqlAppSettingsRepository).toBeDefined();
+    expect(storage.APP_SETTING_KEYS).toBeDefined();
     expect(storage.DDL_STATEMENTS).toBeDefined();
     expect(storage.initializeDatabaseSchema).toBeDefined();
     expect(storage.createInMemoryDb).toBeDefined();

@@ -110,4 +110,11 @@ describe("syncEnv (Worktree 環境変数自動同期基盤)", () => {
 
     expect(copyFileSyncSpy).not.toHaveBeenCalled();
   });
+
+  it("引数なしで呼び出された場合でも例外を投げずに安全に完了すること", () => {
+    vi.spyOn(fs, "existsSync").mockReturnValue(false);
+    expect(() => {
+      syncEnv();
+    }).not.toThrow();
+  });
 });
