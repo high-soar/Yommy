@@ -7,6 +7,7 @@ import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
 import { SqlNovelRepository } from "../../../storage/repositories/novelRepository";
 import { MockHttpClient } from "../../../bridges/http/mockHttpClient";
 import type { NovelSummary } from "../../../storage/types";
+import type { SyncEngine } from "../../cloud-sync/services/syncEngine";
 import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 
 describe("useBookshelf", () => {
@@ -1270,6 +1271,265 @@ describe("useBookshelf", () => {
       );
 
       vi.useRealTimers();
+    });
+  });
+
+  describe("クラウド同期連携 (AC-BS-13)", () => {
+    it("初回マウント時に syncEngine.pullAndMerge が実行され、完了後に作品一覧がリロードされること", async () => {
+      const mockSyncEngine = {
+        pullAndMerge: vi
+          .fn()
+          .mockResolvedValue({ pulled: true, mergedNovels: 1 }),
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const customNovelRepo = {
+        listNovels: vi
+          .fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([
+            {
+              id: "kakuyomu:111",
+              title: "リモートから同期された作品",
+              author: "作者",
+              totalChapters: 10,
+              cachedChapters: 0,
+              bookmarkChapterIndex: null,
+              bookmarkScrollProgress: 0,
+              hasNewUpdate: false,
+              lastReadAt: null,
+              latestEpisodePublishedAt: null,
+              canonicalUrl: "https://kakuyomu.jp/works/111",
+            },
+          ]),
+        getNovelById: vi.fn(),
+        upsertNovelWithToc: vi.fn(),
+        updateBookmark: vi.fn(),
+        deleteNovel: vi.fn(),
+        clearNewUpdate: vi.fn(),
+        updateLastCheckedAt: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          syncEngine: mockSyncEngine as unknown as SyncEngine,
+          novelRepository: customNovelRepo,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(mockSyncEngine.pullAndMerge).toHaveBeenCalledTimes(1);
+      });
+
+      await waitFor(() => {
+        expect(result.current.novels.length).toBe(1);
+        expect(result.current.novels[0].title).toBe(
+          "リモートから同期された作品",
+        );
+      });
+    });
+
+    it("5分以上バックグラウンド休止後に復帰（visibilitychange）したとき、syncEngine.pullAndMerge が実行され一覧がリロードされること", async () => {
+      const mockSyncEngine = {
+        pullAndMerge: vi
+          .fn()
+          .mockResolvedValue({ pulled: true, mergedNovels: 0 }),
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          syncEngine: mockSyncEngine as unknown as SyncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+      expect(mockSyncEngine.pullAndMerge).toHaveBeenCalledTimes(1);
+
+      // バックグラウンドへ移行 (hidden)
+      const now = Date.now();
+      vi.spyOn(Date, "now").mockReturnValue(now);
+      Object.defineProperty(document, "visibilityState", {
+        value: "hidden",
+        writable: true,
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      // 5分1秒経過後にフォアグラウンドへ復帰 (visible)
+      vi.spyOn(Date, "now").mockReturnValue(now + 301000);
+      Object.defineProperty(document, "visibilityState", {
+        value: "visible",
+        writable: true,
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      await waitFor(() => {
+        expect(mockSyncEngine.pullAndMerge).toHaveBeenCalledTimes(2);
+      });
+    });
+
+    it("バックグラウンド休止が5分未満の場合、復帰しても syncEngine.pullAndMerge は実行されないこと", async () => {
+      const mockSyncEngine = {
+        pullAndMerge: vi
+          .fn()
+          .mockResolvedValue({ pulled: true, mergedNovels: 0 }),
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          syncEngine: mockSyncEngine as unknown as SyncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+      expect(mockSyncEngine.pullAndMerge).toHaveBeenCalledTimes(1);
+
+      // バックグラウンドへ移行 (hidden)
+      const now = Date.now();
+      vi.spyOn(Date, "now").mockReturnValue(now);
+      Object.defineProperty(document, "visibilityState", {
+        value: "hidden",
+        writable: true,
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      // 3分経過後に復帰 (5分未満)
+      vi.spyOn(Date, "now").mockReturnValue(now + 180000);
+      Object.defineProperty(document, "visibilityState", {
+        value: "visible",
+        writable: true,
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      expect(mockSyncEngine.pullAndMerge).toHaveBeenCalledTimes(1);
+    });
+
+    it("作品削除時（deleteNovel）に syncEngine.notifyChanged が呼び出され一覧が更新されること", async () => {
+      const mockSyncEngine = {
+        pullAndMerge: vi
+          .fn()
+          .mockResolvedValue({ pulled: false, mergedNovels: 0 }),
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const customNovelRepo = {
+        listNovels: vi
+          .fn()
+          .mockResolvedValueOnce([
+            { id: "kakuyomu:999", title: "削除対象作品" },
+          ])
+          .mockResolvedValueOnce([]),
+        getNovelById: vi.fn(),
+        upsertNovelWithToc: vi.fn(),
+        updateBookmark: vi.fn(),
+        deleteNovel: vi.fn().mockResolvedValue(undefined),
+        clearNewUpdate: vi.fn(),
+        updateLastCheckedAt: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          syncEngine: mockSyncEngine as unknown as SyncEngine,
+          novelRepository: customNovelRepo,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.novels.length).toBe(1);
+      });
+
+      await act(async () => {
+        await result.current.deleteNovel?.("kakuyomu:999");
+      });
+
+      expect(customNovelRepo.deleteNovel).toHaveBeenCalledWith("kakuyomu:999");
+      expect(mockSyncEngine.notifyChanged).toHaveBeenCalledTimes(1);
+      expect(result.current.novels.length).toBe(0);
+    });
+
+    it("作品追加時（addNovel）に syncEngine.notifyChanged が呼び出され一覧が更新されること", async () => {
+      const mockSyncEngine = {
+        pullAndMerge: vi
+          .fn()
+          .mockResolvedValue({ pulled: false, mergedNovels: 0 }),
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const customNovelRepo = {
+        listNovels: vi
+          .fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([
+            { id: "kakuyomu:123", title: "新規追加作品" },
+          ]),
+        getNovelById: vi.fn(),
+        upsertNovelWithToc: vi.fn().mockResolvedValue(undefined),
+        updateBookmark: vi.fn(),
+        deleteNovel: vi.fn(),
+        clearNewUpdate: vi.fn(),
+        updateLastCheckedAt: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          syncEngine: mockSyncEngine as unknown as SyncEngine,
+          novelRepository: customNovelRepo,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.addNovel?.("https://kakuyomu.jp/works/123");
+      });
+
+      expect(customNovelRepo.upsertNovelWithToc).toHaveBeenCalled();
+      expect(mockSyncEngine.notifyChanged).toHaveBeenCalledTimes(1);
+      expect(result.current.novels.length).toBe(1);
+    });
+
+    it("syncEngine.pullAndMerge が例外をスローしても本棚の表示がクラッシュせず正常に動作すること", async () => {
+      const mockSyncEngine = {
+        pullAndMerge: vi.fn().mockRejectedValue(new Error("Pull failed")),
+        notifyChanged: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          syncEngine: mockSyncEngine as unknown as SyncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.error).toBeNull();
+    });
+
+    it("syncEngine が未設定（undefined）でもエラーなく本棚が動作すること", async () => {
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          syncEngine: undefined,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.novels).toEqual([]);
     });
   });
 });

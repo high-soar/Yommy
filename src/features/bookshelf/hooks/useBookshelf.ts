@@ -18,6 +18,8 @@ export interface UseBookshelfResult {
   checkUpdates: (forceAll?: boolean) => Promise<void>;
   reloadNovels: () => Promise<void>;
   clearNovelUpdate: (novelId: string) => Promise<void>;
+  deleteNovel?: (novelId: string) => Promise<void>;
+  addNovel?: (url: string) => Promise<void>;
 }
 
 export const SETTINGS_KEY_BOOKSHELF_SORT_ORDER = "bookshelf_sort_order";

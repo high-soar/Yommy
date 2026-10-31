@@ -14,6 +14,7 @@ import type {
   NovelRecord,
   SettingsRepository,
 } from "../../../storage/types";
+import type { SyncEngine } from "../../cloud-sync/services/syncEngine";
 import {
   CACHE_TTL_MS,
   SHORT_TIMEOUT_MS,
@@ -2429,6 +2430,152 @@ describe("useReader", () => {
         expect(result.current.isLoading).toBe(false);
 
         expect(clearSpy).toHaveBeenCalledWith(seeded.id);
+      });
+    });
+
+    describe("クラウド同期連携 (AC-RD-14)", () => {
+      it("goToChapter による話数変更時に syncEngine.notifyChanged が呼び出されること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 2,
+          cachedCount: 2,
+        });
+
+        const mockSyncEngine = {
+          notifyChanged: vi.fn().mockResolvedValue(undefined),
+        };
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              syncEngine: mockSyncEngine as unknown as SyncEngine,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        mockSyncEngine.notifyChanged.mockClear();
+
+        await act(async () => {
+          const success = await result.current.goToChapter(2);
+          expect(success).toBe(true);
+        });
+
+        expect(mockSyncEngine.notifyChanged).toHaveBeenCalled();
+      });
+
+      it("loadInitialData で未読エピソードを開いて既読更新されたとき、syncEngine.notifyChanged が呼び出されること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 2,
+          cachedCount: 2,
+        });
+
+        // 第1話を未読にしておく
+        await db.execute(
+          "UPDATE chapters SET is_read = 0 WHERE novel_id = ? AND chapter_index = 1",
+          [seeded.id],
+        );
+
+        const mockSyncEngine = {
+          notifyChanged: vi.fn().mockResolvedValue(undefined),
+        };
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              syncEngine: mockSyncEngine as unknown as SyncEngine,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        expect(mockSyncEngine.notifyChanged).toHaveBeenCalled();
+      });
+
+      it("flushBookmark 呼び出し時に syncEngine.notifyChanged が呼び出されること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 2,
+          cachedCount: 2,
+        });
+
+        const mockSyncEngine = {
+          notifyChanged: vi.fn().mockResolvedValue(undefined),
+        };
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              syncEngine: mockSyncEngine as unknown as SyncEngine,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        mockSyncEngine.notifyChanged.mockClear();
+
+        await act(async () => {
+          await result.current.flushBookmark();
+        });
+
+        expect(mockSyncEngine.notifyChanged).toHaveBeenCalled();
+      });
+
+      it("syncEngine が未設定（undefined）でもエラーなく動作すること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 2,
+          cachedCount: 2,
+        });
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              syncEngine: undefined,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        await act(async () => {
+          const success = await result.current.goToChapter(2);
+          expect(success).toBe(true);
+        });
+
+        expect(result.current.chapterIndex).toBe(2);
       });
     });
   });
