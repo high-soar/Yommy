@@ -2,11 +2,11 @@
 type: spec-feature
 title: "設定画面仕様書（SCR-05: Settings）"
 description: 小説リーダーの組版設定（縦書き/横書き、4カラーテーマ、文字サイズ、行間）の一括カスタマイズ・永続化、ルビ・傍点を含むサンプル文章プレビュー、および下部タブ・OSバックキー連携を提供する設定画面（SCR-05）の正本仕様。
-status: "Review (#124)"
+status: Approved
 updated: "2026-10-31"
 tags: [settings, scr-05, typography, theme, preview, bottom-nav, ui]
 related_specs:
-  - docs/specs/changes/issue-124-settings-back-button-navigation.md
+  - docs/specs/changes/archive/issue-124-settings-back-button-navigation.md
   - docs/specs/requirements.md
   - docs/specs/architecture.md
   - docs/specs/db-schema.md
