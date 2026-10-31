@@ -15,6 +15,8 @@ const {
   Empty,
   Paged,
   ScrollMode,
+  BoundaryHintNext,
+  BoundaryHintPrev,
 } = composeStories(stories);
 
 const sampleNovel: NovelRecord = {
@@ -82,7 +84,7 @@ function createDefaultProps(
 
 function firePointer(
   element: HTMLElement,
-  type: "pointerdown" | "pointerup" | "pointercancel",
+  type: "pointerdown" | "pointermove" | "pointerup" | "pointercancel",
   init: { clientX?: number; clientY?: number } = {},
 ) {
   const event = new MouseEvent(type, {
@@ -190,6 +192,20 @@ describe("ReaderPage", () => {
       expect(
         screen.queryByTestId("reader-page-indicator"),
       ).not.toBeInTheDocument();
+    });
+
+    it("BoundaryHintNext ストーリーで次話案内ヒントバッジが表示されること（AC-RD-18）", () => {
+      render(<BoundaryHintNext />);
+      const hint = screen.getByTestId("reader-episode-boundary-hint");
+      expect(hint).toBeInTheDocument();
+      expect(hint).toHaveTextContent("指を離して次の話へ");
+    });
+
+    it("BoundaryHintPrev ストーリーで前話案内ヒントバッジが表示されること（AC-RD-18）", () => {
+      render(<BoundaryHintPrev />);
+      const hint = screen.getByTestId("reader-episode-boundary-hint");
+      expect(hint).toBeInTheDocument();
+      expect(hint).toHaveTextContent("指を離して前の話へ");
     });
   });
 
@@ -553,6 +569,256 @@ describe("ReaderPage", () => {
       );
 
       expect(screen.getByTestId("reader-page")).toBeInTheDocument();
+    });
+  });
+
+  describe("Kindle様式ジェスチャー・エピソード境界遷移検証 (AC-RD-17〜19)", () => {
+    function setupContainerDimensions(element: HTMLElement, width = 300) {
+      Object.defineProperty(element, "clientWidth", {
+        value: width,
+        configurable: true,
+        writable: true,
+      });
+      element.getBoundingClientRect = () => ({
+        left: 0,
+        top: 0,
+        right: width,
+        bottom: 600,
+        width,
+        height: 600,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
+      });
+    }
+
+    it("画面左端タップ（幅約 20%: x < 60px）で縦書き次ページへめくり遷移すること（AC-RD-17）", () => {
+      const onPageChange = vi.fn();
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            pagingMode: "paged",
+            currentPage: 2,
+            totalPages: 5,
+            onPageChange,
+          })}
+        />,
+      );
+
+      const main = screen.getByRole("main");
+      setupContainerDimensions(main, 300);
+
+      firePointer(main, "pointerdown", { clientX: 30, clientY: 100 });
+      firePointer(main, "pointerup", { clientX: 32, clientY: 101 });
+
+      expect(onPageChange).toHaveBeenCalledWith(3);
+    });
+
+    it("画面右端タップ（幅約 20%: x > 240px）で縦書き前ページへめくり遷移すること（AC-RD-17）", () => {
+      const onPageChange = vi.fn();
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            pagingMode: "paged",
+            currentPage: 2,
+            totalPages: 5,
+            onPageChange,
+          })}
+        />,
+      );
+
+      const main = screen.getByRole("main");
+      setupContainerDimensions(main, 300);
+
+      firePointer(main, "pointerdown", { clientX: 270, clientY: 100 });
+      firePointer(main, "pointerup", { clientX: 271, clientY: 100 });
+
+      expect(onPageChange).toHaveBeenCalledWith(1);
+    });
+
+    it("画面中央タップ（幅約 60%: 60px <= x <= 240px）で下部オーバーレイ開閉がトグルすること（AC-RD-17）", () => {
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            pagingMode: "paged",
+            currentPage: 2,
+            totalPages: 5,
+            initialOverlayOpen: false,
+          })}
+        />,
+      );
+
+      const overlay = screen.getByTestId("reader-bottom-overlay");
+      expect(overlay).toHaveAttribute("aria-hidden", "true");
+
+      const main = screen.getByRole("main");
+      setupContainerDimensions(main, 300);
+
+      // 1回目タップで展開
+      firePointer(main, "pointerdown", { clientX: 150, clientY: 100 });
+      firePointer(main, "pointerup", { clientX: 151, clientY: 100 });
+      expect(overlay).toHaveAttribute("aria-hidden", "false");
+
+      // 2回目タップで閉じる
+      firePointer(main, "pointerdown", { clientX: 150, clientY: 100 });
+      firePointer(main, "pointerup", { clientX: 150, clientY: 100 });
+      expect(overlay).toHaveAttribute("aria-hidden", "true");
+    });
+
+    it("水平ドラッグ移動量 30% 以上の指離しで次ページ遷移が確定すること（AC-RD-17）", () => {
+      const onPageChange = vi.fn();
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            pagingMode: "paged",
+            currentPage: 2,
+            totalPages: 5,
+            onPageChange,
+          })}
+        />,
+      );
+
+      const main = screen.getByRole("main");
+      setupContainerDimensions(main, 300);
+
+      firePointer(main, "pointerdown", { clientX: 100, clientY: 100 });
+      firePointer(main, "pointermove", { clientX: 200, clientY: 100 }); // dx = +100 >= 90px (30%)
+      firePointer(main, "pointerup", { clientX: 200, clientY: 100 });
+
+      expect(onPageChange).toHaveBeenCalledWith(3);
+    });
+
+    it("水平ドラッグ移動量 30% 未満の指離しでスナップバックしページ遷移しないこと（AC-RD-17）", () => {
+      const onPageChange = vi.fn();
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            pagingMode: "paged",
+            currentPage: 2,
+            totalPages: 5,
+            onPageChange,
+          })}
+        />,
+      );
+
+      const main = screen.getByRole("main");
+      setupContainerDimensions(main, 300);
+
+      firePointer(main, "pointerdown", { clientX: 100, clientY: 100 });
+      firePointer(main, "pointermove", { clientX: 150, clientY: 100 }); // dx = +50 < 90px
+      firePointer(main, "pointerup", { clientX: 150, clientY: 100 });
+
+      expect(onPageChange).not.toHaveBeenCalled();
+    });
+
+    it("最終ページでさらに次へドラッグ時にヒントが表示され、30%以上離上で次話遷移すること（AC-RD-18）", () => {
+      const onNextChapter = vi.fn();
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            pagingMode: "paged",
+            currentPage: 5,
+            totalPages: 5,
+            chapterIndex: 1,
+            totalChapters: 3,
+            onNextChapter,
+          })}
+        />,
+      );
+
+      const main = screen.getByRole("main");
+      setupContainerDimensions(main, 300);
+
+      firePointer(main, "pointerdown", { clientX: 100, clientY: 100 });
+      firePointer(main, "pointermove", { clientX: 200, clientY: 100 }); // dx = +100 >= 90px
+
+      const hint = screen.getByTestId("reader-episode-boundary-hint");
+      expect(hint).toBeInTheDocument();
+      expect(hint).toHaveTextContent("指を離して次の話へ");
+
+      firePointer(main, "pointerup", { clientX: 200, clientY: 100 });
+      expect(onNextChapter).toHaveBeenCalled();
+    });
+
+    it("第1ページでさらに前へドラッグ時にヒントが表示され、30%以上離上で前話遷移すること（AC-RD-18）", () => {
+      const onPrevChapter = vi.fn();
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            pagingMode: "paged",
+            currentPage: 1,
+            totalPages: 5,
+            chapterIndex: 2,
+            totalChapters: 3,
+            onPrevChapter,
+          })}
+        />,
+      );
+
+      const main = screen.getByRole("main");
+      setupContainerDimensions(main, 300);
+
+      firePointer(main, "pointerdown", { clientX: 200, clientY: 100 });
+      firePointer(main, "pointermove", { clientX: 100, clientY: 100 }); // dx = -100
+
+      const hint = screen.getByTestId("reader-episode-boundary-hint");
+      expect(hint).toBeInTheDocument();
+      expect(hint).toHaveTextContent("指を離して前の話へ");
+
+      firePointer(main, "pointerup", { clientX: 100, clientY: 100 });
+      expect(onPrevChapter).toHaveBeenCalled();
+    });
+
+    it("連続スクロールモードでの 2 段階スクロール（末尾到達後の再ホイール）で次話遷移すること（AC-RD-19）", () => {
+      const onNextChapter = vi.fn();
+      const onScrollProgressChange = vi.fn();
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            pagingMode: "scroll",
+            chapterIndex: 1,
+            totalChapters: 3,
+            onNextChapter,
+            onScrollProgressChange,
+          })}
+        />,
+      );
+
+      const main = screen.getByRole("main");
+      const readerView = screen.getByTestId("reader-view");
+
+      // 第1段階: スクロールで末尾到達
+      fireEvent.scroll(readerView);
+
+      // 第2段階: 再ホイール操作
+      fireEvent.wheel(main, { deltaY: 20 });
+      expect(onNextChapter).toHaveBeenCalled();
+    });
+
+    it("連続スクロールモードでの 2 段階スクロール（先頭到達後の再ホイール）で前話遷移すること（AC-RD-19）", () => {
+      const onPrevChapter = vi.fn();
+      const onScrollProgressChange = vi.fn();
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            pagingMode: "scroll",
+            chapterIndex: 2,
+            totalChapters: 3,
+            onPrevChapter,
+            onScrollProgressChange,
+          })}
+        />,
+      );
+
+      const main = screen.getByRole("main");
+      const readerView = screen.getByTestId("reader-view");
+
+      // 第1段階: スクロールで先頭到達
+      fireEvent.scroll(readerView);
+
+      // 第2段階: 再ホイール操作
+      fireEvent.wheel(main, { deltaY: -20 });
+      expect(onPrevChapter).toHaveBeenCalled();
     });
   });
 });

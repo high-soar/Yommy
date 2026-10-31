@@ -55,6 +55,10 @@ export interface ReaderPageProps {
   onSelectTab?: (tab: BottomTab) => void;
   /** 下部オーバーレイの初期展開フラグ（省略時はエラー/空状態時に true） */
   initialOverlayOpen?: boolean;
+  /** 初期スライド変位量（px、Storybook/VRT/テスト用） */
+  initialSlideOffsetPx?: number;
+  /** 初期境界案内ヒントメッセージ（Storybook/VRT/テスト用） */
+  initialBoundaryHint?: string | null;
 }
 
 const pageBgStyles: Record<ReaderTheme, string> = {
