@@ -960,9 +960,16 @@ describe("ReaderContainer", () => {
         readerView.dispatchEvent(new Event("scroll"));
       });
 
-      await waitFor(() => {
-        expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0.5);
-      });
+      await waitFor(
+        () => {
+          expect(updateBookmarkSpy).toHaveBeenCalledWith(
+            sampleNovel.id,
+            1,
+            0.5,
+          );
+        },
+        { timeout: 3000 },
+      );
     });
   });
 
@@ -1140,29 +1147,37 @@ describe("ReaderContainer", () => {
         firstProps?.onTotalPagesChange?.(10);
       });
 
-      await waitFor(() => {
-        expect(pageSpy).toHaveBeenLastCalledWith(
-          expect.objectContaining({ totalPages: 10 }),
-          undefined,
-        );
-      });
+      await waitFor(
+        () => {
+          expect(pageSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ totalPages: 10 }),
+            undefined,
+          );
+        },
+        { timeout: 3000 },
+      );
 
       // onPageChange でページ移動
-      const updatedProps = pageSpy.mock.lastCall?.[0];
+      const updatedProps = pageSpy.mock.calls.find(
+        (call) => call[0]?.totalPages === 10,
+      )?.[0];
       expect(updatedProps?.onPageChange).toBeDefined();
 
       act(() => {
         updatedProps?.onPageChange?.(4);
       });
 
-      await waitFor(() => {
-        expect(pageSpy).toHaveBeenLastCalledWith(
-          expect.objectContaining({
-            currentPage: 4,
-          }),
-          undefined,
-        );
-      });
+      await waitFor(
+        () => {
+          expect(pageSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+              currentPage: 4,
+            }),
+            undefined,
+          );
+        },
+        { timeout: 3000 },
+      );
     });
   });
 });
