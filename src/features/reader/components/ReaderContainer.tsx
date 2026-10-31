@@ -34,6 +34,7 @@ export interface ReaderContainerProps {
  * 3. 前後エピソード連続遷移（TR-05）および既読フラグの自動更新（AC-RD-07）
  * 4. 下部タブ遷移時および OS バックキー（popstate）離脱時のスクロール進捗率自動保存（flushBookmark, AC-RD-08）
  * 5. 全画面テキスト表示化（AC-RD-09）
+ * 6. ページ送りモード（auto / paged / scroll）とページネーション状態・コールバックの伝播（AC-RD-15, AC-RD-16, AC-RD-20）
  */
 export const ReaderContainer: React.FC<ReaderContainerProps> = ({
   novelId,
