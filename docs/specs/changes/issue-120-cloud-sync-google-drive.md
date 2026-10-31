@@ -113,10 +113,14 @@ Pull 時にリモートデータ（`remote`）とローカル DB（`local`）の
 
 1. **新規作品の自動目次補完**:
    - リモートに存在し、ローカル DB に未登録の作品がある場合、その作品の `canonicalUrl` を対象パーサー（`KakuyomuParser` 等）で即座に自動取得（`novelRepository.upsertNovelWithToc`）し、ローカル DB に目次とともに保存する。
+   - `canonicalUrl` から抽出した `siteType` および `workId` が `remoteNovel.siteType` および `remoteNovel.remoteWorkId` と完全に一致することを検証し、不整合時はフェッチを拒絶する。通信およびパースには正規化された `canonicalUrl` を使用する。
    - 保存完了後、リモートの `bookmarkChapterIndex`, `lastReadAt`, および `readChapterIds` を即座に反映する。
-2. **作品削除の伝播（Tombstone）**:
+2. **作品削除の伝播（Tombstone）と再登録保護**:
    - リモートの `deletedNovels` に含まれる作品 ID について、削除日時（`deletedAt`）がローカル作品の `createdAt` および `updatedAt` より新しい場合、ローカル DB からカスケード削除する。
+   - ただし、リモートの `novels` に同一作品 ID が存在し `updatedAt >= deletedAt` である場合は、リモート再登録作品と判定してローカル削除伝播をスキップする。
    - 逆にローカルで作品を削除した際は、ローカルの `deleted_novels` テーブルに削除日時を記録し、次回 Push 時のリモート `deletedNovels` に結合する（和集合）。
+   - 本棚に現存する作品（`syncNovels`）の作品 ID は、Push 時の `deletedNovels` から確実に除外（`delete`）し、ローカルの `deleted_novels` テーブルからも古い Tombstone をパージ（`purgeDeletedNovels`）して作品の意図せぬ消失を防止する。
+   - `pullAndMerge()` 完了時にも、現存する全作品 ID に対してローカル Tombstone のパージ（`purgeDeletedNovels`）を実行する。
 3. **しおり話数のマージ**:
    - 同一作品が双方に存在する場合、`lastReadAt`（最終閲覧日時）が新しい方の `bookmarkChapterIndex` を採用する。
    - しおり話数が更新された場合、ローカルのスクロール進捗率（`bookmark_scroll_progress`）は `0.0` にリセットする（同一話数の場合はローカルのスクロール進捗率をそのまま維持する）。
@@ -138,6 +142,10 @@ Pull 時にリモートデータ（`remote`）とローカル DB（`local`）の
    - **デバウンス制御**: 読書中の連続ページめくりによる過剰な API リクエストを防ぐため、**2〜3秒（2500ms 推奨）のデバウンス** を設けて非同期実行する。
 3. **オフライン・エラー透過性**:
    - ネットワーク未接続時や Drive API エラー時は、リーダーや本棚のローカル操作を一切ブロックせず、エラーログを保持して次回復帰時に再試行する。
+4. **多重並行実行防止（排他制御・Single-flight）**:
+   - `SyncEngine` 内部に排他制御機構（`isSyncing` フラグおよび FIFO キュー排他制御）を導入し、`pullAndMerge`、`pushCurrentState`、`sync` が同時に重なって実行されないよう安全にガードする。
+   - `sync()` が実行中に重複して呼び出された場合、実行中の Promise を再利用して単一実行に合流（Single-flight）させる。
+   - `scheduleDebouncedPush()` では生成した Promise に内部で `.catch(() => {})` を登録し、呼び出し元が await / catch しない場合（fire-and-forget）でも未処理例外（`UnhandledPromiseRejection`）が漏洩しないよう防止する。
 
 ---
 
@@ -188,7 +196,9 @@ Pull 時にリモートデータ（`remote`）とローカル DB（`local`）の
    - ユーザーが Google アカウント設定から遠隔でアクセス権を取り消した場合、次回通信時の `401 Unauthorized` を検知して自動的に安全な未連携状態へフォールバックする。
 5. **Pull 時同期データのゼロトラスト検証（SSRF / インジェクション防止）**:
    - 受信した JSON に対し、通信前に厳格なランタイムスキーマ検証（型・構造・負数チェック・プロトタイプ汚染防止）を実施する。
-   - 未登録作品の自動目次取得（`upsertNovelWithToc`）前に、`canonicalUrl` を既存の `parseNovelUrl`（`https://kakuyomu.jp/works/<id>` ホワイトリスト検証）にかけ、不正な URL や未知ドメインへのリクエスト（SSRF）を遮断する。
+   - 作品 ID（`id`）が `${siteType}:${remoteWorkId}` と厳密に一致することを検証する。
+   - `deletedNovels` のキーが空文字（`""`）や空白文字でないことを検証し、`novels` と `deletedNovels` の双方に同一キーが存在する場合は、本棚現存作品を優先し `deletedNovels` から安全に除外する。
+   - 未登録作品の自動目次取得（`upsertNovelWithToc`）前に、`canonicalUrl` を既存の `parseNovelUrl`（`https://kakuyomu.jp/works/<id>` ホワイトリスト検証）にかけ、不正な URL や未知ドメインへのリクエスト（SSRF）を遮断する。さらに `canonicalUrl` から抽出した `siteType` / `workId` とリモート作品データの整合性を検証し、正規化 URL で通信を行う。
 
 ---
 

@@ -582,15 +582,18 @@ export interface CloudSyncBridge {
 
 - **ゼロトラスト検証**:
   - 受信した JSON に対し、通信前に厳格なランタイムスキーマ検証（`version === 1`、必須フィールド、数値範囲、プロトタイプ汚染防止）を実行する。
-  - 未登録作品の自動目次取得（`upsertNovelWithToc`）前に、`canonicalUrl` を既存の `parseNovelUrl`（`https://kakuyomu.jp/works/<id>` ホワイトリスト検証）にかけ、不正な URL や未知ドメインへのリクエスト（SSRF）を遮断する。
+  - 作品 ID（`id`）が `${siteType}:${remoteWorkId}` と厳密に一致することを検証する。
+  - `deletedNovels` のキーが空文字（`""`）や空白文字でないことを検証し、`novels` と `deletedNovels` の双方に同一キーが存在する場合は、本棚現存作品を優先し `deletedNovels` から安全に除外する。
+  - 未登録作品の自動目次取得（`upsertNovelWithToc`）前に、`canonicalUrl` を既存の `parseNovelUrl`（`https://kakuyomu.jp/works/<id>` ホワイトリスト検証）にかけ、不正な URL や未知ドメインへのリクエスト（SSRF）を遮断する。さらに `canonicalUrl` から抽出した `siteType` / `workId` とリモート作品データの整合性を検証し、正規化 URL で通信を行う。
 - **競合解決（マージ）ルール**:
   - 新規作品の自動目次補完: リモートにのみ存在する作品は `canonicalUrl` から目次を自動取得してローカル DB に登録し、リモートのしおり話数・既読状態を即時反映する。
-  - 作品削除の伝播（Tombstone）: `deletedNovels` の削除日時がローカル作品の登録/更新日時より新しければローカル DB からカスケード削除する。ローカルで削除された作品も `deleted_novels` テーブルに Tombstone を記録し次回 Push 時に結合する。
+  - 作品削除の伝播（Tombstone）と再登録保護: `deletedNovels` の削除日時がローカル作品の登録/更新日時より新しければローカル DB からカスケード削除する。ただし、リモートの `novels` に同一作品 ID が存在し `updatedAt >= deletedAt` である場合は、リモート再登録作品と判定してローカル削除伝播をスキップする。ローカルで削除された作品も `deleted_novels` テーブルに Tombstone を記録し次回 Push 時に結合する。本棚現存作品の ID は Push 時の `deletedNovels` から除外し、`pushCurrentState` および `pullAndMerge` 完了時にローカルの古い Tombstone をパージ（`purgeDeletedNovels`）する。
   - しおり話数のマージ: 同一作品が両端末にある場合、`lastReadAt` が新しい方の `bookmarkChapterIndex` を採用する（話数変更時はスクロール率を `0.0` にリセット、同一話数の場合は端末ローカルのスクロール率を維持）。
   - 既読状態のマージ: 両端末の既読エピソード ID の和集合（Union）を採用する。
-- **自動同期トリガーとデバウンス制御**:
+- **自動同期トリガーと排他・デバウンス制御**:
   - 自動 Pull: アプリ起動時、およびバックグラウンド復帰時（休止から5分以上経過）。未送信ローカル変更がある場合はマージ後に自動 Push。
   - 自動 Push: 本棚作品追加・削除、およびリーダー話数遷移・既読更新時に 2〜3秒（2500ms）デバウンス付き非同期実行。
+  - 多重並行実行防止（排他制御・Single-flight）: `SyncEngine` 内部に排他制御機構（`isSyncing` フラグおよび FIFO キュー排他制御）を導入し、`pullAndMerge`、`pushCurrentState`、`sync` が同時に重なって実行されないよう安全にガードする。`sync()` が実行中に重複して呼び出された場合、実行中の Promise を再利用して単一実行に合流（Single-flight）させる。`scheduleDebouncedPush()` では生成した Promise に内部で `.catch(() => {})` を登録し、未処理例外（`UnhandledPromiseRejection`）を防止する。
 
 #### 3. ネイティブ Google Identity Services と 5 層セキュリティ設計
 
