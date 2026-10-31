@@ -118,6 +118,7 @@ erDiagram
         INTEGER page_margin_px "画面余白px (8〜48, 初期値 20)"
         INTEGER enable_tap_paging "タップ1画面送り有効 (0 or 1, 初期値 1)"
         INTEGER enable_volume_key_paging "音量キー送り有効 (0 or 1, 初期値 0)"
+        TEXT paging_mode "auto | paged | scroll (初期値 auto)"
         TEXT updated_at "更新日時 (ISO8601)"
     }
 
