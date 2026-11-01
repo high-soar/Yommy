@@ -183,10 +183,9 @@ export function useReaderGestures({
 
       if (!isDraggingRef.current) return;
 
-      // 境界判定
-      const isNextBoundary =
-        currentPage >= totalPages && (isVertical ? dx > 0 : dx < 0);
-      const isPrevBoundary = currentPage <= 1 && (isVertical ? dx < 0 : dx > 0);
+      // 境界判定（縦書きページめくり: 右ドラッグ dx > 0 で前話、左ドラッグ dx < 0 で次話）
+      const isNextBoundary = currentPage >= totalPages && dx > 0;
+      const isPrevBoundary = currentPage <= 1 && dx < 0;
 
       // ラバーバンド減衰（0.3倍）
       let effectiveOffset = dx;
@@ -271,27 +270,15 @@ export function useReaderGestures({
         const ratio = relativeX / width;
 
         if (ratio < 0.2) {
-          // 左端（幅約20%）: 縦書きなら次、横書きなら前
-          if (isVertical) {
-            if (currentPage < totalPages) {
-              onPageChange?.(currentPage + 1);
-            }
-          } else {
-            if (currentPage > 1) {
-              onPageChange?.(currentPage - 1);
-            }
+          // 左端（幅約20%）: 縦書き時は次ページ（左開き）
+          if (currentPage < totalPages) {
+            onPageChange?.(currentPage + 1);
           }
           onCloseOverlay();
         } else if (ratio > 0.8) {
-          // 右端（幅約20%）: 縦書きなら前、横書きなら次
-          if (isVertical) {
-            if (currentPage > 1) {
-              onPageChange?.(currentPage - 1);
-            }
-          } else {
-            if (currentPage < totalPages) {
-              onPageChange?.(currentPage + 1);
-            }
+          // 右端（幅約20%）: 縦書き時は前ページ
+          if (currentPage > 1) {
+            onPageChange?.(currentPage - 1);
           }
           onCloseOverlay();
         } else {
@@ -302,9 +289,8 @@ export function useReaderGestures({
       }
 
       // 2. ドラッグ離上判定
-      const isNextBoundary =
-        currentPage >= totalPages && (isVertical ? dx > 0 : dx < 0);
-      const isPrevBoundary = currentPage <= 1 && (isVertical ? dx < 0 : dx > 0);
+      const isNextBoundary = currentPage >= totalPages && dx > 0;
+      const isPrevBoundary = currentPage <= 1 && dx < 0;
 
       const triggerAnimationEnd = () => {
         setIsAnimating(true);
@@ -337,7 +323,7 @@ export function useReaderGestures({
       const isThresholdMet = Math.abs(dx) >= width * 0.3 || velocity > 0.5;
 
       if (isThresholdMet) {
-        const isNextPage = isVertical ? dx > 0 : dx < 0;
+        const isNextPage = dx > 0;
         if (isNextPage) {
           if (currentPage < totalPages) {
             onPageChange?.(currentPage + 1);
@@ -361,7 +347,6 @@ export function useReaderGestures({
     },
     [
       isPaged,
-      isVertical,
       currentPage,
       totalPages,
       chapterIndex,

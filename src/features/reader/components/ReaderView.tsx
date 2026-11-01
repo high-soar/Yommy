@@ -99,28 +99,17 @@ function restoreScrollPosition(
 
 /**
  * 1ページ組版およびスライドアニメーションのインラインスタイルを生成する純粋関数
+ * （※ページめくりは縦書き専用）
  */
 function getPagedContentStyle(
   isPaged: boolean,
-  isVertical: boolean,
   slideTranslateX: number,
   slideOffsetPx: number,
-  containerWidth?: number,
 ): React.CSSProperties | undefined {
   if (!isPaged) return undefined;
   return {
     transform: `translateX(${slideTranslateX}px)`,
     transition: slideOffsetPx !== 0 ? "none" : "transform 200ms ease-out",
-    ...(isVertical
-      ? {}
-      : {
-          columns: "1",
-          columnGap: "48px",
-          columnFill: "auto",
-          ...(containerWidth && containerWidth > 48
-            ? { columnWidth: `${containerWidth - 48}px` }
-            : {}),
-        }),
   };
 }
 
@@ -268,13 +257,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       <div
         data-testid="reader-content"
         className={`h-full w-full ${isPaged ? "p-6" : ""}`}
-        style={getPagedContentStyle(
-          isPaged,
-          isVertical,
-          slideTranslateX,
-          slideOffsetPx,
-          pageWidth,
-        )}
+        style={getPagedContentStyle(isPaged, slideTranslateX, slideOffsetPx)}
       >
         {(title || chapterTitle) && (
           <header

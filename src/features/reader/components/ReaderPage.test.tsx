@@ -365,11 +365,11 @@ describe("ReaderPage", () => {
       expect(touchZone).not.toHaveClass("left-0");
       expect(touchZone).not.toHaveClass("right-0");
 
-      // 横書き・paged => 実効 paged
+      // 縦書き・paged => 実効 paged
       rerender(
         <ReaderPage
           {...createDefaultProps({
-            writingMode: "horizontal-tb",
+            writingMode: "vertical-rl",
             pagingMode: "paged",
           })}
         />,
@@ -401,6 +401,19 @@ describe("ReaderPage", () => {
           {...createDefaultProps({
             writingMode: "vertical-rl",
             pagingMode: "scroll",
+          })}
+        />,
+      );
+      touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      expect(touchZone).toHaveClass("left-0");
+      expect(touchZone).toHaveClass("right-0");
+
+      // 横書き・paged => 横書きスクロール限定化により実効 scroll (v0.5 Issue #168, #173)
+      rerender(
+        <ReaderPage
+          {...createDefaultProps({
+            writingMode: "horizontal-tb",
+            pagingMode: "paged",
           })}
         />,
       );
