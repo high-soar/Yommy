@@ -5,6 +5,11 @@ import type {
   ReaderFontFamily,
 } from "../../../storage/types";
 import { sanitizeChapterHtml } from "../../../parsers/sanitizer";
+import {
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_PAGE_MARGIN_PX,
+  FONT_FAMILY_STACKS,
+} from "../../../shared/constants/typography";
 
 export interface SampleTextPreviewProps {
   /** 組み方向（'vertical-rl' または 'horizontal-tb'） */
@@ -47,7 +52,7 @@ const orientationStyles: Record<WritingMode, string> = {
  * プレビュー枠の共通外枠スタイル
  */
 const BASE_FRAME_CLASSES =
-  "rounded-xl border shadow-xs h-64 w-full p-4 md:p-6 font-serif transition-colors duration-200 select-none";
+  "rounded-xl border shadow-xs h-64 w-full transition-colors duration-200 select-none";
 
 /**
  * ルビ・傍点を含むサンプル小説文の原本文
@@ -65,6 +70,8 @@ export const SampleTextPreview: React.FC<SampleTextPreviewProps> = ({
   theme,
   fontSizePx,
   lineHeight,
+  fontFamily = DEFAULT_FONT_FAMILY,
+  pageMarginPx = DEFAULT_PAGE_MARGIN_PX,
   className,
 }) => {
   const sanitizedHtml = useMemo(
@@ -88,10 +95,14 @@ export const SampleTextPreview: React.FC<SampleTextPreviewProps> = ({
       data-theme={theme}
       data-font-size={String(fontSizePx)}
       data-line-height={String(lineHeight)}
+      data-font-family={fontFamily}
+      data-page-margin={String(pageMarginPx)}
       className={containerClasses}
       style={{
         fontSize: `${fontSizePx}px`,
         lineHeight,
+        fontFamily: FONT_FAMILY_STACKS[fontFamily],
+        padding: `${pageMarginPx}px`,
       }}
     >
       <div
