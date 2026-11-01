@@ -154,4 +154,17 @@ export class SqlChapterRepository implements ChapterRepository {
       return count;
     });
   }
+
+  async getStorageCacheSummary(): Promise<{
+    totalCachedChapters: number;
+    totalByteSize: number;
+  }> {
+    throw new Error("getStorageCacheSummary is not implemented yet");
+  }
+
+  async deleteAllCachedBodies(_options?: {
+    onlyRead?: boolean;
+  }): Promise<number> {
+    throw new Error("deleteAllCachedBodies is not implemented yet");
+  }
 }
