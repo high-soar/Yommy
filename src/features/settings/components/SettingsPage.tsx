@@ -231,34 +231,41 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             </button>
           </div>
 
-          <div className="flex items-center justify-between py-3 border-b border-slate-200 dark:border-slate-800">
-            <div>
-              <label
-                htmlFor="paging-mode-select"
-                className="text-sm font-medium text-slate-700 dark:text-slate-300"
+          <div className="py-3 border-b border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between">
+              <div>
+                <label
+                  htmlFor="paging-mode-select"
+                  className="text-sm font-medium text-slate-700 dark:text-slate-300"
+                >
+                  ページ送り
+                </label>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  読書時のページ送り方法を設定します
+                </p>
+              </div>
+              <select
+                id="paging-mode-select"
+                data-testid="paging-mode-select"
+                disabled={isLoading || writingMode === "horizontal-tb"}
+                value={pagingMode === "scroll" ? "scroll" : "paged"}
+                onChange={(e) =>
+                  onChangePagingMode?.(e.target.value as ReaderPagingMode)
+                }
+                className="text-xs md:text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 text-slate-700 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
               >
-                ページ送り
-              </label>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                読書時のページ送り方法を設定します
-              </p>
+                <option value="paged">ページめくり（縦書き時）</option>
+                <option value="scroll">連続スクロール</option>
+              </select>
             </div>
-            <select
-              id="paging-mode-select"
-              data-testid="paging-mode-select"
-              disabled={isLoading}
-              value={pagingMode}
-              onChange={(e) =>
-                onChangePagingMode?.(e.target.value as ReaderPagingMode)
-              }
-              className="text-xs md:text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 text-slate-700 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
-            >
-              <option value="auto">
-                自動（縦書き: めくり / 横書き: スクロール）
-              </option>
-              <option value="paged">ページめくり</option>
-              <option value="scroll">連続スクロール</option>
-            </select>
+            {writingMode === "horizontal-tb" && (
+              <p
+                data-testid="paging-mode-note"
+                className="mt-1.5 text-xs text-amber-600 dark:text-amber-400"
+              >
+                ※横書き表示時は連続スクロール固定となります
+              </p>
+            )}
           </div>
 
           <div className="py-3 border-b border-slate-200 dark:border-slate-800">

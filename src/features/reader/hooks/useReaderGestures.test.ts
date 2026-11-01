@@ -529,12 +529,15 @@ describe("useReaderGestures", () => {
     });
   });
 
-  describe("横書きページめくりモード（horizontal-tb / paged）のジェスチャー", () => {
-    it("横書き時は右から左ドラッグ（dx < 0）が次ページ、左から右（dx > 0）が前ページとなること", () => {
+  describe("横書き時のスクロール限定化とジェスチャー無効化 (v0.5 Issue #168, #173)", () => {
+    it("横書き時はドラッグ操作によるページめくりが発火しないこと（実効 scroll 固定）", () => {
+      const onPageChange = vi.fn();
       const { result } = renderHook(() =>
         useReaderGestures({
           ...defaultOptions,
           writingMode: "horizontal-tb",
+          pagingMode: "paged",
+          onPageChange,
         }),
       );
 
@@ -543,7 +546,7 @@ describe("useReaderGestures", () => {
           createPointerEvent("pointerdown", { clientX: 200, clientY: 100 }),
         );
         result.current.handlePointerMove(
-          createPointerEvent("pointermove", { clientX: 100, clientY: 100 }), // dx = -100 (次へ)
+          createPointerEvent("pointermove", { clientX: 100, clientY: 100 }), // dx = -100
         );
       });
 
@@ -553,14 +556,17 @@ describe("useReaderGestures", () => {
         );
       });
 
-      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(3);
+      expect(onPageChange).not.toHaveBeenCalled();
     });
 
-    it("横書きタップ時は右端タップが次ページ、左端タップが前ページとなること", () => {
+    it("横書き時は左右端タップによるページめくりが発火しないこと（実効 scroll 固定）", () => {
+      const onPageChange = vi.fn();
       const { result } = renderHook(() =>
         useReaderGestures({
           ...defaultOptions,
           writingMode: "horizontal-tb",
+          pagingMode: "paged",
+          onPageChange,
         }),
       );
 
@@ -573,7 +579,7 @@ describe("useReaderGestures", () => {
           createPointerEvent("pointerup", { clientX: 270, clientY: 100 }),
         );
       });
-      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(3);
+      expect(onPageChange).not.toHaveBeenCalled();
 
       // 左端タップ（x = 30px < 60px）
       act(() => {
@@ -584,7 +590,7 @@ describe("useReaderGestures", () => {
           createPointerEvent("pointerup", { clientX: 30, clientY: 100 }),
         );
       });
-      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(1);
+      expect(onPageChange).not.toHaveBeenCalled();
     });
   });
 
@@ -1043,16 +1049,17 @@ describe("useReaderGestures", () => {
       expect(onPageChange).not.toHaveBeenCalled();
     });
 
-    it("横書きモードでのドラッグ境界遷移およびエピソード内前ページめくり", () => {
+    it("横書きモード時は paged 指定時でもスクロール固定となりドラッグによる境界遷移やページめくりが発火しないこと (v0.5 Issue #168, #173)", () => {
       const onNextChapter = vi.fn();
       const onPrevChapter = vi.fn();
       const onPageChange = vi.fn();
 
-      // 横書き最終ページで次へドラッグ（dx < -90）
+      // 横書き最終ページで次へドラッグ（dx < -90）しても実効 scroll のため boundaryHint は表示されず次話遷移もしない
       const { result: nextResult } = renderHook(() =>
         useReaderGestures({
           ...defaultOptions,
           writingMode: "horizontal-tb",
+          pagingMode: "paged",
           currentPage: 4,
           totalPages: 4,
           chapterIndex: 2,
@@ -1069,20 +1076,21 @@ describe("useReaderGestures", () => {
           createPointerEvent("pointermove", { clientX: 80, clientY: 100 }), // dx = -120
         );
       });
-      expect(nextResult.current.boundaryHint).toBe("指を離して次の話へ");
+      expect(nextResult.current.boundaryHint).toBeNull();
 
       act(() => {
         nextResult.current.handlePointerUp(
           createPointerEvent("pointerup", { clientX: 80, clientY: 100 }),
         );
       });
-      expect(onNextChapter).toHaveBeenCalled();
+      expect(onNextChapter).not.toHaveBeenCalled();
 
-      // 横書き第1ページで前へドラッグ（dx > 90）
+      // 横書き第1ページで前へドラッグ（dx > 90）しても boundaryHint は表示されず前話遷移もしない
       const { result: prevResult } = renderHook(() =>
         useReaderGestures({
           ...defaultOptions,
           writingMode: "horizontal-tb",
+          pagingMode: "paged",
           currentPage: 1,
           totalPages: 4,
           chapterIndex: 2,
@@ -1099,20 +1107,21 @@ describe("useReaderGestures", () => {
           createPointerEvent("pointermove", { clientX: 220, clientY: 100 }), // dx = +120
         );
       });
-      expect(prevResult.current.boundaryHint).toBe("指を離して前の話へ");
+      expect(prevResult.current.boundaryHint).toBeNull();
 
       act(() => {
         prevResult.current.handlePointerUp(
           createPointerEvent("pointerup", { clientX: 220, clientY: 100 }),
         );
       });
-      expect(onPrevChapter).toHaveBeenCalled();
+      expect(onPrevChapter).not.toHaveBeenCalled();
 
-      // 横書きエピソード内で前ページ送り（dx > 90）
+      // 横書きエピソード内で前ページ送り操作（dx > 90）してもページ送りは発火しない
       const { result: pageResult } = renderHook(() =>
         useReaderGestures({
           ...defaultOptions,
           writingMode: "horizontal-tb",
+          pagingMode: "paged",
           currentPage: 3,
           totalPages: 4,
           onPageChange,
@@ -1130,7 +1139,7 @@ describe("useReaderGestures", () => {
           createPointerEvent("pointerup", { clientX: 200, clientY: 100 }),
         );
       });
-      expect(onPageChange).toHaveBeenCalledWith(2);
+      expect(onPageChange).not.toHaveBeenCalled();
     });
 
     it("ページめくり確定時およびスナップバック時の isAnimating アニメーションタイマー動作", () => {

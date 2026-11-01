@@ -28,9 +28,10 @@ export function resolveEffectivePagingMode(
   pagingMode: ReaderPagingMode,
   writingMode: WritingMode,
 ): "paged" | "scroll" {
-  if (pagingMode === "paged") return "paged";
-  if (pagingMode === "scroll") return "scroll";
-  return writingMode === "vertical-rl" ? "paged" : "scroll";
+  if (writingMode === "horizontal-tb") {
+    return "scroll";
+  }
+  return pagingMode === "scroll" ? "scroll" : "paged";
 }
 
 /**

@@ -141,10 +141,10 @@ export const VerticalPaged: Story = {
 };
 
 /**
- * 横書きページめくり表示
+ * 横書き・ページめくり設定（横書き時は実効スクロール固定）
  */
 export const HorizontalPaged: Story = {
-  name: "横書き・ページめくり",
+  name: "横書き・ページめくり設定（実効スクロール固定）",
   args: {
     writingMode: "horizontal-tb",
     pagingMode: "paged",

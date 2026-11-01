@@ -160,17 +160,18 @@ describe("ReaderView", () => {
       expect(indicator).toHaveTextContent("1 / 5");
     });
 
-    it("HorizontalPaged ストーリーで横書き・ページめくり設定およびページインジケーター（2 / 6）が描画されること", () => {
+    it("HorizontalPaged ストーリーで横書き・paged 設定時でも実効スクロールモード固定となること (v0.5 Issue #168, #173)", () => {
       render(<HorizontalPaged />);
       const container = screen.getByTestId("reader-view");
       expect(container).toHaveAttribute("data-writing-mode", "horizontal-tb");
       expect(container).toHaveAttribute("data-paging-mode", "paged");
-      expect(container).toHaveAttribute("data-effective-paging-mode", "paged");
-      expect(container).toHaveAttribute("data-current-page", "2");
-      expect(container).toHaveAttribute("data-total-pages", "6");
-      expect(container).toHaveClass("overflow-hidden");
-      const indicator = screen.getByTestId("reader-page-indicator");
-      expect(indicator).toHaveTextContent("2 / 6");
+      expect(container).toHaveAttribute("data-effective-paging-mode", "scroll");
+      expect(container).not.toHaveAttribute("data-current-page");
+      expect(container).not.toHaveAttribute("data-total-pages");
+      expect(container).toHaveClass("overflow-y-auto");
+      expect(
+        screen.queryByTestId("reader-page-indicator"),
+      ).not.toBeInTheDocument();
     });
 
     it("PageIndicator ストーリーで指定された現在ページと総ページ数（3 / 12）が表示されること", () => {
@@ -529,7 +530,7 @@ describe("ReaderView", () => {
       ).not.toBeInTheDocument();
     });
 
-    it("pagingMode='paged' のときは横書きでも実効モードが paged となること", () => {
+    it("横書き（horizontal-tb）のときは pagingMode='paged' が指定されても実効モードが scroll 固定となること (v0.5 Issue #168, #173)", () => {
       render(
         <ReaderView
           bodyHtml="<p>本文</p>"
@@ -540,12 +541,12 @@ describe("ReaderView", () => {
         />,
       );
       const container = screen.getByTestId("reader-view");
-      expect(container).toHaveAttribute("data-effective-paging-mode", "paged");
-      expect(container).toHaveAttribute("data-current-page", "3");
-      expect(container).toHaveAttribute("data-total-pages", "8");
-      expect(screen.getByTestId("reader-page-indicator")).toHaveTextContent(
-        "3 / 8",
-      );
+      expect(container).toHaveAttribute("data-effective-paging-mode", "scroll");
+      expect(container).not.toHaveAttribute("data-current-page");
+      expect(container).not.toHaveAttribute("data-total-pages");
+      expect(
+        screen.queryByTestId("reader-page-indicator"),
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -602,42 +603,8 @@ describe("ReaderView", () => {
       });
     });
 
-    it("横書き（horizontal-tb）時、-(currentPage - 1) * pageWidth + slideOffsetPx に基づく transform およびマルチカラム組版スタイルが設定されること", () => {
-      const { rerender } = render(
-        <ReaderView
-          bodyHtml="<p>横書き本文</p>"
-          writingMode="horizontal-tb"
-          pagingMode="paged"
-          currentPage={3}
-          totalPages={5}
-          slideOffsetPx={0}
-        />,
-      );
-
-      const container = screen.getByTestId("reader-view");
-      mockElementDimensions(container, { clientWidth: 500 });
-
-      rerender(
-        <ReaderView
-          bodyHtml="<p>横書き本文</p>"
-          writingMode="horizontal-tb"
-          pagingMode="paged"
-          currentPage={3}
-          totalPages={5}
-          slideOffsetPx={0}
-        />,
-      );
-
-      const content = screen.getByTestId("reader-content");
-      // -(3 - 1) * 500 + 0 = -1000px
-      expect(content).toHaveStyle({
-        transform: "translateX(-1000px)",
-        transition: "transform 200ms ease-out",
-        columnGap: "48px",
-      });
-
-      // スワイプドラッグ中
-      rerender(
+    it("横書き（horizontal-tb）時は pagingMode='paged' が指定されても transform およびマルチカラム組版スタイルが適用されずスクロールモードとなること (v0.5 Issue #168, #173)", () => {
+      render(
         <ReaderView
           bodyHtml="<p>横書き本文</p>"
           writingMode="horizontal-tb"
@@ -647,11 +614,12 @@ describe("ReaderView", () => {
           slideOffsetPx={60}
         />,
       );
-      // -(3 - 1) * 500 + 60 = -940px
-      expect(content).toHaveStyle({
-        transform: "translateX(-940px)",
-        transition: "none",
-      });
+
+      const content = screen.getByTestId("reader-content");
+      // 実効 scroll モードのため transform や columnGap は適用されない
+      expect(content.style.transform).toBe("");
+      expect(content.style.columnGap).toBe("");
+      expect(content.style.columns).toBe("");
     });
 
     it("pageWidth が取得できない（clientWidth = 0）場合は translateX(0px) となること", () => {
@@ -906,7 +874,7 @@ describe("ReaderView", () => {
       ).not.toBeInTheDocument();
     });
 
-    it("横書き paged モード時、段幅と送り幅が整合するインラインスタイルが適用されること (R1-08)", () => {
+    it("横書き時は paged モード指定時でもマルチカラムインラインスタイルが適用されずスクロールモードとなること (R1-08, v0.5 Issue #168, #173)", () => {
       render(
         <ReaderView
           bodyHtml="<p>長文本文</p>"
@@ -918,9 +886,9 @@ describe("ReaderView", () => {
       );
 
       const content = screen.getByTestId("reader-content");
-      // 横書き paged 時のスタイル検証
-      expect(content.style.columns).toBe("1");
-      expect(content.style.columnGap).toBe("48px");
+      // 横書き時は実効 scroll モードのためマルチカラムスタイルは適用されない
+      expect(content.style.columns).toBe("");
+      expect(content.style.columnGap).toBe("");
     });
 
     it("画面リサイズ時に総ページ数が再計測され onTotalPagesChange が呼ばれること (R1-17)", async () => {
