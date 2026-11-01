@@ -171,17 +171,13 @@ describe("ReaderPage", () => {
       expect(overlay).toHaveClass("translate-y-0");
     });
 
-    it("Paged ストーリーでページめくり組版およびページインジケーター（2 / 5）が表示されること（AC-RD-15, AC-RD-16）", () => {
+    it("Paged ストーリーでページめくり組版プロパティが ReaderView に伝播されること（AC-RD-15, AC-RD-16）", () => {
       render(<Paged />);
       const view = screen.getByTestId("reader-view");
       expect(view).toHaveAttribute("data-paging-mode", "paged");
       expect(view).toHaveAttribute("data-effective-paging-mode", "paged");
       expect(view).toHaveAttribute("data-current-page", "2");
       expect(view).toHaveAttribute("data-total-pages", "5");
-
-      const indicator = screen.getByTestId("reader-page-indicator");
-      expect(indicator).toBeInTheDocument();
-      expect(indicator).toHaveTextContent("2 / 5");
     });
 
     it("ScrollMode ストーリーで連続スクロールモードとして描画されること（AC-RD-15）", () => {
@@ -352,6 +348,66 @@ describe("ReaderPage", () => {
       fireEvent.keyDown(touchZone, { key: "Tab" });
       expect(overlay).toHaveAttribute("aria-hidden", "true");
     });
+
+    it("実効 paged モード時、最下部タッチゾーンが中央60%（left-[20%] right-[20%]）に限定され左右端タップが妨げられないこと (R1-34)", () => {
+      // 縦書き・auto => 実効 paged
+      const { rerender } = render(
+        <ReaderPage
+          {...createDefaultProps({
+            writingMode: "vertical-rl",
+            pagingMode: "auto",
+          })}
+        />,
+      );
+      let touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      expect(touchZone).toHaveClass("left-[20%]");
+      expect(touchZone).toHaveClass("right-[20%]");
+      expect(touchZone).not.toHaveClass("left-0");
+      expect(touchZone).not.toHaveClass("right-0");
+
+      // 横書き・paged => 実効 paged
+      rerender(
+        <ReaderPage
+          {...createDefaultProps({
+            writingMode: "horizontal-tb",
+            pagingMode: "paged",
+          })}
+        />,
+      );
+      touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      expect(touchZone).toHaveClass("left-[20%]");
+      expect(touchZone).toHaveClass("right-[20%]");
+    });
+
+    it("実効 scroll モード時、最下部タッチゾーンが画面全幅（left-0 right-0）に配置されること (R1-34)", () => {
+      // 横書き・auto => 実効 scroll
+      const { rerender } = render(
+        <ReaderPage
+          {...createDefaultProps({
+            writingMode: "horizontal-tb",
+            pagingMode: "auto",
+          })}
+        />,
+      );
+      let touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      expect(touchZone).toHaveClass("left-0");
+      expect(touchZone).toHaveClass("right-0");
+      expect(touchZone).not.toHaveClass("left-[20%]");
+      expect(touchZone).not.toHaveClass("right-[20%]");
+
+      // 縦書き・scroll => 実効 scroll
+      rerender(
+        <ReaderPage
+          {...createDefaultProps({
+            writingMode: "vertical-rl",
+            pagingMode: "scroll",
+          })}
+        />,
+      );
+      touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      expect(touchZone).toHaveClass("left-0");
+      expect(touchZone).toHaveClass("right-0");
+    });
   });
 
   describe("自動非表示（Auto-Hide）トリガーの検証（AC-RD-10）", () => {
@@ -462,7 +518,7 @@ describe("ReaderPage", () => {
       expect(onSelectTab).toHaveBeenCalledWith("settings");
     });
 
-    it("activeTab が指定された場合、ReaderBottomOverlay に反映され対応するタブがアクティブとなること", () => {
+    it("activeTab が指定された場合、ReaderBottomOverlay に props が反映されること (R1-32)", () => {
       const { rerender } = render(
         <ReaderPage
           {...createDefaultProps({
@@ -472,13 +528,9 @@ describe("ReaderPage", () => {
         />,
       );
 
-      expect(screen.getByTestId("reader-bottom-tab-search")).toHaveAttribute(
-        "aria-selected",
-        "true",
-      );
-      expect(screen.getByTestId("reader-bottom-tab-bookshelf")).toHaveAttribute(
-        "aria-selected",
-        "false",
+      expect(screen.getByTestId("reader-bottom-overlay")).toHaveAttribute(
+        "data-active-tab",
+        "search",
       );
 
       rerender(
@@ -490,13 +542,9 @@ describe("ReaderPage", () => {
         />,
       );
 
-      expect(screen.getByTestId("reader-bottom-tab-ranking")).toHaveAttribute(
-        "aria-selected",
-        "true",
-      );
-      expect(screen.getByTestId("reader-bottom-tab-search")).toHaveAttribute(
-        "aria-selected",
-        "false",
+      expect(screen.getByTestId("reader-bottom-overlay")).toHaveAttribute(
+        "data-active-tab",
+        "ranking",
       );
     });
   });
@@ -517,9 +565,6 @@ describe("ReaderPage", () => {
       expect(view).toHaveAttribute("data-paging-mode", "paged");
       expect(view).toHaveAttribute("data-current-page", "3");
       expect(view).toHaveAttribute("data-total-pages", "10");
-
-      const indicator = screen.getByTestId("reader-page-indicator");
-      expect(indicator).toHaveTextContent("3 / 10");
     });
 
     it("pagingMode, currentPage, totalPages 未指定時に既定値（auto, 1, 1）が適用されること", () => {
@@ -535,9 +580,6 @@ describe("ReaderPage", () => {
       // vertical-rl のため実効 paged となり 1 / 1
       expect(view).toHaveAttribute("data-current-page", "1");
       expect(view).toHaveAttribute("data-total-pages", "1");
-      expect(screen.getByTestId("reader-page-indicator")).toHaveTextContent(
-        "1 / 1",
-      );
     });
 
     it("ReaderView からの onTotalPagesChange イベントが親へ伝播されること", () => {

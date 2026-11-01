@@ -96,6 +96,10 @@ describe("ReaderBottomOverlay", () => {
 
     it("SearchTabActive ストーリーで検索タブが aria-selected=true となること", () => {
       render(<SearchTabActive />);
+      expect(screen.getByTestId("reader-bottom-overlay")).toHaveAttribute(
+        "data-active-tab",
+        "search",
+      );
       expect(screen.getByTestId("reader-bottom-tab-search")).toHaveAttribute(
         "aria-selected",
         "true",

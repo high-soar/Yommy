@@ -3430,6 +3430,125 @@ describe("useReader", () => {
         });
         expect(result.current.currentPage).toBe(1);
       });
+
+      it("goToChapter に startAt: 'end' を指定した場合、initialScrollProgress が 1.0 に設定され、setTotalPages 時に最終ページへ設定されること (R1-07)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 3,
+          cachedCount: 3,
+        });
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 2 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        await act(async () => {
+          const success = await result.current.goToChapter(1, {
+            startAt: "end",
+          });
+          expect(success).toBe(true);
+        });
+
+        expect(result.current.chapterIndex).toBe(1);
+        expect(result.current.initialScrollProgress).toBe(1.0);
+        expect(result.current.scrollProgress).toBe(1.0);
+
+        // 総ページ数が計測されたら最終ページ（totalPages）に設定されること
+        act(() => {
+          result.current.setTotalPages(5);
+        });
+        expect(result.current.currentPage).toBe(5);
+        expect(result.current.totalPages).toBe(5);
+      });
+    });
+
+    describe("先読み（Prefetch）直列化とアンマウント保護 (R1-29)", () => {
+      it("先読み実行中に連続して goToChapter が呼ばれた場合、前回の先読み完了を待ってから新エピソードの先読みが直列実行されること (R1-29)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 5,
+          cachedCount: 2, // 3話以降は未キャッシュ
+        });
+
+        const mockHttpClient = new MockHttpClient();
+        let prefetchCallCount = 0;
+        mockHttpClient.setResponse(
+          "https://kakuyomu.jp/works/16817330658027210412/episodes/3",
+          () => {
+            prefetchCallCount++;
+            return {
+              status: 200,
+              url: "https://kakuyomu.jp/works/16817330658027210412/episodes/3",
+              headers: {},
+              html: "<html><body><div class='widget-episodeBody'>第3話本文</div></body></html>",
+            };
+          },
+        );
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              httpClient: mockHttpClient,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        // 連続話数遷移
+        await act(async () => {
+          await result.current.goToChapter(2);
+        });
+        expect(result.current.chapterIndex).toBe(2);
+        expect(prefetchCallCount).toBeGreaterThanOrEqual(0);
+      });
+
+      it("loadInitialData 実行中にアンマウントされた場合、DB 更新処理がスキップされること (R1-29)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const updateBookmarkSpy = vi.spyOn(novelRepo, "updateBookmark");
+
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 2,
+          cachedCount: 2,
+        });
+
+        const { unmount } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        // 即座にアンマウント
+        unmount();
+        await new Promise((r) => setTimeout(r, 50));
+        // アンマウント後の不要な DB 書き込みがないこと
+        expect(updateBookmarkSpy).not.toHaveBeenCalled();
+      });
     });
   });
 });

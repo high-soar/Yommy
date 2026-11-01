@@ -78,6 +78,11 @@ export interface UseReaderOptions {
   initialWorkUrl?: string;
 }
 
+export interface GoToChapterOptions {
+  /** 遷移先エピソードの表示開始位置（"start": 先頭 0.0、"end": 末尾 1.0・最終ページ） */
+  startAt?: "start" | "end";
+}
+
 export interface UseReaderResult {
   novel: NovelRecord | null;
   chapter: ChapterRecord | null;
@@ -108,7 +113,10 @@ export interface UseReaderResult {
   setTotalPages: (total: number) => void;
   updateScrollProgress: (progress: number) => Promise<void>;
   flushBookmark: () => Promise<void>;
-  goToChapter: (targetChapterIndex: number) => Promise<boolean>;
+  goToChapter: (
+    targetChapterIndex: number,
+    options?: GoToChapterOptions,
+  ) => Promise<boolean>;
   fetchNovelFromUrl: () => Promise<void>;
 }
 
@@ -728,7 +736,10 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
 
   // 前後エピソード遷移
   const goToChapter = useCallback(
-    async (targetChapterIndex: number): Promise<boolean> => {
+    async (
+      targetChapterIndex: number,
+      _options?: GoToChapterOptions,
+    ): Promise<boolean> => {
       stopPrefetch();
 
       const currentNovel = novelRef.current;

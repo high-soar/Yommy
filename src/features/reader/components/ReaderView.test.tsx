@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./ReaderView.stories";
@@ -888,6 +888,7 @@ describe("ReaderView", () => {
       expect(indicator).toHaveClass("opacity-60");
       expect(indicator).toHaveClass("tabular-nums");
       expect(indicator).toHaveClass("pointer-events-none");
+      expect(indicator).toHaveClass("[writing-mode:horizontal-tb]");
     });
 
     it("実効 scroll 時に reader-page-indicator が描画されないこと", () => {
@@ -904,6 +905,61 @@ describe("ReaderView", () => {
       expect(
         screen.queryByTestId("reader-page-indicator"),
       ).not.toBeInTheDocument();
+    });
+
+    it("横書き paged モード時、段幅と送り幅が整合するインラインスタイルが適用されること (R1-08)", () => {
+      render(
+        <ReaderView
+          bodyHtml="<p>長文本文</p>"
+          writingMode="horizontal-tb"
+          pagingMode="paged"
+          currentPage={2}
+          totalPages={5}
+        />,
+      );
+
+      const content = screen.getByTestId("reader-content");
+      // 横書き paged 時のスタイル検証
+      expect(content.style.columns).toBe("1");
+      expect(content.style.columnGap).toBe("48px");
+    });
+
+    it("画面リサイズ時に総ページ数が再計測され onTotalPagesChange が呼ばれること (R1-17)", async () => {
+      const onTotalPagesChange = vi.fn();
+      render(
+        <ReaderView
+          bodyHtml="<p>本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="paged"
+          currentPage={1}
+          onTotalPagesChange={onTotalPagesChange}
+        />,
+      );
+
+      onTotalPagesChange.mockClear();
+
+      act(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+
+      expect(onTotalPagesChange).toHaveBeenCalled();
+    });
+
+    it("実効 paged モードで initialScrollProgress が指定されても scrollLeft は 0 にリセットされ二重変位が防止されること (R1-27)", () => {
+      render(
+        <ReaderView
+          bodyHtml="<p>本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="paged"
+          currentPage={2}
+          totalPages={3}
+          initialScrollProgress={0.5}
+        />,
+      );
+
+      const container = screen.getByTestId("reader-view");
+      expect(container.scrollLeft).toBe(0);
+      expect(container.scrollTop).toBe(0);
     });
   });
 });
