@@ -3718,6 +3718,52 @@ describe("useReader", () => {
 
         expect(saveBodySpy).not.toHaveBeenCalled();
       });
+
+      it("goToChapter で前話末尾遷移（startAt: 'end'）した直後にルーター同期で chapterIndex プロパティが更新されても、計測済みの末尾ページ位置（currentPage / totalPages）がリセットされないこと (R2-04)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 2,
+          cachedCount: 2,
+        });
+
+        const { result, rerender } = renderHook(
+          ({ chapterIdx }: { chapterIdx: number }) =>
+            useReader({ novelId: seeded.id, chapterIndex: chapterIdx }),
+          {
+            initialProps: { chapterIdx: 2 },
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+          expect(result.current.chapterIndex).toBe(2);
+        });
+
+        // 前話へ末尾開始（startAt: "end"）で遷移し、ReaderView のページ数計測（setTotalPages(3)）を実行
+        await act(async () => {
+          await result.current.goToChapter(1, { startAt: "end" });
+        });
+        act(() => {
+          result.current.setTotalPages(3);
+        });
+        expect(result.current.totalPages).toBe(3);
+        expect(result.current.currentPage).toBe(3);
+
+        // ReaderContainer の router.navigateToReader による URL パラメータ（chapterIndex）同期をシミュレート
+        rerender({ chapterIdx: 1 });
+        await new Promise((r) => setTimeout(r, 50));
+
+        expect(result.current.chapterIndex).toBe(1);
+        expect(result.current.totalPages).toBe(3);
+        expect(result.current.currentPage).toBe(3);
+      });
     });
   });
 });
