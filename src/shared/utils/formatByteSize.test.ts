@@ -54,5 +54,14 @@ describe("formatByteSize", () => {
       expect(formatByteSize(10 * 1024 * 1024)).toBe("10.0 MB");
       expect(formatByteSize(100.25 * 1024 * 1024)).toBe("100.3 MB");
     });
+
+    it("四捨五入の丸め境界値が正しくフォーマットされること", () => {
+      // 1.04 KB -> 1.0 KB, 1.06 KB -> 1.1 KB
+      expect(formatByteSize(Math.round(1024 * 1.04))).toBe("1.0 KB");
+      expect(formatByteSize(Math.round(1024 * 1.06))).toBe("1.1 KB");
+      // 1.04 MB -> 1.0 MB, 1.06 MB -> 1.1 MB
+      expect(formatByteSize(Math.round(1024 * 1024 * 1.04))).toBe("1.0 MB");
+      expect(formatByteSize(Math.round(1024 * 1024 * 1.06))).toBe("1.1 MB");
+    });
   });
 });
