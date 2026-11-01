@@ -178,6 +178,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   const isFirstPageMeasurementRef = useRef<boolean>(true);
   const prefetchAbortControllerRef = useRef<AbortController | null>(null);
   const activePrefetchPromiseRef = useRef<Promise<void> | null>(null);
+  const lastGoToChapterIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     novelRef.current = novel;
@@ -427,7 +428,14 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   useEffect(() => {
     if (!isReady) return;
 
+    const skippedChapterIndex = lastGoToChapterIndexRef.current;
+    lastGoToChapterIndexRef.current = null;
+    if (skippedChapterIndex === (chapterIndex ?? 1)) {
+      return;
+    }
+
     let isMounted = true;
+    stopPrefetch();
     setIsLoading(true);
     setError(null);
 
@@ -561,7 +569,6 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
 
     return () => {
       isMounted = false;
-      stopPrefetch();
     };
   }, [
     isReady,
@@ -829,9 +836,12 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         }
 
         // 6. State 更新
+        lastGoToChapterIndexRef.current = targetChapterIndex;
         setCurrentChapterIndex(targetChapterIndex);
+        currentChapterIndexRef.current = targetChapterIndex;
         setChapter(targetChapter);
         setNovel(reloadedNovel);
+        novelRef.current = reloadedNovel;
         resetPaginationState(nextProgress, nextProgress);
         isSuccess = true;
 
