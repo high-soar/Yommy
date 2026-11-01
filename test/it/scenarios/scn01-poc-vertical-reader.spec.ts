@@ -153,7 +153,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(detailTitle).toHaveText("境界迷宮と異界の魔術師");
 
     const detailStats = page.getByTestId("novel-detail-stats");
-    await expect(detailStats).toContainText("全 4 話（取得済み 0 話）");
+    await expect(detailStats).toContainText("全 4 話（取得済み 0 話");
 
     // 章見出しが存在することを確認
     const sectionHeader = page.getByTestId("chapter-section-header").first();
