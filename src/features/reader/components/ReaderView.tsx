@@ -165,6 +165,10 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   slideOffsetPx = 0,
   isAnimating = false,
   onTotalPagesChange,
+  chapterIndex = 1,
+  totalChapters,
+  onPrevChapter,
+  onNextChapter,
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const contentRef = React.useRef<HTMLDivElement>(null);
@@ -278,7 +282,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         themeStyles[theme]
       } ${isVertical ? "writing-vertical-rl" : "writing-horizontal-tb"} ${
         isPaged
-          ? "overflow-hidden"
+          ? "overflow-hidden touch-none"
           : isVertical
             ? "overflow-x-auto overflow-y-hidden leading-loose p-6"
             : "overflow-y-auto overflow-x-hidden leading-relaxed p-6"
@@ -301,6 +305,32 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           pageHeight,
         )}
       >
+        {!isPaged && (
+          <div
+            className={`flex ${
+              isVertical
+                ? "flex-col items-center justify-center my-6"
+                : "justify-center my-6"
+            }`}
+          >
+            <button
+              type="button"
+              data-testid="reader-scroll-prev-chapter"
+              disabled={chapterIndex <= 1}
+              onClick={onPrevChapter}
+              className={`px-5 py-2 text-sm font-medium rounded-lg border transition-opacity cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed [writing-mode:horizontal-tb] ${
+                theme === "dark" || theme === "black"
+                  ? "border-slate-700 bg-slate-800/80 text-slate-200 hover:bg-slate-700"
+                  : theme === "sepia"
+                    ? "border-[#e0d0b0] bg-[#f0e4c8] text-[#5f4b32] hover:bg-[#e8dbbf]"
+                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              前の話へ
+            </button>
+          </div>
+        )}
+
         {(title || chapterTitle) && (
           <header
             className={`mb-6 pb-4 border-b ${
@@ -333,6 +363,36 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           className="novel-content"
           dangerouslySetInnerHTML={{ __html: bodyHtml }}
         />
+
+        {!isPaged && (
+          <div
+            className={`flex ${
+              isVertical
+                ? "flex-col items-center justify-center my-6"
+                : "justify-center my-6"
+            }`}
+          >
+            <button
+              type="button"
+              data-testid="reader-scroll-next-chapter"
+              disabled={
+                totalChapters !== undefined
+                  ? chapterIndex >= totalChapters
+                  : false
+              }
+              onClick={onNextChapter}
+              className={`px-5 py-2 text-sm font-medium rounded-lg border transition-opacity cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed [writing-mode:horizontal-tb] ${
+                theme === "dark" || theme === "black"
+                  ? "border-slate-700 bg-slate-800/80 text-slate-200 hover:bg-slate-700"
+                  : theme === "sepia"
+                    ? "border-[#e0d0b0] bg-[#f0e4c8] text-[#5f4b32] hover:bg-[#e8dbbf]"
+                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              次の話へ
+            </button>
+          </div>
+        )}
       </div>
 
       {isPaged && (

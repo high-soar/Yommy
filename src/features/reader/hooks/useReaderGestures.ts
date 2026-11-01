@@ -57,9 +57,9 @@ export interface UseReaderGesturesResult {
   /** コンテナ touchmove ハンドラー */
   handleTouchMove?: (e: React.TouchEvent) => void;
   /** コンテナ touchend ハンドラー */
-  handleTouchEnd?: (e: React.TouchEvent) => void;
+  handleTouchEnd?: (e?: React.TouchEvent) => void;
   /** コンテナ touchcancel ハンドラー */
-  handleTouchCancel?: () => void;
+  handleTouchCancel?: (e?: React.TouchEvent) => void;
   /** コンテナ click ハンドラー（タップ後の誤トグル防止付き） */
   handleMainClick: () => void;
   /** 連続スクロール用 wheel ハンドラー */
@@ -111,6 +111,37 @@ export function useReaderGestures({
   const animationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 端ページ2段階タップ用（AC-RD-18）
+  const pendingBoundaryTapRef = useRef<"next" | "prev" | null>(null);
+  const boundaryTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  // 連続スクロール端2段階スワイプ/ホイール用（AC-RD-19）
+  const pendingScrollSwipeRef = useRef<"next" | "prev" | null>(null);
+  const scrollSwipeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const hasTriggeredInGestureRef = useRef(false);
+
+  const clearBoundaryTap = useCallback(() => {
+    if (boundaryTapTimerRef.current) {
+      clearTimeout(boundaryTapTimerRef.current);
+      boundaryTapTimerRef.current = null;
+    }
+    pendingBoundaryTapRef.current = null;
+    setBoundaryHint(null);
+  }, []);
+
+  const clearScrollSwipe = useCallback(() => {
+    if (scrollSwipeTimerRef.current) {
+      clearTimeout(scrollSwipeTimerRef.current);
+      scrollSwipeTimerRef.current = null;
+    }
+    pendingScrollSwipeRef.current = null;
+    setBoundaryHint(null);
+  }, []);
+
   // アンマウント時にタイマーを確実にクリーンアップ (R1-25(7))
   useEffect(() => {
     return () => {
@@ -120,8 +151,10 @@ export function useReaderGestures({
       if (tapTimerRef.current) {
         clearTimeout(tapTimerRef.current);
       }
+      clearBoundaryTap();
+      clearScrollSwipe();
     };
-  }, []);
+  }, [clearBoundaryTap, clearScrollSwipe]);
 
   // 連続スクロールモード用の端到達フラグ（2段階操作用）
   const reachedEndRef = useRef(false);
@@ -133,6 +166,50 @@ export function useReaderGestures({
     return containerRef?.current?.clientWidth || window.innerWidth;
   }, [containerRef]);
 
+  // 連続スクロール端2段階アクション発火ヘルパー（AC-RD-19）
+  const triggerScrollBoundaryAction = useCallback(
+    (direction: "next" | "prev") => {
+      if (direction === "next") {
+        if (chapterIndex >= totalChapters) return;
+        if (pendingScrollSwipeRef.current === "next") {
+          clearScrollSwipe();
+          wasAtEndOnDownRef.current = false;
+          reachedEndRef.current = false;
+          onNextChapter();
+        } else {
+          clearScrollSwipe();
+          pendingScrollSwipeRef.current = "next";
+          setBoundaryHint("もう一度スワイプで次の話へ");
+          scrollSwipeTimerRef.current = setTimeout(() => {
+            clearScrollSwipe();
+          }, 2500);
+        }
+      } else {
+        if (chapterIndex <= 1) return;
+        if (pendingScrollSwipeRef.current === "prev") {
+          clearScrollSwipe();
+          wasAtStartOnDownRef.current = false;
+          reachedStartRef.current = false;
+          onPrevChapter();
+        } else {
+          clearScrollSwipe();
+          pendingScrollSwipeRef.current = "prev";
+          setBoundaryHint("もう一度スワイプで前の話へ");
+          scrollSwipeTimerRef.current = setTimeout(() => {
+            clearScrollSwipe();
+          }, 2500);
+        }
+      }
+    },
+    [
+      chapterIndex,
+      totalChapters,
+      onNextChapter,
+      onPrevChapter,
+      clearScrollSwipe,
+    ],
+  );
+
   // Pointer Down
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -142,6 +219,7 @@ export function useReaderGestures({
         time: Date.now(),
       };
       isDraggingRef.current = false;
+      hasTriggeredInGestureRef.current = false;
 
       if (!isPaged) {
         wasAtEndOnDownRef.current = reachedEndRef.current;
@@ -161,23 +239,18 @@ export function useReaderGestures({
 
       if (!isPaged) {
         // 連続スクロールモード時の2段階スワイプ判定
+        if (hasTriggeredInGestureRef.current) return;
         if (wasAtEndOnDownRef.current) {
           const isNextSwipe = isVertical ? dx < -30 : dy < -30;
           if (isNextSwipe) {
-            wasAtEndOnDownRef.current = false;
-            reachedEndRef.current = false;
-            if (chapterIndex < totalChapters) {
-              onNextChapter();
-            }
+            hasTriggeredInGestureRef.current = true;
+            triggerScrollBoundaryAction("next");
           }
         } else if (wasAtStartOnDownRef.current) {
           const isPrevSwipe = isVertical ? dx > 30 : dy > 30;
           if (isPrevSwipe) {
-            wasAtStartOnDownRef.current = false;
-            reachedStartRef.current = false;
-            if (chapterIndex > 1) {
-              onPrevChapter();
-            }
+            hasTriggeredInGestureRef.current = true;
+            triggerScrollBoundaryAction("prev");
           }
         }
         return;
@@ -226,8 +299,7 @@ export function useReaderGestures({
       chapterIndex,
       totalChapters,
       getContainerWidth,
-      onNextChapter,
-      onPrevChapter,
+      triggerScrollBoundaryAction,
     ],
   );
 
@@ -244,6 +316,7 @@ export function useReaderGestures({
       const width = getContainerWidth();
 
       touchStartRef.current = null;
+      hasTriggeredInGestureRef.current = false;
 
       if (!isPaged) {
         wasAtEndOnDownRef.current = false;
@@ -262,10 +335,10 @@ export function useReaderGestures({
           tapTimerRef.current = null;
         }, 100);
         setSlideOffsetPx(0);
-        setBoundaryHint(null);
 
         // オーバーレイ表示中はどの位置のタップでも閉じる
         if (isOverlayOpen) {
+          clearBoundaryTap();
           onCloseOverlay();
           return;
         }
@@ -280,17 +353,56 @@ export function useReaderGestures({
         if (ratio < 0.2) {
           // 左端（幅約20%）: 縦書き時は次ページ（左開き）
           if (currentPage < totalPages) {
+            clearBoundaryTap();
             onPageChange?.(currentPage + 1);
+            onCloseOverlay();
+          } else {
+            // 最終ページ到達時の次話遷移判定（2段階タップ: AC-RD-18）
+            if (chapterIndex < totalChapters) {
+              if (pendingBoundaryTapRef.current === "next") {
+                clearBoundaryTap();
+                onNextChapter();
+                onCloseOverlay();
+              } else {
+                clearBoundaryTap();
+                pendingBoundaryTapRef.current = "next";
+                setBoundaryHint("もう一度タップで次の話へ");
+                boundaryTapTimerRef.current = setTimeout(() => {
+                  clearBoundaryTap();
+                }, 2500);
+              }
+            } else {
+              clearBoundaryTap();
+            }
           }
-          onCloseOverlay();
         } else if (ratio > 0.8) {
           // 右端（幅約20%）: 縦書き時は前ページ
           if (currentPage > 1) {
+            clearBoundaryTap();
             onPageChange?.(currentPage - 1);
+            onCloseOverlay();
+          } else {
+            // 第1ページ到達時の前話遷移判定（2段階タップ: AC-RD-18）
+            if (chapterIndex > 1) {
+              if (pendingBoundaryTapRef.current === "prev") {
+                clearBoundaryTap();
+                onPrevChapter();
+                onCloseOverlay();
+              } else {
+                clearBoundaryTap();
+                pendingBoundaryTapRef.current = "prev";
+                setBoundaryHint("もう一度タップで前の話へ");
+                boundaryTapTimerRef.current = setTimeout(() => {
+                  clearBoundaryTap();
+                }, 2500);
+              }
+            } else {
+              clearBoundaryTap();
+            }
           }
-          onCloseOverlay();
         } else {
           // 中央（幅約60%）: オーバーレイ開閉トグル
+          clearBoundaryTap();
           onToggleOverlay();
         }
         return;
@@ -367,6 +479,7 @@ export function useReaderGestures({
       onPageChange,
       onNextChapter,
       onPrevChapter,
+      clearBoundaryTap,
     ],
   );
 
@@ -374,15 +487,68 @@ export function useReaderGestures({
   const handlePointerCancel = useCallback(() => {
     touchStartRef.current = null;
     isDraggingRef.current = false;
-    setSlideOffsetPx(0);
-    setBoundaryHint(null);
-    if (!isPaged) {
-      wasAtEndOnDownRef.current = false;
-      wasAtStartOnDownRef.current = false;
+    hasTriggeredInGestureRef.current = false;
+    if (isPaged) {
+      setSlideOffsetPx(0);
+      setBoundaryHint(null);
     }
   }, [isPaged]);
 
-  // Wheel（連続スクロールモード時の2段階操作）
+  // Touch Event ハンドラー（実機 WebView での pointercancel 発火防止・ネイティブスクロール共存: AC-RD-18, AC-RD-19）
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      if (e.touches.length === 0) return;
+      touchStartRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        time: Date.now(),
+      };
+      hasTriggeredInGestureRef.current = false;
+      if (!isPaged) {
+        wasAtEndOnDownRef.current = reachedEndRef.current;
+        wasAtStartOnDownRef.current = reachedStartRef.current;
+      }
+    },
+    [isPaged],
+  );
+
+  const handleTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      if (isPaged || !touchStartRef.current || e.touches.length === 0) return;
+      if (hasTriggeredInGestureRef.current) return;
+
+      const touch = e.touches[0];
+      const dx = touch.clientX - touchStartRef.current.x;
+      const dy = touch.clientY - touchStartRef.current.y;
+
+      if (wasAtEndOnDownRef.current) {
+        const isNextSwipe = isVertical ? dx < -30 : dy < -30;
+        if (isNextSwipe) {
+          hasTriggeredInGestureRef.current = true;
+          triggerScrollBoundaryAction("next");
+        }
+      } else if (wasAtStartOnDownRef.current) {
+        const isPrevSwipe = isVertical ? dx > 30 : dy > 30;
+        if (isPrevSwipe) {
+          hasTriggeredInGestureRef.current = true;
+          triggerScrollBoundaryAction("prev");
+        }
+      }
+    },
+    [isPaged, isVertical, triggerScrollBoundaryAction],
+  );
+
+  const handleTouchEnd = useCallback(() => {
+    touchStartRef.current = null;
+    hasTriggeredInGestureRef.current = false;
+  }, []);
+
+  const handleTouchCancel = useCallback(() => {
+    touchStartRef.current = null;
+    hasTriggeredInGestureRef.current = false;
+  }, []);
+
+  // Wheel（連続スクロールモード時の2段階操作: AC-RD-19）
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
       if (isPaged) return;
@@ -395,25 +561,12 @@ export function useReaderGestures({
         : e.deltaY < 0;
 
       if (reachedEndRef.current && isNextWheel) {
-        reachedEndRef.current = false;
-        if (chapterIndex < totalChapters) {
-          onNextChapter();
-        }
+        triggerScrollBoundaryAction("next");
       } else if (reachedStartRef.current && isPrevWheel) {
-        reachedStartRef.current = false;
-        if (chapterIndex > 1) {
-          onPrevChapter();
-        }
+        triggerScrollBoundaryAction("prev");
       }
     },
-    [
-      isPaged,
-      isVertical,
-      chapterIndex,
-      totalChapters,
-      onNextChapter,
-      onPrevChapter,
-    ],
+    [isPaged, isVertical, triggerScrollBoundaryAction],
   );
 
   // Scroll Progress（連続スクロールモードの端到達判定トラッキング）
@@ -431,6 +584,14 @@ export function useReaderGestures({
         } else {
           reachedEndRef.current = false;
           reachedStartRef.current = false;
+          if (pendingScrollSwipeRef.current !== null) {
+            if (scrollSwipeTimerRef.current) {
+              clearTimeout(scrollSwipeTimerRef.current);
+              scrollSwipeTimerRef.current = null;
+            }
+            pendingScrollSwipeRef.current = null;
+            setBoundaryHint(null);
+          }
         }
       }
     },
@@ -451,6 +612,10 @@ export function useReaderGestures({
     handlePointerMove,
     handlePointerUp,
     handlePointerCancel,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+    handleTouchCancel,
     handleMainClick,
     handleWheel,
     handleScrollProgressChange,

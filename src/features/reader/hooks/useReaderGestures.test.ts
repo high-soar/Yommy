@@ -544,6 +544,39 @@ describe("useReaderGestures", () => {
       expect(defaultOptions.onCloseOverlay).toHaveBeenCalled();
     });
 
+    it("100ms以内の連続タップ時に既存の tapTimer がクリアされること", () => {
+      const { result } = renderHook(() => useReaderGestures(defaultOptions));
+
+      // 1回目のタップ
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 30, clientY: 100 }),
+        );
+      });
+      vi.advanceTimersByTime(50);
+      act(() => {
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 30, clientY: 100 }),
+        );
+      });
+
+      // 30ms後（100ms以内）に2回目のタップ
+      vi.advanceTimersByTime(30);
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 30, clientY: 100 }),
+        );
+      });
+      vi.advanceTimersByTime(20);
+      act(() => {
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 30, clientY: 100 }),
+        );
+      });
+
+      expect(defaultOptions.onPageChange).toHaveBeenCalledTimes(2);
+    });
+
     describe("端ページでの2段階タップによる前後話移動と案内ヒント表示 (AC-RD-18, v0.5 Issue #168, #175)", () => {
       it("縦書きpagedの最終ページで左端タップ時、1回目でヒント表示、2.5秒以内の2回目で次話遷移すること", () => {
         const onNextChapter = vi.fn();
@@ -688,6 +721,55 @@ describe("useReaderGestures", () => {
 
         expect(onPrevChapter).toHaveBeenCalledTimes(1);
         expect(result.current.boundaryHint).toBeNull();
+      });
+
+      it("第1ページでの1回目タップ後、2.5秒無操作で案内ヒントが自動消去され状態がリセットされること", () => {
+        const onPrevChapter = vi.fn();
+        const { result } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            currentPage: 1,
+            totalPages: 4,
+            chapterIndex: 2,
+            totalChapters: 3,
+            onPrevChapter,
+          }),
+        );
+
+        // 1回目のタップ
+        act(() => {
+          result.current.handlePointerDown(
+            createPointerEvent("pointerdown", { clientX: 270, clientY: 100 }),
+          );
+        });
+        vi.advanceTimersByTime(100);
+        act(() => {
+          result.current.handlePointerUp(
+            createPointerEvent("pointerup", { clientX: 270, clientY: 100 }),
+          );
+        });
+        expect(result.current.boundaryHint).toBe("もう一度タップで前の話へ");
+
+        // 2.5秒経過
+        act(() => {
+          vi.advanceTimersByTime(2500);
+        });
+        expect(result.current.boundaryHint).toBeNull();
+
+        // 2.5秒経過後のタップは再度1回目扱いとなり、遷移しないこと
+        act(() => {
+          result.current.handlePointerDown(
+            createPointerEvent("pointerdown", { clientX: 270, clientY: 100 }),
+          );
+        });
+        vi.advanceTimersByTime(100);
+        act(() => {
+          result.current.handlePointerUp(
+            createPointerEvent("pointerup", { clientX: 270, clientY: 100 }),
+          );
+        });
+        expect(onPrevChapter).not.toHaveBeenCalled();
+        expect(result.current.boundaryHint).toBe("もう一度タップで前の話へ");
       });
 
       it("作品の最終話（chapterIndex=totalChapters）の最終ページでは次話タップヒントを表示しないこと", () => {
@@ -994,6 +1076,132 @@ describe("useReaderGestures", () => {
 
       expect(defaultOptions.onNextChapter).toHaveBeenCalledTimes(1);
       expect(result.current.boundaryHint).toBeNull();
+    });
+
+    it("縦書きスクロールで先頭到達後、ポインタードラッグの2回操作で前話遷移すること", () => {
+      const onPrevChapter = vi.fn();
+      const { result } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          pagingMode: "scroll",
+          writingMode: "vertical-rl",
+          chapterIndex: 2,
+          totalChapters: 4,
+          onPrevChapter,
+        }),
+      );
+
+      // 第1段階: 先頭到達
+      act(() => {
+        result.current.handleScrollProgressChange(0.0);
+      });
+
+      // 第2段階（1回目）: 右方向へスワイプ（戻る方向: dx > 30）
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 150, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 150, clientY: 100 }),
+        );
+      });
+
+      expect(onPrevChapter).not.toHaveBeenCalled();
+      expect(result.current.boundaryHint).toBe("もう一度スワイプで前の話へ");
+
+      // 第2段階（2回目）: 2.5秒以内の2回目スワイプ
+      vi.advanceTimersByTime(500);
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 150, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 150, clientY: 100 }),
+        );
+      });
+
+      expect(onPrevChapter).toHaveBeenCalledTimes(1);
+      expect(result.current.boundaryHint).toBeNull();
+    });
+
+    it("横書きスクロールで末尾・先頭到達後、ポインタードラッグ操作で次話・前話遷移すること、および同一ジェスチャー内の再トリガー抑止", () => {
+      const { result } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          pagingMode: "scroll",
+          writingMode: "horizontal-tb",
+          chapterIndex: 2,
+          totalChapters: 4,
+        }),
+      );
+
+      // 1. 末尾到達での上スワイプ（dy < -30）
+      act(() => {
+        result.current.handleScrollProgressChange(1.0);
+      });
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 200 }),
+        );
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 100, clientY: 150 }),
+        );
+      });
+      expect(result.current.boundaryHint).toBe("もう一度スワイプで次の話へ");
+
+      // 同一ジェスチャー内でのさらなる移動は無視されること
+      act(() => {
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 100, clientY: 100 }),
+        );
+      });
+      expect(defaultOptions.onNextChapter).not.toHaveBeenCalled();
+
+      // ポインター離上
+      act(() => {
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 100, clientY: 100 }),
+        );
+      });
+
+      // 2. 先頭到達での下スワイプ（dy > 30）
+      act(() => {
+        result.current.handleScrollProgressChange(0.0);
+      });
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 100, clientY: 150 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 100, clientY: 150 }),
+        );
+      });
+      expect(result.current.boundaryHint).toBe("もう一度スワイプで前の話へ");
+
+      // 3. 中間位置でのポインタースワイプは何もしないこと
+      act(() => {
+        result.current.handleScrollProgressChange(0.5);
+      });
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 100, clientY: 150 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 100, clientY: 150 }),
+        );
+      });
     });
 
     it("Touch Event（handleTouchStart, handleTouchMove, handleTouchEnd）による2段階スワイプで次話遷移すること", () => {
@@ -1649,6 +1857,236 @@ describe("useReaderGestures", () => {
 
       unmount();
       expect(clearTimeoutSpy).toHaveBeenCalled();
+    });
+
+    it("タッチイベントのガード条件およびエッジケースが網羅されること", () => {
+      const onPrevChapter = vi.fn();
+      const onNextChapter = vi.fn();
+      const { result, unmount } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          pagingMode: "scroll",
+          chapterIndex: 2,
+          totalChapters: 4,
+          onPrevChapter,
+          onNextChapter,
+        }),
+      );
+
+      // touches が空の touchstart
+      act(() => {
+        result.current.handleTouchStart?.(createTouchEvent("touchstart", []));
+      });
+
+      // touches が空の touchmove
+      act(() => {
+        result.current.handleTouchMove?.(createTouchEvent("touchmove", []));
+      });
+
+      // touchStart がない状態での touchmove
+      act(() => {
+        result.current.handleTouchMove?.(
+          createTouchEvent("touchmove", [{ clientX: 100, clientY: 100 }]),
+        );
+      });
+
+      // 前話方向へのタッチスワイプ（wasAtStartOnDownRef）
+      act(() => {
+        result.current.handleScrollProgressChange(0.0);
+        result.current.handleTouchStart?.(
+          createTouchEvent("touchstart", [{ clientX: 100, clientY: 100 }]),
+        );
+        result.current.handleTouchMove?.(
+          createTouchEvent("touchmove", [{ clientX: 150, clientY: 100 }]),
+        );
+      });
+      expect(result.current.boundaryHint).toBe("もう一度スワイプで前の話へ");
+
+      // 同一ジェスチャー内でのさらなる移動は無視されること（hasTriggeredInGestureRef）
+      act(() => {
+        result.current.handleTouchMove?.(
+          createTouchEvent("touchmove", [{ clientX: 160, clientY: 100 }]),
+        );
+      });
+      expect(onPrevChapter).not.toHaveBeenCalled();
+
+      // touchEnd でジェスチャー終了
+      act(() => {
+        result.current.handleTouchEnd?.();
+      });
+
+      // 2回目の前話タッチスワイプ
+      vi.advanceTimersByTime(500);
+      act(() => {
+        result.current.handleTouchStart?.(
+          createTouchEvent("touchstart", [{ clientX: 100, clientY: 100 }]),
+        );
+        result.current.handleTouchMove?.(
+          createTouchEvent("touchmove", [{ clientX: 150, clientY: 100 }]),
+        );
+        result.current.handleTouchEnd?.();
+      });
+      expect(onPrevChapter).toHaveBeenCalledTimes(1);
+
+      // touchCancel の呼び出し
+      act(() => {
+        result.current.handleTouchStart?.(
+          createTouchEvent("touchstart", [{ clientX: 100, clientY: 100 }]),
+        );
+        result.current.handleTouchCancel?.();
+      });
+
+      // 横書き（horizontal-tb）スクロールでの TouchMove
+      const { result: horizontalTouchResult } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          writingMode: "horizontal-tb",
+          pagingMode: "scroll",
+          chapterIndex: 2,
+          totalChapters: 4,
+          onPrevChapter,
+          onNextChapter,
+        }),
+      );
+
+      // 末尾から上スワイプ（dy < -30: 次話へ）
+      act(() => {
+        horizontalTouchResult.current.handleScrollProgressChange(1.0);
+        horizontalTouchResult.current.handleTouchStart?.(
+          createTouchEvent("touchstart", [{ clientX: 100, clientY: 100 }]),
+        );
+        horizontalTouchResult.current.handleTouchMove?.(
+          createTouchEvent("touchmove", [{ clientX: 100, clientY: 50 }]),
+        );
+        horizontalTouchResult.current.handleTouchEnd?.();
+      });
+      expect(horizontalTouchResult.current.boundaryHint).toBe(
+        "もう一度スワイプで次の話へ",
+      );
+
+      // 先頭から下スワイプ（dy > 30: 前話へ）
+      act(() => {
+        horizontalTouchResult.current.handleScrollProgressChange(0.0);
+        horizontalTouchResult.current.handleTouchStart?.(
+          createTouchEvent("touchstart", [{ clientX: 100, clientY: 100 }]),
+        );
+        horizontalTouchResult.current.handleTouchMove?.(
+          createTouchEvent("touchmove", [{ clientX: 100, clientY: 150 }]),
+        );
+        horizontalTouchResult.current.handleTouchEnd?.();
+      });
+      expect(horizontalTouchResult.current.boundaryHint).toBe(
+        "もう一度スワイプで前の話へ",
+      );
+
+      // 中間位置での touchmove は何も発火しないこと
+      act(() => {
+        horizontalTouchResult.current.handleScrollProgressChange(0.5);
+        horizontalTouchResult.current.handleTouchStart?.(
+          createTouchEvent("touchstart", [{ clientX: 100, clientY: 100 }]),
+        );
+        horizontalTouchResult.current.handleTouchMove?.(
+          createTouchEvent("touchmove", [{ clientX: 100, clientY: 50 }]),
+        );
+        horizontalTouchResult.current.handleTouchEnd?.();
+      });
+
+      // paged モード時の touchMove は何もしないこと
+      const { result: pagedResult } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          pagingMode: "paged",
+        }),
+      );
+      act(() => {
+        pagedResult.current.handleTouchStart?.(
+          createTouchEvent("touchstart", [{ clientX: 100, clientY: 100 }]),
+        );
+        pagedResult.current.handleTouchMove?.(
+          createTouchEvent("touchmove", [{ clientX: 150, clientY: 100 }]),
+        );
+      });
+
+      unmount();
+    });
+
+    it("連続スクロール端での1回目スワイプ後、2.5秒無操作で案内ヒントが自動消去されること（次話および前話）", () => {
+      const onNextChapter = vi.fn();
+      const onPrevChapter = vi.fn();
+      const { result } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          pagingMode: "scroll",
+          chapterIndex: 2,
+          totalChapters: 4,
+          onNextChapter,
+          onPrevChapter,
+        }),
+      );
+
+      // 1. 次話スワイプ（末尾到達後の次話ホイール）
+      act(() => {
+        result.current.handleScrollProgressChange(1.0);
+      });
+      act(() => {
+        result.current.handleWheel?.(
+          createWheelEvent({
+            deltaX: -60,
+            deltaY: 0,
+          }),
+        );
+      });
+      expect(result.current.boundaryHint).toBe("もう一度スワイプで次の話へ");
+
+      // 2.5秒経過して消去されること
+      act(() => {
+        vi.advanceTimersByTime(2500);
+      });
+      expect(result.current.boundaryHint).toBeNull();
+
+      // 2.5秒経過後のホイールは再度1回目扱いとなること
+      act(() => {
+        result.current.handleWheel?.(
+          createWheelEvent({
+            deltaX: -60,
+            deltaY: 0,
+          }),
+        );
+      });
+      expect(onNextChapter).not.toHaveBeenCalled();
+      expect(result.current.boundaryHint).toBe("もう一度スワイプで次の話へ");
+
+      // 2. 前話スワイプ（先頭到達後の前話ホイール）
+      act(() => {
+        result.current.handleScrollProgressChange(0.0);
+      });
+      act(() => {
+        result.current.handleWheel?.(
+          createWheelEvent({
+            deltaX: 60,
+            deltaY: 0,
+          }),
+        );
+      });
+      expect(result.current.boundaryHint).toBe("もう一度スワイプで前の話へ");
+
+      // 2.5秒経過して消去されること
+      act(() => {
+        vi.advanceTimersByTime(2500);
+      });
+      expect(result.current.boundaryHint).toBeNull();
+
+      // 2.5秒経過後のホイールは再度1回目扱いとなること
+      act(() => {
+        result.current.handleWheel?.(
+          createWheelEvent({
+            deltaX: 60,
+            deltaY: 0,
+          }),
+        );
+      });
+      expect(onPrevChapter).not.toHaveBeenCalled();
+      expect(result.current.boundaryHint).toBe("もう一度スワイプで前の話へ");
     });
 
     it("アニメーション進行中に次のジェスチャーが確定した場合、既存のアニメーションタイマーがクリアされること (R1-25(7))", () => {
