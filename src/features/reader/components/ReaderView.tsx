@@ -24,6 +24,10 @@ export interface ReaderViewProps {
   slideOffsetPx?: number;
   isAnimating?: boolean;
   onTotalPagesChange?: (totalPages: number) => void;
+  chapterIndex?: number;
+  totalChapters?: number;
+  onPrevChapter?: () => void;
+  onNextChapter?: () => void;
 }
 
 const themeStyles: Record<ReaderTheme, string> = {

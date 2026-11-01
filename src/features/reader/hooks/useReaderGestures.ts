@@ -52,6 +52,14 @@ export interface UseReaderGesturesResult {
   handlePointerUp: (e: React.PointerEvent) => void;
   /** コンテナ pointercancel ハンドラー */
   handlePointerCancel: () => void;
+  /** コンテナ touchstart ハンドラー */
+  handleTouchStart?: (e: React.TouchEvent) => void;
+  /** コンテナ touchmove ハンドラー */
+  handleTouchMove?: (e: React.TouchEvent) => void;
+  /** コンテナ touchend ハンドラー */
+  handleTouchEnd?: (e: React.TouchEvent) => void;
+  /** コンテナ touchcancel ハンドラー */
+  handleTouchCancel?: () => void;
   /** コンテナ click ハンドラー（タップ後の誤トグル防止付き） */
   handleMainClick: () => void;
   /** 連続スクロール用 wheel ハンドラー */

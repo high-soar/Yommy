@@ -856,9 +856,18 @@ describe("ReaderPage", () => {
       readerView.scrollLeft = -500;
       fireEvent.scroll(readerView);
 
-      // 第2段階: 再ホイール操作
+      // 第2段階: 1回目の再ホイール操作で案内ヒント表示、2.5秒以内の2回目で次話遷移
       fireEvent.wheel(main, { deltaY: 20 });
-      expect(onNextChapter).toHaveBeenCalled();
+      expect(onNextChapter).not.toHaveBeenCalled();
+      expect(
+        screen.getByTestId("reader-episode-boundary-hint"),
+      ).toHaveTextContent("もう一度スワイプで次の話へ");
+
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      fireEvent.wheel(main, { deltaY: 20 });
+      expect(onNextChapter).toHaveBeenCalledTimes(1);
     });
 
     it("連続スクロールモードでの 2 段階スクロール（先頭到達後の再ホイール）で前話遷移すること（AC-RD-19）", () => {
@@ -893,9 +902,73 @@ describe("ReaderPage", () => {
       readerView.scrollLeft = 0;
       fireEvent.scroll(readerView);
 
-      // 第2段階: 再ホイール操作
+      // 第2段階: 1回目のホイールでヒント、2回目で前話遷移
       fireEvent.wheel(main, { deltaY: -20 });
-      expect(onPrevChapter).toHaveBeenCalled();
+      expect(onPrevChapter).not.toHaveBeenCalled();
+      expect(
+        screen.getByTestId("reader-episode-boundary-hint"),
+      ).toHaveTextContent("もう一度スワイプで前の話へ");
+
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      fireEvent.wheel(main, { deltaY: -20 });
+      expect(onPrevChapter).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("実機タッチ制御（touch-action: none / touch-none）の検証（AC-RD-18）", () => {
+    it("縦書き paged モード時、main 要素に touch-none クラスが付与されること", () => {
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            writingMode: "vertical-rl",
+            pagingMode: "paged",
+          })}
+        />,
+      );
+      const main = screen.getByRole("main");
+      expect(main).toHaveClass("touch-none");
+    });
+
+    it("連続スクロールモード時、main 要素に touch-none クラスが付与されないこと", () => {
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            writingMode: "vertical-rl",
+            pagingMode: "scroll",
+          })}
+        />,
+      );
+      const main = screen.getByRole("main");
+      expect(main).not.toHaveClass("touch-none");
+    });
+  });
+
+  describe("連続スクロール時の本文先頭・末尾前後話ボタン（AC-RD-19）", () => {
+    it("スクロールモード時、本文先頭「前の話へ」および末尾「次の話へ」ボタンがクリック可能であること", () => {
+      const onPrevChapter = vi.fn();
+      const onNextChapter = vi.fn();
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            pagingMode: "scroll",
+            chapterIndex: 2,
+            totalChapters: 4,
+            onPrevChapter,
+            onNextChapter,
+          })}
+        />,
+      );
+
+      const prevBtn = screen.getByTestId("reader-scroll-prev-chapter");
+      const nextBtn = screen.getByTestId("reader-scroll-next-chapter");
+
+      fireEvent.click(prevBtn);
+      expect(onPrevChapter).toHaveBeenCalledTimes(1);
+
+      fireEvent.click(nextBtn);
+      expect(onNextChapter).toHaveBeenCalledTimes(1);
     });
   });
 });

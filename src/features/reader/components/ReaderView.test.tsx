@@ -1056,4 +1056,135 @@ describe("ReaderView", () => {
       expect(content.style.columnGap).toBe("48px");
     });
   });
+
+  describe("実機タッチ制御（touch-action: none / touch-none）の検証 (AC-RD-18, v0.5 Issue #168, #175)", () => {
+    it("実効 paged モード時、ルート要素（reader-view）に touch-none クラスが付与されること", () => {
+      render(
+        <ReaderView
+          bodyHtml="<p>本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="paged"
+          currentPage={1}
+          totalPages={3}
+        />,
+      );
+      const container = screen.getByTestId("reader-view");
+      expect(container).toHaveClass("touch-none");
+    });
+
+    it("実効 scroll モード時、ルート要素（reader-view）に touch-none クラスが付与されないこと", () => {
+      render(
+        <ReaderView
+          bodyHtml="<p>本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="scroll"
+        />,
+      );
+      const container = screen.getByTestId("reader-view");
+      expect(container).not.toHaveClass("touch-none");
+    });
+  });
+
+  describe("連続スクロールモードでの本文先頭・末尾前後話ボタン配置（AC-RD-19, v0.5 Issue #168, #175）", () => {
+    it("実効 paged モード時は本文先頭・末尾の前後話ボタンが表示されないこと", () => {
+      render(
+        <ReaderView
+          bodyHtml="<p>本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="paged"
+          chapterIndex={2}
+          totalChapters={5}
+        />,
+      );
+      expect(
+        screen.queryByTestId("reader-scroll-prev-chapter"),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("reader-scroll-next-chapter"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("実効 scroll モード時、本文先頭に「前の話へ」、末尾に「次の話へ」ボタンが表示されること", () => {
+      render(
+        <ReaderView
+          bodyHtml="<p>本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="scroll"
+          chapterIndex={2}
+          totalChapters={5}
+        />,
+      );
+      expect(
+        screen.getByTestId("reader-scroll-prev-chapter"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId("reader-scroll-next-chapter"),
+      ).toBeInTheDocument();
+    });
+
+    it("第1話（chapterIndex=1）のとき、先頭の「前の話へ」ボタンが disabled となること", () => {
+      const onPrevChapter = vi.fn();
+      const onNextChapter = vi.fn();
+      render(
+        <ReaderView
+          bodyHtml="<p>本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="scroll"
+          chapterIndex={1}
+          totalChapters={3}
+          onPrevChapter={onPrevChapter}
+          onNextChapter={onNextChapter}
+        />,
+      );
+      const prevBtn = screen.getByTestId("reader-scroll-prev-chapter");
+      const nextBtn = screen.getByTestId("reader-scroll-next-chapter");
+
+      expect(prevBtn).toBeDisabled();
+      expect(nextBtn).toBeEnabled();
+
+      fireEvent.click(nextBtn);
+      expect(onNextChapter).toHaveBeenCalledTimes(1);
+    });
+
+    it("最終話（chapterIndex=totalChapters）のとき、末尾の「次の話へ」ボタンが disabled となること", () => {
+      const onPrevChapter = vi.fn();
+      const onNextChapter = vi.fn();
+      render(
+        <ReaderView
+          bodyHtml="<p>本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="scroll"
+          chapterIndex={3}
+          totalChapters={3}
+          onPrevChapter={onPrevChapter}
+          onNextChapter={onNextChapter}
+        />,
+      );
+      const prevBtn = screen.getByTestId("reader-scroll-prev-chapter");
+      const nextBtn = screen.getByTestId("reader-scroll-next-chapter");
+
+      expect(prevBtn).toBeEnabled();
+      expect(nextBtn).toBeDisabled();
+
+      fireEvent.click(prevBtn);
+      expect(onPrevChapter).toHaveBeenCalledTimes(1);
+    });
+
+    it("横書きスクロール時でも前後話ボタンが表示され、テーマに応じたスタイルが適用されること", () => {
+      render(
+        <ReaderView
+          bodyHtml="<p>横書き本文</p>"
+          writingMode="horizontal-tb"
+          pagingMode="scroll"
+          theme="sepia"
+          chapterIndex={2}
+          totalChapters={4}
+        />,
+      );
+      const prevBtn = screen.getByTestId("reader-scroll-prev-chapter");
+      const nextBtn = screen.getByTestId("reader-scroll-next-chapter");
+      expect(prevBtn).toBeInTheDocument();
+      expect(nextBtn).toBeInTheDocument();
+    });
+  });
 });
