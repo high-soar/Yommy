@@ -120,6 +120,7 @@ export const VerticalLongContent: Story = {
   name: "縦書き（長文スクロール・Overflow）",
   args: {
     writingMode: "vertical-rl",
+    pagingMode: "scroll",
     theme: "light",
     bodyHtml: longBodyHtml,
   },
@@ -135,6 +136,7 @@ export const VerticalPaged: Story = {
     pagingMode: "paged",
     currentPage: 1,
     totalPages: 5,
+    bodyHtml: longBodyHtml,
   },
 };
 
@@ -148,6 +150,7 @@ export const HorizontalPaged: Story = {
     pagingMode: "paged",
     currentPage: 2,
     totalPages: 6,
+    bodyHtml: longBodyHtml,
   },
 };
 
@@ -161,5 +164,6 @@ export const PageIndicator: Story = {
     pagingMode: "paged",
     currentPage: 3,
     totalPages: 12,
+    bodyHtml: longBodyHtml,
   },
 };
