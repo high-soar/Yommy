@@ -2,7 +2,7 @@
 type: spec-feature
 title: "小説リーダー画面仕様書（SCR-03: Novel Reader）"
 description: "小説本文の全画面（100dvh）縦書き・横書き組版表示、ページめくり（タップ/Kindle様式スワイプ送り）と連続スクロール切替、エピソード端シームレス遷移、最下部タッチによる下部オーバーレイ（ReaderBottomOverlay: 前後話ナビ＋下部タブ）、ルビ・傍点描画、4カラーテーマ・文字サイズ・行間設定の永続化、前後エピソード遷移、未キャッシュ話のオンデマンド取得、既読・しおり・進捗率の自動保存/復元、およびSCN-01統合シナリオの正本仕様。"
-status: "Review (#122)"
+status: Approved
 updated: "2026-10-31"
 tags:
   - reader
@@ -41,6 +41,7 @@ related_specs:
   - docs/specs/features/settings.md
   - docs/specs/parsers/kakuyomu.md
   - docs/specs/changes/archive/issue-123-reader-bottom-overlay-ui-improvement.md
+  - docs/specs/changes/archive/issue-124-settings-back-button-navigation.md
   - docs/specs/changes/archive/issue-79-four-tabs-search-ranking.md
   - docs/specs/changes/archive/issue-80-bookshelf-update-check-and-sort.md
   - docs/specs/changes/archive/issue-81-prefetch-and-cache-rules.md
@@ -81,7 +82,7 @@ related_tests:
   - `SYS-REQ-06`（クラウド同期連携：話数遷移・既読更新時の自動 Push、2〜3秒デバウンス制御）
   - `SYS-REQ-07`（ルビ `<ruby>`・傍点 `<em class="bouten">` のサニタイズ済み組版描画）
   - `SYS-REQ-08`（全画面 `100dvh` での縦書き `vertical-rl` / 横書き `horizontal-tb` 表示）
-  - `SYS-REQ-09`（文字サイズ `fontSizePx`・行間 `lineHeight` のカスタマイズと永続化 ※設定画面 `SCR-05` で変更、余白・フォント種別は `v0.4`）
+  - `SYS-REQ-09`（文字サイズ `fontSizePx`・行間 `lineHeight` のカスタマイズと永続化 ※設定画面 `SCR-05` で変更、余白・フォント種別は `v0.5〜`）
   - `SYS-REQ-10`（4カラーテーマ `light` / `sepia` / `dark` / `black` 切り替え ※設定画面 `SCR-05` で変更）
   - `SYS-REQ-11`（全画面表示でのページ送りモード［自動/ページめくり/スクロール］切替、1ページ組版［行途切れ防止］、横スライドアニメーション、ページインジケーター表示、Kindle様式のリアルタイム指追従スワイプ・30%規定値スナップバック・画面左右約20%タップ送り、画面中央タップオーバーレイ開閉、エピソード端でのシームレス前後話遷移［ラバーバンド離上遷移およびスクロール2段階操作遷移］）
   - `SYS-REQ-12`（しおり話数 `bookmark_chapter_index`・本文進捗率 `bookmark_scroll_progress` の自動保存・復元、ページめくりモードとスクロールモードの進捗連動、OSバックキー・下部タブ遷移時の `flushBookmark` 実行、および既読フラグ `is_read` の自動更新）
@@ -92,12 +93,12 @@ related_tests:
   - `TR-01b`（下部オーバーレイの「本棚」タブタップによる本棚トップ画面 `SCR-01` `/` へのダイレクト遷移）
   - `TR-03`（本棚画面 `SCR-01` の「続きから読む」から `SCR-03` への直接遷移）
   - `TR-04`（作品詳細・目次画面 `SCR-02` のエピソード選択または読書開始ボタンから `SCR-03` への遷移）
-  - `TR-05`（`SCR-03` 内の下部オーバーレイ「前の話へ」「次の話へ」操作による同一作品の前後エピソード `chapterIndex ± 1` への遷移）
+  - `TR-05`（下部オーバーレイの「前の話へ」「次の話へ」操作、およびエピソード境界でのシームレス遷移［ラバーバンドドラッグ離上 / 2段階スクロール］による同一作品の前後エピソード `chapterIndex ± 1` への遷移）
   - `TR-06`（OS バックキーまたは下部オーバーレイの4タブ遷移によりスクロール進捗率を保存して `SCR-02` `/novels/:novelId`、または各タブへ遷移）
 - **対象外スコープ（後続 Milestone）**:
-  - ハードウェア音量キー（`enableVolumeKeyPaging`）による1画面ジャンプ送り（Milestone `v0.4`：`SYS-REQ-11` 拡張、本Issueでは対象外）
+  - ハードウェア音量キー（`enableVolumeKeyPaging`）による1画面ジャンプ送り（Milestone `v0.5〜`：`SYS-REQ-11` 拡張、本Issueでは対象外）
   - 3D カール等の過剰な描画エフェクト（2D 横スライドアニメーションを採用）
-  - 画面余白（`pageMarginPx`）・フォント種別（`fontFamily`）の UI カスタマイズ（Milestone `v0.4`：`SYS-REQ-09` 拡張）
+  - 画面余白（`pageMarginPx`）・フォント種別（`fontFamily`）の UI カスタマイズ（Milestone `v0.5〜`：`SYS-REQ-09` 拡張）
   - 取得失敗時の内蔵 WebView フォールバック遷移 `TR-10`（Milestone `v0.4`：`SYS-REQ-13`）
 
 ---

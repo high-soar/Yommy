@@ -29,6 +29,7 @@ related_specs:
   - docs/specs/features/reader-view.md
   - docs/specs/features/settings.md
   - docs/specs/parsers/kakuyomu.md
+  - docs/specs/changes/archive/issue-120-cloud-sync-google-drive.md
   - docs/specs/changes/archive/issue-79-four-tabs-search-ranking.md
   - docs/specs/changes/archive/issue-80-bookshelf-update-check-and-sort.md
   - docs/specs/changes/archive/issue-81-prefetch-and-cache-rules.md
@@ -66,6 +67,7 @@ related_tests:
   - `SYS-REQ-03`（レートリミット・バックグラウンド取得：未取得話一括キャッシュ時の 1.5秒間隔ウェイト制御および中断制御）
   - `SYS-REQ-04`（更新チェック・差分取得：作品詳細画面表示時の本棚「NEW」バッジ自動解除、手動目次再取得と新着話数フィードバック表示）
   - `SYS-REQ-05`（キャッシュ管理・容量整理：未取得話の一括キャッシュ、確認ダイアログ付き作品削除と `chapters` カスケード削除）
+  - `SYS-REQ-06`（クラウド同期・バックアップ：Google Drive クラウド同期による他端末からの作品追加・しおり位置・既読状態の反映、および作品削除時の同期反映）
   - `SYS-REQ-12`（しおり・スクロール位置自動保存に基づくしおり位置マーク・既読バッジ表示および「続きから読む」導線）
   - `SYS-REQ-16`（全画面シェル・下部タブ・論理階層遷移：100dvh 全画面シェル内配置、固定ヘッダー＋内部スクロール目次、下部タブバー連携）
   - `SYS-REQ-19`（探索一覧からの作品即時登録・遷移：検索・ランキングからの遷移元導線）
@@ -81,8 +83,8 @@ related_tests:
   - `TR-18`（作品詳細ヘッダーの「未取得話を一括キャッシュ」アクションによる順次本文取得・進捗表示・手動中断）
 - **対象外スコープ（後続 Issue / Milestone）**:
   - エピソード閲覧に伴うしおり位置（`bookmarkChapterIndex`, `bookmarkScrollProgress`）および既読フラグ（`isRead`）の自動更新ロジック本体（Issue #14 の `SCR-03` リーダー画面拡張で一括実装）
-  - 内蔵 WebView（`SCR-04`）での手動インポート連携（Milestone `v0.4`：`SYS-REQ-13, 14`, `TR-09`）
-  - 作品単位の「本文キャッシュのみ削除（目次は残す）」操作（Milestone `v0.4`：`SYS-REQ-05`）
+  - 内蔵 WebView（`SCR-04`）での手動インポート連携（Milestone `v0.5〜`：`SYS-REQ-13, 14`, `TR-09`）
+  - 作品単位の「本文キャッシュのみ削除（目次は残す）」操作（Milestone `v0.5〜`：`SYS-REQ-05`）
 
 ---
 
