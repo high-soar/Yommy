@@ -382,5 +382,65 @@ describe("SettingsContainer", () => {
       await user.click(syncBtn);
       expect(mockSyncEngine.sync).toHaveBeenCalled();
     });
+
+    it("ストレージ・キャッシュ管理セクションが描画され、一括キャッシュ削除がコンテナ経由で実行できること (AC-ST-14〜16)", async () => {
+      const user = userEvent.setup();
+      let summaryData = { totalCachedChapters: 8, totalByteSize: 204800 };
+      const deleteAllCachedBodiesMock = vi.fn(async () => {
+        summaryData = { totalCachedChapters: 0, totalByteSize: 0 };
+        return 8;
+      });
+
+      const mockChapterRepo = {
+        listChaptersByNovelId: vi.fn(async () => []),
+        getChapter: vi.fn(async () => null),
+        saveChapterBody: vi.fn(async () => undefined),
+        markChapterRead: vi.fn(async () => undefined),
+        deleteCachedBodies: vi.fn(async () => 0),
+        deleteAllCachedBodies: deleteAllCachedBodiesMock,
+        getStorageCacheSummary: vi.fn(async () => summaryData),
+      };
+
+      render(
+        <ServiceProvider
+          services={{
+            chapterRepository: mockChapterRepo,
+          }}
+        >
+          <SettingsContainer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("storage-cache-section")).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId("storage-cache-summary")).toHaveTextContent(
+        "キャッシュ済み: 全 8 話（合計 200.0 KB）",
+      );
+
+      const openBtn = screen.getByTestId(
+        "open-global-clear-cache-dialog-button",
+      );
+      await user.click(openBtn);
+
+      const clearAllBtn = screen.getByTestId(
+        "confirm-global-clear-all-cache-button",
+      );
+      await user.click(clearAllBtn);
+
+      expect(deleteAllCachedBodiesMock).toHaveBeenCalledWith({
+        onlyRead: false,
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("storage-cache-notice")).toHaveTextContent(
+          "本文キャッシュを一括削除しました（8話）",
+        );
+        expect(screen.getByTestId("storage-cache-summary")).toHaveTextContent(
+          "キャッシュ済み: 全 0 話（合計 0 B）",
+        );
+      });
+    });
   });
 });
