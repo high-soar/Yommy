@@ -610,12 +610,12 @@ describe("ReaderView", () => {
       );
 
       const content = screen.getByTestId("reader-content");
-      // マルチカラムスタイル (AC-RD-15)
+      // マルチカラムスタイル (AC-RD-15, AC-RD-21)
       expect(content.style.columns).toBe("1");
-      expect(content.style.columnGap).toBe("48px");
+      expect(content.style.columnGap).toBe("40px");
       expect(content.style.columnFill).toBe("auto");
-      expect(content.style.width).toBe("352px"); // 400 - 48
-      expect(content.style.height).toBe("552px"); // 600 - 48
+      expect(content.style.width).toBe("360px"); // 400 - 40
+      expect(content.style.height).toBe("560px"); // 600 - 40
 
       // translateY によるページ位置確定 (AC-RD-16): -(2 - 1) * 600 = -600px
       expect(content).toHaveStyle({
@@ -1055,7 +1055,7 @@ describe("ReaderView", () => {
       expect(onTotalPagesChange).toHaveBeenCalledWith(2);
     });
 
-    it("containerWidth や containerHeight が 48 以下の極小ビューポートでは width/height スタイルが付与されないこと", () => {
+    it("containerWidth や containerHeight が 0 の極小ビューポートでは width/height スタイルが付与されないこと", () => {
       const { rerender } = render(
         <ReaderView
           bodyHtml="<p>本文</p>"
@@ -1067,7 +1067,7 @@ describe("ReaderView", () => {
       );
 
       const container = screen.getByTestId("reader-view");
-      mockElementDimensions(container, { clientWidth: 40, clientHeight: 40 });
+      mockElementDimensions(container, { clientWidth: 0, clientHeight: 0 });
 
       rerender(
         <ReaderView
@@ -1084,7 +1084,7 @@ describe("ReaderView", () => {
       expect(content.style.height).toBe("");
       expect(content.style.columnWidth).toBe("");
       expect(content.style.columns).toBe("1");
-      expect(content.style.columnGap).toBe("48px");
+      expect(content.style.columnGap).toBe("40px");
     });
   });
 
@@ -1282,7 +1282,9 @@ describe("ReaderView", () => {
         render(<ReaderView bodyHtml="<p>本文</p>" fontFamily={family} />);
         const container = screen.getByTestId("reader-view");
         expect(container).toHaveAttribute("data-font-family", family);
-        expect(container.style.fontFamily).toBe(FONT_FAMILY_STACKS[family]);
+        expect(container).toHaveStyle({
+          fontFamily: FONT_FAMILY_STACKS[family],
+        });
       },
     );
 
@@ -1290,9 +1292,9 @@ describe("ReaderView", () => {
       render(<ReaderView bodyHtml="<p>本文</p>" />);
       const container = screen.getByTestId("reader-view");
       expect(container).toHaveAttribute("data-font-family", "biz-ud-mincho");
-      expect(container.style.fontFamily).toBe(
-        FONT_FAMILY_STACKS["biz-ud-mincho"],
-      );
+      expect(container).toHaveStyle({
+        fontFamily: FONT_FAMILY_STACKS["biz-ud-mincho"],
+      });
     });
 
     it("ハードコードされていた font-serif クラスが付与されていないこと", () => {

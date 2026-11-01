@@ -90,6 +90,8 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
   theme,
   fontSizePx,
   lineHeight,
+  fontFamily,
+  pageMarginPx,
   initialScrollProgress,
   pagingMode = "auto",
   currentPage = 1,
@@ -311,6 +313,8 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
               theme={theme}
               fontSizePx={fontSizePx}
               lineHeight={lineHeight}
+              fontFamily={fontFamily}
+              pageMarginPx={pageMarginPx}
               initialScrollProgress={initialScrollProgress}
               onScrollProgressChange={handleScrollProgressChange}
               pagingMode={pagingMode}

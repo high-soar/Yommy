@@ -6,6 +6,11 @@ import type {
   ReaderFontFamily,
 } from "../../../storage/types";
 import { resolveEffectivePagingMode } from "../hooks/useReader";
+import {
+  FONT_FAMILY_STACKS,
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_PAGE_MARGIN_PX,
+} from "../../../shared/constants/typography";
 
 export type { WritingMode, ReaderTheme, ReaderPagingMode, ReaderFontFamily };
 
@@ -64,14 +69,18 @@ function calculatePageTransforms(
 
 /**
  * マルチカラム要素の scrollHeight とコンテナ高さから総ページ数を算出する純粋関数
- * （gap = 48px, pageStride = pageHeight）
+ * （gap = pageMarginPx * 2, pageStride = pageHeight）
  */
 function calculateMeasuredTotalPages(
   scrollHeight: number,
   pageHeight: number,
+  pageMarginPx: number = DEFAULT_PAGE_MARGIN_PX,
 ): number {
   if (pageHeight <= 0) return 1;
-  return Math.max(1, Math.round((scrollHeight + 48) / pageHeight));
+  return Math.max(
+    1,
+    Math.round((scrollHeight + pageMarginPx * 2) / pageHeight),
+  );
 }
 
 /**
@@ -118,16 +127,17 @@ function getPagedContentStyle(
   slideOffsetPx: number = 0,
   containerWidth?: number,
   containerHeight?: number,
+  pageMarginPx: number = DEFAULT_PAGE_MARGIN_PX,
 ): React.CSSProperties | undefined {
   if (!isPaged) return undefined;
 
   const width =
-    containerWidth && containerWidth > 48
-      ? `${containerWidth - 48}px`
+    containerWidth !== undefined && containerWidth > 0
+      ? `${Math.max(1, containerWidth - pageMarginPx * 2)}px`
       : undefined;
   const height =
-    containerHeight && containerHeight > 48
-      ? `${containerHeight - 48}px`
+    containerHeight !== undefined && containerHeight > 0
+      ? `${Math.max(1, containerHeight - pageMarginPx * 2)}px`
       : undefined;
 
   const { transform, transition } = calculatePageTransforms(
@@ -138,7 +148,7 @@ function getPagedContentStyle(
 
   return {
     columns: 1,
-    columnGap: "48px",
+    columnGap: `${pageMarginPx * 2}px`,
     columnFill: "auto",
     ...(width ? { width, columnWidth: width } : {}),
     ...(height ? { height } : {}),
@@ -160,6 +170,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   theme = "light",
   fontSizePx = 18,
   lineHeight = 1.8,
+  fontFamily = DEFAULT_FONT_FAMILY,
+  pageMarginPx = DEFAULT_PAGE_MARGIN_PX,
   initialScrollProgress = 0,
   onScrollProgressChange,
   pagingMode = "auto",
@@ -202,6 +214,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           const measuredPages = calculateMeasuredTotalPages(
             contentRef.current.scrollHeight,
             h,
+            pageMarginPx,
           );
           onTotalPagesChange?.(measuredPages);
         }
@@ -209,9 +222,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [isPaged, onTotalPagesChange]);
+  }, [isPaged, onTotalPagesChange, pageMarginPx]);
 
-  // DOM 寸法計測（総ページ数算出）: マウント時および chapterTitle, bodyHtml, initialScrollProgress, writingMode, fontSizePx, lineHeight, pagingMode, containerHeight 変更時
+  // DOM 寸法計測（総ページ数算出）: マウント時および chapterTitle, bodyHtml, initialScrollProgress, writingMode, fontSizePx, lineHeight, fontFamily, pageMarginPx, pagingMode, containerHeight 変更時
   useEffect(() => {
     if (!isPaged) return;
     const container = containerRef.current;
@@ -222,6 +235,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     const measuredPages = calculateMeasuredTotalPages(
       content.scrollHeight,
       pageHeight,
+      pageMarginPx,
     );
     onTotalPagesChange?.(measuredPages);
   }, [
@@ -232,6 +246,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     writingMode,
     fontSizePx,
     lineHeight,
+    fontFamily,
+    pageMarginPx,
     pagingMode,
     containerHeight,
     onTotalPagesChange,
@@ -276,23 +292,27 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       data-theme={theme}
       data-font-size={String(fontSizePx)}
       data-line-height={String(lineHeight)}
+      data-font-family={fontFamily}
+      data-page-margin={String(pageMarginPx)}
       data-paging-mode={pagingMode}
       data-effective-paging-mode={effectivePagingMode}
       data-current-page={isPaged ? String(currentPage) : undefined}
       data-total-pages={isPaged ? String(totalPages) : undefined}
       onScroll={handleScroll}
-      className={`h-full w-full max-w-full font-serif transition-colors duration-200 relative ${
+      className={`h-full w-full max-w-full transition-colors duration-200 relative ${
         themeStyles[theme]
       } ${isVertical ? "writing-vertical-rl" : "writing-horizontal-tb"} ${
         isPaged
           ? "overflow-hidden touch-none"
           : isVertical
-            ? "overflow-x-auto overflow-y-hidden leading-loose p-6"
-            : "overflow-y-auto overflow-x-hidden leading-relaxed p-6"
+            ? "overflow-x-auto overflow-y-hidden leading-loose"
+            : "overflow-y-auto overflow-x-hidden leading-relaxed"
       }`}
       style={{
         fontSize: `${fontSizePx}px`,
         lineHeight,
+        fontFamily: FONT_FAMILY_STACKS[fontFamily],
+        ...(!isPaged ? { padding: `${pageMarginPx}px` } : {}),
       }}
     >
       <div
@@ -306,6 +326,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           slideOffsetPx,
           pageWidth,
           pageHeight,
+          pageMarginPx,
         )}
       >
         {!isPaged && (
