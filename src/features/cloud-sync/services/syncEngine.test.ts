@@ -2339,5 +2339,196 @@ describe("syncEngine", () => {
       expect(parsed.deletedNovels["kakuyomu:old-tombstone"]).toBeUndefined();
       expect(parsed.deletedNovels["kakuyomu:recent-tombstone"]).toBeDefined();
     });
+
+    it("pushCurrentState 単体実行時にローカルとリモートの双方に同一作品が存在する場合、readChapterIds の和集合・lastReadAt/bookmarkChapterIndex の LWW・updatedAt/isFavorite の LWW でフィールドマージされること (R2-01)", async () => {
+      await resetTestDb();
+      const db = await createInMemoryDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const appSettingsRepo = new SqlAppSettingsRepository(db);
+      const bridge = new MockCloudSyncBridge();
+      await bridge.signIn();
+
+      const parserRegistry = createDefaultParserRegistry();
+      const httpClient = new MockHttpClient();
+      const validUrl = "https://kakuyomu.jp/works/16817330658027210412";
+      const parser = parserRegistry.getParser(validUrl)!;
+      const index = parser.parseNovelIndex(workIndexHtml, validUrl);
+
+      // ローカルに作品を登録（第1話既読、しおり第1話、isFavorite=0）
+      await novelRepo.upsertNovelWithToc(index, "2026-10-10T00:00:00.000Z");
+      await chapterRepo.markChapterRead(
+        "kakuyomu:16817330658027210412",
+        1,
+        true,
+      );
+      await novelRepo.updateBookmark("kakuyomu:16817330658027210412", 1, 0.2);
+      await db.execute(
+        "UPDATE novels SET last_read_at = '2026-10-20T00:00:00.000Z', updated_at = '2026-10-20T00:00:00.000Z', is_favorite = 0 WHERE id = ?;",
+        ["kakuyomu:16817330658027210412"],
+      );
+
+      const chapters = await chapterRepo.listChaptersByNovelId(
+        "kakuyomu:16817330658027210412",
+      );
+      const ep1Id = chapters.find((c) => c.chapterIndex === 1)!.remoteChapterId;
+      const ep2Id = chapters.find((c) => c.chapterIndex === 2)!.remoteChapterId;
+
+      // ケース1: リモートの方が lastReadAt / updatedAt ともに新しい場合
+      const remoteStateNewer: YommySyncState = {
+        version: 1,
+        lastSyncedAt: "2026-10-25T00:00:00.000Z",
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            id: "kakuyomu:16817330658027210412",
+            siteType: "kakuyomu",
+            remoteWorkId: "16817330658027210412",
+            canonicalUrl: validUrl,
+            title: "境界迷宮と異界の魔術師",
+            author: "小野崎",
+            synopsis: "あらすじ",
+            totalChapters: 3,
+            isFavorite: 1,
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: null,
+            bookmarkChapterIndex: 3,
+            lastReadAt: "2026-10-25T12:00:00.000Z",
+            readChapterIds: [ep2Id],
+            createdAt: "2026-10-10T00:00:00.000Z",
+            updatedAt: "2026-10-25T12:00:00.000Z",
+          },
+        },
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(remoteStateNewer));
+
+      const engine = new SyncEngine({
+        bridge,
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        appSettingsRepository: appSettingsRepo,
+        parserRegistry,
+        httpClient,
+      });
+
+      await engine.pushCurrentState();
+      const pushed1 = validateSyncState((await bridge.pullFile())!);
+      const merged1 = pushed1.novels["kakuyomu:16817330658027210412"];
+      expect(merged1.readChapterIds).toEqual(
+        expect.arrayContaining([ep1Id, ep2Id]),
+      );
+      expect(merged1.readChapterIds).toHaveLength(2);
+      expect(merged1.bookmarkChapterIndex).toBe(3);
+      expect(merged1.lastReadAt).toBe("2026-10-25T12:00:00.000Z");
+      expect(merged1.isFavorite).toBe(1);
+      expect(merged1.updatedAt).toBe("2026-10-25T12:00:00.000Z");
+
+      // ケース2: リモートの lastReadAt は新しいが bookmarkChapterIndex が null の場合、ローカルの bookmarkChapterIndex を維持すること
+      const remoteStateNullBookmark: YommySyncState = {
+        ...remoteStateNewer,
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            ...remoteStateNewer.novels["kakuyomu:16817330658027210412"],
+            bookmarkChapterIndex: null,
+            lastReadAt: "2026-10-26T00:00:00.000Z",
+          },
+        },
+      };
+      await bridge.pushFile(JSON.stringify(remoteStateNullBookmark));
+      await engine.pushCurrentState();
+      const pushed2 = validateSyncState((await bridge.pullFile())!);
+      const merged2 = pushed2.novels["kakuyomu:16817330658027210412"];
+      expect(merged2.bookmarkChapterIndex).toBe(1);
+      expect(merged2.lastReadAt).toBe("2026-10-26T00:00:00.000Z");
+
+      // ケース3: ローカルの方が lastReadAt / updatedAt ともに新しい（またはリモート lastReadAt が null）場合、ローカルの値を維持すること
+      await db.execute(
+        "UPDATE novels SET last_read_at = NULL, updated_at = '2026-10-30T00:00:00.000Z', is_favorite = 0 WHERE id = ?;",
+        ["kakuyomu:16817330658027210412"],
+      );
+      const remoteStateOlder: YommySyncState = {
+        ...remoteStateNewer,
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            ...remoteStateNewer.novels["kakuyomu:16817330658027210412"],
+            isFavorite: 1,
+            bookmarkChapterIndex: 3,
+            lastReadAt: null,
+            updatedAt: "2026-10-15T00:00:00.000Z",
+          },
+        },
+      };
+      await bridge.pushFile(JSON.stringify(remoteStateOlder));
+      await engine.pushCurrentState();
+      const pushed3 = validateSyncState((await bridge.pullFile())!);
+      const merged3 = pushed3.novels["kakuyomu:16817330658027210412"];
+      expect(merged3.bookmarkChapterIndex).toBe(1);
+      expect(merged3.lastReadAt).toBeNull();
+      expect(merged3.isFavorite).toBe(0);
+      expect(merged3.updatedAt).toBe("2026-10-30T00:00:00.000Z");
+    });
+
+    it("cancelDebouncedPush 呼び出し時に scheduleDebouncedPush の保留 Promise が resolve されハングしないこと (R2-09)", async () => {
+      vi.useFakeTimers();
+      await resetTestDb();
+      const db = await createInMemoryDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const appSettingsRepo = new SqlAppSettingsRepository(db);
+      const bridge = new MockCloudSyncBridge();
+      const parserRegistry = createDefaultParserRegistry();
+      const httpClient = new MockHttpClient();
+
+      const engine = new SyncEngine({
+        bridge,
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        appSettingsRepository: appSettingsRepo,
+        parserRegistry,
+        httpClient,
+      });
+
+      // 保留なし時の cancelDebouncedPush も安全に完了すること
+      engine.cancelDebouncedPush();
+
+      let resolved = false;
+      const pending = engine.scheduleDebouncedPush(2500).then(() => {
+        resolved = true;
+      });
+
+      engine.cancelDebouncedPush();
+      await pending;
+      expect(resolved).toBe(true);
+      vi.useRealTimers();
+    });
+
+    it("pushCurrentState 実行中の pullFile で 401 Unauthorized エラーが発生した際、bridge.signOut が重複せず 1 回のみ呼ばれること (R2-09)", async () => {
+      await resetTestDb();
+      const db = await createInMemoryDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const appSettingsRepo = new SqlAppSettingsRepository(db);
+      const bridge = new MockCloudSyncBridge();
+      await bridge.signIn();
+
+      const signOutSpy = vi.spyOn(bridge, "signOut");
+      vi.spyOn(bridge, "pullFile").mockRejectedValueOnce(
+        new Error("401 Unauthorized"),
+      );
+
+      const engine = new SyncEngine({
+        bridge,
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        appSettingsRepository: appSettingsRepo,
+        parserRegistry: createDefaultParserRegistry(),
+        httpClient: new MockHttpClient(),
+      });
+
+      await expect(engine.pushCurrentState()).rejects.toThrow(
+        "401 Unauthorized",
+      );
+      expect(signOutSpy).toHaveBeenCalledTimes(1);
+    });
   });
 });
