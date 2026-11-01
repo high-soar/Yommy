@@ -3,10 +3,11 @@ import type {
   WritingMode,
   ReaderTheme,
   ReaderPagingMode,
+  ReaderFontFamily,
 } from "../../../storage/types";
 import { resolveEffectivePagingMode } from "../hooks/useReader";
 
-export type { WritingMode, ReaderTheme, ReaderPagingMode };
+export type { WritingMode, ReaderTheme, ReaderPagingMode, ReaderFontFamily };
 
 export interface ReaderViewProps {
   title?: string;
@@ -16,6 +17,8 @@ export interface ReaderViewProps {
   theme?: ReaderTheme;
   fontSizePx?: number;
   lineHeight?: number;
+  fontFamily?: ReaderFontFamily;
+  pageMarginPx?: number;
   initialScrollProgress?: number;
   onScrollProgressChange?: (progress: number) => void;
   pagingMode?: ReaderPagingMode;
