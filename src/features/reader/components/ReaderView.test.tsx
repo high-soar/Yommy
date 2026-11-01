@@ -17,6 +17,9 @@ const {
   VerticalPaged,
   HorizontalPaged,
   PageIndicator,
+  ScrollWithChapterButtons,
+  ScrollFirstChapter,
+  ScrollLastChapter,
 } = composeStories(stories);
 
 /**
@@ -180,6 +183,32 @@ describe("ReaderView", () => {
       expect(indicator).toBeInTheDocument();
       expect(indicator).toHaveTextContent("3 / 12");
       expect(indicator).toHaveClass("tabular-nums");
+    });
+
+    it("ScrollWithChapterButtons ストーリーで本文先頭・末尾の前後話ボタンが表示されること", () => {
+      render(<ScrollWithChapterButtons />);
+      const prevButton = screen.getByTestId("reader-scroll-prev-chapter");
+      const nextButton = screen.getByTestId("reader-scroll-next-chapter");
+      expect(prevButton).toBeInTheDocument();
+      expect(prevButton).not.toBeDisabled();
+      expect(nextButton).toBeInTheDocument();
+      expect(nextButton).not.toBeDisabled();
+    });
+
+    it("ScrollFirstChapter ストーリーで第1話の前話ボタンが無効化されること", () => {
+      render(<ScrollFirstChapter />);
+      const prevButton = screen.getByTestId("reader-scroll-prev-chapter");
+      const nextButton = screen.getByTestId("reader-scroll-next-chapter");
+      expect(prevButton).toBeDisabled();
+      expect(nextButton).not.toBeDisabled();
+    });
+
+    it("ScrollLastChapter ストーリーで最終話の次話ボタンが無効化されること", () => {
+      render(<ScrollLastChapter />);
+      const prevButton = screen.getByTestId("reader-scroll-prev-chapter");
+      const nextButton = screen.getByTestId("reader-scroll-next-chapter");
+      expect(prevButton).not.toBeDisabled();
+      expect(nextButton).toBeDisabled();
     });
   });
 

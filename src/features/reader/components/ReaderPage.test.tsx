@@ -17,6 +17,10 @@ const {
   ScrollMode,
   BoundaryHintNext,
   BoundaryHintPrev,
+  TapBoundaryHintNext,
+  TapBoundaryHintPrev,
+  ScrollBoundaryHintNext,
+  ScrollBoundaryHintPrev,
 } = composeStories(stories);
 
 const sampleNovel: NovelRecord = {
@@ -202,6 +206,34 @@ describe("ReaderPage", () => {
       const hint = screen.getByTestId("reader-episode-boundary-hint");
       expect(hint).toBeInTheDocument();
       expect(hint).toHaveTextContent("指を離して前の話へ");
+    });
+
+    it("TapBoundaryHintNext ストーリーで端2段階タップの次話案内ヒントが表示されること（AC-RD-18）", () => {
+      render(<TapBoundaryHintNext />);
+      const hint = screen.getByTestId("reader-episode-boundary-hint");
+      expect(hint).toBeInTheDocument();
+      expect(hint).toHaveTextContent("もう一度タップで次の話へ");
+    });
+
+    it("TapBoundaryHintPrev ストーリーで端2段階タップの前話案内ヒントが表示されること（AC-RD-18）", () => {
+      render(<TapBoundaryHintPrev />);
+      const hint = screen.getByTestId("reader-episode-boundary-hint");
+      expect(hint).toBeInTheDocument();
+      expect(hint).toHaveTextContent("もう一度タップで前の話へ");
+    });
+
+    it("ScrollBoundaryHintNext ストーリーで連続スクロール端2段階スワイプの次話案内ヒントが表示されること（AC-RD-19）", () => {
+      render(<ScrollBoundaryHintNext />);
+      const hint = screen.getByTestId("reader-episode-boundary-hint");
+      expect(hint).toBeInTheDocument();
+      expect(hint).toHaveTextContent("もう一度スワイプで次の話へ");
+    });
+
+    it("ScrollBoundaryHintPrev ストーリーで連続スクロール端2段階スワイプの前話案内ヒントが表示されること（AC-RD-19）", () => {
+      render(<ScrollBoundaryHintPrev />);
+      const hint = screen.getByTestId("reader-episode-boundary-hint");
+      expect(hint).toBeInTheDocument();
+      expect(hint).toHaveTextContent("もう一度スワイプで前の話へ");
     });
   });
 
