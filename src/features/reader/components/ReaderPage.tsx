@@ -5,6 +5,7 @@ import type {
   WritingMode,
   ReaderTheme,
   ReaderPagingMode,
+  ReaderFontFamily,
 } from "../../../storage/types";
 import type { BottomTab } from "../../../shared/ui/BottomTabBar";
 import { ReaderView } from "./ReaderView";
@@ -29,6 +30,10 @@ export interface ReaderPageProps {
   fontSizePx: number;
   /** 行間倍率 */
   lineHeight: number;
+  /** フォント種別（省略時: 'biz-ud-mincho'、v0.5 Issue #169） */
+  fontFamily?: ReaderFontFamily;
+  /** 画面余白 px（省略時: 20、v0.5 Issue #169） */
+  pageMarginPx?: number;
   /** 初期復元する進捗率（0.0 〜 1.0） */
   initialScrollProgress: number;
   /** ページ送りモード（auto / paged / scroll、省略時: 'auto'） */

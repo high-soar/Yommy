@@ -1184,4 +1184,37 @@ describe("ReaderContainer", () => {
       );
     });
   });
+
+  describe("フォント種別・画面余白の ReaderPage へのバケツリレー検証 (AC-RD-21, SYS-REQ-09, v0.5 Issue #169, #180)", () => {
+    it("settingsRepository の fontFamily と pageMarginPx が useReader を経由して ReaderPage に伝播されること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
+      const { repo: chapterRepository } = createMockChapterRepo();
+      const settingsRepository = createMockSettingsRepo({
+        fontFamily: "biz-ud-gothic",
+        pageMarginPx: 32,
+      });
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+          settingsRepository={settingsRepository}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            fontFamily: "biz-ud-gothic",
+            pageMarginPx: 32,
+          }),
+          undefined,
+        );
+      });
+    });
+  });
 });

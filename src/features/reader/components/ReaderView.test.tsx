@@ -4,6 +4,8 @@ import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./ReaderView.stories";
 import { ReaderView } from "./ReaderView";
+import { FONT_FAMILY_STACKS } from "../../../shared/constants/typography";
+import type { ReaderFontFamily } from "../../../storage/types";
 
 const {
   VerticalLight,
@@ -1262,6 +1264,197 @@ describe("ReaderView", () => {
       nextBtn = screen.getByTestId("reader-scroll-next-chapter");
       expect(prevBtn).toHaveClass("bg-white");
       expect(nextBtn).toHaveClass("bg-white");
+    });
+  });
+
+  describe("フォント種別と動的画面余白の組版反映の検証 (AC-RD-21, SYS-REQ-09, v0.5 Issue #169, #180)", () => {
+    const fontFamilies: ReaderFontFamily[] = [
+      "biz-ud-mincho",
+      "mincho",
+      "biz-ud-gothic",
+      "gothic",
+      "klee",
+    ];
+
+    it.each(fontFamilies)(
+      "fontFamily='%s' 指定時に対応する CSS フォントスタックがインラインスタイルに適用され data-font-family 属性が付与されること",
+      (family) => {
+        render(<ReaderView bodyHtml="<p>本文</p>" fontFamily={family} />);
+        const container = screen.getByTestId("reader-view");
+        expect(container).toHaveAttribute("data-font-family", family);
+        expect(container.style.fontFamily).toBe(FONT_FAMILY_STACKS[family]);
+      },
+    );
+
+    it("fontFamily 省略時は既定値 'biz-ud-mincho' のフォントスタックが適用されること", () => {
+      render(<ReaderView bodyHtml="<p>本文</p>" />);
+      const container = screen.getByTestId("reader-view");
+      expect(container).toHaveAttribute("data-font-family", "biz-ud-mincho");
+      expect(container.style.fontFamily).toBe(
+        FONT_FAMILY_STACKS["biz-ud-mincho"],
+      );
+    });
+
+    it("ハードコードされていた font-serif クラスが付与されていないこと", () => {
+      render(<ReaderView bodyHtml="<p>本文</p>" />);
+      const container = screen.getByTestId("reader-view");
+      expect(container).not.toHaveClass("font-serif");
+    });
+
+    it("連続スクロール時（横書き）、動的画面余白 padding: ${pageMarginPx}px がインラインスタイルに適用され data-page-margin 属性が付与され p-6 クラスが付与されないこと", () => {
+      render(
+        <ReaderView
+          bodyHtml="<p>横書き本文</p>"
+          writingMode="horizontal-tb"
+          pageMarginPx={32}
+        />,
+      );
+      const container = screen.getByTestId("reader-view");
+      expect(container).toHaveAttribute("data-page-margin", "32");
+      expect(container.style.padding).toBe("32px");
+      expect(container).not.toHaveClass("p-6");
+    });
+
+    it("連続スクロール時（縦書き scroll）、動的画面余白 padding: ${pageMarginPx}px が適用されること", () => {
+      render(
+        <ReaderView
+          bodyHtml="<p>縦書き本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="scroll"
+          pageMarginPx={12}
+        />,
+      );
+      const container = screen.getByTestId("reader-view");
+      expect(container).toHaveAttribute("data-page-margin", "12");
+      expect(container.style.padding).toBe("12px");
+      expect(container).not.toHaveClass("p-6");
+    });
+
+    it("pageMarginPx 省略時は既定値 20px が適用されること", () => {
+      render(
+        <ReaderView bodyHtml="<p>横書き本文</p>" writingMode="horizontal-tb" />,
+      );
+      const container = screen.getByTestId("reader-view");
+      expect(container).toHaveAttribute("data-page-margin", "20");
+      expect(container.style.padding).toBe("20px");
+    });
+
+    it("縦書きマルチカラム組版時（実効 paged）、pageMarginPx に応じて columnGap・width・height が動的に算出されること", () => {
+      const { rerender } = render(
+        <ReaderView
+          bodyHtml="<p>縦書き本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="paged"
+          pageMarginPx={16}
+        />,
+      );
+      const container = screen.getByTestId("reader-view");
+      mockElementDimensions(container, {
+        clientWidth: 400,
+        clientHeight: 600,
+      });
+
+      rerender(
+        <ReaderView
+          bodyHtml="<p>縦書き本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="paged"
+          pageMarginPx={16}
+        />,
+      );
+
+      const content = screen.getByTestId("reader-content");
+      // columnGap = 16 * 2 = 32px
+      expect(content.style.columnGap).toBe("32px");
+      // width = Math.max(1, 400 - 32) = 368px
+      expect(content.style.width).toBe("368px");
+      // height = Math.max(1, 600 - 32) = 568px
+      expect(content.style.height).toBe("568px");
+    });
+
+    it("極小ビューポート（containerWidth <= pageMarginPx * 2）でも Math.max(1, ...) により 1px 以上が保証されること", () => {
+      const { rerender } = render(
+        <ReaderView
+          bodyHtml="<p>本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="paged"
+          pageMarginPx={24}
+        />,
+      );
+      const container = screen.getByTestId("reader-view");
+      mockElementDimensions(container, {
+        clientWidth: 30,
+        clientHeight: 30,
+      });
+
+      rerender(
+        <ReaderView
+          bodyHtml="<p>本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="paged"
+          pageMarginPx={24}
+        />,
+      );
+
+      const content = screen.getByTestId("reader-content");
+      expect(content.style.columnGap).toBe("48px");
+      expect(content.style.width).toBe("1px");
+      expect(content.style.height).toBe("1px");
+    });
+
+    it("pageMarginPx または fontFamily の変化により onTotalPagesChange が再発火し余白を考慮した総ページ数が算出されること", () => {
+      const onTotalPagesChange = vi.fn();
+      const { rerender } = render(
+        <ReaderView
+          bodyHtml="<p>本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="paged"
+          pageMarginPx={20}
+          fontFamily="biz-ud-mincho"
+          onTotalPagesChange={onTotalPagesChange}
+        />,
+      );
+
+      const container = screen.getByTestId("reader-view");
+      const content = screen.getByTestId("reader-content");
+      mockElementDimensions(container, {
+        clientHeight: 600,
+        clientWidth: 400,
+      });
+      // (1120 + 40 * 2) / 600 = 1200 / 600 = 2
+      mockElementDimensions(content, {
+        scrollHeight: 1120,
+      });
+
+      onTotalPagesChange.mockClear();
+
+      // pageMarginPx を 40 に変更: (1120 + 40 * 2) / 600 = 1200 / 600 = 2
+      rerender(
+        <ReaderView
+          bodyHtml="<p>本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="paged"
+          pageMarginPx={40}
+          fontFamily="biz-ud-mincho"
+          onTotalPagesChange={onTotalPagesChange}
+        />,
+      );
+      expect(onTotalPagesChange).toHaveBeenCalledWith(2);
+
+      onTotalPagesChange.mockClear();
+
+      // fontFamily を変更: 再評価が発火すること
+      rerender(
+        <ReaderView
+          bodyHtml="<p>本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="paged"
+          pageMarginPx={40}
+          fontFamily="klee"
+          onTotalPagesChange={onTotalPagesChange}
+        />,
+      );
+      expect(onTotalPagesChange).toHaveBeenCalledWith(2);
     });
   });
 });

@@ -1013,4 +1013,29 @@ describe("ReaderPage", () => {
       expect(onNextChapter).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe("フォント種別・画面余白 props の ReaderView への伝播検証 (AC-RD-21, SYS-REQ-09, v0.5 Issue #169, #180)", () => {
+    it("fontFamily と pageMarginPx が指定された場合、直接描画される ReaderView に伝播されること", () => {
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            fontFamily: "klee",
+            pageMarginPx: 36,
+          })}
+        />,
+      );
+
+      const view = screen.getByTestId("reader-view");
+      expect(view).toHaveAttribute("data-font-family", "klee");
+      expect(view).toHaveAttribute("data-page-margin", "36");
+    });
+
+    it("fontFamily と pageMarginPx が省略された場合、既定値（biz-ud-mincho, 20）が ReaderView に反映されること", () => {
+      render(<ReaderPage {...createDefaultProps()} />);
+
+      const view = screen.getByTestId("reader-view");
+      expect(view).toHaveAttribute("data-font-family", "biz-ud-mincho");
+      expect(view).toHaveAttribute("data-page-margin", "20");
+    });
+  });
 });
