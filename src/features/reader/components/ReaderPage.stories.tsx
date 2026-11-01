@@ -212,3 +212,59 @@ export const BoundaryHintPrev: Story = {
     initialSlideOffsetPx: -40,
   },
 };
+
+/**
+ * 端2段階タップ案内ヒント（次話へ）表示
+ */
+export const TapBoundaryHintNext: Story = {
+  name: "端2段階タップヒント（次話へ）",
+  args: {
+    pagingMode: "paged" as ReaderPagingMode,
+    currentPage: 3,
+    totalPages: 3,
+    chapterIndex: 1,
+    totalChapters: 3,
+    initialBoundaryHint: "もう一度タップで次の話へ",
+  },
+};
+
+/**
+ * 端2段階タップ案内ヒント（前話へ）表示
+ */
+export const TapBoundaryHintPrev: Story = {
+  name: "端2段階タップヒント（前話へ）",
+  args: {
+    pagingMode: "paged" as ReaderPagingMode,
+    currentPage: 1,
+    totalPages: 3,
+    chapterIndex: 2,
+    totalChapters: 3,
+    initialBoundaryHint: "もう一度タップで前の話へ",
+  },
+};
+
+/**
+ * 連続スクロール端2段階スワイプ案内ヒント（次話へ）表示
+ */
+export const ScrollBoundaryHintNext: Story = {
+  name: "連続スクロール端ヒント（次話へ）",
+  args: {
+    pagingMode: "scroll" as ReaderPagingMode,
+    chapterIndex: 1,
+    totalChapters: 3,
+    initialBoundaryHint: "もう一度スワイプで次の話へ",
+  },
+};
+
+/**
+ * 連続スクロール端2段階スワイプ案内ヒント（前話へ）表示
+ */
+export const ScrollBoundaryHintPrev: Story = {
+  name: "連続スクロール端ヒント（前話へ）",
+  args: {
+    pagingMode: "scroll" as ReaderPagingMode,
+    chapterIndex: 2,
+    totalChapters: 3,
+    initialBoundaryHint: "もう一度スワイプで前の話へ",
+  },
+};

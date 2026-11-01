@@ -167,3 +167,48 @@ export const PageIndicator: Story = {
     bodyHtml: longBodyHtml,
   },
 };
+
+/**
+ * 連続スクロール・本文前後話ボタン表示（第2話 / 全3話・中間話）
+ */
+export const ScrollWithChapterButtons: Story = {
+  name: "連続スクロール・本文前後話ボタン（中間話）",
+  args: {
+    writingMode: "vertical-rl",
+    pagingMode: "scroll",
+    chapterIndex: 2,
+    totalChapters: 3,
+    onPrevChapter: fn(),
+    onNextChapter: fn(),
+  },
+};
+
+/**
+ * 連続スクロール・第1話（前話ボタン無効化）
+ */
+export const ScrollFirstChapter: Story = {
+  name: "連続スクロール・第1話（前話無効）",
+  args: {
+    writingMode: "vertical-rl",
+    pagingMode: "scroll",
+    chapterIndex: 1,
+    totalChapters: 3,
+    onPrevChapter: fn(),
+    onNextChapter: fn(),
+  },
+};
+
+/**
+ * 連続スクロール・最終話（次話ボタン無効化）
+ */
+export const ScrollLastChapter: Story = {
+  name: "連続スクロール・最終話（次話無効）",
+  args: {
+    writingMode: "vertical-rl",
+    pagingMode: "scroll",
+    chapterIndex: 3,
+    totalChapters: 3,
+    onPrevChapter: fn(),
+    onNextChapter: fn(),
+  },
+};
