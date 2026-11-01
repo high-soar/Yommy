@@ -960,5 +960,39 @@ describe("ReaderView", () => {
       expect(container.scrollLeft).toBe(0);
       expect(container.scrollTop).toBe(0);
     });
+
+    it("同一 bodyHtml であっても chapterTitle または initialScrollProgress が変化した際（前後話遷移時）に総ページ数が再計測され onTotalPagesChange が呼び出されること (R2-04)", () => {
+      const onTotalPagesChange = vi.fn();
+      const { rerender } = render(
+        <ReaderView
+          chapterTitle="第2話 見知らぬ空"
+          bodyHtml="<p>共通本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="paged"
+          initialScrollProgress={0}
+          onTotalPagesChange={onTotalPagesChange}
+        />,
+      );
+
+      const container = screen.getByTestId("reader-view");
+      mockElementDimensions(container, {
+        scrollWidth: 1000,
+        clientWidth: 500,
+      });
+      onTotalPagesChange.mockClear();
+
+      rerender(
+        <ReaderView
+          chapterTitle="プロローグ：目覚め"
+          bodyHtml="<p>共通本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="paged"
+          initialScrollProgress={1}
+          onTotalPagesChange={onTotalPagesChange}
+        />,
+      );
+
+      expect(onTotalPagesChange).toHaveBeenCalledWith(2);
+    });
   });
 });
