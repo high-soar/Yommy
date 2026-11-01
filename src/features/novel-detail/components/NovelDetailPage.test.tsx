@@ -16,6 +16,8 @@ const {
   WithError,
   BatchCaching,
   AllCached,
+  WithClearCacheDialog,
+  WithClearCacheNotice,
 } = composeStories(stories);
 
 const sampleNovel: NovelRecord = {
@@ -164,6 +166,28 @@ describe("NovelDetailPage", () => {
       expect(screen.getByTestId("novel-detail-error")).toHaveTextContent(
         "通信エラーが発生しました",
       );
+    });
+
+    it("WithClearCacheDialog ストーリーでキャッシュ整理確認ダイアログが表示されること (AC-ND-21)", () => {
+      render(<WithClearCacheDialog />);
+
+      expect(
+        screen.getByTestId("clear-cache-confirm-dialog"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId("confirm-clear-read-cache-button"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId("confirm-clear-all-cache-button"),
+      ).toBeInTheDocument();
+    });
+
+    it("WithClearCacheNotice ストーリーでキャッシュ削除完了通知メッセージが表示されること (AC-ND-22)", () => {
+      render(<WithClearCacheNotice />);
+
+      const notice = screen.getByTestId("novel-detail-notice");
+      expect(notice).toBeInTheDocument();
+      expect(notice).toHaveTextContent("本文キャッシュを削除しました（2話）");
     });
   });
 
@@ -551,6 +575,34 @@ describe("NovelDetailPage", () => {
         const cancelButton = screen.getByTestId("cancel-clear-cache-button");
         await user.click(cancelButton);
         expect(onCloseClearCacheDialog).toHaveBeenCalledTimes(1);
+      });
+
+      it("onCloseClearCacheDialog が省略された場合でもキャンセルボタン押下時に安全に no-op 処理されること", async () => {
+        const user = userEvent.setup();
+
+        render(
+          <NovelDetailPage
+            {...defaultPageProps}
+            isClearCacheDialogOpen={true}
+          />,
+        );
+
+        const cancelButton = screen.getByTestId("cancel-clear-cache-button");
+        await expect(user.click(cancelButton)).resolves.not.toThrow();
+      });
+
+      it("onConfirmClearCache が省略された場合でも確定ボタン押下時に安全に no-op 処理されること", async () => {
+        const user = userEvent.setup();
+
+        render(
+          <NovelDetailPage
+            {...defaultPageProps}
+            isClearCacheDialogOpen={true}
+          />,
+        );
+
+        const allButton = screen.getByTestId("confirm-clear-all-cache-button");
+        await expect(user.click(allButton)).resolves.not.toThrow();
       });
 
       it("refreshMessage にキャッシュ削除完了メッセージが設定された場合、インライン通知に表示されること (AC-ND-22)", () => {
