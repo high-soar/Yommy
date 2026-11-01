@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import type { NovelDetailHeaderProps } from "../types";
+import { formatByteSize } from "../../../shared/utils/formatByteSize";
 
 export type { NovelDetailHeaderProps } from "../types";
 
@@ -24,6 +25,7 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
   onStartBatchCache,
   onCancelBatchCache,
   onOpenDeleteDialog,
+  onOpenClearCacheDialog,
 }) => {
   const [isSynopsisExpanded, setIsSynopsisExpanded] = useState(false);
 
@@ -83,6 +85,17 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
         </button>
         <button
           type="button"
+          data-testid="open-clear-cache-dialog-button"
+          onClick={onOpenClearCacheDialog}
+          disabled={
+            novel.cachedChapters === 0 || isRefreshing || isBatchCaching
+          }
+          className="px-3 py-1.5 text-xs font-medium text-amber-700 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-amber-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+        >
+          本文キャッシュ整理
+        </button>
+        <button
+          type="button"
           data-testid="open-delete-dialog-button"
           onClick={onOpenDeleteDialog}
           disabled={isRefreshing || isBatchCaching}
@@ -132,7 +145,8 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
           data-testid="novel-detail-stats"
           className="text-xs text-slate-500 dark:text-slate-400 mt-0.5"
         >
-          全 {novel.totalChapters} 話（取得済み {novel.cachedChapters} 話）
+          全 {novel.totalChapters} 話（取得済み {novel.cachedChapters} 話 /{" "}
+          {formatByteSize(novel.totalByteSize)}）
         </div>
       </div>
 

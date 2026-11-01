@@ -29,6 +29,8 @@ export const NovelDetailContainer: React.FC<NovelDetailContainerProps> = ({
     isAllCached,
     isDeleteDialogOpen,
     isDeleting,
+    isClearCacheDialogOpen,
+    isClearingCache,
     refreshMessage,
     error,
     refreshToc,
@@ -37,6 +39,9 @@ export const NovelDetailContainer: React.FC<NovelDetailContainerProps> = ({
     openDeleteDialog,
     closeDeleteDialog,
     confirmDeleteNovel,
+    openClearCacheDialog,
+    closeClearCacheDialog,
+    confirmClearCache,
   } = useNovelDetail(novelId);
 
   const handleBackToBookshelf = useCallback(() => {
@@ -91,6 +96,8 @@ export const NovelDetailContainer: React.FC<NovelDetailContainerProps> = ({
       isAllCached={isAllCached}
       isDeleteDialogOpen={isDeleteDialogOpen}
       isDeleting={isDeleting}
+      isClearCacheDialogOpen={isClearCacheDialogOpen}
+      isClearingCache={isClearingCache}
       refreshMessage={refreshMessage}
       error={error}
       onBackToBookshelf={handleBackToBookshelf}
@@ -103,6 +110,9 @@ export const NovelDetailContainer: React.FC<NovelDetailContainerProps> = ({
       onOpenDeleteDialog={openDeleteDialog}
       onCloseDeleteDialog={closeDeleteDialog}
       onConfirmDelete={handleConfirmDelete}
+      onOpenClearCacheDialog={openClearCacheDialog}
+      onCloseClearCacheDialog={closeClearCacheDialog}
+      onConfirmClearCache={confirmClearCache}
     />
   );
 };
