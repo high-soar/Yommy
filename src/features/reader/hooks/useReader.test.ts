@@ -434,6 +434,64 @@ describe("useReader", () => {
       expect(result.current.lineHeight).toBe(2.0);
     });
 
+    it("初回ロード時に settingsRepository から fontFamily と pageMarginPx が正常に復元されること (SYS-REQ-09)", async () => {
+      const db = await resetTestDb();
+      const settingsRepo = new SqlSettingsRepository(db);
+      await settingsRepo.updateReaderSettings({
+        fontFamily: "klee",
+        pageMarginPx: 32,
+      });
+
+      const { result } = renderHook(() => useReader(), {
+        wrapper: createWrapper({ settingsRepository: settingsRepo }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.fontFamily).toBe("klee");
+      expect(result.current.pageMarginPx).toBe(32);
+    });
+
+    it("初回ロード時に settingsRepository.getReaderSettings が失敗した場合、fontFamily と pageMarginPx のデフォルト値（'biz-ud-mincho', 20）が維持されること", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 2,
+        cachedCount: 2,
+      });
+
+      const mockSettingsRepo: SettingsRepository = {
+        getReaderSettings: async () => {
+          throw new Error("設定読み出し失敗");
+        },
+        updateReaderSettings: async () => {
+          throw new Error("更新不可");
+        },
+      };
+
+      const { result } = renderHook(
+        () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+        {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+            settingsRepository: mockSettingsRepo,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.fontFamily).toBe("biz-ud-mincho");
+      expect(result.current.pageMarginPx).toBe(20);
+      expect(result.current.error).toBeNull();
+    });
+
     it("初回ロード時に settingsRepository.getReaderSettings が例外を投げた場合でも、デフォルト設定値が維持されて正常にロードが完了すること", async () => {
       const db = await resetTestDb();
       const novelRepo = new SqlNovelRepository(db);
@@ -471,6 +529,8 @@ describe("useReader", () => {
       expect(result.current.theme).toBe("light");
       expect(result.current.fontSizePx).toBe(18);
       expect(result.current.lineHeight).toBe(1.8);
+      expect(result.current.fontFamily).toBe("biz-ud-mincho");
+      expect(result.current.pageMarginPx).toBe(20);
       expect(result.current.error).toBeNull();
     });
 

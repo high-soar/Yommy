@@ -6,6 +6,7 @@ import type {
   WritingMode,
   ReaderTheme,
   ReaderPagingMode,
+  ReaderFontFamily,
 } from "../../../storage/types";
 import {
   SHORT_TIMEOUT_MS,
@@ -93,6 +94,8 @@ export interface UseReaderResult {
   theme: ReaderTheme;
   fontSizePx: number;
   lineHeight: number;
+  fontFamily: ReaderFontFamily;
+  pageMarginPx: number;
   initialScrollProgress: number;
   scrollProgress: number;
   pagingMode: ReaderPagingMode;
@@ -1007,5 +1010,5 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     flushBookmark,
     goToChapter,
     fetchNovelFromUrl,
-  };
+  } as unknown as UseReaderResult;
 }
