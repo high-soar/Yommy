@@ -1,6 +1,7 @@
 import React from "react";
 import { useSettings } from "../hooks/useSettings";
 import { useCloudSync } from "../hooks/useCloudSync";
+import { useStorageCache } from "../hooks/useStorageCache";
 import { SettingsPage } from "./SettingsPage";
 
 export interface SettingsContainerProps {
@@ -48,6 +49,15 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
     syncNow: onSyncNow,
   } = useCloudSync();
 
+  const {
+    summary: storageCacheSummary,
+    isLoading: isStorageCacheLoading,
+    isClearing: isStorageCacheClearing,
+    notice: storageCacheNotice,
+    error: storageCacheError,
+    clearCache: onClearStorageCache,
+  } = useStorageCache();
+
   return (
     <SettingsPage
       writingMode={writingMode}
@@ -63,6 +73,11 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
       cloudSyncLastSyncedAt={cloudSyncLastSyncedAt}
       isCloudSyncing={isCloudSyncing}
       cloudSyncError={cloudSyncError}
+      storageCacheSummary={storageCacheSummary}
+      isStorageCacheLoading={isStorageCacheLoading}
+      isStorageCacheClearing={isStorageCacheClearing}
+      storageCacheNotice={storageCacheNotice}
+      storageCacheError={storageCacheError}
       onToggleWritingMode={toggleWritingMode}
       onChangeTheme={changeTheme}
       onChangeFontSize={changeFontSize}
@@ -73,6 +88,7 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
       onSignInGoogle={onSignInGoogle}
       onSignOutGoogle={onSignOutGoogle}
       onSyncNow={onSyncNow}
+      onClearStorageCache={onClearStorageCache}
       className={className}
     />
   );

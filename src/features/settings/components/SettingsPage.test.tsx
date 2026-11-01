@@ -16,6 +16,8 @@ const {
   PagingModeSelection,
   HorizontalWithPagingModeDisabled,
   FontSelectionKlee,
+  WithStorageCache,
+  WithStorageCacheDialogOpen,
 } = composeStories(stories);
 
 describe("SettingsPage", () => {
@@ -240,6 +242,32 @@ describe("SettingsPage", () => {
       expect(note).toHaveTextContent(
         "※横書き表示時は連続スクロール固定となります",
       );
+    });
+
+    it("WithStorageCache: ストレージ・キャッシュ情報と完了通知が描画されること (AC-ST-14, AC-ST-16)", () => {
+      render(<WithStorageCache />);
+
+      expect(screen.getByTestId("storage-cache-section")).toBeInTheDocument();
+      expect(screen.getByTestId("storage-cache-summary")).toHaveTextContent(
+        "キャッシュ済み: 全 12 話（合計 1.5 MB）",
+      );
+      expect(screen.getByTestId("storage-cache-notice")).toHaveTextContent(
+        "本文キャッシュを一括削除しました（4話）",
+      );
+    });
+
+    it("WithStorageCacheDialogOpen: 一括削除確認ダイアログが描画されること (AC-ST-15)", () => {
+      render(<WithStorageCacheDialogOpen />);
+
+      expect(
+        screen.getByTestId("global-clear-cache-dialog"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId("confirm-global-clear-read-cache-button"),
+      ).toHaveTextContent("既読話の本文キャッシュのみ削除");
+      expect(
+        screen.getByTestId("confirm-global-clear-all-cache-button"),
+      ).toHaveTextContent("すべての本文キャッシュを削除");
     });
   });
 

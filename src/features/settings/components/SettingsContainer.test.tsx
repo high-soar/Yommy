@@ -413,11 +413,10 @@ describe("SettingsContainer", () => {
 
       await waitFor(() => {
         expect(screen.getByTestId("storage-cache-section")).toBeInTheDocument();
+        expect(screen.getByTestId("storage-cache-summary")).toHaveTextContent(
+          "キャッシュ済み: 全 8 話（合計 200.0 KB）",
+        );
       });
-
-      expect(screen.getByTestId("storage-cache-summary")).toHaveTextContent(
-        "キャッシュ済み: 全 8 話（合計 200.0 KB）",
-      );
 
       const openBtn = screen.getByTestId(
         "open-global-clear-cache-dialog-button",

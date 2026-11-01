@@ -185,3 +185,41 @@ export const FontSelectionKlee: Story = {
     isLoading: false,
   },
 };
+
+/**
+ * ストレージ・キャッシュ情報表示（v0.5 Issue #170）
+ */
+export const WithStorageCache: Story = {
+  name: "ストレージキャッシュ保持状態",
+  args: {
+    writingMode: "vertical-rl",
+    theme: "light",
+    fontSizePx: 18,
+    lineHeight: 1.8,
+    isLoading: false,
+    storageCacheSummary: {
+      totalCachedChapters: 12,
+      totalByteSize: 1572864, // 1.5 MB
+    },
+    storageCacheNotice: "本文キャッシュを一括削除しました（4話）",
+  },
+};
+
+/**
+ * ストレージキャッシュ一括削除ダイアログ表示（v0.5 Issue #170）
+ */
+export const WithStorageCacheDialogOpen: Story = {
+  name: "ストレージキャッシュ一括削除ダイアログ表示",
+  args: {
+    writingMode: "vertical-rl",
+    theme: "light",
+    fontSizePx: 18,
+    lineHeight: 1.8,
+    isLoading: false,
+    storageCacheSummary: {
+      totalCachedChapters: 12,
+      totalByteSize: 1572864,
+    },
+    initialShowStorageCacheDialog: true,
+  },
+};

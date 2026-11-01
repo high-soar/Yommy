@@ -9,6 +9,7 @@ import type { CloudSyncAuthState } from "../../../bridges/cloud-sync/types";
 import type { StorageCacheSummary } from "../hooks/useStorageCache";
 import { SampleTextPreview } from "./SampleTextPreview";
 import { CloudSyncSection } from "./CloudSyncSection";
+import { StorageCacheSection } from "./StorageCacheSection";
 import {
   FONT_FAMILY_OPTIONS,
   DEFAULT_FONT_FAMILY,
@@ -177,6 +178,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onSignInGoogle,
   onSignOutGoogle,
   onSyncNow,
+  storageCacheSummary = { totalCachedChapters: 0, totalByteSize: 0 },
+  isStorageCacheLoading = false,
+  isStorageCacheClearing = false,
+  storageCacheNotice = null,
+  storageCacheError = null,
+  initialShowStorageCacheDialog = false,
+  onClearStorageCache,
   className,
 }) => {
   const rootClasses =
@@ -532,6 +540,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           onSignIn={onSignInGoogle}
           onSignOut={onSignOutGoogle}
           onSyncNow={onSyncNow}
+        />
+
+        <StorageCacheSection
+          summary={storageCacheSummary}
+          isLoading={isStorageCacheLoading}
+          isClearing={isStorageCacheClearing}
+          notice={storageCacheNotice}
+          error={storageCacheError}
+          initialShowDialog={initialShowStorageCacheDialog}
+          onClearCache={onClearStorageCache}
         />
       </div>
     </div>
