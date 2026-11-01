@@ -4,7 +4,26 @@ import { ServiceProvider } from "../../../app/ServiceProvider";
 import type {
   ReaderSettings,
   SettingsRepository,
+  ChapterRepository,
 } from "../../../storage/types";
+
+/**
+ * Storybook 用のインメモリ ChapterRepository モックファクトリ
+ */
+export function createMockChapterRepository(): ChapterRepository {
+  return {
+    listChaptersByNovelId: async () => [],
+    getChapter: async () => null,
+    saveChapterBody: async () => undefined,
+    markChapterRead: async () => undefined,
+    deleteCachedBodies: async () => 0,
+    deleteAllCachedBodies: async () => 12,
+    getStorageCacheSummary: async () => ({
+      totalCachedChapters: 12,
+      totalByteSize: 1572864,
+    }),
+  };
+}
 
 /**
  * Storybook 用のインメモリ SettingsRepository モックファクトリ
@@ -41,12 +60,16 @@ const meta: Meta<typeof SettingsContainer> = {
   parameters: {
     layout: "fullscreen",
   },
-  excludeStories: ["createMockSettingsRepository"],
+  excludeStories: [
+    "createMockSettingsRepository",
+    "createMockChapterRepository",
+  ],
   decorators: [
     (Story) => (
       <ServiceProvider
         services={{
           settingsRepository: createMockSettingsRepository(),
+          chapterRepository: createMockChapterRepository(),
         }}
       >
         <Story />
