@@ -159,12 +159,56 @@ export class SqlChapterRepository implements ChapterRepository {
     totalCachedChapters: number;
     totalByteSize: number;
   }> {
-    throw new Error("getStorageCacheSummary is not implemented yet");
+    const rows = await this.db.query<{
+      total_cached_chapters: number;
+      total_byte_size: number;
+    }>(
+      `SELECT
+        COUNT(*) AS total_cached_chapters,
+        COALESCE(SUM(byte_size), 0) AS total_byte_size
+      FROM chapters
+      WHERE body_html IS NOT NULL;`,
+    );
+
+    const row = rows[0];
+    return {
+      totalCachedChapters: row?.total_cached_chapters ?? 0,
+      totalByteSize: row?.total_byte_size ?? 0,
+    };
   }
 
-  async deleteAllCachedBodies(_options?: {
+  async deleteAllCachedBodies(options?: {
     onlyRead?: boolean;
   }): Promise<number> {
-    throw new Error("deleteAllCachedBodies is not implemented yet");
+    return await this.db.runTransaction(async () => {
+      const condition = options?.onlyRead
+        ? "body_html IS NOT NULL AND is_read = 1"
+        : "body_html IS NOT NULL";
+
+      const countRows = await this.db.query<{ count: number }>(
+        `SELECT COUNT(*) AS count FROM chapters WHERE ${condition};`,
+      );
+      const count = countRows[0]?.count ?? 0;
+      if (count === 0) {
+        return 0;
+      }
+
+      const novelRows = await this.db.query<{ novel_id: string }>(
+        `SELECT DISTINCT novel_id FROM chapters WHERE ${condition};`,
+      );
+
+      await this.db.execute(
+        `UPDATE chapters
+         SET body_html = NULL, byte_size = 0, downloaded_at = NULL
+         WHERE ${condition};`,
+      );
+
+      const now = new Date().toISOString();
+      for (const row of novelRows) {
+        await this.recalculateNovelStats(row.novel_id, now);
+      }
+
+      return count;
+    });
   }
 }
