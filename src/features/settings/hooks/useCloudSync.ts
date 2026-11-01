@@ -37,18 +37,14 @@ function isUnauthorizedError(err: unknown): boolean {
     if (obj.status === 401 || obj.statusCode === 401) {
       return true;
     }
-    if (typeof obj.message === "string") {
-      const msg = obj.message.toLowerCase();
-      if (msg.includes("401") || msg.includes("unauthorized")) {
-        return true;
-      }
-    }
   }
-  if (err instanceof Error) {
-    const msg = err.message.toLowerCase();
-    return msg.includes("401") || msg.includes("unauthorized");
-  }
-  return false;
+  const message = err instanceof Error ? err.message : String(err);
+  return (
+    /\b401\s+Unauthorized\b/i.test(message) ||
+    /\bHTTP\s+401\b/i.test(message) ||
+    /\bstatus(?:\s*code)?\s*[:=]?\s*401\b/i.test(message) ||
+    /\bUnauthorized\b/i.test(message)
+  );
 }
 
 /**
@@ -68,7 +64,7 @@ export function useCloudSync(): UseCloudSyncResult {
   const [error, setError] = useState<string | null>(null);
 
   const isMountedRef = useRef<boolean>(true);
-  const isInitializingRef = useRef<boolean>(true);
+  const hasUserActionOccurredRef = useRef<boolean>(false);
   const authStateRef = useRef<CloudSyncAuthState>(authState);
   authStateRef.current = authState;
 
@@ -112,16 +108,22 @@ export function useCloudSync(): UseCloudSyncResult {
           }
         }
 
-        if (!cancelled && isMountedRef.current && isInitializingRef.current) {
+        if (
+          !cancelled &&
+          isMountedRef.current &&
+          !hasUserActionOccurredRef.current
+        ) {
           setLastSyncedAt(restoredLastSynced);
           setAuthState(bridgeState);
         }
       } catch (err: unknown) {
-        if (!cancelled && isMountedRef.current && isInitializingRef.current) {
+        if (
+          !cancelled &&
+          isMountedRef.current &&
+          !hasUserActionOccurredRef.current
+        ) {
           setError(err instanceof Error ? err.message : String(err));
         }
-      } finally {
-        isInitializingRef.current = false;
       }
     }
 
@@ -135,7 +137,7 @@ export function useCloudSync(): UseCloudSyncResult {
 
   // Google アカウント連携（認可フロー実行）
   const signIn = useCallback(async (): Promise<void> => {
-    isInitializingRef.current = false;
+    hasUserActionOccurredRef.current = true;
     if (isMountedRef.current) {
       setError(null);
       setAuthState({ status: "authenticating" });
@@ -174,6 +176,11 @@ export function useCloudSync(): UseCloudSyncResult {
             "Initial sync failed after sign in, proceeding:",
             syncErr,
           );
+          if (isMountedRef.current) {
+            setError(
+              syncErr instanceof Error ? syncErr.message : String(syncErr),
+            );
+          }
         } finally {
           if (isMountedRef.current) {
             setIsSyncing(false);
@@ -206,6 +213,7 @@ export function useCloudSync(): UseCloudSyncResult {
 
   // 連携解除
   const signOut = useCallback(async (): Promise<void> => {
+    hasUserActionOccurredRef.current = true;
     if (isMountedRef.current) {
       setError(null);
     }

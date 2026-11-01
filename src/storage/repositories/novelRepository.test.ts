@@ -826,6 +826,20 @@ describe("SqlNovelRepository", () => {
       const updated = await repository.getNovelById(created.id);
       expect(updated?.isFavorite).toBe(true);
       expect(updated?.lastReadAt).toBe("2026-11-01T12:00:00Z");
+
+      // isFavorite: false での更新
+      await repository.updateSyncMetadata?.(created.id, {
+        isFavorite: false,
+      });
+      const unFav = await repository.getNovelById(created.id);
+      expect(unFav?.isFavorite).toBe(false);
+      expect(unFav?.lastReadAt).toBe("2026-11-01T12:00:00Z");
+
+      // 空メタデータ呼び出し時は何もしないこと
+      await repository.updateSyncMetadata?.(created.id, {});
+      const unchanged = await repository.getNovelById(created.id);
+      expect(unchanged?.isFavorite).toBe(false);
+      expect(unchanged?.lastReadAt).toBe("2026-11-01T12:00:00Z");
     });
 
     it("purgeExpiredDeletedNovels で指定時刻以前の Tombstone が一括パージされること (R1-28)", async () => {

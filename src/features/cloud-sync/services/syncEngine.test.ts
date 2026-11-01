@@ -530,7 +530,9 @@ describe("syncEngine", () => {
       chapterRepo = new SqlChapterRepository(db);
       appSettingsRepo = new SqlAppSettingsRepository(db);
       parserRegistry = createDefaultParserRegistry();
-      bridge = new MockCloudSyncBridge();
+      bridge = new MockCloudSyncBridge({
+        initialAuthState: { status: "connected", email: "user@example.com" },
+      });
 
       httpClient = new MockHttpClient();
       httpClient.setResponse(
@@ -1581,13 +1583,17 @@ describe("syncEngine", () => {
     });
 
     it("pushCurrentState: リモートの Tombstone がローカルの Tombstone より古い場合はローカルの日時を維持すること", async () => {
+      const now = Date.now();
+      const remoteDeletedAt = new Date(now - 10 * 86400000).toISOString();
+      const localDeletedAt = now - 5 * 86400000;
+
       // リモートの古い Tombstone をセット
       const remoteState: YommySyncState = {
         version: 1,
-        lastSyncedAt: "2026-10-31T12:00:00.000Z",
+        lastSyncedAt: new Date(now - 2000).toISOString(),
         novels: {},
         deletedNovels: {
-          "kakuyomu:tombstone-test": "2026-10-01T00:00:00.000Z",
+          "kakuyomu:tombstone-test": remoteDeletedAt,
         },
       };
       await bridge.pushFile(JSON.stringify(remoteState));
@@ -1596,7 +1602,7 @@ describe("syncEngine", () => {
       vi.spyOn(novelRepo, "getDeletedNovels").mockResolvedValue([
         {
           id: "kakuyomu:tombstone-test",
-          deletedAt: new Date("2026-10-15T00:00:00.000Z").getTime(),
+          deletedAt: localDeletedAt,
         },
       ]);
 
@@ -1604,7 +1610,7 @@ describe("syncEngine", () => {
       const pushedContent = bridge.getFileContent();
       const state = JSON.parse(pushedContent!) as YommySyncState;
       expect(state.deletedNovels["kakuyomu:tombstone-test"]).toBe(
-        new Date("2026-10-15T00:00:00.000Z").toISOString(),
+        new Date(localDeletedAt).toISOString(),
       );
     });
 

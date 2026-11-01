@@ -722,6 +722,33 @@ describe("useCloudSync", () => {
       warnSpy.mockRestore();
     });
 
+    it("signIn 後の初回 syncEngine.sync で非Error例外が発生した場合も文字列化されて error ステートに設定されること (R1-16)", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const bridge = createMockBridge();
+      const appSettings = createMockAppSettings();
+      const syncEngine = createMockSyncEngine();
+      vi.mocked(syncEngine.sync).mockRejectedValueOnce("同期の不明な例外");
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+          syncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.authState.status).toBe("unlinked");
+      });
+
+      await act(async () => {
+        await result.current.signIn();
+      });
+
+      expect(result.current.error).toBe("同期の不明な例外");
+      warnSpy.mockRestore();
+    });
+
     it("React StrictMode（マウント→クリーンアップ→再マウント）において初期状態が正しく復元されること (R1-25(6))", async () => {
       const bridge = createMockBridge({
         status: "connected",

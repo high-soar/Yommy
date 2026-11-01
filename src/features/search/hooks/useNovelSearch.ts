@@ -70,7 +70,7 @@ interface ExecuteSearchParams {
  * 登録済み作品の照合・その場本棚追加、および詳細画面への遷移制御を提供する。
  */
 export function useNovelSearch(): UseNovelSearchResult {
-  const { httpClient, parserRegistry, novelRepository, isReady } =
+  const { httpClient, parserRegistry, novelRepository, syncEngine, isReady } =
     useServices();
   const router = useRouter();
 
@@ -286,6 +286,7 @@ export function useNovelSearch(): UseNovelSearchResult {
 
         setRegisteredWorkIds((prev) => new Set(prev).add(item.remoteWorkId));
         setAddingWorkId((prev) => (prev === item.remoteWorkId ? null : prev));
+        syncEngine?.notifyChanged().catch(() => {});
         return savedNovel.id;
       } catch (err) {
         setAddingWorkId((prev) => (prev === item.remoteWorkId ? null : prev));
@@ -294,7 +295,7 @@ export function useNovelSearch(): UseNovelSearchResult {
         return null;
       }
     },
-    [addingWorkId, httpClient, novelRepository, parserRegistry],
+    [addingWorkId, httpClient, novelRepository, parserRegistry, syncEngine],
   );
 
   const handleCardSelect = useCallback(

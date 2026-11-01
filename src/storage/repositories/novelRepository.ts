@@ -264,6 +264,9 @@ export class SqlNovelRepository implements NovelRepository {
         ]);
       }
 
+      // 再登録時は deleted_novels の Tombstone を自動消去 (R1-28)
+      await this.db.execute(`DELETE FROM deleted_novels WHERE id = ?;`, [id]);
+
       const result = await this.getNovelById(id);
       return result!;
     });
@@ -350,13 +353,33 @@ export class SqlNovelRepository implements NovelRepository {
   }
 
   async updateSyncMetadata(
-    _novelId: string,
-    _metadata: { isFavorite?: boolean; lastReadAt?: string | null },
+    novelId: string,
+    metadata: { isFavorite?: boolean; lastReadAt?: string | null },
   ): Promise<void> {
-    // Red: 未実装
+    const updates: string[] = [];
+    const params: unknown[] = [];
+
+    if (metadata.isFavorite !== undefined) {
+      updates.push("is_favorite = ?");
+      params.push(metadata.isFavorite ? 1 : 0);
+    }
+    if (metadata.lastReadAt !== undefined) {
+      updates.push("last_read_at = ?");
+      params.push(metadata.lastReadAt);
+    }
+
+    if (updates.length === 0) return;
+
+    params.push(novelId);
+    await this.db.execute(
+      `UPDATE novels SET ${updates.join(", ")} WHERE id = ?;`,
+      params,
+    );
   }
 
-  async purgeExpiredDeletedNovels(_cutoffTimeMs: number): Promise<void> {
-    // Red: 未実装
+  async purgeExpiredDeletedNovels(cutoffTimeMs: number): Promise<void> {
+    await this.db.execute(`DELETE FROM deleted_novels WHERE deleted_at < ?;`, [
+      cutoffTimeMs,
+    ]);
   }
 }

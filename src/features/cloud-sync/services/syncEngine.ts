@@ -278,8 +278,10 @@ export function parseNovelUrl(url: string): ParsedNovelUrl | null {
   }
 }
 
+const TOMBSTONE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
 /**
- * エラーが 401 Unauthorized に該当するか判定する
+ * エラーが 401 Unauthorized に該当するか判定する (R1-13)
  */
 export function isUnauthorizedError(err: unknown): boolean {
   if (!err) return false;
@@ -290,10 +292,13 @@ export function isUnauthorizedError(err: unknown): boolean {
   ) {
     return true;
   }
-  if (err instanceof Error) {
-    return err.message.includes("401") || err.message.includes("Unauthorized");
-  }
-  return String(err).includes("401") || String(err).includes("Unauthorized");
+  const message = err instanceof Error ? err.message : String(err);
+  return (
+    /\b401\s+Unauthorized\b/i.test(message) ||
+    /\bHTTP\s+401\b/i.test(message) ||
+    /\bstatus(?:\s*code)?\s*[:=]?\s*401\b/i.test(message) ||
+    /\bUnauthorized\b/i.test(message)
+  );
 }
 
 /**
@@ -426,6 +431,17 @@ export class SyncEngine {
       );
     }
 
+    // 新規取込時にお気に入りおよび最終読了日時を復元 (R1-12)
+    if (
+      remoteNovel.isFavorite === 1 ||
+      (remoteNovel.lastReadAt !== null && remoteNovel.lastReadAt !== undefined)
+    ) {
+      await this.deps.novelRepository.updateSyncMetadata?.(novelId, {
+        isFavorite: remoteNovel.isFavorite === 1,
+        lastReadAt: remoteNovel.lastReadAt,
+      });
+    }
+
     if (remoteNovel.readChapterIds.length > 0) {
       const chapters =
         await this.deps.chapterRepository.listChaptersByNovelId(novelId);
@@ -493,20 +509,29 @@ export class SyncEngine {
     );
 
     for (const [novelId, remoteNovel] of Object.entries(novels)) {
-      // ローカルの削除がリモートの更新より新しい場合は復元しない
-      const localDeletedAt = localTombstoneMap.get(novelId);
-      if (
-        localDeletedAt !== undefined &&
-        localDeletedAt > Date.parse(remoteNovel.updatedAt)
-      ) {
-        continue;
-      }
+      try {
+        // ローカルで削除された作品は、削除後に明示的に再追加された場合（createdAt > deletedAt）のみ復元 (R1-11)
+        const localDeletedAt = localTombstoneMap.get(novelId);
+        if (localDeletedAt !== undefined) {
+          const remoteCreatedAt = Date.parse(remoteNovel.createdAt);
+          if (isNaN(remoteCreatedAt) || localDeletedAt >= remoteCreatedAt) {
+            continue;
+          }
+        }
 
-      const localNovel = await this.deps.novelRepository.getNovelById(novelId);
-      if (!localNovel) {
-        await this.mergeNewNovel(novelId, remoteNovel);
-      } else {
-        await this.mergeExistingNovel(novelId, remoteNovel, localNovel);
+        const localNovel =
+          await this.deps.novelRepository.getNovelById(novelId);
+        if (!localNovel) {
+          await this.mergeNewNovel(novelId, remoteNovel);
+        } else {
+          await this.mergeExistingNovel(novelId, remoteNovel, localNovel);
+        }
+      } catch (err) {
+        // 作品単位で try/catch し、1件の失敗で全体を中断させない (R1-05)
+        console.warn(
+          `[SyncEngine] Failed to merge novel ${novelId}, skipping:`,
+          err,
+        );
       }
     }
   }
@@ -515,6 +540,11 @@ export class SyncEngine {
     pulled: boolean;
     mergedNovels: number;
   }> {
+    const authState = await this.deps.bridge.getAuthState();
+    if (authState.status !== "connected") {
+      return { pulled: false, mergedNovels: 0 };
+    }
+
     let rawContent: string | null;
     try {
       rawContent = await this.deps.bridge.pullFile();
@@ -596,33 +626,60 @@ export class SyncEngine {
     return syncNovels;
   }
 
+  private buildMergedSyncNovels(
+    localNovels: Record<string, SyncNovelData>,
+    localTombstoneMap: Map<string, number>,
+    remoteState: YommySyncState | null,
+  ): Record<string, SyncNovelData> {
+    const merged: Record<string, SyncNovelData> = { ...localNovels };
+    if (remoteState) {
+      for (const [id, remoteNovel] of Object.entries(remoteState.novels)) {
+        const localDeletedAt = localTombstoneMap.get(id);
+        if (localDeletedAt !== undefined) {
+          const remoteCreatedAt = Date.parse(remoteNovel.createdAt);
+          if (isNaN(remoteCreatedAt) || localDeletedAt >= remoteCreatedAt) {
+            continue;
+          }
+        }
+        if (!merged[id]) {
+          merged[id] = remoteNovel;
+        }
+      }
+    }
+    return merged;
+  }
+
   private async buildMergedTombstones(
     syncNovels: Record<string, SyncNovelData>,
+    remoteState: YommySyncState | null,
   ): Promise<Record<string, string>> {
+    const cutoffTime = Date.now() - TOMBSTONE_RETENTION_MS;
+    // ローカルの期限切れ Tombstone をパージ (R1-28)
+    await this.deps.novelRepository.purgeExpiredDeletedNovels?.(cutoffTime);
+
     const localTombstones =
       (await this.deps.novelRepository.getDeletedNovels?.()) ?? [];
     const mergedDeletedNovels: Record<string, string> = {};
     for (const t of localTombstones) {
-      mergedDeletedNovels[t.id] = new Date(t.deletedAt).toISOString();
+      if (t.deletedAt >= cutoffTime) {
+        mergedDeletedNovels[t.id] = new Date(t.deletedAt).toISOString();
+      }
     }
 
-    // リモートの既存 Tombstone と和集合をとる
-    try {
-      const remoteRaw = await this.deps.bridge.pullFile();
-      if (remoteRaw) {
-        const parsed = validateSyncState(remoteRaw);
-        for (const [id, dateStr] of Object.entries(parsed.deletedNovels)) {
-          if (
-            !mergedDeletedNovels[id] ||
-            Date.parse(dateStr) > Date.parse(mergedDeletedNovels[id])
-          ) {
-            mergedDeletedNovels[id] = dateStr;
-          }
+    // リモートの既存 Tombstone と和集合をとる（期限切れは除外）
+    if (remoteState) {
+      for (const [id, dateStr] of Object.entries(remoteState.deletedNovels)) {
+        const parsedTime = Date.parse(dateStr);
+        if (isNaN(parsedTime) || parsedTime < cutoffTime) {
+          continue;
+        }
+        if (
+          !mergedDeletedNovels[id] ||
+          parsedTime > Date.parse(mergedDeletedNovels[id])
+        ) {
+          mergedDeletedNovels[id] = dateStr;
         }
       }
-    } catch (err) {
-      await this.handleUnauthorized(err);
-      throw err;
     }
 
     // 本棚に現存する作品は Tombstone から除外
@@ -634,13 +691,43 @@ export class SyncEngine {
   }
 
   private async doPushCurrentState(): Promise<void> {
+    const authState = await this.deps.bridge.getAuthState();
+    if (authState.status !== "connected") {
+      return;
+    }
+
     try {
-      const syncNovels = await this.buildSyncNovels();
+      let remoteState: YommySyncState | null = null;
+      try {
+        const remoteRaw = await this.deps.bridge.pullFile();
+        if (remoteRaw) {
+          remoteState = validateSyncState(remoteRaw);
+        }
+      } catch (err) {
+        await this.handleUnauthorized(err);
+        throw err;
+      }
+
+      const localSyncNovels = await this.buildSyncNovels();
+      const localTombstones =
+        (await this.deps.novelRepository.getDeletedNovels?.()) ?? [];
+      const localTombstoneMap = new Map(
+        localTombstones.map((t) => [t.id, t.deletedAt]),
+      );
+      const syncNovels = this.buildMergedSyncNovels(
+        localSyncNovels,
+        localTombstoneMap,
+        remoteState,
+      );
+
       const existingNovelIds = Object.keys(syncNovels);
       if (existingNovelIds.length > 0) {
         await this.deps.novelRepository.purgeDeletedNovels?.(existingNovelIds);
       }
-      const mergedDeletedNovels = await this.buildMergedTombstones(syncNovels);
+      const mergedDeletedNovels = await this.buildMergedTombstones(
+        syncNovels,
+        remoteState,
+      );
 
       const state: YommySyncState = {
         version: 1,

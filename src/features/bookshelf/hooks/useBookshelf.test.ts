@@ -1275,6 +1275,16 @@ describe("useBookshelf", () => {
   });
 
   describe("クラウド同期連携 (AC-BS-13)", () => {
+    const connectedBridge = {
+      getAuthState: vi
+        .fn()
+        .mockResolvedValue({ status: "connected", email: "user@example.com" }),
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+      pullFile: vi.fn(),
+      pushFile: vi.fn(),
+    };
+
     it("初回マウント時に syncEngine.pullAndMerge が実行され、完了後に作品一覧がリロードされること", async () => {
       const mockSyncEngine = {
         pullAndMerge: vi
@@ -1312,6 +1322,7 @@ describe("useBookshelf", () => {
 
       const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
         wrapper: createWrapper({
+          cloudSyncBridge: connectedBridge,
           syncEngine: mockSyncEngine as unknown as SyncEngine,
           novelRepository: customNovelRepo,
         }),
@@ -1339,6 +1350,7 @@ describe("useBookshelf", () => {
 
       const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
         wrapper: createWrapper({
+          cloudSyncBridge: connectedBridge,
           syncEngine: mockSyncEngine as unknown as SyncEngine,
         }),
       });
@@ -1382,6 +1394,7 @@ describe("useBookshelf", () => {
 
       const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
         wrapper: createWrapper({
+          cloudSyncBridge: connectedBridge,
           syncEngine: mockSyncEngine as unknown as SyncEngine,
         }),
       });
@@ -1535,6 +1548,7 @@ describe("useBookshelf", () => {
 
       const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
         wrapper: createWrapper({
+          cloudSyncBridge: connectedBridge,
           syncEngine: mockSyncEngine as unknown as SyncEngine,
         }),
       });
