@@ -2,7 +2,7 @@
 type: spec-feature
 title: "作品詳細・目次画面仕様書（SCR-02: Novel Detail & TOC）"
 description: 登録済み作品のヘッダー情報・あらすじ表示、章見出し付きエピソード一覧（キャッシュ済み・既読・しおり状態）、目次更新（再取得）、作品削除、およびリーダー画面への閲覧遷移を提供する作品詳細・目次画面（SCR-02）の正本仕様。
-status: Approved
+status: "Review (#170)"
 updated: "2026-11-01"
 tags:
   [
@@ -17,8 +17,12 @@ tags:
     prefetch,
     batch-cache,
     cache-rules,
+    cache-management,
+    capacity-visualization,
+    ho-24,
   ]
 related_specs:
+  - docs/specs/changes/issue-170-cache-management-and-capacity-visualization.md
   - docs/specs/requirements.md
   - docs/specs/architecture.md
   - docs/specs/db-schema.md
@@ -67,7 +71,7 @@ related_tests:
   - `SYS-REQ-02`（本文取得・オフライン閲覧：エピソード選択または読書開始ボタンによるリーダー遷移と、未キャッシュ話のオンデマンド本文取得・キャッシュ状態反映、および未取得話の一括キャッシュ）
   - `SYS-REQ-03`（レートリミット・バックグラウンド取得：未取得話一括キャッシュ時の 1.5秒間隔ウェイト制御および中断制御）
   - `SYS-REQ-04`（更新チェック・差分取得：作品詳細画面表示時の本棚「NEW」バッジ自動解除、手動目次再取得と新着話数フィードバック表示）
-  - `SYS-REQ-05`（キャッシュ管理・容量整理：未取得話の一括キャッシュ、確認ダイアログ付き作品削除と `chapters` カスケード削除）
+  - `SYS-REQ-05`（キャッシュ管理・容量整理：未取得話の一括キャッシュ、確認ダイアログ付き作品削除と `chapters` カスケード削除、作品別キャッシュデータ容量可視化、確認ダイアログ付き本文キャッシュ削除［既読話のみ／全話］、`v0.5` Issue #170）
   - `SYS-REQ-06`（クラウド同期・バックアップ：Google Drive クラウド同期による他端末からの作品追加・しおり位置・既読状態の反映、および作品削除時の同期反映）
   - `SYS-REQ-12`（しおり・スクロール位置自動保存に基づくしおり位置マーク・既読バッジ表示および「続きから読む」導線）
   - `SYS-REQ-16`（全画面シェル・下部タブ・論理階層遷移：100dvh 全画面シェル内配置、固定ヘッダー＋内部スクロール目次、下部タブバー連携）
@@ -82,10 +86,10 @@ related_tests:
   - `TR-07`（作品詳細画面からの戻り元復帰導線：作品未検出画面 `novel-detail-not-found` の「戻る」ボタン、作品削除確認ダイアログでの削除実行完了、または OS バックキー操作による直前の遷移元画面［本棚 `SCR-01` `/`、検索 `SCR-06` `/search`、ランキング `SCR-07` `/ranking`］への復帰。直前履歴が存在しない場合は本棚 `/` へ復帰。※`NovelDetailHeader` 内の「← 本棚へ戻る」ボタンは廃止。なお下部タブバー「本棚」タップ時は `TR-01b` が適用される）
   - `TR-14`（検索結果カードおよびランキング結果カード本体タップによる `SCR-02` `/novels/:novelId` への遷移）
   - `TR-18`（作品詳細ヘッダーの「未取得話を一括キャッシュ」アクションによる順次本文取得・進捗表示・手動中断）
+  - `TR-19`（作品詳細ヘッダーの「本文キャッシュ整理」アクションによる本文キャッシュ削除［既読のみ／全話］・容量即時再計算、`v0.5` Issue #170）
 - **対象外スコープ（後続 Issue / Milestone）**:
   - エピソード閲覧に伴うしおり位置（`bookmarkChapterIndex`, `bookmarkScrollProgress`）および既読フラグ（`isRead`）の自動更新ロジック本体（Issue #14 の `SCR-03` リーダー画面拡張で一括実装）
   - 内蔵 WebView（`SCR-04`）での手動インポート連携（Milestone `v0.5〜`：`SYS-REQ-13, 14`, `TR-09`）
-  - 作品単位の「本文キャッシュのみ削除（目次は残す）」操作（Milestone `v0.5〜`：`SYS-REQ-05`）
 
 ---
 
@@ -114,6 +118,9 @@ src/features/novel-detail/
     ├── DeleteConfirmDialog.tsx            # 作品削除確認モーダルダイアログ（Presentational）
     ├── DeleteConfirmDialog.stories.tsx
     ├── DeleteConfirmDialog.test.tsx
+    ├── ClearCacheConfirmDialog.tsx        # 本文キャッシュ削除確認モーダルダイアログ（既読のみ/全話）（Presentational, v0.5）
+    ├── ClearCacheConfirmDialog.stories.tsx
+    ├── ClearCacheConfirmDialog.test.tsx
     ├── NovelDetailPage.tsx                # 作品詳細・目次画面全体のレイアウト統合コンポーネント（Presentational）
     ├── NovelDetailPage.stories.tsx
     ├── NovelDetailPage.test.tsx
@@ -132,21 +139,22 @@ src/features/novel-detail/
 
 #### プロパティ契約（`NovelDetailHeaderProps`）
 
-| プロパティ名           | 型                                           | 必須 | 説明                                                |
-| :--------------------- | :------------------------------------------- | :--- | :-------------------------------------------------- |
-| `novel`                | `NovelRecord`                                | 必須 | 表示対象の作品レコード                              |
-| `isRefreshing`         | `boolean`                                    | 必須 | 目次再取得（更新）通信中フラグ                      |
-| `isBatchCaching`       | `boolean`                                    | 必須 | 未取得話一括キャッシュ実行中フラグ (`v0.3`)         |
-| `batchCacheProgress`   | `{ current: number; total: number } \| null` | 必須 | 一括キャッシュ進行状況（現在話数/対象総数, `v0.3`） |
-| `isAllCached`          | `boolean`                                    | 必須 | 全話キャッシュ済み判定フラグ (`v0.3`)               |
-| `refreshMessage`       | `string \| null`                             | 任意 | 目次再取得・一括キャッシュ完了時の通知メッセージ    |
-| `error`                | `string \| null`                             | 任意 | 目次再取得失敗・一括キャッシュ失敗・削除のエラー    |
-| `onStartFromBeginning` | `() => void`                                 | 必須 | 「最初から読む（第1話）」ボタン押下時のコールバック |
-| `onResumeBookmark`     | `(chapterIndex: number) => void`             | 必須 | 「続きから読む（第N話）」ボタン押下時のコールバック |
-| `onRefreshToc`         | () => void \| Promise<void>                  | 必須 | 「目次を更新」ボタン押下時のコールバック            |
-| `onStartBatchCache`    | () => void \| Promise<void>                  | 必須 | 「未取得話を一括キャッシュ」ボタン押下時 (`v0.3`)   |
-| `onCancelBatchCache`   | `() => void`                                 | 必須 | 一括キャッシュ「中断」ボタン押下時 (`v0.3`)         |
-| `onOpenDeleteDialog`   | `() => void`                                 | 必須 | 「作品を削除」ボタン押下時のコールバック            |
+| プロパティ名             | 型                                           | 必須 | 説明                                                   |
+| :----------------------- | :------------------------------------------- | :--- | :----------------------------------------------------- |
+| `novel`                  | `NovelRecord`                                | 必須 | 表示対象の作品レコード                                 |
+| `isRefreshing`           | `boolean`                                    | 必須 | 目次再取得（更新）通信中フラグ                         |
+| `isBatchCaching`         | `boolean`                                    | 必須 | 未取得話一括キャッシュ実行中フラグ (`v0.3`)            |
+| `batchCacheProgress`     | `{ current: number; total: number } \| null` | 必須 | 一括キャッシュ進行状況（現在話数/対象総数, `v0.3`）    |
+| `isAllCached`            | `boolean`                                    | 必須 | 全話キャッシュ済み判定フラグ (`v0.3`)                  |
+| `refreshMessage`         | `string \| null`                             | 任意 | 目次再取得・一括キャッシュ完了時の通知メッセージ       |
+| `error`                  | `string \| null`                             | 任意 | 目次再取得失敗・一括キャッシュ失敗・削除のエラー       |
+| `onStartFromBeginning`   | `() => void`                                 | 必須 | 「最初から読む（第1話）」ボタン押下時のコールバック    |
+| `onResumeBookmark`       | `(chapterIndex: number) => void`             | 必須 | 「続きから読む（第N話）」ボタン押下時のコールバック    |
+| `onRefreshToc`           | () => void \| Promise<void>                  | 必須 | 「目次を更新」ボタン押下時のコールバック               |
+| `onStartBatchCache`      | () => void \| Promise<void>                  | 必須 | 「未取得話を一括キャッシュ」ボタン押下時 (`v0.3`)      |
+| `onCancelBatchCache`     | `() => void`                                 | 必須 | 一括キャッシュ「中断」ボタン押下時 (`v0.3`)            |
+| `onOpenDeleteDialog`     | `() => void`                                 | 必須 | 「作品を削除」ボタン押下時のコールバック               |
+| `onOpenClearCacheDialog` | `() => void`                                 | 任意 | 「本文キャッシュ整理」ボタン押下時 (`v0.5` Issue #170) |
 
 #### 表示項目・セマンティック属性・活性制御ルール
 
@@ -157,7 +165,7 @@ src/features/novel-detail/
   - **作品タイトル**: `data-testid="novel-detail-title"`（`novel.title`、コンパクトな見出しサイズ）
   - **著者名**: `data-testid="novel-detail-author"`（`novel.author`、空文字の場合は `著者不明`）
   - **話数・キャッシュ統計**: `data-testid="novel-detail-stats"`
-    - `全 {novel.totalChapters} 話（取得済み {novel.cachedChapters} 話）` の形式で表示する。
+    - `全 {novel.totalChapters} 話（取得済み {novel.cachedChapters} 話 / {formatByteSize(novel.totalByteSize)}）` の形式で表示する。
 - **あらすじの折りたたみトグル（`synopsis`）**:
   - `data-testid="novel-detail-synopsis"`（`novel.synopsis`、空文字の場合は `あらすじはありません。`）
   - **初期状態（折りたたみ）**: 数行（2〜3行、`line-clamp-2` 等）のみ表示する。
@@ -183,6 +191,9 @@ src/features/novel-detail/
       - 中断ボタン `data-testid="batch-cache-cancel-button"`（ラベル: `中断`）を表示し、クリック時に `onCancelBatchCache()` を呼び出す。
   - **目次更新ボタン**: `data-testid="refresh-toc-button"`
     - `isRefreshing === true` の間は `disabled` とし、ラベルを `更新中...` に変更する（通常時は `目次を更新`）。`isBatchCaching === true` の間も二重実行防止のため `disabled` とする。
+  - **本文キャッシュ整理ボタン（`v0.5` Issue #170）**: `data-testid="open-clear-cache-dialog-button"`
+    - ラベル: `本文キャッシュ整理`。クリック時に `onOpenClearCacheDialog()` を呼び出す。
+    - `novel.cachedChapters === 0`、`isRefreshing === true`、または `isBatchCaching === true` の間は `disabled`。
   - **作品削除起動ボタン**: `data-testid="open-delete-dialog-button"`（ラベル: `作品を削除`、`isRefreshing === true` または `isBatchCaching === true` の間は `disabled`）。
 - **インラインフィードバック表示**:
   - `refreshMessage` が非 null の場合: `data-testid="novel-detail-notice"` に通知メッセージ（例: `目次を更新しました（+2話）` または `全話のキャッシュを取得しました`、`最新の状態です`）を表示する。
@@ -268,38 +279,71 @@ src/features/novel-detail/
 - **削除確定ボタン**: `data-testid="confirm-delete-button"`
   - `isDeleting === true` の間は `disabled` とし、ラベルを `削除中...` に変更する（通常時は `削除する`）。
 - **キャンセルボタン**: `data-testid="cancel-delete-button"`（ラベル: `キャンセル`、`isDeleting === true` の間は `disabled`）。
+- **Escape キー連動**: キーボードの `Escape` キー押下時に `isDeleting === false` であれば `onClose()` を呼び出して閉じる。
 
 ---
 
-### 3.5 `NovelDetailPage`（作品詳細・目次画面 Presentational コンポーネント）
+### 3.5 `ClearCacheConfirmDialog`（本文キャッシュ削除確認ダイアログ: `v0.5` Issue #170）
 
-`NovelDetailHeader`、`EpisodeList`、および `DeleteConfirmDialog` を統合し、ローディング状態や未存在作品（Not Found）状態の排他描画、ヘッダー固定・各話リスト内部スクロールレイアウト、およびしおり話数への初期スクロール調整を制御する画面コンポーネントです。
+作品の目次情報・既読状態・しおり位置を保持したまま、端末ストレージを解放するために本文キャッシュのみを削除（既読話のみ／全話）する確認モーダルダイアログです。
+
+#### プロパティ契約（`ClearCacheConfirmDialogProps`）
+
+| プロパティ名 | 型                                                                    | 必須 | 説明                                    |
+| :----------- | :-------------------------------------------------------------------- | :--- | :-------------------------------------- |
+| `isOpen`     | `boolean`                                                             | 必須 | ダイアログの表示状態                    |
+| `novelTitle` | `string`                                                              | 必須 | 対象の作品タイトル                      |
+| `isClearing` | `boolean`                                                             | 必須 | キャッシュ削除実行中フラグ              |
+| `onClose`    | `() => void`                                                          | 必須 | キャンセル / 閉じる操作時のコールバック |
+| `onConfirm`  | `(options: { onlyRead: boolean }) => void \| Promise<void \| number>` | 必須 | 削除確定時のコールバック                |
+
+#### 機能・セマンティック属性
+
+- `isOpen === false` の場合は何も描画しない（`null`）。
+- **ダイアログコンテナ**: `role="dialog"`, `aria-modal="true"`, `data-testid="clear-cache-confirm-dialog"`
+- **説明テキスト**: 目次一覧・既読状態・しおり位置は保持され、再度読む際は再取得可能である旨を明記する。
+- **選択アクションボタン**:
+  - **既読話のみ削除**: `data-testid="confirm-clear-read-cache-button"`（ラベル: `既読話の本文キャッシュのみ削除`、クリック時に `onConfirm({ onlyRead: true })` を呼び出す、`isClearing === true` の間は `disabled`）。
+  - **全話削除**: `data-testid="confirm-clear-all-cache-button"`（ラベル: `すべての本文キャッシュを削除`、クリック時に `onConfirm({ onlyRead: false })` を呼び出す、`isClearing === true` の間は `disabled`）。
+  - **キャンセル**: `data-testid="cancel-clear-cache-button"`（ラベル: `キャンセル`、クリック時に `onClose()` を呼び出す、`isClearing === true` の間は `disabled`）。
+- **Escape キー連動**: キーボードの `Escape` キー押下時に `isClearing === false` であれば `onClose()` を呼び出して閉じる。
+
+---
+
+### 3.6 `NovelDetailPage`（作品詳細・目次画面 Presentational コンポーネント）
+
+`NovelDetailHeader`、`EpisodeList`、`DeleteConfirmDialog`、および `ClearCacheConfirmDialog` を統合し、ローディング状態や未存在作品（Not Found）状態の排他描画、ヘッダー固定・各話リスト内部スクロールレイアウト、およびしおり話数への初期スクロール調整を制御する画面コンポーネントです。
 
 #### プロパティ契約（`NovelDetailPageProps`）
 
-| プロパティ名           | 型                                           | 必須 | 説明                                               |
-| :--------------------- | :------------------------------------------- | :--- | :------------------------------------------------- |
-| `novel`                | `NovelRecord \| null`                        | 必須 | 作品レコード（未取得・存在しない場合は `null`）    |
-| `chapters`             | `ChapterSummary[]`                           | 必須 | エピソード目次一覧                                 |
-| `isLoading`            | `boolean`                                    | 必須 | 初回データ読み込み中フラグ                         |
-| `isRefreshing`         | `boolean`                                    | 必須 | 目次再取得（更新）通信中フラグ                     |
-| `isBatchCaching`       | `boolean`                                    | 必須 | 未取得話一括キャッシュ実行中フラグ (`v0.3`)        |
-| `batchCacheProgress`   | `{ current: number; total: number } \| null` | 必須 | 一括キャッシュ進行状況 (`v0.3`)                    |
-| `isAllCached`          | `boolean`                                    | 必須 | 全話キャッシュ済み判定フラグ (`v0.3`)              |
-| `isDeleteDialogOpen`   | `boolean`                                    | 必須 | 作品削除確認ダイアログの開閉状態                   |
-| `isDeleting`           | `boolean`                                    | 必須 | 作品削除実行中フラグ                               |
-| `refreshMessage`       | `string \| null`                             | 任意 | 目次再取得・一括キャッシュ完了時の通知文字列       |
-| `error`                | `string \| null`                             | 任意 | エラーメッセージ文字列                             |
-| `onBackToBookshelf`    | `() => void`                                 | 必須 | 「本棚へ戻る」押下時（未検出エラー画面での復帰用） |
-| `onStartFromBeginning` | `() => void`                                 | 必須 | 「最初から読む（第1話）」押下時（`TR-04`）         |
-| `onResumeBookmark`     | `(chapterIndex: number) => void`             | 必須 | 「続きから読む（第N話）」押下時（`TR-04`）         |
-| `onSelectEpisode`      | `(chapterIndex: number) => void`             | 必須 | 個別エピソード行タップ時（`TR-04`）                |
-| `onRefreshToc`         | () => void \| Promise<void>                  | 必須 | 「目次を更新」押下時                               |
-| `onStartBatchCache`    | () => void \| Promise<void>                  | 必須 | 「未取得話を一括キャッシュ」押下時 (`v0.3`)        |
-| `onCancelBatchCache`   | `() => void`                                 | 必須 | 一括キャッシュ「中断」押下時 (`v0.3`)              |
-| `onOpenDeleteDialog`   | `() => void`                                 | 必須 | 「作品を削除」押下時                               |
-| `onCloseDeleteDialog`  | `() => void`                                 | 必須 | 削除確認ダイアログのキャンセル時                   |
-| `onConfirmDelete`      | () => void \| Promise<void>                  | 必須 | 削除確認ダイアログの「削除する」確定時（`TR-07`）  |
+| プロパティ名              | 型                                                                    | 必須 | 説明                                               |
+| :------------------------ | :-------------------------------------------------------------------- | :--- | :------------------------------------------------- |
+| `novel`                   | `NovelRecord \| null`                                                 | 必須 | 作品レコード（未取得・存在しない場合は `null`）    |
+| `chapters`                | `ChapterSummary[]`                                                    | 必須 | エピソード目次一覧                                 |
+| `isLoading`               | `boolean`                                                             | 必須 | 初回データ読み込み中フラグ                         |
+| `isRefreshing`            | `boolean`                                                             | 必須 | 目次再取得（更新）通信中フラグ                     |
+| `isBatchCaching`          | `boolean`                                                             | 必須 | 未取得話一括キャッシュ実行中フラグ (`v0.3`)        |
+| `batchCacheProgress`      | `{ current: number; total: number } \| null`                          | 必須 | 一括キャッシュ進行状況 (`v0.3`)                    |
+| `isAllCached`             | `boolean`                                                             | 必須 | 全話キャッシュ済み判定フラグ (`v0.3`)              |
+| `isDeleteDialogOpen`      | `boolean`                                                             | 必須 | 作品削除確認ダイアログの開閉状態                   |
+| `isDeleting`              | `boolean`                                                             | 必須 | 作品削除実行中フラグ                               |
+| `isClearCacheDialogOpen`  | `boolean`                                                             | 任意 | 本文キャッシュ削除ダイアログ開閉 (`v0.5`)          |
+| `isClearingCache`         | `boolean`                                                             | 任意 | 本文キャッシュ削除実行中フラグ (`v0.5`)            |
+| `refreshMessage`          | `string \| null`                                                      | 任意 | 目次再取得・一括キャッシュ完了時の通知文字列       |
+| `error`                   | `string \| null`                                                      | 任意 | エラーメッセージ文字列                             |
+| `onBackToBookshelf`       | `() => void`                                                          | 必須 | 「本棚へ戻る」押下時（未検出エラー画面での復帰用） |
+| `onStartFromBeginning`    | `() => void`                                                          | 必須 | 「最初から読む（第1話）」押下時（`TR-04`）         |
+| `onResumeBookmark`        | `(chapterIndex: number) => void`                                      | 必須 | 「続きから読む（第N話）」押下時（`TR-04`）         |
+| `onSelectEpisode`         | `(chapterIndex: number) => void`                                      | 必須 | 個別エピソード行タップ時（`TR-04`）                |
+| `onRefreshToc`            | () => void \| Promise<void>                                           | 必須 | 「目次を更新」押下時                               |
+| `onStartBatchCache`       | () => void \| Promise<void>                                           | 必須 | 「未取得話を一括キャッシュ」押下時 (`v0.3`)        |
+| `onCancelBatchCache`      | `() => void`                                                          | 必須 | 一括キャッシュ「中断」押下時 (`v0.3`)              |
+| `onOpenDeleteDialog`      | `() => void`                                                          | 必須 | 「作品を削除」押下時                               |
+| `onCloseDeleteDialog`     | `() => void`                                                          | 必須 | 削除確認ダイアログのキャンセル時                   |
+| `onConfirmDelete`         | () => void \| Promise<void>                                           | 必須 | 削除確認ダイアログの「削除する」確定時（`TR-07`）  |
+| `onOpenClearCacheDialog`  | `() => void`                                                          | 任意 | 「本文キャッシュ整理」押下時 (`v0.5`)              |
+| `onCloseClearCacheDialog` | `() => void`                                                          | 任意 | キャッシュ削除ダイアログキャンセル時 (`v0.5`)      |
+| `onConfirmClearCache`     | `(options: { onlyRead: boolean }) => void \| Promise<void \| number>` | 任意 | キャッシュ削除確定時 (`v0.5`)                      |
 
 #### セマンティック属性とレイアウト・排他描画ルール
 
@@ -350,6 +394,8 @@ export interface UseNovelDetailResult {
   isAllCached: boolean;
   isDeleteDialogOpen: boolean;
   isDeleting: boolean;
+  isClearCacheDialogOpen: boolean;
+  isClearingCache: boolean;
   refreshMessage: string | null;
   error: string | null;
   refreshToc: () => Promise<boolean>;
@@ -358,6 +404,9 @@ export interface UseNovelDetailResult {
   openDeleteDialog: () => void;
   closeDeleteDialog: () => void;
   confirmDeleteNovel: () => Promise<boolean>;
+  openClearCacheDialog: () => void;
+  closeClearCacheDialog: () => void;
+  confirmClearCache: (options: { onlyRead: boolean }) => Promise<number>;
   reloadDetail: () => Promise<void>;
 }
 ```
@@ -404,23 +453,35 @@ export interface UseNovelDetailResult {
    - 手動中断（`cancelBatchCache`）または画面離脱（アンマウント）時は `AbortController.abort()` で直ちに安全に処理を停止する（取得済み話数は SQLite 内に保持される）。
    - 全話取得成功時は `refreshMessage = "全話のキャッシュを取得しました"`（または `"N話のキャッシュを取得しました"`）を設定し、`isBatchCaching = false`, `batchCacheProgress = null` とする。
    - 取得失敗時は処理を中断し、`error = "第X話の取得に失敗したためキャッシュを中断しました"` を設定して `isBatchCaching = false` とする。
+6. **本文キャッシュ削除パイプライン（`TR-19`、`v0.5` Issue #170）**:
+   - `isClearingCache = true`, `error = null` にセットする。
+   - `deletedCount = await chapterRepository.deleteCachedBodies(novelId, options)` を実行する。
+     - `options.onlyRead === true`: 既読話（`is_read = 1`）のみ本文キャッシュ（`body_html = NULL`, `byte_size = 0`, `downloaded_at = NULL`）を破棄。
+     - `options.onlyRead === false`: 全話の本文キャッシュを破棄。
+     - いずれの場合も目次情報（`chapters` レコード）、既読状態（`is_read`）、しおり位置（`bookmark_chapter_index` / `bookmark_scroll_progress`）は完全保持される。
+   - 削除完了後、親作品レコード（`cached_chapters`, `total_byte_size`）および各話一覧（`ChapterSummary[]`）を再取得して State を即時更新する。
+   - ダイアログを閉じ（`isClearCacheDialogOpen = false`）、通知メッセージ `refreshMessage = "本文キャッシュを削除しました（${deletedCount}話）"` をセットし、`isClearingCache = false` として削除話数を返却する。
+   - 削除失敗時はダイアログを閉じずに `error` をセットし、`isClearingCache = false` に戻す。
 
 ---
 
 ## 5. 受入条件一覧（Acceptance Criteria: `AC-ND-xx`）
 
-| AC ID          | 対象機能                                                 | 検証条件                                                                                                                                                                                                                                                                                                                                                                                                                                                   | 関連要件 / 遷移                               |
-| :------------- | :------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------- |
-| **`AC-ND-01`** | 作品ヘッダー情報・あらすじトグル表示                     | 作品詳細画面（`/novels/:novelId`）上部に `NovelDetailHeader` が固定配置（`shrink-0`）され、タイトル・著者・統計がコンパクトに表示されること。またあらすじは初期状態で折りたたまれ（2〜3行 clamp）、トグルボタン（`synopsis-toggle-button`）で全文展開／折りたたみが可能であり、展開時は最大高さ制限と内部スクロール（`max-h` ＋ `overflow-y-auto`）が適用されること。あらすじ空文字時は「あらすじはありません。」を表示しトグルは非表示であること。        | `SYS-REQ-01` / `TR-02`                        |
-| **`AC-ND-02`** | 章見出しとエピソード一覧・内部スクロール                 | エピソード一覧が固定ヘッダー下の独立スクロール領域（`flex-1 min-h-0 overflow-y-auto`）として描画され、`chapterIndex` 昇順で章見出し（`chapter-section-header`）、本文キャッシュ状態（`取得済み` / `未取得`）、既読状態（`既読`）、しおり位置（`しおり`）が正確に表示されること。                                                                                                                                                                           | `SYS-REQ-01`, `02`, `12`                      |
-| **`AC-ND-03`** | 読書開始ボタンの表示制御と遷移                           | しおり未設定時は「最初から読む（第1話）」の1ボタンのみが表示され、しおり設定時は「続きから読む（第N話）」と「最初から読む（第1話）」の2ボタンが表示され、それぞれ該当話のリーダー画面（`/novels/:novelId/chapters/:chapterIndex`）へ遷移（`TR-04`）すること。                                                                                                                                                                                              | `SYS-REQ-02`, `12` / `TR-04`                  |
-| **`AC-ND-04`** | 未キャッシュ話選択とオンデマンド取得                     | 目次一覧で未キャッシュ話をタップすると即座にリーダー画面（`SCR-03`）へ遷移（`TR-04`）して本文がオンデマンド取得・DB保存され、OS バックキー（`TR-06`）で戻ると該当話が `取得済み` バッジ・取得済み話数 `+1` に更新されていること。                                                                                                                                                                                                                          | `SYS-REQ-02` / `TR-04`, `TR-06`               |
-| **`AC-ND-05`** | 目次再取得（更新）とフィードバック表示                   | 「目次を更新」ボタンを押下すると作品トップ HTML を再取得して `upsertNovelWithToc` で既存キャッシュを保持したまま目次を更新し、完了時に新着話数に応じたインライン通知（`目次を更新しました（+N話）` / `最新の状態です`）、失敗時にエラーメッセージを表示すること。                                                                                                                                                                                          | `SYS-REQ-01`, `04`                            |
-| **`AC-ND-06`** | 確認ダイアログ付き作品削除と戻り元復帰・クラウド同期伝播 | 「作品を削除」ボタンから確認ダイアログを開き、「削除する」を確定すると `deleteNovel` により作品および関連 `chapters` がカスケード削除され、直前の遷移元画面（探索元画面、履歴なし時は本棚 `/`）へ復帰（`TR-07`）して一覧から消去されること。またクラウド同期連携時は `syncEngine.notifyChanged()` により Tombstone がクラウドへ Push されること。                                                                                                          | `SYS-REQ-05, 06` / `TR-07`                    |
-| **`AC-ND-07`** | 戻り元復帰導線の整理と未存在フォールバック               | `NovelDetailHeader` 内の「← 本棚へ戻る」ボタンは廃止されていること。また存在しない `novelId` が指定された場合はクラッシュせず `novel-detail-not-found` と「戻る」導線（`back-to-bookshelf-button`）を表示し、タップ時に直前の遷移元画面（本棚 `/`、検索 `/search`、ランキング `/ranking`、履歴なし時は本棚 `/`）へ復帰できること（`TR-07`）。                                                                                                              | `SYS-REQ-01, 16, 20` / `TR-07`                |
-| **`AC-ND-08`** | しおり位置への初期スクロール自動調整                     | 対象作品に `bookmarkChapterIndex` が設定されている場合、初回データ読み込み完了時に該当話（`data-chapter-index`）の要素が各話リストスクロール領域の先頭（上端）に来るよう自動スクロールされること。また、「目次を更新」実行時には自動スクロールが再発火せず、ユーザーの現在スクロール位置が維持されること。                                                                                                                                                 | `SYS-REQ-01, 12`                              |
-| **`AC-ND-09`** | 100dvh 全画面シェル・下部タブ・階層復帰                  | 作品詳細画面が `h-full flex flex-col overflow-hidden` の全画面シェル内に配置され、中間コンテンツ領域（`flex-1 min-h-0 overflow-y-auto`）のみがスクロール可能であること。画面下部に共通 `BottomTabBar`（`bottom-tab-bar`）が 4 タブ構成で表示され、各タブタップ（`TR-01`, `TR-01b`）により各画面へ遷移でき、OS バックキー（`TR-07`）により直前の遷移元画面（本棚 `SCR-01`、検索 `SCR-06`、ランキング `SCR-07`、履歴なし時は本棚 `/`）へ論理復帰できること。 | `SYS-REQ-16, 20` / `TR-01`, `TR-01b`, `TR-07` |
-| **`AC-ND-10`** | 作品詳細表示による本棚「NEW」バッジ解除                  | 本棚で「NEW」バッジが表示されていた作品の詳細画面（`SCR-02`）を開いた際（`TR-02` 等）、`clearNewUpdate` が実行されて作品の `has_new_update` が 0 に解除され、本棚へ戻った際（`TR-07`）に対象作品カードの「NEW」バッジが消去されていること。                                                                                                                                                                                                                | `SYS-REQ-04` / `TR-02`, `TR-07`               |
-| **`AC-ND-11`** | 未取得話の一括キャッシュ実行と進捗表示                   | 「未取得話を一括キャッシュ」ボタンを押下すると、未キャッシュ話を対象に 1.5秒間隔のウェイト制御を挟んで順次本文を取得して SQLite に保存し、進行状況（`batch-cache-progress`）が表示され、各話取得ごとに取得済み話数・キャッシュバッジ（`取得済み`）が即時更新されること。                                                                                                                                                                                   | `SYS-REQ-02, 03, 05` / `TR-18`                |
-| **`AC-ND-12`** | 一括キャッシュの中断と安全性                             | 一括キャッシュ実行中に「中断」ボタン（`batch-cache-cancel-button`）を押下した際、または画面離脱（アンマウント）時に `AbortController` により直ちに通信が停止し、それまでに保存された本文データが破損せず SQLite に保持されること。                                                                                                                                                                                                                         | `SYS-REQ-02, 03, 05` / `TR-18`                |
-| **`AC-ND-13`** | 全話取得済み時のボタン状態制御                           | 対象作品にエピソードが存在し（`chapters.length > 0`）、かつ全エピソードがキャッシュ済みかつ有効期間内（7日以内）である場合、一括キャッシュボタンが disabled 化され「全話キャッシュ済み」と表示されること。エピソードが 0 話の場合は `isAllCached = false` かつ一括キャッシュボタンが disabled（「未取得話を一括キャッシュ」）となること。                                                                                                                  | `SYS-REQ-02, 05` / `TR-18`                    |
+| AC ID          | 対象機能                                                 | 検証条件                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 関連要件 / 遷移                               |
+| :------------- | :------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------- |
+| **`AC-ND-01`** | 作品ヘッダー情報・あらすじトグル表示                     | 作品詳細画面（`/novels/:novelId`）上部に `NovelDetailHeader` が固定配置（`shrink-0`）され、タイトル・著者・統計がコンパクトに表示されること。またあらすじは初期状態で折りたたまれ（2〜3行 clamp）、トグルボタン（`synopsis-toggle-button`）で全文展開／折りたたみが可能であり、展開時は最大高さ制限と内部スクロール（`max-h` ＋ `overflow-y-auto`）が適用されること。あらすじ空文字時は「あらすじはありません。」を表示しトグルは非表示であること。                     | `SYS-REQ-01` / `TR-02`                        |
+| **`AC-ND-02`** | 章見出しとエピソード一覧・内部スクロール                 | エピソード一覧が固定ヘッダー下の独立スクロール領域（`flex-1 min-h-0 overflow-y-auto`）として描画され、`chapterIndex` 昇順で章見出し（`chapter-section-header`）、本文キャッシュ状態（`取得済み` / `未取得`）、既読状態（`既読`）、しおり位置（`しおり`）が正確に表示されること。                                                                                                                                                                                        | `SYS-REQ-01`, `02`, `12`                      |
+| **`AC-ND-03`** | 読書開始ボタンの表示制御と遷移                           | しおり未設定時は「最初から読む（第1話）」の1ボタンのみが表示され、しおり設定時は「続きから読む（第N話）」と「最初から読む（第1話）」の2ボタンが表示され、それぞれ該当話のリーダー画面（`/novels/:novelId/chapters/:chapterIndex`）へ遷移（`TR-04`）すること。                                                                                                                                                                                                           | `SYS-REQ-02`, `12` / `TR-04`                  |
+| **`AC-ND-04`** | 未キャッシュ話選択とオンデマンド取得                     | 目次一覧で未キャッシュ話をタップすると即座にリーダー画面（`SCR-03`）へ遷移（`TR-04`）して本文がオンデマンド取得・DB保存され、OS バックキー（`TR-06`）で戻ると該当話が `取得済み` バッジ・取得済み話数 `+1` に更新されていること。                                                                                                                                                                                                                                       | `SYS-REQ-02` / `TR-04`, `TR-06`               |
+| **`AC-ND-05`** | 目次再取得（更新）とフィードバック表示                   | 「目次を更新」ボタンを押下すると作品トップ HTML を再取得して `upsertNovelWithToc` で既存キャッシュを保持したまま目次を更新し、完了時に新着話数に応じたインライン通知（`目次を更新しました（+N話）` / `最新の状態です`）、失敗時にエラーメッセージを表示すること。                                                                                                                                                                                                       | `SYS-REQ-01`, `04`                            |
+| **`AC-ND-06`** | 確認ダイアログ付き作品削除と戻り元復帰・クラウド同期伝播 | 「作品を削除」ボタンから確認ダイアログを開き、「削除する」を確定すると `deleteNovel` により作品および関連 `chapters` がカスケード削除され、直前の遷移元画面（探索元画面、履歴なし時は本棚 `/`）へ復帰（`TR-07`）して一覧から消去されること。またクラウド同期連携時は `syncEngine.notifyChanged()` により Tombstone がクラウドへ Push されること。                                                                                                                       | `SYS-REQ-05, 06` / `TR-07`                    |
+| **`AC-ND-07`** | 戻り元復帰導線の整理と未存在フォールバック               | `NovelDetailHeader` 内の「← 本棚へ戻る」ボタンは廃止されていること。また存在しない `novelId` が指定された場合はクラッシュせず `novel-detail-not-found` と「戻る」導線（`back-to-bookshelf-button`）を表示し、タップ時に直前の遷移元画面（本棚 `/`、検索 `/search`、ランキング `/ranking`、履歴なし時は本棚 `/`）へ復帰できること（`TR-07`）。                                                                                                                           | `SYS-REQ-01, 16, 20` / `TR-07`                |
+| **`AC-ND-08`** | しおり位置への初期スクロール自動調整                     | 対象作品に `bookmarkChapterIndex` が設定されている場合、初回データ読み込み完了時に該当話（`data-chapter-index`）の要素が各話リストスクロール領域の先頭（上端）に来るよう自動スクロールされること。また、「目次を更新」実行時には自動スクロールが再発火せず、ユーザーの現在スクロール位置が維持されること。                                                                                                                                                              | `SYS-REQ-01, 12`                              |
+| **`AC-ND-09`** | 100dvh 全画面シェル・下部タブ・階層復帰                  | 作品詳細画面が `h-full flex flex-col overflow-hidden` の全画面シェル内に配置され、中間コンテンツ領域（`flex-1 min-h-0 overflow-y-auto`）のみがスクロール可能であること。画面下部に共通 `BottomTabBar`（`bottom-tab-bar`）が 4 タブ構成で表示され、各タブタップ（`TR-01`, `TR-01b`）により各画面へ遷移でき、OS バックキー（`TR-07`）により直前の遷移元画面（本棚 `SCR-01`、検索 `SCR-06`、ランキング `SCR-07`、履歴なし時は本棚 `/`）へ論理復帰できること。              | `SYS-REQ-16, 20` / `TR-01`, `TR-01b`, `TR-07` |
+| **`AC-ND-10`** | 作品詳細表示による本棚「NEW」バッジ解除                  | 本棚で「NEW」バッジが表示されていた作品の詳細画面（`SCR-02`）を開いた際（`TR-02` 等）、`clearNewUpdate` が実行されて作品の `has_new_update` が 0 に解除され、本棚へ戻った際（`TR-07`）に対象作品カードの「NEW」バッジが消去されていること。                                                                                                                                                                                                                             | `SYS-REQ-04` / `TR-02`, `TR-07`               |
+| **`AC-ND-11`** | 未取得話の一括キャッシュ実行と進捗表示                   | 「未取得話を一括キャッシュ」ボタンを押下すると、未キャッシュ話を対象に 1.5秒間隔のウェイト制御を挟んで順次本文を取得して SQLite に保存し、進行状況（`batch-cache-progress`）が表示され、各話取得ごとに取得済み話数・キャッシュバッジ（`取得済み`）が即時更新されること。                                                                                                                                                                                                | `SYS-REQ-02, 03, 05` / `TR-18`                |
+| **`AC-ND-12`** | 一括キャッシュの中断と安全性                             | 一括キャッシュ実行中に「中断」ボタン（`batch-cache-cancel-button`）を押下した際、または画面離脱（アンマウント）時に `AbortController` により直ちに通信が停止し、それまでに保存された本文データが破損せず SQLite に保持されること。                                                                                                                                                                                                                                      | `SYS-REQ-02, 03, 05` / `TR-18`                |
+| **`AC-ND-13`** | 全話取得済み時のボタン状態制御                           | 対象作品にエピソードが存在し（`chapters.length > 0`）、かつ全エピソードがキャッシュ済みかつ有効期間内（7日以内）である場合、一括キャッシュボタンが disabled 化され「全話キャッシュ済み」と表示されること。エピソードが 0 話の場合は `isAllCached = false` かつ一括キャッシュボタンが disabled（「未取得話を一括キャッシュ」）となること。                                                                                                                               | `SYS-REQ-02, 05` / `TR-18`                    |
+| **`AC-ND-20`** | 作品ヘッダーでのキャッシュ容量表示                       | 作品詳細ヘッダー（`data-testid="novel-detail-stats"`）において、`全 {novel.totalChapters} 話（取得済み {novel.cachedChapters} 話 / {formatByteSize(novel.totalByteSize)}）` の形式でキャッシュ容量がフォーマット表示されること。                                                                                                                                                                                                                                        | `SYS-REQ-05` / `TR-02`                        |
+| **`AC-ND-21`** | 本文キャッシュ整理ボタンと確認ダイアログ                 | 作品詳細ヘッダーの「本文キャッシュ整理」（`data-testid="open-clear-cache-dialog-button"`）から確認ダイアログ（`data-testid="clear-cache-confirm-dialog"`）が開き、「既読話の本文キャッシュのみ削除」（`data-testid="confirm-clear-read-cache-button"`）または「すべての本文キャッシュを削除」（`data-testid="confirm-clear-all-cache-button"`）を選択できること。また、`novel.cachedChapters === 0`、一括キャッシュ中、または目次更新中はボタンが disabled となること。 | `SYS-REQ-05` / `TR-19`                        |
+| **`AC-ND-22`** | 本文キャッシュ削除の即時反映と安全性                     | 本文キャッシュ削除実行時、目次情報・既読フラグ・しおり位置を保持したまま該当話の本文キャッシュ（`body_html = NULL`, `byte_size = 0`, `downloaded_at = NULL`）が削除され、親作品の `cachedChapters` / `totalByteSize` および各話一覧のバッジ（取得済み→未取得）が即時再計算・反映され、完了通知（`novel-detail-notice`）が表示されること。                                                                                                                               | `SYS-REQ-05` / `TR-19`                        |

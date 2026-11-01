@@ -2,7 +2,7 @@
 type: spec-feature
 title: "設定画面仕様書（SCR-05: Settings）"
 description: 小説リーダーの組版設定（縦書き/横書き、ページ送りモード、4カラーテーマ、文字サイズ、行間）の一括カスタマイズ・永続化、ルビ・傍点を含むサンプル文章プレビュー、Google Drive クラウド同期連携、および下部タブ・OSバックキー連携を提供する設定画面（SCR-05）の正本仕様。
-status: "Review (#168)"
+status: "Review (#170)"
 updated: "2026-11-01"
 tags:
   [
@@ -15,11 +15,15 @@ tags:
     ui,
     cloud-sync,
     google-drive,
+    cache-management,
+    capacity-visualization,
     paging,
     pagination,
     ho-23,
+    ho-24,
   ]
 related_specs:
+  - docs/specs/changes/issue-170-cache-management-and-capacity-visualization.md
   - docs/specs/changes/issue-168-reader-pagination-and-touch-refinement.md
   - docs/specs/changes/archive/issue-122-reader-page-turning.md
   - docs/specs/changes/archive/issue-120-cloud-sync-google-drive.md
@@ -59,6 +63,7 @@ related_tests:
 
 - **対象画面**: 設定画面（`SCR-05`、ルートパス `/settings`）
 - **対応要件**:
+  - `SYS-REQ-05`（キャッシュ管理・容量整理：設定画面での全体キャッシュ容量可視化と確認ダイアログ付き本文キャッシュ一括削除［既読のみ／全話］、`v0.5` Issue #170）
   - `SYS-REQ-06`（Google Drive appDataFolder による本棚・しおり・既読のクラウド同期・マージ、手動即時同期、アカウント連携/解除）
   - `SYS-REQ-07`（ルビ・傍点の正確な描画：サンプル文章プレビュー枠内でのルビ・傍点レンダリング）
   - `SYS-REQ-08`（縦書き `vertical-rl` / 横書き `horizontal-tb` 切り替え）
@@ -71,10 +76,10 @@ related_tests:
   - `TR-01`（下部タブバー「設定」タップによる各画面から `SCR-05` への遷移）
   - `TR-01b`（下部タブバー「本棚」タップによる `SCR-05` から本棚画面 `SCR-01` `/` への直接遷移）
   - `TR-12`（設定画面（`/settings`）で OS バックキーを実行したとき、直前の画面（リーダー `SCR-03`、作品詳細 `SCR-02`）またはホームの本棚画面（`SCR-01`）へ復帰すること）
+  - `TR-20`（設定画面での本文キャッシュ一括整理アクションによる一括削除［既読のみ／全話］・全体容量即時再計算、`v0.5` Issue #170）
 - **対象外スコープ（後続 Milestone）**:
   - フォント種別（`fontFamily`）の選択および画面余白（`pageMarginPx`）の設定（Milestone `v0.5〜`：`SYS-REQ-09` 拡張）
   - ハードウェア音量キー送り（`enableVolumeKeyPaging`）のトグル設定（Milestone `v0.5〜`：`SYS-REQ-11` 拡張、本Issueでは対象外）
-  - 全体および作品別キャッシュ使用量の可視化、既読キャッシュ一括削除（Milestone `v0.5〜`：`SYS-REQ-05`）
 
 ---
 
@@ -88,7 +93,9 @@ src/features/settings/
 │   ├── useSettings.ts                     # reader_settings 読み出し・更新・永続化フック
 │   ├── useSettings.test.tsx               # フック単体テスト（Vitest）
 │   ├── useCloudSync.ts                    # Google Drive クラウド同期状態管理・操作フック（v0.4）
-│   └── useCloudSync.test.ts               # クラウド同期フック単体テスト（Vitest）
+│   ├── useCloudSync.test.ts               # クラウド同期フック単体テスト（Vitest）
+│   ├── useStorageCache.ts                 # 全体キャッシュ集計・一括本文キャッシュ削除フック（v0.5）
+│   └── useStorageCache.test.ts            # ストレージキャッシュフック単体テスト（Vitest）
 └── components/
     ├── SampleTextPreview.tsx              # ルビ・傍点を含む固定小説文のリアルタイム組版プレビュー（Presentational）
     ├── SampleTextPreview.stories.tsx
@@ -96,10 +103,13 @@ src/features/settings/
     ├── CloudSyncSection.tsx               # Google Drive クラウド同期カード（連携・解除・即時同期・状態表示）（Presentational, v0.4）
     ├── CloudSyncSection.stories.tsx
     ├── CloudSyncSection.test.tsx
-    ├── SettingsPage.tsx                   # 設定項目（組版・プレビュー・クラウド同期）のレイアウト統合（Presentational）
+    ├── StorageCacheSection.tsx            # ストレージ・キャッシュ管理カード（全体集計・一括削除ダイアログ）（Presentational, v0.5）
+    ├── StorageCacheSection.stories.tsx
+    ├── StorageCacheSection.test.tsx
+    ├── SettingsPage.tsx                   # 設定項目（組版・プレビュー・クラウド同期・ストレージ）のレイアウト統合（Presentational）
     ├── SettingsPage.stories.tsx
     ├── SettingsPage.test.tsx
-    ├── SettingsContainer.tsx              # useSettings / useCloudSync / Router を接続する Container
+    ├── SettingsContainer.tsx              # useSettings / useCloudSync / useStorageCache / Router を接続する Container
     ├── SettingsContainer.stories.tsx
     └── SettingsContainer.test.tsx
 ```
@@ -244,9 +254,45 @@ Google Drive（`appDataFolder`）とのアカウント連携・解除、手動�
 
 ---
 
-### 3.4 `SettingsContainer`（設定画面 Container コンポーネント）
+### 3.4 `StorageCacheSection`（ストレージ・キャッシュ管理セクション: `v0.5` Issue #170）
 
-`useSettings` および `useCloudSync` フックを呼び出し、`SettingsPage` に現在設定、クラウド同期状態、および各種操作ハンドラーを注入する Container コンポーネントです。
+全登録作品の合計キャッシュ済み話数および合計キャッシュ容量を可視化し、アプリ全体の本文キャッシュ一括削除（既読のみ／全話）を提供する Presentational コンポーネントです。
+
+#### プロパティ契約（`StorageCacheSectionProps`）
+
+| プロパティ名   | 型                                                            | 必須 | 既定値  | 説明                                         |
+| :------------- | :------------------------------------------------------------ | :--- | :------ | :------------------------------------------- |
+| `summary`      | `StorageCacheSummary`                                         | 必須 | -       | 全作品合計キャッシュ情報（話数・バイト容量） |
+| `isLoading`    | `boolean`                                                     | 任意 | `false` | 集計データ取得中フラグ                       |
+| `isClearing`   | `boolean`                                                     | 任意 | `false` | キャッシュ一括削除実行中フラグ               |
+| `notice`       | `string \| null`                                              | 任意 | `null`  | 一括削除完了通知メッセージ                   |
+| `error`        | `string \| null`                                              | 任意 | `null`  | キャッシュ削除エラーメッセージ               |
+| `onClearCache` | `(options: { onlyRead: boolean }) => void \| Promise<number>` | 任意 | -       | 一括削除確定時のコールバック                 |
+
+#### 表示項目・セマンティック属性
+
+- **セクションルート**: `data-testid="storage-cache-section"`
+- **セクションタイトル**: 「ストレージ・キャッシュ管理」
+- **説明文**: 「ダウンロードした本文キャッシュの容量を確認し、安全に整理します。目次・既読・しおりは保持されます。」
+- **全体容量表示 (`data-testid="storage-cache-summary"`)**:
+  - `キャッシュ済み: 全 {summary.totalCachedChapters} 話（合計 {formatByteSize(summary.totalByteSize)}）` の形式で表示する。
+- **一括削除起動ボタン (`data-testid="open-global-clear-cache-dialog-button"`)**:
+  - ラベル: `本文キャッシュを一括整理`
+  - `summary.totalCachedChapters === 0` または `isClearing === true` の間は `disabled`。
+  - 押下時に確認ダイアログ（`data-testid="global-clear-cache-dialog"`）を表示する。
+- **一括削除確認ダイアログ (`data-testid="global-clear-cache-dialog"`)**:
+  - 目次・既読状態・しおり位置は保持され、再度読む際は再取得可能である旨を明記。
+  - **既読話のみ削除**: `data-testid="confirm-global-clear-read-cache-button"`（ラベル: `既読話の本文キャッシュのみ削除`、クリック時に `onClearCache({ onlyRead: true })` を呼び出す、`isClearing === true` の間は `disabled`）。
+  - **全話削除**: `data-testid="confirm-global-clear-all-cache-button"`（ラベル: `すべての本文キャッシュを削除`、クリック時に `onClearCache({ onlyRead: false })` を呼び出す、`isClearing === true` の間は `disabled`）。
+  - **キャンセル**: `data-testid="cancel-global-clear-cache-button"`（ラベル: `キャンセル`、`isClearing === true` の間は `disabled`）。
+- **インライン完了通知 (`data-testid="storage-cache-notice"`)**: `notice` が非 null の場合、通知メッセージを表示。
+- **エラー警告枠 (`data-testid="storage-cache-error-alert"`)**: `error` が非 null の場合、`role="alert"` でエラーメッセージを表示。
+
+---
+
+### 3.5 `SettingsContainer`（設定画面 Container コンポーネント）
+
+`useSettings`、`useCloudSync`、および `useStorageCache` フックを呼び出し、`SettingsPage` に現在設定、クラウド同期状態、ストレージキャッシュ集計・操作ハンドラーを注入する Container コンポーネントです。
 
 #### プロパティ契約（`SettingsContainerProps`）
 
@@ -321,6 +367,38 @@ export interface UseCloudSyncResult {
    - 完了時に `cloud_sync_last_synced_at` を現在時刻で `app_settings` へ更新し、`isSyncing = false` とする。
    - 失敗時は直前の状態を維持し、`error` をセットして画面上に通知する。
 
+### 4.4 `useStorageCache` フック契約・キャッシュ整理パイプライン（v0.5 新設: Issue #170）
+
+```ts
+export interface StorageCacheSummary {
+  totalCachedChapters: number;
+  totalByteSize: number;
+}
+
+export interface UseStorageCacheResult {
+  summary: StorageCacheSummary;
+  isLoading: boolean;
+  isClearing: boolean;
+  notice: string | null;
+  error: string | null;
+  clearCache: (options: { onlyRead: boolean }) => Promise<number>;
+  refreshSummary: () => Promise<void>;
+}
+```
+
+1. **初期ロード（`refreshSummary`）**:
+   - `ServiceProvider` の `isReady` 完了後、`chapterRepository.getStorageCacheSummary()` を呼び出して全登録作品の合計キャッシュ話数（`totalCachedChapters`）および合計バイト容量（`totalByteSize`）を取得して `summary` State を初期化する。
+   - `getStorageCacheSummary` が未定義の環境では `{ totalCachedChapters: 0, totalByteSize: 0 }` に安全にフォールバックする。
+2. **全体一括キャッシュ削除（`clearCache`）**:
+   - `isClearing = true`, `error = null`, `notice = null` を設定する。
+   - `deletedCount = await chapterRepository.deleteAllCachedBodies(options)` を実行する。
+     - `options.onlyRead === true`: 全作品を対象に既読話（`is_read = 1`）のみ本文キャッシュを破棄。
+     - `options.onlyRead === false`: 全作品の全エピソード本文キャッシュを一括破棄。
+     - いずれの場合も作品レコード（`novels`）、目次情報（`chapters`）、既読状態（`is_read`）、しおり位置は完全に保持される。
+   - 削除完了後、`refreshSummary()` を実行して合計キャッシュ話数・合計容量を即時再集計して更新する。
+   - `notice = "本文キャッシュを一括削除しました（${deletedCount}話）"` をセットし、`isClearing = false` として削除話数を返却する。
+   - 削除失敗時は `error` をセットし、`isClearing = false` に戻す。
+
 ---
 
 ## 5. 受入条件一覧（Acceptance Criteria: `AC-ST-xx`）
@@ -340,3 +418,6 @@ export interface UseCloudSyncResult {
 | **`AC-ST-11`** | 遠隔認可解除（401）検知時の未連携フォールバック             | Google アカウント管理から遠隔で権限が取り消された場合、次回通信時の 401 Unauthorized を検知して自動的に安全な未連携状態へ遷移し、セクション内にエラー通知が表示されること。                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `SYS-REQ-06`                   |
 | **`AC-ST-12`** | 境界値・未設定フォールバック・起動時一時エラー保護          | Android ネイティブ環境では APK パッケージ名（`com.yommy.app`）と署名鍵 SHA-1 により Google Identity Services（`AuthorizationClient`）が OAuth クライアントを自動識別し、Web / テスト環境では `.env.local`（`VITE_GOOGLE_CLIENT_ID`）の有無に関わらず `MockCloudSyncBridge` にフォールバックして動作すること（R2-18）。また `syncEngine` 未注入や `appSettingsRepository` のオプショナルメソッド欠落時にもクラッシュせず安全にフォールバックし（R1-15）、起動時の `getAuthState()` でオフライン等の一時エラー（`{ status: "error", message }`）が発生した場合は連携状態を保持したまま「認証エラー」とエラーアラートを表示すること（R2-03）。 | `SYS-REQ-06`                   |
 | **`AC-ST-13`** | ページ送りモード切替と永続化                                | ページ送りモードセレクター（`paging-mode-select`）で「ページめくり（縦書き時）」「連続スクロール」の2択を切り替えられ、横書き（`horizontal-tb`）選択時はセレクターが `disabled` となり注記（`paging-mode-note`）が表示されること。選択結果は `reader_settings` テーブルへ永続化され、リロード後およびリーダー画面（`SCR-03`）でも設定が維持・反映されること。                                                                                                                                                                                                                                                                               | `SYS-REQ-11`                   |
+| **`AC-ST-14`** | ストレージ・キャッシュ管理セクション表示                    | 設定画面に「ストレージ・キャッシュ管理」セクション（`data-testid="storage-cache-section"`）が配置され、アプリ全体の合計キャッシュ話数および合計容量（`data-testid="storage-cache-summary"`）が `formatByteSize` 規約に従って正確にフォーマット表示されること。                                                                                                                                                                                                                                                                                                                                                                              | `SYS-REQ-05` / `TR-01`         |
+| **`AC-ST-15`** | 一括削除起動ボタンと確認ダイアログ                          | 一括削除起動ボタン（`data-testid="open-global-clear-cache-dialog-button"`）から一括削除確認ダイアログ（`data-testid="global-clear-cache-dialog"`）が開き、「既読話の本文キャッシュのみ削除」（`data-testid="confirm-global-clear-read-cache-button"`）または「すべての本文キャッシュを削除」（`data-testid="confirm-global-clear-all-cache-button"`）を選択できること。また、合計キャッシュ話数が 0 または処理中はボタンが disabled となること。                                                                                                                                                                                            | `SYS-REQ-05` / `TR-20`         |
+| **`AC-ST-16`** | 一括キャッシュ削除の即時反映と安全性                        | 一括削除完了後、全登録作品の対象話本文キャッシュが削除され、作品登録・目次・既読状態・しおりは保持された状態で、合計キャッシュ話数・合計容量表示が即時再計算されて更新され、完了通知（`data-testid="storage-cache-notice"`）が表示されること。                                                                                                                                                                                                                                                                                                                                                                                              | `SYS-REQ-05` / `TR-20`         |
