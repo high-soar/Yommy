@@ -420,17 +420,13 @@ export interface NovelRepository {
   deleteNovel(novelId: string): Promise<void>;
   clearNewUpdate(novelId: string): Promise<void>;
   updateLastCheckedAt(novelId: string, checkedAt: string): Promise<void>;
-  updateSyncMetadata?(
-    novelId: string,
-    metadata: {
-      isFavorite: boolean;
-      lastReadAt: string | null;
-      updatedAt: string;
-    },
-  ): Promise<void>;
   getDeletedNovels?(): Promise<DeletedNovelRecord[]>;
   purgeDeletedNovels?(idList: string[]): Promise<void>;
-  purgeExpiredDeletedNovels?(retentionMs?: number): Promise<void>;
+  updateSyncMetadata?(
+    novelId: string,
+    metadata: { isFavorite?: boolean; lastReadAt?: string | null },
+  ): Promise<void>;
+  purgeExpiredDeletedNovels?(cutoffTimeMs: number): Promise<void>;
 }
 
 export interface AppSettingsRepository {

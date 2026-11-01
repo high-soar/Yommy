@@ -72,7 +72,7 @@ describe("Android ビルド設定および署名・バージョン管理検証 (
       const content = fs.readFileSync(buildGradlePath, "utf-8");
 
       expect(content).toMatch(
-        /implementation\s+['"]com\.google\.android\.gms:play-services-auth:21\.3\.0['"]/,
+        /implementation\s+['"]com\.google\.android\.gms:play-services-auth:21\.4\.0['"]/,
       );
     });
   });
