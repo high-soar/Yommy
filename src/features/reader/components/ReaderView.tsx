@@ -53,6 +53,20 @@ function calculateSlideTranslateX(
 }
 
 /**
+ * ページ確定変位（translateY）およびスワイプ追従変位（translateX）を算出する純粋関数（スタブ）
+ */
+function calculatePageTransforms(
+  currentPage: number,
+  pageHeight: number,
+  slideOffsetPx: number,
+): { transform: string; transition: string } {
+  void currentPage;
+  void pageHeight;
+  void slideOffsetPx;
+  return { transform: "", transition: "" };
+}
+
+/**
  * コンテナ寸法から総ページ数を算出する純粋関数
  */
 function calculateMeasuredTotalPages(
@@ -103,13 +117,24 @@ function restoreScrollPosition(
  */
 function getPagedContentStyle(
   isPaged: boolean,
-  slideTranslateX: number,
-  slideOffsetPx: number,
+  currentPage: number = 1,
+  pageHeight: number = 0,
+  slideOffsetPx: number = 0,
+  containerWidth?: number,
+  containerHeight?: number,
 ): React.CSSProperties | undefined {
+  void containerWidth;
+  void containerHeight;
   if (!isPaged) return undefined;
+  const { transform, transition } = calculatePageTransforms(
+    currentPage,
+    pageHeight,
+    slideOffsetPx,
+  );
   return {
-    transform: `translateX(${slideTranslateX}px)`,
-    transition: slideOffsetPx !== 0 ? "none" : "transform 200ms ease-out",
+    transform: transform || "translateX(0px)",
+    transition:
+      transition || (slideOffsetPx !== 0 ? "none" : "transform 200ms ease-out"),
   };
 }
 
