@@ -177,6 +177,15 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   const initialScrollProgressRef = useRef<number>(initialScrollProgress);
   const isFirstPageMeasurementRef = useRef<boolean>(true);
   const prefetchAbortControllerRef = useRef<AbortController | null>(null);
+  const activePrefetchPromiseRef = useRef<Promise<void> | null>(null);
+  const isMountedRef = useRef<boolean>(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     novelRef.current = novel;
@@ -333,6 +342,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       currentChapterIdx: number,
       totalChapterCount: number,
     ) => {
+      const previousPromise = activePrefetchPromiseRef.current;
       stopPrefetch();
 
       if (totalChapterCount <= currentChapterIdx) {
@@ -343,10 +353,17 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       prefetchAbortControllerRef.current = abortController;
       const signal = abortController.signal;
 
-      void (async () => {
+      const runPrefetch = async () => {
         try {
+          // 先行先読みタスクの完了を待機（直列化保証: R1-29）
+          if (previousPromise) {
+            await previousPromise;
+          }
+          if (signal.aborted || !isMountedRef.current) return;
+
           // 第 N 話表示完了後、初期インターバル 1.5秒待機
           await delay(PREFETCH_INTERVAL_MS, signal);
+          if (signal.aborted || !isMountedRef.current) return;
 
           const maxChapterIndex = Math.min(
             currentChapterIdx + PREFETCH_COUNT,
@@ -358,6 +375,8 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             targetIdx <= maxChapterIndex;
             targetIdx++
           ) {
+            if (signal.aborted || !isMountedRef.current) return;
+
             const targetChapter = await chapterRepository.getChapter(
               targetNovelId,
               targetIdx,
@@ -380,7 +399,6 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
                 targetIdx,
                 targetChapter.url,
                 timeoutMs,
-                signal,
               );
             } catch (err: unknown) {
               if (signal.aborted) return;
@@ -399,8 +417,15 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             "[useReader] Prefetch loop terminated unexpectedly",
             err,
           );
+        } finally {
+          if (activePrefetchPromiseRef.current === currentPromise) {
+            activePrefetchPromiseRef.current = null;
+          }
         }
-      })();
+      };
+
+      const currentPromise = runPrefetch();
+      activePrefetchPromiseRef.current = currentPromise;
     },
     [chapterRepository, fetchAndSaveChapterBody, stopPrefetch],
   );
@@ -442,20 +467,20 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             targetNovel = await novelRepository.getNovelById(novels[0].id);
           }
         }
+        if (!isMounted) return;
 
         if (!targetNovel) {
-          if (isMounted) {
-            setNovel(null);
-            setChapter(null);
-            setCurrentChapterIndex(targetIndex);
-            resetPaginationState(0, 0);
-          }
+          setNovel(null);
+          setChapter(null);
+          setCurrentChapterIndex(targetIndex);
+          resetPaginationState(0, 0);
           return;
         }
 
         // 新着更新フラグの自動解除 (AC-RD-11)
         if (targetNovel.hasNewUpdate) {
           await novelRepository.clearNewUpdate(targetNovel.id);
+          if (!isMounted) return;
           targetNovel = {
             ...targetNovel,
             hasNewUpdate: false,
@@ -466,6 +491,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           targetNovel.id,
           targetIndex,
         );
+        if (!isMounted) return;
 
         // キャッシュ鮮度・オンデマンド本文取得
         if (targetChapter) {
@@ -474,11 +500,13 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             targetIndex,
             targetChapter,
           );
+          if (!isMounted) return;
           if (resolved) {
             targetChapter = resolved;
             const reloadedNovel = await novelRepository.getNovelById(
               targetNovel.id,
             );
+            if (!isMounted) return;
             if (reloadedNovel) {
               targetNovel = reloadedNovel;
             }
@@ -496,6 +524,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             targetIndex,
             true,
           );
+          if (!isMounted) return;
           targetChapter = { ...targetChapter, isRead: true };
           if (syncEngine) {
             syncEngine.notifyChanged().catch(() => {});
@@ -510,6 +539,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           nextScrollProgress = targetNovel.bookmarkScrollProgress;
         } else {
           await novelRepository.updateBookmark(targetNovel.id, targetIndex, 0);
+          if (!isMounted) return;
           targetNovel = {
             ...targetNovel,
             bookmarkChapterIndex: targetIndex,
@@ -738,7 +768,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   const goToChapter = useCallback(
     async (
       targetChapterIndex: number,
-      _options?: GoToChapterOptions,
+      options?: GoToChapterOptions,
     ): Promise<boolean> => {
       stopPrefetch();
 
@@ -795,11 +825,12 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           targetChapter = { ...targetChapter, isRead: true };
         }
 
-        // 5. 新エピソード先頭へのしおり更新
+        // 5. 新エピソードへのしおり更新（R1-07: startAt === "end" の場合は末尾進捗 1.0）
+        const nextProgress = options?.startAt === "end" ? 1.0 : 0.0;
         await novelRepository.updateBookmark(
           currentNovel.id,
           targetChapterIndex,
-          0,
+          nextProgress,
         );
         const reloadedNovel = await novelRepository.getNovelById(
           currentNovel.id,
@@ -813,7 +844,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         setCurrentChapterIndex(targetChapterIndex);
         setChapter(targetChapter);
         setNovel(reloadedNovel);
-        resetPaginationState(0, 0);
+        resetPaginationState(nextProgress, nextProgress);
         isSuccess = true;
 
         if (targetChapter && targetChapter.bodyHtml !== null && reloadedNovel) {

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect } from "react";
 import { useRouter } from "../../../app/router";
-import { useReader } from "../hooks/useReader";
+import { useReader, type GoToChapterOptions } from "../hooks/useReader";
 import { ReaderPage } from "./ReaderPage";
 
 /**
@@ -107,8 +107,8 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
 
   // 前後話エピソード遷移共通処理（TR-05）
   const navigateToTargetChapter = useCallback(
-    async (targetIndex: number) => {
-      const ok = await goToChapter(targetIndex);
+    async (targetIndex: number, options?: GoToChapterOptions) => {
+      const ok = await goToChapter(targetIndex, options);
       if (ok) {
         const targetId = novelId ?? novel?.id;
         if (targetId) {
@@ -123,9 +123,9 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
     [goToChapter, novelId, novel?.id, onNavigateChapter, router],
   );
 
-  // 前の話へ（TR-05）
+  // 前の話へ（TR-05, R1-07: 前話末尾復元）
   const handlePrevChapter = useCallback(async () => {
-    await navigateToTargetChapter(currentChapterIndex - 1);
+    await navigateToTargetChapter(currentChapterIndex - 1, { startAt: "end" });
   }, [currentChapterIndex, navigateToTargetChapter]);
 
   // 次の話へ（TR-05）

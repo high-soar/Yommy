@@ -3481,18 +3481,22 @@ describe("useReader", () => {
         const chapterRepo = new SqlChapterRepository(db);
         const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
           chapterCount: 5,
-          cachedCount: 2, // 3話以降は未キャッシュ
+          cachedCount: 2, // 1話・2話はキャッシュ済み、3話以降は未キャッシュ
+        });
+
+        let unblockPrefetch: () => void = () => {};
+        const prefetchBlocker = new Promise<void>((r) => {
+          unblockPrefetch = r;
         });
 
         const mockHttpClient = new MockHttpClient();
-        let prefetchCallCount = 0;
         mockHttpClient.setResponse(
-          "https://kakuyomu.jp/works/16817330658027210412/episodes/3",
-          () => {
-            prefetchCallCount++;
+          `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[2]}`,
+          async () => {
+            await prefetchBlocker;
             return {
               status: 200,
-              url: "https://kakuyomu.jp/works/16817330658027210412/episodes/3",
+              url: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[2]}`,
               headers: {},
               html: "<html><body><div class='widget-episodeBody'>第3話本文</div></body></html>",
             };
@@ -3514,12 +3518,22 @@ describe("useReader", () => {
           expect(result.current.isLoading).toBe(false);
         });
 
-        // 連続話数遷移
+        // 1.5秒待って先読みが第3話の HTTP リクエストでブロックされた状態にする
+        await new Promise((r) => setTimeout(r, 1600));
+
+        // 第2話へ遷移（goToChapter(2) 完了時に第2話の startPrefetch が走り、ブロック中の先行先読みを直列待機する）
         await act(async () => {
-          await result.current.goToChapter(2);
+          const success = await result.current.goToChapter(2);
+          expect(success).toBe(true);
         });
+
+        // 先行先読みのブロックを解除し、直列化待機を通過させる
+        await act(async () => {
+          unblockPrefetch();
+          await new Promise((r) => setTimeout(r, 50));
+        });
+
         expect(result.current.chapterIndex).toBe(2);
-        expect(prefetchCallCount).toBeGreaterThanOrEqual(0);
       });
 
       it("loadInitialData 実行中にアンマウントされた場合、DB 更新処理がスキップされること (R1-29)", async () => {

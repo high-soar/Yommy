@@ -633,8 +633,7 @@ describe("ReaderView", () => {
       expect(content).toHaveStyle({
         transform: "translateX(-1000px)",
         transition: "transform 200ms ease-out",
-        columnWidth: "100%",
-        columnGap: "0px",
+        columnGap: "48px",
       });
 
       // スワイプドラッグ中

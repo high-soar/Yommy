@@ -10,6 +10,7 @@ import type { BottomTab } from "../../../shared/ui/BottomTabBar";
 import { ReaderView } from "./ReaderView";
 import { ReaderBottomOverlay } from "./ReaderBottomOverlay";
 import { useReaderGestures } from "../hooks/useReaderGestures";
+import { resolveEffectivePagingMode } from "../hooks/useReader";
 
 export interface ReaderPageProps {
   /** 対象作品レコード（未登録時は null） */
@@ -223,6 +224,15 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
     }
   }, []);
 
+  const effectivePagingMode = resolveEffectivePagingMode(
+    pagingMode,
+    writingMode,
+  );
+  const touchZonePositionClass =
+    effectivePagingMode === "paged"
+      ? "left-[20%] right-[20%]"
+      : "left-0 right-0";
+
   return (
     <div
       data-testid="reader-page"
@@ -313,7 +323,7 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
       {/* 最下部タッチゾーン（下端約 72px） */}
       <div
         data-testid="reader-bottom-touch-zone"
-        className="absolute bottom-0 left-0 right-0 h-[72px] z-30 pointer-events-auto cursor-pointer"
+        className={`absolute bottom-0 ${touchZonePositionClass} h-[72px] z-30 pointer-events-auto cursor-pointer`}
         onPointerDown={handleTouchZonePointerDown}
         onPointerUp={handleTouchZonePointerUp}
         onPointerCancel={handleTouchZonePointerCancel}
