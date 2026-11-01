@@ -78,6 +78,8 @@ const meta: Meta<typeof NovelDetailPage> = {
     isAllCached: false,
     isDeleteDialogOpen: false,
     isDeleting: false,
+    isClearCacheDialogOpen: false,
+    isClearingCache: false,
     refreshMessage: null,
     error: null,
     onBackToBookshelf: fn(),
@@ -90,6 +92,9 @@ const meta: Meta<typeof NovelDetailPage> = {
     onOpenDeleteDialog: fn(),
     onCloseDeleteDialog: fn(),
     onConfirmDelete: fn(),
+    onOpenClearCacheDialog: fn(),
+    onCloseClearCacheDialog: fn(),
+    onConfirmClearCache: fn(),
   },
 };
 
@@ -195,5 +200,25 @@ export const WithError: Story = {
   name: "エラー表示",
   args: {
     error: "通信エラーが発生しました",
+  },
+};
+
+/**
+ * 本文キャッシュ整理確認ダイアログ表示中状態
+ */
+export const WithClearCacheDialog: Story = {
+  name: "キャッシュ整理ダイアログ表示中",
+  args: {
+    isClearCacheDialogOpen: true,
+  },
+};
+
+/**
+ * 本文キャッシュ削除完了通知表示状態
+ */
+export const WithClearCacheNotice: Story = {
+  name: "キャッシュ削除完了通知表示",
+  args: {
+    refreshMessage: "本文キャッシュを削除しました（2話）",
   },
 };

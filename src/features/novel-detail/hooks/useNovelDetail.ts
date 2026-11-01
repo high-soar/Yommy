@@ -17,6 +17,9 @@ export const DEFAULT_FETCH_ERROR_MESSAGE = "作品情報の取得に失敗しま
 export const DEFAULT_REFRESH_ERROR_MESSAGE = "目次の更新に失敗しました";
 /** 作品削除失敗時のデフォルトエラーメッセージ */
 export const DEFAULT_DELETE_ERROR_MESSAGE = "作品の削除に失敗しました";
+/** 本文キャッシュ削除失敗時のデフォルトエラーメッセージ */
+export const DEFAULT_CLEAR_CACHE_ERROR_MESSAGE =
+  "本文キャッシュの削除に失敗しました";
 
 /**
  * 例外オブジェクトからユーザー向けエラーメッセージを安全に抽出する。
@@ -72,6 +75,9 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
   } | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [isClearCacheDialogOpen, setIsClearCacheDialogOpen] =
+    useState<boolean>(false);
+  const [isClearingCache, setIsClearingCache] = useState<boolean>(false);
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -168,7 +174,8 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
       isRefreshing ||
       isDeleting ||
       isBatchCaching ||
-      isBatchCachingRef.current
+      isBatchCachingRef.current ||
+      isClearingCache
     ) {
       return false;
     }
@@ -223,6 +230,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     isRefreshing,
     isDeleting,
     isBatchCaching,
+    isClearingCache,
     parserRegistry,
     httpClient,
     novelRepository,
@@ -240,7 +248,8 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
       isBatchCaching ||
       isBatchCachingRef.current ||
       isRefreshing ||
-      isDeleting
+      isDeleting ||
+      isClearingCache
     ) {
       return;
     }
@@ -364,6 +373,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     isBatchCaching,
     isRefreshing,
     isDeleting,
+    isClearingCache,
     parserRegistry,
     httpClient,
     chapterRepository,
@@ -407,7 +417,8 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
       isDeleting ||
       isRefreshing ||
       isBatchCaching ||
-      isBatchCachingRef.current
+      isBatchCachingRef.current ||
+      isClearingCache
     ) {
       return false;
     }
@@ -434,10 +445,81 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     isDeleting,
     isRefreshing,
     isBatchCaching,
+    isClearingCache,
     novelRepository,
     syncEngine,
     novelId,
   ]);
+
+  /**
+   * 本文キャッシュ整理確認ダイアログを開く
+   */
+  const openClearCacheDialog = useCallback(() => {
+    setIsClearCacheDialogOpen(true);
+  }, []);
+
+  /**
+   * 本文キャッシュ整理確認ダイアログを閉じる（削除処理中は安全のため閉じない）
+   */
+  const closeClearCacheDialog = useCallback(() => {
+    if (isClearingCache) {
+      return;
+    }
+    setIsClearCacheDialogOpen(false);
+  }, [isClearingCache]);
+
+  /**
+   * 本文キャッシュ削除を確定実行し、親作品レコードとエピソード一覧を即時再取得・反映する。
+   *
+   * @param options.onlyRead - true の場合は既読話のみ削除、false の場合は全話削除
+   * @returns 削除された話数（失敗時は 0）
+   */
+  const confirmClearCache = useCallback(
+    async (options: { onlyRead: boolean }): Promise<number> => {
+      if (
+        isClearingCache ||
+        isRefreshing ||
+        isBatchCaching ||
+        isDeleting ||
+        isBatchCachingRef.current
+      ) {
+        return 0;
+      }
+
+      setIsClearingCache(true);
+      setError(null);
+
+      let deletedCount = 0;
+      try {
+        deletedCount = await chapterRepository.deleteCachedBodies(
+          novelId,
+          options,
+        );
+        const [updatedNovel, updatedChapters] = await Promise.all([
+          novelRepository.getNovelById(novelId),
+          chapterRepository.listChaptersByNovelId(novelId),
+        ]);
+        setNovel(updatedNovel);
+        setChapters(updatedChapters);
+        setIsClearCacheDialogOpen(false);
+        setRefreshMessage(`本文キャッシュを削除しました（${deletedCount}話）`);
+      } catch (err: unknown) {
+        setError(extractErrorMessage(err, DEFAULT_CLEAR_CACHE_ERROR_MESSAGE));
+      } finally {
+        setIsClearingCache(false);
+      }
+      return deletedCount;
+    },
+    [
+      isClearingCache,
+      isRefreshing,
+      isBatchCaching,
+      isDeleting,
+      chapterRepository,
+      novelRepository,
+      novelId,
+    ],
+  );
 
   return {
     novel,
@@ -449,6 +531,8 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     isAllCached,
     isDeleteDialogOpen,
     isDeleting,
+    isClearCacheDialogOpen,
+    isClearingCache,
     refreshMessage,
     error,
     refreshToc,
@@ -457,6 +541,9 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     openDeleteDialog,
     closeDeleteDialog,
     confirmDeleteNovel,
+    openClearCacheDialog,
+    closeClearCacheDialog,
+    confirmClearCache,
     reloadDetail,
   };
 }

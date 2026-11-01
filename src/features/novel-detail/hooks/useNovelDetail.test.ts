@@ -7,6 +7,7 @@ import {
   DEFAULT_FETCH_ERROR_MESSAGE,
   DEFAULT_REFRESH_ERROR_MESSAGE,
   DEFAULT_DELETE_ERROR_MESSAGE,
+  DEFAULT_CLEAR_CACHE_ERROR_MESSAGE,
 } from "./useNovelDetail";
 import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
 import { SqlNovelRepository } from "../../../storage/repositories/novelRepository";
@@ -789,11 +790,12 @@ describe("useNovelDetail", () => {
     const createDummyContent = (
       index: number,
       bodyHtml: string = "<p>本文</p>",
+      byteSize: number = 100,
     ) => ({
       remoteChapterId: KAKUYOMU_EPISODE_IDS[index - 1] ?? `ep-${index}`,
       title: `第${index}話`,
       bodyHtml,
-      byteSize: 100,
+      byteSize,
       prevChapterUrl: null,
       nextChapterUrl: null,
     });
@@ -1382,6 +1384,385 @@ describe("useNovelDetail", () => {
         });
 
         vi.useRealTimers();
+      });
+    });
+
+    describe("本文キャッシュ削除パイプライン (AC-ND-20, AC-ND-21, AC-ND-22, TR-19)", () => {
+      it("初期状態で isClearCacheDialogOpen === false, isClearingCache === false であること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedSampleNovel(novelRepo, 2);
+
+        const { result } = renderHook(() => useNovelDetail(seeded.id), {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+          }),
+        });
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        expect(result.current.isClearCacheDialogOpen).toBe(false);
+        expect(result.current.isClearingCache).toBe(false);
+      });
+
+      it("openClearCacheDialog でダイアログが開き、closeClearCacheDialog で閉じられること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedSampleNovel(novelRepo, 2);
+
+        const { result } = renderHook(() => useNovelDetail(seeded.id), {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+          }),
+        });
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        act(() => {
+          result.current.openClearCacheDialog();
+        });
+        expect(result.current.isClearCacheDialogOpen).toBe(true);
+
+        act(() => {
+          result.current.closeClearCacheDialog();
+        });
+        expect(result.current.isClearCacheDialogOpen).toBe(false);
+      });
+
+      it("confirmClearCache({ onlyRead: true }) で既読話の本文キャッシュのみ削除され、容量と話一覧が即時反映されること (AC-ND-22, TR-19)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedSampleNovel(novelRepo, 2);
+
+        // 2話とも本文を保存
+        const now = new Date().toISOString();
+        await chapterRepo.saveChapterBody(
+          seeded.id,
+          1,
+          createDummyContent(1, "<p>第1話本文</p>", 100),
+          now,
+        );
+        await chapterRepo.saveChapterBody(
+          seeded.id,
+          2,
+          createDummyContent(2, "<p>第2話本文</p>", 200),
+          now,
+        );
+        // 第1話のみ既読化
+        await chapterRepo.markChapterRead(seeded.id, 1, true);
+
+        const { result } = renderHook(() => useNovelDetail(seeded.id), {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+          }),
+        });
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        expect(result.current.novel?.cachedChapters).toBe(2);
+        expect(result.current.novel?.totalByteSize).toBe(300);
+
+        act(() => {
+          result.current.openClearCacheDialog();
+        });
+        expect(result.current.isClearCacheDialogOpen).toBe(true);
+
+        let deletedCount = 0;
+        await act(async () => {
+          deletedCount = await result.current.confirmClearCache({
+            onlyRead: true,
+          });
+        });
+
+        expect(deletedCount).toBe(1);
+        expect(result.current.isClearCacheDialogOpen).toBe(false);
+        expect(result.current.isClearingCache).toBe(false);
+        expect(result.current.refreshMessage).toBe(
+          "本文キャッシュを削除しました（1話）",
+        );
+
+        // 即時反映された novel と chapters の検証
+        expect(result.current.novel?.cachedChapters).toBe(1);
+        expect(result.current.novel?.totalByteSize).toBe(200);
+
+        // 第1話は未取得、第2話は取得済みのまま保持
+        expect(result.current.chapters[0].downloadedAt).toBeNull();
+        expect(result.current.chapters[0].isRead).toBe(true); // 既読状態は保持
+        expect(result.current.chapters[1].downloadedAt).not.toBeNull();
+      });
+
+      it("confirmClearCache({ onlyRead: false }) で全話の本文キャッシュが削除され、容量と話一覧が即時反映されること (AC-ND-22, TR-19)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedSampleNovel(novelRepo, 2);
+
+        const now = new Date().toISOString();
+        await chapterRepo.saveChapterBody(
+          seeded.id,
+          1,
+          createDummyContent(1, "<p>第1話本文</p>", 100),
+          now,
+        );
+        await chapterRepo.saveChapterBody(
+          seeded.id,
+          2,
+          createDummyContent(2, "<p>第2話本文</p>", 200),
+          now,
+        );
+
+        const { result } = renderHook(() => useNovelDetail(seeded.id), {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+          }),
+        });
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        expect(result.current.novel?.cachedChapters).toBe(2);
+
+        act(() => {
+          result.current.openClearCacheDialog();
+        });
+
+        let deletedCount = 0;
+        await act(async () => {
+          deletedCount = await result.current.confirmClearCache({
+            onlyRead: false,
+          });
+        });
+
+        expect(deletedCount).toBe(2);
+        expect(result.current.isClearCacheDialogOpen).toBe(false);
+        expect(result.current.isClearingCache).toBe(false);
+        expect(result.current.refreshMessage).toBe(
+          "本文キャッシュを削除しました（2話）",
+        );
+
+        expect(result.current.novel?.cachedChapters).toBe(0);
+        expect(result.current.novel?.totalByteSize).toBe(0);
+        expect(result.current.chapters[0].downloadedAt).toBeNull();
+        expect(result.current.chapters[1].downloadedAt).toBeNull();
+      });
+
+      it("confirmClearCache 失敗時（deleteCachedBodies で例外）はダイアログを開いたまま error がセットされること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedSampleNovel(novelRepo, 2);
+
+        // deleteCachedBodies が例外を投げるようにモック化
+        vi.spyOn(chapterRepo, "deleteCachedBodies").mockRejectedValueOnce(
+          new Error("DB書き込み失敗"),
+        );
+
+        const { result } = renderHook(() => useNovelDetail(seeded.id), {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+          }),
+        });
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        act(() => {
+          result.current.openClearCacheDialog();
+        });
+        expect(result.current.isClearCacheDialogOpen).toBe(true);
+
+        let deletedCount = -1;
+        await act(async () => {
+          deletedCount = await result.current.confirmClearCache({
+            onlyRead: false,
+          });
+        });
+
+        expect(deletedCount).toBe(0);
+        // ダイアログは閉じない
+        expect(result.current.isClearCacheDialogOpen).toBe(true);
+        expect(result.current.isClearingCache).toBe(false);
+        expect(result.current.error).toBe("DB書き込み失敗");
+      });
+
+      it("confirmClearCache 失敗時、非Error例外がスローされた場合は DEFAULT_CLEAR_CACHE_ERROR_MESSAGE がセットされること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedSampleNovel(novelRepo, 2);
+
+        vi.spyOn(chapterRepo, "deleteCachedBodies").mockRejectedValueOnce(
+          "文字列エラー",
+        );
+
+        const { result } = renderHook(() => useNovelDetail(seeded.id), {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+          }),
+        });
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        act(() => {
+          result.current.openClearCacheDialog();
+        });
+
+        await act(async () => {
+          await result.current.confirmClearCache({ onlyRead: true });
+        });
+
+        expect(result.current.error).toBe(DEFAULT_CLEAR_CACHE_ERROR_MESSAGE);
+      });
+
+      it("キャッシュ削除実行中の closeClearCacheDialog や他の非同期処理（refreshToc, startBatchCache, confirmDeleteNovel, confirmClearCache）が相互にガードされること", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedSampleNovel(novelRepo, 2);
+
+        let resolveDelete!: (count: number) => void;
+        vi.spyOn(chapterRepo, "deleteCachedBodies").mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveDelete = resolve;
+            }),
+        );
+
+        const { result } = renderHook(() => useNovelDetail(seeded.id), {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+          }),
+        });
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        act(() => {
+          result.current.openClearCacheDialog();
+        });
+
+        let clearPromise: Promise<number>;
+        act(() => {
+          clearPromise = result.current.confirmClearCache({ onlyRead: false });
+        });
+
+        expect(result.current.isClearingCache).toBe(true);
+
+        // 削除中は closeClearCacheDialog を呼んでもダイアログは閉じない
+        act(() => {
+          result.current.closeClearCacheDialog();
+        });
+        expect(result.current.isClearCacheDialogOpen).toBe(true);
+
+        // 削除中の confirmClearCache 重複呼び出しはガードされて 0 を返す
+        let secondClear = -1;
+        await act(async () => {
+          secondClear = await result.current.confirmClearCache({
+            onlyRead: true,
+          });
+        });
+        expect(secondClear).toBe(0);
+
+        // 削除中の refreshToc はガードされて false を返す
+        let refreshResult = true;
+        await act(async () => {
+          refreshResult = await result.current.refreshToc();
+        });
+        expect(refreshResult).toBe(false);
+
+        // 削除中の confirmDeleteNovel はガードされて false を返す
+        let deleteResult = true;
+        await act(async () => {
+          deleteResult = await result.current.confirmDeleteNovel();
+        });
+        expect(deleteResult).toBe(false);
+
+        // 削除を完了させる
+        await act(async () => {
+          resolveDelete(2);
+          await clearPromise;
+        });
+
+        expect(result.current.isClearingCache).toBe(false);
+        expect(result.current.isClearCacheDialogOpen).toBe(false);
+      });
+
+      it("目次更新中（isRefreshing === true）や作品削除中（isDeleting === true）は confirmClearCache がガードされ 0 を返すこと", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedSampleNovel(novelRepo, 2);
+
+        let resolveRefresh!: () => void;
+        const httpClient = new MockHttpClient();
+        httpClient.setResponse(
+          /kakuyomu\.jp\/works\/1177354054881162325$/,
+          () =>
+            new Promise((resolve) => {
+              resolveRefresh = () =>
+                resolve({
+                  status: 200,
+                  headers: {},
+                  html: workIndexHtml,
+                });
+            }),
+        );
+
+        const { result } = renderHook(() => useNovelDetail(seeded.id), {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+            httpClient,
+          }),
+        });
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        let refreshPromise: Promise<boolean>;
+        act(() => {
+          refreshPromise = result.current.refreshToc();
+        });
+
+        expect(result.current.isRefreshing).toBe(true);
+
+        // 更新中は confirmClearCache がガードされる
+        let clearResult = -1;
+        await act(async () => {
+          clearResult = await result.current.confirmClearCache({
+            onlyRead: false,
+          });
+        });
+        expect(clearResult).toBe(0);
+
+        await act(async () => {
+          resolveRefresh();
+          await refreshPromise;
+        });
+
+        expect(result.current.isRefreshing).toBe(false);
       });
     });
   });

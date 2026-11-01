@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { NovelDetailHeader } from "./NovelDetailHeader";
 import { EpisodeList } from "./EpisodeList";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
+import { ClearCacheConfirmDialog } from "./ClearCacheConfirmDialog";
 import type { NovelDetailPageProps } from "../types";
 
 export type { NovelDetailPageProps } from "../types";
@@ -11,6 +12,8 @@ export type { NovelDetailPageProps } from "../types";
  *
  * ローディング、未検出作品（Not Found）、および通常表示（固定ヘッダー＋内部スクロール目次リスト＋削除ダイアログ）の排他描画を制御する。
  */
+const noop = () => {};
+
 export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
   novel,
   chapters,
@@ -21,6 +24,8 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
   isAllCached,
   isDeleteDialogOpen,
   isDeleting,
+  isClearCacheDialogOpen = false,
+  isClearingCache = false,
   refreshMessage,
   error,
   onBackToBookshelf,
@@ -33,6 +38,9 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
   onOpenDeleteDialog,
   onCloseDeleteDialog,
   onConfirmDelete,
+  onOpenClearCacheDialog,
+  onCloseClearCacheDialog = noop,
+  onConfirmClearCache = noop,
 }) => {
   const episodeContainerRef = useRef<HTMLElement | null>(null);
   const scrolledNovelIdRef = useRef<string | null>(null);
@@ -128,6 +136,7 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
               onStartBatchCache={onStartBatchCache}
               onCancelBatchCache={onCancelBatchCache}
               onOpenDeleteDialog={onOpenDeleteDialog}
+              onOpenClearCacheDialog={onOpenClearCacheDialog}
             />
           </div>
 
@@ -151,6 +160,14 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
             isDeleting={isDeleting}
             onClose={onCloseDeleteDialog}
             onConfirm={onConfirmDelete}
+          />
+
+          <ClearCacheConfirmDialog
+            isOpen={isClearCacheDialogOpen}
+            novelTitle={novel.title}
+            isClearing={isClearingCache}
+            onClose={onCloseClearCacheDialog}
+            onConfirm={onConfirmClearCache}
           />
         </>
       )}

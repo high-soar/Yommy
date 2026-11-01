@@ -40,6 +40,7 @@ const meta: Meta<typeof NovelDetailHeader> = {
     onStartBatchCache: fn(),
     onCancelBatchCache: fn(),
     onOpenDeleteDialog: fn(),
+    onOpenClearCacheDialog: fn(),
   },
 };
 

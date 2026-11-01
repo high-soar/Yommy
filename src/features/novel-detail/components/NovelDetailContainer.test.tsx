@@ -835,5 +835,62 @@ describe("NovelDetailContainer", () => {
         ).toBe(true);
       });
     });
+
+    it("本文キャッシュ整理ボタンからダイアログを開き削除を実行した際、deleteCachedBodies が呼び出され完了通知が表示されること (AC-ND-21, AC-ND-22, TR-19)", async () => {
+      const user = userEvent.setup();
+      const deleteCachedBodiesMock = vi.fn().mockResolvedValue(1);
+      const mockChapterRepo: ChapterRepository = {
+        ...createMockChapterRepo(sampleChapters),
+        deleteCachedBodies: deleteCachedBodiesMock,
+      };
+
+      render(
+        <RouterProvider
+          initialPath={`/novels/${encodeURIComponent(sampleNovel.id)}`}
+        >
+          <RouteObserverWrapper
+            novelId={sampleNovel.id}
+            novelRepository={createMockNovelRepo(sampleNovel)}
+            chapterRepository={mockChapterRepo}
+          />
+        </RouterProvider>,
+      );
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("open-clear-cache-dialog-button"),
+        ).toBeInTheDocument();
+      });
+
+      // 本文キャッシュ整理ダイアログを開く
+      await user.click(screen.getByTestId("open-clear-cache-dialog-button"));
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("clear-cache-confirm-dialog"),
+        ).toBeInTheDocument();
+      });
+
+      // 既読話の本文キャッシュのみ削除を実行
+      await user.click(screen.getByTestId("confirm-clear-read-cache-button"));
+
+      await waitFor(() => {
+        expect(deleteCachedBodiesMock).toHaveBeenCalledWith(sampleNovel.id, {
+          onlyRead: true,
+        });
+      });
+
+      // ダイアログが閉じ、完了通知が表示されること
+      await waitFor(() => {
+        expect(
+          screen.queryByTestId("clear-cache-confirm-dialog"),
+        ).not.toBeInTheDocument();
+        expect(screen.getByTestId("novel-detail-notice")).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId("novel-detail-notice")).toHaveTextContent(
+        "本文キャッシュを削除しました（1話）",
+      );
+    });
   });
 });

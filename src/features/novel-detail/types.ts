@@ -13,6 +13,8 @@ export interface UseNovelDetailResult {
   isAllCached: boolean;
   isDeleteDialogOpen: boolean;
   isDeleting: boolean;
+  isClearCacheDialogOpen: boolean;
+  isClearingCache: boolean;
   refreshMessage: string | null;
   error: string | null;
   refreshToc: () => Promise<boolean>;
@@ -21,6 +23,9 @@ export interface UseNovelDetailResult {
   openDeleteDialog: () => void;
   closeDeleteDialog: () => void;
   confirmDeleteNovel: () => Promise<boolean>;
+  openClearCacheDialog: () => void;
+  closeClearCacheDialog: () => void;
+  confirmClearCache: (options: { onlyRead: boolean }) => Promise<number>;
   reloadDetail: () => Promise<void>;
 }
 
@@ -41,6 +46,7 @@ export interface NovelDetailHeaderProps {
   onStartBatchCache: () => void | Promise<void>;
   onCancelBatchCache: () => void;
   onOpenDeleteDialog: () => void;
+  onOpenClearCacheDialog?: () => void;
 }
 
 /**
@@ -73,6 +79,17 @@ export interface DeleteConfirmDialogProps {
 }
 
 /**
+ * 本文キャッシュ削除確認ダイアログコンポーネント（ClearCacheConfirmDialog）Props
+ */
+export interface ClearCacheConfirmDialogProps {
+  isOpen: boolean;
+  novelTitle: string;
+  isClearing: boolean;
+  onClose: () => void;
+  onConfirm: (options: { onlyRead: boolean }) => void | Promise<void | number>;
+}
+
+/**
  * 作品詳細・目次画面 Presentational コンポーネント（NovelDetailPage）Props
  */
 export interface NovelDetailPageProps {
@@ -85,6 +102,8 @@ export interface NovelDetailPageProps {
   isAllCached: boolean;
   isDeleteDialogOpen: boolean;
   isDeleting: boolean;
+  isClearCacheDialogOpen?: boolean;
+  isClearingCache?: boolean;
   refreshMessage?: string | null;
   error?: string | null;
   onBackToBookshelf: () => void;
@@ -97,6 +116,11 @@ export interface NovelDetailPageProps {
   onOpenDeleteDialog: () => void;
   onCloseDeleteDialog: () => void;
   onConfirmDelete: () => void | Promise<void>;
+  onOpenClearCacheDialog?: () => void;
+  onCloseClearCacheDialog?: () => void;
+  onConfirmClearCache?: (options: {
+    onlyRead: boolean;
+  }) => void | Promise<void | number>;
 }
 
 /**

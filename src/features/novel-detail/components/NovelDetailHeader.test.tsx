@@ -55,7 +55,7 @@ describe("NovelDetailHeader", () => {
         "小野崎",
       );
       expect(screen.getByTestId("novel-detail-stats")).toHaveTextContent(
-        "全 45 話（取得済み 12 話）",
+        "全 45 話（取得済み 12 話 / 100.0 KB）",
       );
 
       const synopsis = screen.getByTestId("novel-detail-synopsis");
@@ -478,6 +478,121 @@ describe("NovelDetailHeader", () => {
         expect(screen.getByTestId("batch-cache-progress")).toHaveTextContent(
           "キャッシュ中...",
         );
+      });
+    });
+
+    describe("キャッシュ容量表示と本文キャッシュ整理ボタン制御 (AC-ND-20, AC-ND-21, TR-19)", () => {
+      it("キャッシュ容量が formatByteSize により正しくフォーマット表示されること (AC-ND-20)", () => {
+        const { rerender } = render(
+          <NovelDetailHeader
+            {...defaultProps}
+            novel={{
+              ...sampleNovel,
+              totalChapters: 10,
+              cachedChapters: 3,
+              totalByteSize: 1048576, // 1.0 MB
+            }}
+          />,
+        );
+
+        expect(screen.getByTestId("novel-detail-stats")).toHaveTextContent(
+          "全 10 話（取得済み 3 話 / 1.0 MB）",
+        );
+
+        rerender(
+          <NovelDetailHeader
+            {...defaultProps}
+            novel={{
+              ...sampleNovel,
+              totalChapters: 5,
+              cachedChapters: 0,
+              totalByteSize: 0,
+            }}
+          />,
+        );
+
+        expect(screen.getByTestId("novel-detail-stats")).toHaveTextContent(
+          "全 5 話（取得済み 0 話 / 0 B）",
+        );
+      });
+
+      it("キャッシュ取得済み（cachedChapters > 0）かつ非実行中のとき、本文キャッシュ整理ボタンが活性化し、クリックで onOpenClearCacheDialog が呼ばれること (AC-ND-21, TR-19)", async () => {
+        const user = userEvent.setup();
+        const onOpenClearCacheDialog = vi.fn();
+
+        render(
+          <NovelDetailHeader
+            {...defaultProps}
+            novel={{
+              ...sampleNovel,
+              cachedChapters: 5,
+            }}
+            onOpenClearCacheDialog={onOpenClearCacheDialog}
+          />,
+        );
+
+        const clearCacheButton = screen.getByTestId(
+          "open-clear-cache-dialog-button",
+        );
+        expect(clearCacheButton).toBeInTheDocument();
+        expect(clearCacheButton).not.toBeDisabled();
+        expect(clearCacheButton).toHaveTextContent("本文キャッシュ整理");
+
+        await user.click(clearCacheButton);
+        expect(onOpenClearCacheDialog).toHaveBeenCalledTimes(1);
+      });
+
+      it("cachedChapters === 0 のとき本文キャッシュ整理ボタンが disabled であること (AC-ND-21)", () => {
+        render(
+          <NovelDetailHeader
+            {...defaultProps}
+            novel={{
+              ...sampleNovel,
+              cachedChapters: 0,
+            }}
+          />,
+        );
+
+        const clearCacheButton = screen.getByTestId(
+          "open-clear-cache-dialog-button",
+        );
+        expect(clearCacheButton).toBeDisabled();
+      });
+
+      it("目次更新中（isRefreshing === true）のとき本文キャッシュ整理ボタンが disabled であること (AC-ND-21)", () => {
+        render(
+          <NovelDetailHeader
+            {...defaultProps}
+            novel={{
+              ...sampleNovel,
+              cachedChapters: 5,
+            }}
+            isRefreshing={true}
+          />,
+        );
+
+        const clearCacheButton = screen.getByTestId(
+          "open-clear-cache-dialog-button",
+        );
+        expect(clearCacheButton).toBeDisabled();
+      });
+
+      it("一括キャッシュ中（isBatchCaching === true）のとき本文キャッシュ整理ボタンが disabled であること (AC-ND-21)", () => {
+        render(
+          <NovelDetailHeader
+            {...defaultProps}
+            novel={{
+              ...sampleNovel,
+              cachedChapters: 5,
+            }}
+            isBatchCaching={true}
+          />,
+        );
+
+        const clearCacheButton = screen.getByTestId(
+          "open-clear-cache-dialog-button",
+        );
+        expect(clearCacheButton).toBeDisabled();
       });
     });
   });
