@@ -1,5 +1,9 @@
 import React, { useMemo } from "react";
-import type { WritingMode, ReaderTheme } from "../../../storage/types";
+import type {
+  WritingMode,
+  ReaderTheme,
+  ReaderFontFamily,
+} from "../../../storage/types";
 import { sanitizeChapterHtml } from "../../../parsers/sanitizer";
 
 export interface SampleTextPreviewProps {
@@ -11,6 +15,10 @@ export interface SampleTextPreviewProps {
   fontSizePx: number;
   /** 行間倍率 */
   lineHeight: number;
+  /** フォント種別（5種、v0.5 Issue #169） */
+  fontFamily?: ReaderFontFamily;
+  /** 画面余白 (px)（8〜48px、v0.5 Issue #169） */
+  pageMarginPx?: number;
   /** 追加の CSS クラス（任意） */
   className?: string;
 }
