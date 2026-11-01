@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./SampleTextPreview.stories";
 import { SampleTextPreview } from "./SampleTextPreview";
+import { FONT_FAMILY_STACKS } from "../../../shared/constants/typography";
 
 const {
   VerticalLight,
@@ -11,6 +12,12 @@ const {
   VerticalBlack,
   HorizontalLight,
   CustomTypography,
+  FontMincho,
+  FontGothic,
+  FontBizUdGothic,
+  FontKlee,
+  MarginMin,
+  MarginMax,
 } = composeStories(stories);
 
 describe("SampleTextPreview", () => {
@@ -24,21 +31,22 @@ describe("SampleTextPreview", () => {
       expect(preview).toHaveAttribute("data-theme", "light");
       expect(preview).toHaveAttribute("data-font-size", "18");
       expect(preview).toHaveAttribute("data-line-height", "1.8");
+      expect(preview).toHaveAttribute("data-font-family", "biz-ud-mincho");
+      expect(preview).toHaveAttribute("data-page-margin", "20");
 
-      // 共通・外枠スタイル
+      // 共通・外枠スタイル（ハードコード p-4/p-6, font-serif は廃止され動的スタイル化）
       expect(preview).toHaveClass(
         "rounded-xl",
         "border",
         "shadow-xs",
         "h-64",
         "w-full",
-        "p-4",
-        "md:p-6",
-        "font-serif",
         "transition-colors",
         "duration-200",
         "select-none",
       );
+      expect(preview).not.toHaveClass("font-serif");
+      expect(preview).not.toHaveClass("p-4");
 
       // 縦書きスタイル
       expect(preview).toHaveClass(
@@ -55,10 +63,12 @@ describe("SampleTextPreview", () => {
         "border-slate-200",
       );
 
-      // インラインスタイル
+      // インラインスタイル（CSSフォントスタックおよび画面余白パディング）
       expect(preview).toHaveStyle({
         fontSize: "18px",
         lineHeight: "1.8",
+        fontFamily: FONT_FAMILY_STACKS["biz-ud-mincho"],
+        padding: "20px",
       });
 
       // 内部コンテンツのルビ・傍点
@@ -141,9 +151,87 @@ describe("SampleTextPreview", () => {
         lineHeight: "2.2",
       });
     });
+
+    it("FontMincho: 明朝体（標準）フォントスタックが適用されること (AC-ST-02, AC-ST-17)", () => {
+      render(<FontMincho />);
+      const preview = screen.getByTestId("sample-text-preview");
+
+      expect(preview).toHaveAttribute("data-font-family", "mincho");
+      expect(preview).toHaveStyle({
+        fontFamily: FONT_FAMILY_STACKS.mincho,
+      });
+    });
+
+    it("FontGothic: ゴシック体（標準）フォントスタックが適用されること (AC-ST-02, AC-ST-17)", () => {
+      render(<FontGothic />);
+      const preview = screen.getByTestId("sample-text-preview");
+
+      expect(preview).toHaveAttribute("data-font-family", "gothic");
+      expect(preview).toHaveStyle({
+        fontFamily: FONT_FAMILY_STACKS.gothic,
+      });
+    });
+
+    it("FontBizUdGothic: UDゴシックフォントスタックが適用されること (AC-ST-02, AC-ST-17)", () => {
+      render(<FontBizUdGothic />);
+      const preview = screen.getByTestId("sample-text-preview");
+
+      expect(preview).toHaveAttribute("data-font-family", "biz-ud-gothic");
+      expect(preview).toHaveStyle({
+        fontFamily: FONT_FAMILY_STACKS["biz-ud-gothic"],
+      });
+    });
+
+    it("FontKlee: 教科書体（Klee）フォントスタックが適用されること (AC-ST-02, AC-ST-17)", () => {
+      render(<FontKlee />);
+      const preview = screen.getByTestId("sample-text-preview");
+
+      expect(preview).toHaveAttribute("data-font-family", "klee");
+      expect(preview).toHaveStyle({
+        fontFamily: FONT_FAMILY_STACKS.klee,
+      });
+    });
+
+    it("MarginMin: 最小余白（8px）が padding および属性に反映されること (AC-ST-02, AC-ST-18)", () => {
+      render(<MarginMin />);
+      const preview = screen.getByTestId("sample-text-preview");
+
+      expect(preview).toHaveAttribute("data-page-margin", "8");
+      expect(preview).toHaveStyle({
+        padding: "8px",
+      });
+    });
+
+    it("MarginMax: 最大余白（48px）が padding および属性に反映されること (AC-ST-02, AC-ST-18)", () => {
+      render(<MarginMax />);
+      const preview = screen.getByTestId("sample-text-preview");
+
+      expect(preview).toHaveAttribute("data-page-margin", "48");
+      expect(preview).toHaveStyle({
+        padding: "48px",
+      });
+    });
   });
 
   describe("直接 Props レンダリングとエッジケース検証", () => {
+    it("fontFamily および pageMarginPx 省略時に既定値（'biz-ud-mincho', 20）が適用されること (AC-ST-02)", () => {
+      render(
+        <SampleTextPreview
+          writingMode="vertical-rl"
+          theme="light"
+          fontSizePx={18}
+          lineHeight={1.8}
+        />,
+      );
+      const preview = screen.getByTestId("sample-text-preview");
+      expect(preview).toHaveAttribute("data-font-family", "biz-ud-mincho");
+      expect(preview).toHaveAttribute("data-page-margin", "20");
+      expect(preview).toHaveStyle({
+        fontFamily: FONT_FAMILY_STACKS["biz-ud-mincho"],
+        padding: "20px",
+      });
+    });
+
     it("className が指定された場合、既存スタイルと正しくマージされること", () => {
       render(
         <SampleTextPreview
