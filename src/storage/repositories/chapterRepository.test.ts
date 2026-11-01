@@ -538,5 +538,31 @@ describe("SqlChapterRepository", () => {
       expect(summary.totalCachedChapters).toBe(0);
       expect(summary.totalByteSize).toBe(0);
     });
+
+    it("空の options オブジェクト ({}) を渡した場合も全キャッシュが削除されること", async () => {
+      const deletedCount = await chapterRepo.deleteAllCachedBodies({});
+      expect(deletedCount).toBe(4);
+
+      const summary = await chapterRepo.getStorageCacheSummary();
+      expect(summary.totalCachedChapters).toBe(0);
+      expect(summary.totalByteSize).toBe(0);
+    });
+
+    it("onlyRead: true 指定時に全キャッシュ話が未読の場合、削除対象0件となり未読キャッシュが保持されること", async () => {
+      // 既読フラグをすべて false に更新
+      await chapterRepo.markChapterRead(novelId, 1, false);
+      await chapterRepo.markChapterRead(novelId, 2, false);
+      await chapterRepo.markChapterRead(secondNovelId, 1, false);
+
+      const deletedCount = await chapterRepo.deleteAllCachedBodies({
+        onlyRead: true,
+      });
+      expect(deletedCount).toBe(0);
+
+      // キャッシュ話数・容量が一切変わらないことを確認
+      const summary = await chapterRepo.getStorageCacheSummary();
+      expect(summary.totalCachedChapters).toBe(4);
+      expect(summary.totalByteSize).toBe(1100);
+    });
   });
 });

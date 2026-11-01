@@ -172,8 +172,8 @@ export class SqlChapterRepository implements ChapterRepository {
 
     const row = rows[0];
     return {
-      totalCachedChapters: row?.total_cached_chapters ?? 0,
-      totalByteSize: row?.total_byte_size ?? 0,
+      totalCachedChapters: row.total_cached_chapters,
+      totalByteSize: row.total_byte_size,
     };
   }
 
@@ -188,7 +188,7 @@ export class SqlChapterRepository implements ChapterRepository {
       const countRows = await this.db.query<{ count: number }>(
         `SELECT COUNT(*) AS count FROM chapters WHERE ${condition};`,
       );
-      const count = countRows[0]?.count ?? 0;
+      const count = countRows[0].count;
       if (count === 0) {
         return 0;
       }
