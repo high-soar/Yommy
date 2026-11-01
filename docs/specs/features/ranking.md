@@ -3,7 +3,7 @@ type: spec-feature
 title: "ランキング画面仕様書（SCR-07: Novel Ranking）"
 description: "複数小説サイト（v0.3はカクヨム）のランキング一覧（期間×総合/主要ジャンル）、順位バッジ表示、作品カード一覧およびその場での本棚追加を提供するランキング画面（SCR-07）の正本仕様。"
 status: Approved
-updated: "2026-10-31"
+updated: "2026-11-01"
 tags:
   - ranking
   - scr-07
@@ -50,7 +50,7 @@ related_tests:
   - `TR-01`（下部タブバーによる 4 画面「本棚 `/`」「検索 `/search`」「ランキング `/ranking`」「設定 `/settings`」相互切替）
   - `TR-12`（ランキング画面上での OS バックキー操作によるホーム「本棚 `SCR-01` `/`」への復帰）
   - `TR-14`（ランキング結果カード本体タップによる作品詳細・目次画面 `SCR-02` `/novels/:novelId` への遷移）
-- **対象外スコープ（Milestone `v0.4` 以降）**:
+- **対象外スコープ（Milestone `v0.5〜`）**:
   - 小説家になろう（`narou`）のランキング実装
   - 短編ランキング（`work_variation=short`）への明示的切替UI（v0.3 ではカクヨム標準の長編 `long` 固定）
 

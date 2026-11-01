@@ -3,7 +3,7 @@ type: spec-feature
 title: "作品詳細・目次画面仕様書（SCR-02: Novel Detail & TOC）"
 description: 登録済み作品のヘッダー情報・あらすじ表示、章見出し付きエピソード一覧（キャッシュ済み・既読・しおり状態）、目次更新（再取得）、作品削除、およびリーダー画面への閲覧遷移を提供する作品詳細・目次画面（SCR-02）の正本仕様。
 status: Approved
-updated: "2026-10-31"
+updated: "2026-11-01"
 tags:
   [
     novel-detail,
@@ -50,6 +50,7 @@ related_tests:
   - test/it/scenarios/scn02-search-ranking-discovery.spec.ts
   - test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts
   - test/it/scenarios/scn04-prefetch-and-cache.spec.ts
+  - test/it/scenarios/scn05-cloud-sync.spec.ts
 ---
 
 # 作品詳細・目次画面仕様書（SCR-02）

@@ -3,7 +3,7 @@ type: spec-feature
 title: "本棚画面仕様書（SCR-01: Bookshelf）"
 description: "登録済み小説カード一覧の表示、しおり位置からのワンタップ読書再開、および検索・ランキング画面への誘導を提供する本棚画面（SCR-01）の正本仕様。"
 status: Approved
-updated: "2026-10-31"
+updated: "2026-11-01"
 tags:
   - bookshelf
   - scr-01
@@ -43,6 +43,7 @@ related_tests:
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
   - test/it/scenarios/scn02-search-ranking-discovery.spec.ts
   - test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts
+  - test/it/scenarios/scn05-cloud-sync.spec.ts
 ---
 
 # 本棚画面仕様書（SCR-01）
@@ -78,7 +79,7 @@ related_tests:
   - `TR-15`（空状態からの検索画面 `SCR-06` またはランキング画面 `SCR-07` への遷移）
   - `TR-16`（本棚ソート順切り替え：ヘッダーのセレクター操作による一覧の即時並び替えと永続化）
   - `TR-17`（手動一括更新チェック：ヘッダーの更新ボタン押下による非同期バックグラウンド目次再取得とNEW表示反映）
-- **対象外スコープ（Milestone `v0.4` 以降）**:
+- **対象外スコープ（Milestone `v0.5〜`）**:
   - お気に入りフィルタ機能（`SYS-REQ-04` 拡張）
   - アプリ非起動時（OS ネイティブ WorkManager 等）のバックグラウンドプッシュ通知
 
@@ -280,5 +281,5 @@ export interface UseBookshelfResult {
 | **`AC-BS-09`** | 作品閲覧による「NEW」バッジ解除                 | 「NEW」バッジが表示された作品カード本体タップ（`novel-card-select`、`TR-02`）または「続きから読む」ボタン押下（`novel-card-resume`、`TR-03`）により作品詳細またはリーダーを開いた時点で、対象作品の `has_new_update` が解除（0）され、バッジが消去されること。                                     | `SYS-REQ-04` / `TR-02`, `TR-03`                |
 | **`AC-BS-10`** | 自動更新チェックと手動一括更新                  | 本棚表示時に前回更新確認から1時間以上経過した作品を対象に、ウェイト間隔（1秒）付きでバックグラウンド順次更新チェックが実行されること。またヘッダーの更新ボタン（`bookshelf-refresh-button`）から全作品の更新チェックを手動で即時トリガーでき、進行中は進捗が表示されること。                       | `SYS-REQ-04` / `TR-17`                         |
 | **`AC-BS-11`** | 本棚5種ソート切り替えと永続化                   | 本棚ヘッダーのソートセレクター（`bookshelf-sort-select`）から5種類のソート順を切り替えることができ、一覧が即時正しく並び替わり、選択結果が DB に永続化され、アプリ再起動後も同一の並び順が維持されること。                                                                                         | `SYS-REQ-04` / `TR-16`                         |
-| **`AC-BS-12`** | OS バックキー2回押下でのアプリ終了              | 本棚画面での OS バックキー2秒以内2回押下によるアプリ終了および1回目押下時のトースト表示 (TR-13)。                                                                                                                                                                                                  | `SYS-REQ-20` / `TR-13`                         |
+| **`AC-BS-12`** | OS バックキー2回押下でのアプリ終了              | 本棚画面での OS バックキー2秒以内2回押下によるアプリ終了および1回目押下時のトースト表示 (TR-13)。                                                                                                                                                                                                  | `SYS-REQ-16` / `TR-13`                         |
 | **`AC-BS-13`** | クラウド同期連携（自動Pull・作品追加/削除Push） | アプリ起動時または5分以上バックグラウンド休止後の復帰時に自動Pullが実行されリモートの変更が本棚へ反映されること。また作品追加または削除時に自動Pushがデバウンス実行され、作品削除時は `deleted_novels` へTombstoneが記録されること。未連携（unlinked）時は Pull/Push をスキップすること（R1-14）。 | `SYS-REQ-06`                                   |

@@ -35,6 +35,7 @@ MK 作業はファイル編集数やテスト・VRT 実行ログが多く、メ�
 2. 作業手順:
    - Red（失敗確認） → Green（最小実装） → Refactor の各ステップで個別にコミット（英語 type + 日本語要約）を刻むこと。
    - `.tsx` を作成・変更する場合は、同階層に `.stories.tsx` と `.test.tsx`（`composeStories` 全件実行＋分岐補完）を 1対1 で作成し、親のテストで子のバリエーションを相乗りしないこと。
+   - 新規設定カラム・DB カラム追加時は、DDL（`schema.ts` ＋ 既存 DB 復元マイグレーション）→ 型定義（`types.ts`）→ Repository → Hook / Container → Page → View → Storybook / UT / IT の全層でプロップス・コールバック・マイグレーションが途切れず伝播しているか確認すること。
    - Green 以降や検証中に不備を見つけた場合は `docs/quality/bug-and-handover-log.md` に記録し、原因分類 `D`（設計不備）の場合は必ず `docs/specs/` も同時修正すること。
 3. 完了前検証:
    - `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run test:coverage`（C0/C1/Functions 100%）を実行し PASS を確認すること。
@@ -53,12 +54,19 @@ MK 作業はファイル編集数やテスト・VRT 実行ログが多く、メ�
 ### Step 1: Red（テスト・Story 先行作成と失敗確認）
 
 - **Parser Layer**: `__fixtures__/*.html` にテスト用 HTML を用意し（現行サイトの初期表示 DOM 件数制限やトグル非表示章、`__NEXT_DATA__` 等の埋め込み JSON データ構造を事前調査し、7話超・複数章構成を含むフィクスチャを用意すること）、`*.test.ts` で抽出期待値（タイトル、目次、`<ruby>`・傍点保持、サニタイズ、異常系）を日本語の `it("... (AC-xx)")` で記述する。
-- **Storage Layer**: `resetTestDb()` で初期化するインメモリ DB を用い、Repository の CRUD・境界値テストを `*.test.ts` に記述する。
+- **Storage Layer**:
+  - `resetTestDb()` で初期化するインメモリ DB を用い、Repository の CRUD・境界値テストを `*.test.ts` に記述する。
+  - **新規設定カラム・DB カラム追加時の全層伝播チェック（原因 `D` 再発防止）**: DDL（`schema.ts` ＋ `ServiceProvider` での既存 DB バイナリ復元時マイグレーション `initializeDatabaseSchema`）→ 型定義（`types.ts`）→ Repository → Hook / Container → Page → View → Storybook / UT / IT の全層でプロップス・コールバック・マイグレーションが途切れず伝播しているか確認すること。
 - **Viewer & Bridge Layer**:
   - `*.stories.tsx` に表示バリエーション（縦書き `vertical-rl`、横書き、ルビ・傍点、各カラーテーマ、Loading/Error/Empty、操作 `play` 関数）を定義する。
   - スクロール・Overflow を伴う表示コンポーネント（特に親 `horizontal-tb` 内で `writing-mode: vertical-rl` となる直交フロー要素）では、`w-full max-w-full` 等の幅制約を明示するとともに、画面外にはみ出す長文データを含めた Story（1280px / 375px 双方で Overflow するケース）を必須とし、VRT と実ブラウザ IT（負の `scrollLeft` 検証）の双方でスクロール可能性を保証する。
   - 非同期永続化を伴う設定やフォームでは、保存失敗時の状態ロールバックおよびエラー通知（`role="alert"`）の Story / UT を必須とする。
   - ルーティング・ナビゲーション機能では、同一ルート再タップ時の重複履歴ガード（no-op 制御）を考慮する。
+  - **Android ネイティブプラグイン ＆ 幾何学的 UI タッチゾーン実装時の検証規律（原因 `D` 再発防止）**:
+    - Capacitor ネイティブプラグイン（Java）では `startActivityForResult` 等の非推奨/非互換シグネチャを避け `ActivityResultContracts.StartIntentSenderForResult` ＋ `saveCall`/`getSavedCall`/`freeSavedCall` を使用し、401 リトライ時は `clearToken` でローカルキャッシュを破棄してから再取得すること。また `ci.yml` の `android-compile` ジョブおよび `scripts/android-build-config.test.ts` で検証すること。
+    - フルスクリーン UI の複数タッチゾーン（左右端ページめくり領域と最下部オーバーレイ起動領域など）は幾何学的に排他配置（例: `left-[20%] right-[20%]`）とし、境界座標タップの単体テストを作成すること。
+  - **React Hooks の非同期タスク直列化・Abort ガード・参照安定性（原因 `A`/`S` 再発防止）**:
+    - エピソード遷移や連続操作で再スケジュールされる非同期処理（先読み `startPrefetch` 等）は、先行 Promise の完了待機（`activePrefetchPromiseRef`）による直列化、`AbortSignal` の下位関数（`fetchAndSaveChapterBody`）への伝播、および HTTP 完了直後・DB 保存直前の `if (signal?.aborted) return` / マウント状態ガードを徹底すること。
   - `*.test.tsx` で `composeStories` による全 Story 実行＋内部ロジック補完テストを記述する。
 - **失敗確認とコミット**: `npx vitest run <対象テスト>` を実行し、未実装により期待通り失敗することを確認して `test(<scope>): ...（Red）` をコミットする。
 
