@@ -644,8 +644,40 @@ export class SyncEngine {
             continue;
           }
         }
-        if (!merged[id]) {
+        const local = merged[id];
+        if (!local) {
           merged[id] = remoteNovel;
+        } else {
+          const localLastRead = local.lastReadAt
+            ? Date.parse(local.lastReadAt)
+            : 0;
+          const remoteLastRead = remoteNovel.lastReadAt
+            ? Date.parse(remoteNovel.lastReadAt)
+            : 0;
+          const isRemoteReadNewer = remoteLastRead > localLastRead;
+          const isRemoteUpdateNewer =
+            Date.parse(remoteNovel.updatedAt) > Date.parse(local.updatedAt);
+
+          merged[id] = {
+            ...local,
+            readChapterIds: Array.from(
+              new Set([...local.readChapterIds, ...remoteNovel.readChapterIds]),
+            ),
+            lastReadAt: isRemoteReadNewer
+              ? remoteNovel.lastReadAt
+              : local.lastReadAt,
+            bookmarkChapterIndex: isRemoteReadNewer
+              ? remoteNovel.bookmarkChapterIndex !== null
+                ? remoteNovel.bookmarkChapterIndex
+                : local.bookmarkChapterIndex
+              : local.bookmarkChapterIndex,
+            updatedAt: isRemoteUpdateNewer
+              ? remoteNovel.updatedAt
+              : local.updatedAt,
+            isFavorite: isRemoteUpdateNewer
+              ? remoteNovel.isFavorite
+              : local.isFavorite,
+          };
         }
       }
     }
@@ -701,14 +733,9 @@ export class SyncEngine {
 
     try {
       let remoteState: YommySyncState | null = null;
-      try {
-        const remoteRaw = await this.deps.bridge.pullFile();
-        if (remoteRaw) {
-          remoteState = validateSyncState(remoteRaw);
-        }
-      } catch (err) {
-        await this.handleUnauthorized(err);
-        throw err;
+      const remoteRaw = await this.deps.bridge.pullFile();
+      if (remoteRaw) {
+        remoteState = validateSyncState(remoteRaw);
       }
 
       const localSyncNovels = await this.buildSyncNovels();
@@ -801,7 +828,10 @@ export class SyncEngine {
   }
 
   cancelDebouncedPush(): void {
-    this.extractPendingHandlers();
+    const { resolve } = this.extractPendingHandlers();
+    if (resolve) {
+      resolve();
+    }
   }
 
   async flushDebouncedPush(): Promise<void> {
