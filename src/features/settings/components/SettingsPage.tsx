@@ -6,6 +6,7 @@ import type {
   ReaderPagingMode,
 } from "../../../storage/types";
 import type { CloudSyncAuthState } from "../../../bridges/cloud-sync/types";
+import type { StorageCacheSummary } from "../hooks/useStorageCache";
 import { SampleTextPreview } from "./SampleTextPreview";
 import { CloudSyncSection } from "./CloudSyncSection";
 import {
@@ -63,6 +64,22 @@ export interface SettingsPageProps {
   onSignOutGoogle?: () => Promise<void>;
   /** 今すぐ同期ボタン押下時のコールバック（v0.4） */
   onSyncNow?: () => Promise<void>;
+  /** 全登録作品合計キャッシュ情報（省略時: { totalCachedChapters: 0, totalByteSize: 0 }、v0.5 Issue #170） */
+  storageCacheSummary?: StorageCacheSummary;
+  /** キャッシュ集計読込中フラグ（v0.5 Issue #170） */
+  isStorageCacheLoading?: boolean;
+  /** キャッシュ削除処理中フラグ（v0.5 Issue #170） */
+  isStorageCacheClearing?: boolean;
+  /** 一括削除完了通知メッセージ（v0.5 Issue #170） */
+  storageCacheNotice?: string | null;
+  /** キャッシュ操作エラーメッセージ（v0.5 Issue #170） */
+  storageCacheError?: string | null;
+  /** 一括削除確認ダイアログの初期表示状態（Storybook / テスト用、v0.5 Issue #170） */
+  initialShowStorageCacheDialog?: boolean;
+  /** 一括削除確定時のコールバック（v0.5 Issue #170） */
+  onClearStorageCache?: (options: {
+    onlyRead: boolean;
+  }) => void | Promise<number>;
   /** エラーメッセージ（省略時: null） */
   error?: string | null;
   /** 追加の CSS クラス（任意） */

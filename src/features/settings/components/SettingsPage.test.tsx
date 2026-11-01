@@ -694,5 +694,69 @@ describe("SettingsPage", () => {
       await user.click(syncBtn);
       expect(onSyncNow).toHaveBeenCalledTimes(1);
     });
+
+    it("ストレージ・キャッシュ管理セクションが統合され、一括削除コールバックが呼び出されること (AC-ST-14〜16)", async () => {
+      const onClearStorageCache = vi.fn().mockResolvedValue(5);
+      const user = userEvent.setup();
+
+      render(
+        <SettingsPage
+          writingMode="vertical-rl"
+          theme="light"
+          storageCacheSummary={{
+            totalCachedChapters: 12,
+            totalByteSize: 1048576,
+          }}
+          storageCacheNotice="本文キャッシュを一括削除しました（5話）"
+          storageCacheError={null}
+          onToggleWritingMode={vi.fn()}
+          onChangeTheme={vi.fn()}
+          onChangeFontSize={vi.fn()}
+          onChangeLineHeight={vi.fn()}
+          onClearStorageCache={onClearStorageCache}
+        />,
+      );
+
+      expect(screen.getByTestId("storage-cache-section")).toBeInTheDocument();
+      expect(screen.getByTestId("storage-cache-summary")).toHaveTextContent(
+        "キャッシュ済み: 全 12 話（合計 1.0 MB）",
+      );
+      expect(screen.getByTestId("storage-cache-notice")).toHaveTextContent(
+        "本文キャッシュを一括削除しました（5話）",
+      );
+
+      const openBtn = screen.getByTestId(
+        "open-global-clear-cache-dialog-button",
+      );
+      await user.click(openBtn);
+
+      const readBtn = screen.getByTestId(
+        "confirm-global-clear-read-cache-button",
+      );
+      await user.click(readBtn);
+
+      expect(onClearStorageCache).toHaveBeenCalledWith({ onlyRead: true });
+    });
+
+    it("storageCacheSummary 省略時にデフォルトのキャッシュ0件表示が適用されること (AC-ST-14)", () => {
+      render(
+        <SettingsPage
+          writingMode="vertical-rl"
+          theme="light"
+          onToggleWritingMode={vi.fn()}
+          onChangeTheme={vi.fn()}
+          onChangeFontSize={vi.fn()}
+          onChangeLineHeight={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByTestId("storage-cache-section")).toBeInTheDocument();
+      expect(screen.getByTestId("storage-cache-summary")).toHaveTextContent(
+        "キャッシュ済み: 全 0 話（合計 0 B）",
+      );
+      expect(
+        screen.getByTestId("open-global-clear-cache-dialog-button"),
+      ).toBeDisabled();
+    });
   });
 });
