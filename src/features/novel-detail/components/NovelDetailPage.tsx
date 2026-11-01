@@ -12,6 +12,8 @@ export type { NovelDetailPageProps } from "../types";
  *
  * ローディング、未検出作品（Not Found）、および通常表示（固定ヘッダー＋内部スクロール目次リスト＋削除ダイアログ）の排他描画を制御する。
  */
+const noop = () => {};
+
 export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
   novel,
   chapters,
@@ -22,8 +24,8 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
   isAllCached,
   isDeleteDialogOpen,
   isDeleting,
-  isClearCacheDialogOpen,
-  isClearingCache,
+  isClearCacheDialogOpen = false,
+  isClearingCache = false,
   refreshMessage,
   error,
   onBackToBookshelf,
@@ -37,8 +39,8 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
   onCloseDeleteDialog,
   onConfirmDelete,
   onOpenClearCacheDialog,
-  onCloseClearCacheDialog,
-  onConfirmClearCache,
+  onCloseClearCacheDialog = noop,
+  onConfirmClearCache = noop,
 }) => {
   const episodeContainerRef = useRef<HTMLElement | null>(null);
   const scrolledNovelIdRef = useRef<string | null>(null);
@@ -161,11 +163,11 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
           />
 
           <ClearCacheConfirmDialog
-            isOpen={Boolean(isClearCacheDialogOpen)}
+            isOpen={isClearCacheDialogOpen}
             novelTitle={novel.title}
-            isClearing={Boolean(isClearingCache)}
-            onClose={onCloseClearCacheDialog ?? (() => {})}
-            onConfirm={onConfirmClearCache ?? (() => {})}
+            isClearing={isClearingCache}
+            onClose={onCloseClearCacheDialog}
+            onConfirm={onConfirmClearCache}
           />
         </>
       )}
