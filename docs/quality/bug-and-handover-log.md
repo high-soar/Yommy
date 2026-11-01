@@ -6,6 +6,7 @@ status: Approved
 updated: "2026-11-01"
 tags: [quality, bug-log, handover, dre, kaizen]
 related_specs:
+  - docs/specs/changes/issue-169-font-and-margin-customization.md
   - docs/specs/changes/issue-168-reader-pagination-and-touch-refinement.md
   - docs/specs/changes/archive/issue-122-reader-page-turning.md
   - docs/specs/changes/archive/issue-123-reader-bottom-overlay-ui-improvement.md
@@ -79,11 +80,12 @@ related_tests: []
 > - Milestone `v0.2` で解決済みの申し送り（`HO-10`〜`HO-13`）: [docs/quality/archive/v0.2-ui-ux-log.md](archive/v0.2-ui-ux-log.md)
 > - Milestone `v0.3` で解決済みの申し送り（`HO-14`, `HO-16`〜`HO-21`）: [docs/quality/archive/v0.3-search-prefetch-log.md](archive/v0.3-search-prefetch-log.md)
 
-|   ID    | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                                        | 解決先（対象 Issue / 成果物）           | 完了ゲート             | 状態 (`Open` / `Resolved`) |
-| :-----: | :---------------: | :-------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------- | :--------------------- | :------------------------: |
-| `HO-15` |        #78        | Android 実機での APK 上書きインストール実証（GitHub Actions 生成 APK を実機へアンインストールなしで上書きアップデートできることの検証）                   | Issue #168 実機検証にて確認完了（v0.5） | 実機インストール確認時 |         `Resolved`         |
-| `HO-22` |       #120        | Google Drive appDataFolder クラウド同期の Android 実機 / Google Play 開発者サービス環境での OAuth 認可フローおよび `AuthorizationClient` 連携の実機検証   | Issue #168 実機検証にて確認完了（v0.5） | 実機インストール確認時 |         `Resolved`         |
-| `HO-23` |       #122        | リーダー縦書きページめくりにおける Android 実機（90Hz/120Hz）でのタッチイベント・スワイプリアルタイム指追従パフォーマンスおよびラバーバンド描画負荷の検証 | Issue #168（v0.5抜本修正・実機確認）    | 実機インストール確認時 |           `Open`           |
+|   ID    | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                                                        | 解決先（対象 Issue / 成果物）           | 完了ゲート             | 状態 (`Open` / `Resolved`) |
+| :-----: | :---------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :-------------------------------------- | :--------------------- | :------------------------: |
+| `HO-15` |        #78        | Android 実機での APK 上書きインストール実証（GitHub Actions 生成 APK を実機へアンインストールなしで上書きアップデートできることの検証）                                   | Issue #168 実機検証にて確認完了（v0.5） | 実機インストール確認時 |         `Resolved`         |
+| `HO-22` |       #120        | Google Drive appDataFolder クラウド同期の Android 実機 / Google Play 開発者サービス環境での OAuth 認可フローおよび `AuthorizationClient` 連携の実機検証                   | Issue #168 実機検証にて確認完了（v0.5） | 実機インストール確認時 |         `Resolved`         |
+| `HO-23` |       #122        | リーダー縦書きページめくりにおける Android 実機（90Hz/120Hz）でのタッチイベント・スワイプリアルタイム指追従パフォーマンスおよびラバーバンド描画負荷の検証                 | Issue #168（v0.5抜本修正・実機確認）    | 実機インストール確認時 |           `Open`           |
+| `HO-24` |       #169        | Android 実機環境におけるフォント種別（明朝/ゴシック/UD明朝/UDゴシック/Klee教科書体）のフォールバック表示および画面余白（8〜48px）変更時の文字切れ・折り返し描画の実機確認 | Issue #169（v0.5実装・実機確認）        | 実機インストール確認時 |           `Open`           |
 
 ---
 

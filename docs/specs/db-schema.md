@@ -2,7 +2,7 @@
 type: spec-db-schema
 title: ローカル DB スキーマ定義（App 全体正本）
 description: SQLite（novels, chapters, download_queue, reader_settings, app_settings）のER図、テーブル構造、およびDDL定義の正本。
-status: "Review (#168)"
+status: "Review (#169)"
 updated: "2026-11-01"
 tags:
   [
@@ -18,9 +18,13 @@ tags:
     tombstone,
     paging,
     pagination,
+    font-family,
+    page-margin,
     ho-23,
+    ho-24,
   ]
 related_specs:
+  - docs/specs/changes/issue-169-font-and-margin-customization.md
   - docs/specs/changes/issue-168-reader-pagination-and-touch-refinement.md
   - docs/specs/changes/archive/issue-122-reader-page-turning.md
   - docs/specs/changes/archive/issue-120-cloud-sync-google-drive.md
@@ -252,6 +256,12 @@ INSERT OR IGNORE INTO reader_settings (
   1, 'vertical-rl', 'light', 'biz-ud-mincho', 18, 1.8, 20, 1, 0, 'auto', '2026-01-01T00:00:00.000Z'
 );
 ```
+
+> [!NOTE]
+> **`font_family` / `page_margin_px` の UI 操作・組版動的反映（`v0.5` Issue #169）**:
+>
+> - **`font_family`**: `mincho` / `gothic` / `biz-ud-mincho` / `biz-ud-gothic` / `klee`（既定値 `'biz-ud-mincho'`）。設定画面（`SCR-05`）の 5 種ドロップダウンで選択・永続化し、サンプルプレビュー枠およびリーダー画面（`SCR-03`）へ動的反映する。
+> - **`page_margin_px`**: `8 〜 48px`（既定値 `20px`、`4px` 刻み）。設定画面（`SCR-05`）のステッパーボタンで調整・永続化し、サンプルプレビュー枠およびリーダー画面（`SCR-03`）の余白・縦書きマルチカラム組版（段幅・段高・`columnGap`）へ動的反映する。
 
 ### 3.5 `app_settings` テーブル（汎用アプリケーション設定・本棚ソート順）
 
