@@ -335,7 +335,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
 
         setNovel((prev) => {
           const isNewCache = target.downloadedAt === null;
-          const oldSize = target.byteSize ?? 0;
+          const oldSize = target.byteSize;
           return {
             ...prev!,
             cachedChapters: isNewCache
@@ -343,7 +343,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
               : prev!.cachedChapters,
             totalByteSize: Math.max(
               0,
-              (prev!.totalByteSize ?? 0) - oldSize + parsedContent.byteSize,
+              prev!.totalByteSize - oldSize + parsedContent.byteSize,
             ),
             updatedAt: downloadedAt,
           };
