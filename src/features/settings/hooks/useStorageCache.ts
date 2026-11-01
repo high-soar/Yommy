@@ -1,21 +1,39 @@
 import { useCallback, useEffect, useState } from "react";
 import { useServices } from "../../../app/ServiceProvider";
 
+/**
+ * ストレージキャッシュサマリー情報
+ */
 export interface StorageCacheSummary {
+  /** 全登録作品の合計キャッシュ済み話数 */
   totalCachedChapters: number;
+  /** 全登録作品の合計キャッシュバイト容量 */
   totalByteSize: number;
 }
 
+/**
+ * useStorageCache フック戻り値
+ */
 export interface UseStorageCacheResult {
+  /** 全体キャッシュ集計情報 */
   summary: StorageCacheSummary;
+  /** キャッシュ情報読込中フラグ */
   isLoading: boolean;
+  /** キャッシュ一括削除処理中フラグ */
   isClearing: boolean;
+  /** 削除完了通知メッセージ */
   notice: string | null;
+  /** キャッシュ操作エラーメッセージ */
   error: string | null;
+  /** 全体本文キャッシュ一括削除ハンドラー */
   clearCache: (options: { onlyRead: boolean }) => Promise<number>;
+  /** キャッシュサマリー再取得ハンドラー */
   refreshSummary: () => Promise<void>;
 }
 
+/**
+ * 設定画面（SCR-05）におけるアプリ全体キャッシュ集計・一括削除フック
+ */
 export function useStorageCache(): UseStorageCacheResult {
   const { chapterRepository, isReady } = useServices();
 
