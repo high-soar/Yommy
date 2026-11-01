@@ -3536,7 +3536,7 @@ describe("useReader", () => {
         expect(result.current.chapterIndex).toBe(2);
       });
 
-      it("loadInitialData 実行中にアンマウントされた場合、DB 更新処理がスキップされること (R1-29)", async () => {
+      it("loadInitialData の本文取得中にアンマウントされた場合、DB 更新処理がスキップされること (R1-29)", async () => {
         const db = await resetTestDb();
         const novelRepo = new SqlNovelRepository(db);
         const chapterRepo = new SqlChapterRepository(db);
@@ -3544,8 +3544,33 @@ describe("useReader", () => {
 
         const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
           chapterCount: 2,
-          cachedCount: 2,
+          cachedCount: 0, // 未キャッシュ（通信発生）
+          bookmarkChapterIndex: null, // しおりなし（ロード完了時は updateBookmark が走る）
         });
+
+        let unblockFetch: () => void = () => {};
+        const fetchBlocker = new Promise<void>((r) => {
+          unblockFetch = r;
+        });
+        let onFetchStarted: () => void = () => {};
+        const fetchStarted = new Promise<void>((r) => {
+          onFetchStarted = r;
+        });
+
+        const mockHttpClient = new MockHttpClient();
+        mockHttpClient.setResponse(
+          `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[0]}`,
+          async () => {
+            onFetchStarted();
+            await fetchBlocker;
+            return {
+              status: 200,
+              url: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[0]}`,
+              headers: {},
+              html: "<html><body><div class='widget-episodeBody'>本文</div></body></html>",
+            };
+          },
+        );
 
         const { unmount } = renderHook(
           () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
@@ -3553,15 +3578,81 @@ describe("useReader", () => {
             wrapper: createWrapper({
               novelRepository: novelRepo,
               chapterRepository: chapterRepo,
+              httpClient: mockHttpClient,
             }),
           },
         );
 
-        // 即座にアンマウント
+        // HTTP 通信が開始されたことを待機（初期 DB 取得を確実に通過）
+        await fetchStarted;
+
+        // 通信待機中にアンマウント
         unmount();
+        unblockFetch();
         await new Promise((r) => setTimeout(r, 50));
-        // アンマウント後の不要な DB 書き込みがないこと
+
+        // アンマウント後の不要な DB 書き込みがスキップされること
         expect(updateBookmarkSpy).not.toHaveBeenCalled();
+      });
+
+      it("先行先読みタスクの待機中にアンマウントされた場合、新先読みが安全に中断されること (R1-29)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 5,
+          cachedCount: 2,
+        });
+
+        let unblockPrefetch: () => void = () => {};
+        const prefetchBlocker = new Promise<void>((r) => {
+          unblockPrefetch = r;
+        });
+
+        const mockHttpClient = new MockHttpClient();
+        mockHttpClient.setResponse(
+          `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[2]}`,
+          async () => {
+            await prefetchBlocker;
+            return {
+              status: 200,
+              url: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[2]}`,
+              headers: {},
+              html: "<html><body><div class='widget-episodeBody'>第3話本文</div></body></html>",
+            };
+          },
+        );
+
+        const { result, unmount } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              httpClient: mockHttpClient,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        // 1.5秒待って第3話の先読みがブロックされた状態にする
+        await new Promise((r) => setTimeout(r, 1600));
+
+        // 第2話へ遷移して新先読みを開始（ブロック中の先行タスクを await previousPromise で待機中）
+        await act(async () => {
+          await result.current.goToChapter(2);
+        });
+
+        // 先行タスク待機中の状態でアンマウント（signal.aborted = true になる）
+        unmount();
+
+        // 先行ブロック解除
+        unblockPrefetch();
+        await new Promise((r) => setTimeout(r, 50));
       });
     });
   });

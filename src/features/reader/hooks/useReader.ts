@@ -359,11 +359,10 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           if (previousPromise) {
             await previousPromise;
           }
-          if (signal.aborted || !isMountedRef.current) return;
+          if (signal.aborted) return;
 
           // 第 N 話表示完了後、初期インターバル 1.5秒待機
           await delay(PREFETCH_INTERVAL_MS, signal);
-          if (signal.aborted || !isMountedRef.current) return;
 
           const maxChapterIndex = Math.min(
             currentChapterIdx + PREFETCH_COUNT,
@@ -375,8 +374,6 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             targetIdx <= maxChapterIndex;
             targetIdx++
           ) {
-            if (signal.aborted || !isMountedRef.current) return;
-
             const targetChapter = await chapterRepository.getChapter(
               targetNovelId,
               targetIdx,
@@ -480,7 +477,6 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         // 新着更新フラグの自動解除 (AC-RD-11)
         if (targetNovel.hasNewUpdate) {
           await novelRepository.clearNewUpdate(targetNovel.id);
-          if (!isMounted) return;
           targetNovel = {
             ...targetNovel,
             hasNewUpdate: false,
@@ -491,7 +487,6 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           targetNovel.id,
           targetIndex,
         );
-        if (!isMounted) return;
 
         // キャッシュ鮮度・オンデマンド本文取得
         if (targetChapter) {
@@ -500,18 +495,19 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             targetIndex,
             targetChapter,
           );
-          if (!isMounted) return;
           if (resolved) {
             targetChapter = resolved;
             const reloadedNovel = await novelRepository.getNovelById(
               targetNovel.id,
             );
-            if (!isMounted) return;
             if (reloadedNovel) {
               targetNovel = reloadedNovel;
             }
           }
         }
+
+        // R1-29: 初期通信（resolveChapterBody）完了後にアンマウントされていた場合は DB 更新・同期をスキップ
+        if (!isMounted) return;
 
         // 既読自動更新
         if (
@@ -524,7 +520,6 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             targetIndex,
             true,
           );
-          if (!isMounted) return;
           targetChapter = { ...targetChapter, isRead: true };
           if (syncEngine) {
             syncEngine.notifyChanged().catch(() => {});
@@ -539,15 +534,12 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           nextScrollProgress = targetNovel.bookmarkScrollProgress;
         } else {
           await novelRepository.updateBookmark(targetNovel.id, targetIndex, 0);
-          if (!isMounted) return;
           targetNovel = {
             ...targetNovel,
             bookmarkChapterIndex: targetIndex,
             bookmarkScrollProgress: 0,
           };
         }
-
-        if (!isMounted) return;
 
         resetPaginationState(nextInitialProgress, nextScrollProgress);
         setNovel(targetNovel);
