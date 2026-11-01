@@ -212,3 +212,87 @@ export const ScrollLastChapter: Story = {
     onNextChapter: fn(),
   },
 };
+
+/**
+ * UD明朝（既定値）フォント表示（v0.5 Issue #169）
+ */
+export const FontBizUdMincho: Story = {
+  name: "フォント：UD明朝（既定値）",
+  args: {
+    writingMode: "vertical-rl",
+    theme: "light",
+    fontFamily: "biz-ud-mincho",
+  },
+};
+
+/**
+ * 明朝体（標準）フォント表示（v0.5 Issue #169）
+ */
+export const FontMincho: Story = {
+  name: "フォント：明朝体（標準）",
+  args: {
+    writingMode: "vertical-rl",
+    theme: "light",
+    fontFamily: "mincho",
+  },
+};
+
+/**
+ * UDゴシック（BIZ UDGothic）フォント表示（v0.5 Issue #169）
+ */
+export const FontBizUdGothic: Story = {
+  name: "フォント：UDゴシック",
+  args: {
+    writingMode: "vertical-rl",
+    theme: "light",
+    fontFamily: "biz-ud-gothic",
+  },
+};
+
+/**
+ * ゴシック体（標準）フォント表示（v0.5 Issue #169）
+ */
+export const FontGothic: Story = {
+  name: "フォント：ゴシック体（標準）",
+  args: {
+    writingMode: "vertical-rl",
+    theme: "light",
+    fontFamily: "gothic",
+  },
+};
+
+/**
+ * 教科書体（Klee）フォント表示（v0.5 Issue #169）
+ */
+export const FontKlee: Story = {
+  name: "フォント：教科書体（Klee）",
+  args: {
+    writingMode: "vertical-rl",
+    theme: "light",
+    fontFamily: "klee",
+  },
+};
+
+/**
+ * 最小余白（8px）表示（v0.5 Issue #169）
+ */
+export const MarginMin: Story = {
+  name: "画面余白：最小（8px）",
+  args: {
+    writingMode: "vertical-rl",
+    theme: "light",
+    pageMarginPx: 8,
+  },
+};
+
+/**
+ * 最大余白（48px）表示（v0.5 Issue #169）
+ */
+export const MarginMax: Story = {
+  name: "画面余白：最大（48px）",
+  args: {
+    writingMode: "vertical-rl",
+    theme: "light",
+    pageMarginPx: 48,
+  },
+};
