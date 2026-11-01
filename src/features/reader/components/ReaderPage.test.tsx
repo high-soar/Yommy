@@ -21,6 +21,7 @@ const {
   TapBoundaryHintPrev,
   ScrollBoundaryHintNext,
   ScrollBoundaryHintPrev,
+  CustomFontAndMargin,
 } = composeStories(stories);
 
 const sampleNovel: NovelRecord = {
@@ -234,6 +235,13 @@ describe("ReaderPage", () => {
       const hint = screen.getByTestId("reader-episode-boundary-hint");
       expect(hint).toBeInTheDocument();
       expect(hint).toHaveTextContent("もう一度スワイプで前の話へ");
+    });
+
+    it("CustomFontAndMargin ストーリーで指定フォント（klee）と余白（32px）が ReaderView に反映されること (v0.5 Issue #169)", () => {
+      render(<CustomFontAndMargin />);
+      const view = screen.getByTestId("reader-view");
+      expect(view).toHaveAttribute("data-font-family", "klee");
+      expect(view).toHaveAttribute("data-page-margin", "32");
     });
   });
 

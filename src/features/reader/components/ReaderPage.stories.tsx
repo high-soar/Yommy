@@ -268,3 +268,14 @@ export const ScrollBoundaryHintPrev: Story = {
     initialBoundaryHint: "もう一度スワイプで前の話へ",
   },
 };
+
+/**
+ * カスタムフォント・画面余白（教科書体 Klee・余白 32px）表示（v0.5 Issue #169）
+ */
+export const CustomFontAndMargin: Story = {
+  name: "カスタムフォント・余白（Klee / 32px）",
+  args: {
+    fontFamily: "klee",
+    pageMarginPx: 32,
+  },
+};

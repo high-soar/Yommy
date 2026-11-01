@@ -22,6 +22,13 @@ const {
   ScrollWithChapterButtons,
   ScrollFirstChapter,
   ScrollLastChapter,
+  FontBizUdMincho,
+  FontMincho,
+  FontBizUdGothic,
+  FontGothic,
+  FontKlee,
+  MarginMin,
+  MarginMax,
 } = composeStories(stories);
 
 /**
@@ -211,6 +218,63 @@ describe("ReaderView", () => {
       const nextButton = screen.getByTestId("reader-scroll-next-chapter");
       expect(prevButton).not.toBeDisabled();
       expect(nextButton).toBeDisabled();
+    });
+
+    it("FontBizUdMincho ストーリーでUD明朝フォントが適用されること (v0.5 Issue #169)", () => {
+      render(<FontBizUdMincho />);
+      const container = screen.getByTestId("reader-view");
+      expect(container).toHaveAttribute("data-font-family", "biz-ud-mincho");
+      expect(container).toHaveStyle({
+        fontFamily: FONT_FAMILY_STACKS["biz-ud-mincho"],
+      });
+    });
+
+    it("FontMincho ストーリーで標準明朝フォントが適用されること (v0.5 Issue #169)", () => {
+      render(<FontMincho />);
+      const container = screen.getByTestId("reader-view");
+      expect(container).toHaveAttribute("data-font-family", "mincho");
+      expect(container).toHaveStyle({
+        fontFamily: FONT_FAMILY_STACKS.mincho,
+      });
+    });
+
+    it("FontBizUdGothic ストーリーでUDゴシックフォントが適用されること (v0.5 Issue #169)", () => {
+      render(<FontBizUdGothic />);
+      const container = screen.getByTestId("reader-view");
+      expect(container).toHaveAttribute("data-font-family", "biz-ud-gothic");
+      expect(container).toHaveStyle({
+        fontFamily: FONT_FAMILY_STACKS["biz-ud-gothic"],
+      });
+    });
+
+    it("FontGothic ストーリーで標準ゴシックフォントが適用されること (v0.5 Issue #169)", () => {
+      render(<FontGothic />);
+      const container = screen.getByTestId("reader-view");
+      expect(container).toHaveAttribute("data-font-family", "gothic");
+      expect(container).toHaveStyle({
+        fontFamily: FONT_FAMILY_STACKS.gothic,
+      });
+    });
+
+    it("FontKlee ストーリーで教科書体（Klee）フォントが適用されること (v0.5 Issue #169)", () => {
+      render(<FontKlee />);
+      const container = screen.getByTestId("reader-view");
+      expect(container).toHaveAttribute("data-font-family", "klee");
+      expect(container).toHaveStyle({
+        fontFamily: FONT_FAMILY_STACKS.klee,
+      });
+    });
+
+    it("MarginMin ストーリーで最小余白（8px）が適用されること (v0.5 Issue #169)", () => {
+      render(<MarginMin />);
+      const container = screen.getByTestId("reader-view");
+      expect(container).toHaveAttribute("data-page-margin", "8");
+    });
+
+    it("MarginMax ストーリーで最大余白（48px）が適用されること (v0.5 Issue #169)", () => {
+      render(<MarginMax />);
+      const container = screen.getByTestId("reader-view");
+      expect(container).toHaveAttribute("data-page-margin", "48");
     });
   });
 
