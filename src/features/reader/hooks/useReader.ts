@@ -254,6 +254,9 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         timeoutMs,
         signal,
       });
+      if (signal?.aborted) {
+        return null;
+      }
       if (chapterRes.status >= 400) {
         throw new Error(
           `エピソードの取得に失敗しました (HTTP ${chapterRes.status})`,
@@ -388,6 +391,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
                 targetIdx,
                 targetChapter.url,
                 timeoutMs,
+                signal,
               );
             } catch (err: unknown) {
               if (signal.aborted) return;

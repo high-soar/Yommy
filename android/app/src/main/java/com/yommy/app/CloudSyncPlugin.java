@@ -17,6 +17,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import com.google.android.gms.auth.api.identity.AuthorizationClient;
 import com.google.android.gms.auth.api.identity.AuthorizationRequest;
 import com.google.android.gms.auth.api.identity.AuthorizationResult;
+import com.google.android.gms.auth.api.identity.ClearTokenRequest;
 import com.google.android.gms.auth.api.identity.Identity;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.common.api.Scope;
@@ -137,13 +138,15 @@ public class CloudSyncPlugin extends Plugin {
                 .addOnFailureListener(e -> {
                     Log.w(TAG, "Silent re-authorization failed in getAuthState", e);
                     JSObject res = new JSObject();
-                    res.put("status", STATUS_UNLINKED);
+                    res.put("status", STATUS_ERROR);
+                    res.put("message", e.getMessage() != null ? e.getMessage() : "Failed to verify auth state");
                     call.resolve(res);
                 });
         } catch (Exception e) {
             Log.w(TAG, "Silent re-authorization exception in getAuthState", e);
             JSObject res = new JSObject();
-            res.put("status", STATUS_UNLINKED);
+            res.put("status", STATUS_ERROR);
+            res.put("message", e.getMessage() != null ? e.getMessage() : "Failed to verify auth state");
             call.resolve(res);
         }
     }
@@ -306,6 +309,20 @@ public class CloudSyncPlugin extends Plugin {
         });
     }
 
+    private void clearCachedToken(String token) {
+        if (token == null || token.isEmpty()) {
+            return;
+        }
+        try {
+            ClearTokenRequest request = ClearTokenRequest.builder()
+                .setToken(token)
+                .build();
+            Tasks.await(Identity.getAuthorizationClient(getActivity()).clearToken(request));
+        } catch (Exception ignored) {
+            // Proceed to refreshAccessToken even if clearing local cache fails
+        }
+    }
+
     private String getOrRefreshToken() throws Exception {
         if (currentAccessToken != null && !currentAccessToken.isEmpty()) {
             return currentAccessToken;
@@ -353,7 +370,8 @@ public class CloudSyncPlugin extends Plugin {
                 try {
                     fileId = findSyncFileId(token);
                 } catch (Exception e) {
-                    if (e.getMessage() != null && e.getMessage().contains("401")) {
+                    if (e.getMessage() != null && e.getMessage().contains("401 Unauthorized")) {
+                        clearCachedToken(token);
                         currentAccessToken = null;
                         token = refreshAccessToken();
                         fileId = findSyncFileId(token);
@@ -382,6 +400,7 @@ public class CloudSyncPlugin extends Plugin {
 
                     if (responseCode == 401) {
                         conn.disconnect();
+                        clearCachedToken(token);
                         currentAccessToken = null;
                         token = refreshAccessToken();
                         conn = (HttpURLConnection) downloadUrl.openConnection();
@@ -419,7 +438,7 @@ public class CloudSyncPlugin extends Plugin {
             } catch (Exception e) {
                 Log.e(TAG, "pullFile failed", e);
                 String msg = e.getMessage() != null ? e.getMessage() : e.toString();
-                if (msg.contains("401")) {
+                if (msg.contains("401 Unauthorized")) {
                     currentAccessToken = null;
                     clearLinkedState();
                     call.reject("401 Unauthorized");
@@ -445,7 +464,8 @@ public class CloudSyncPlugin extends Plugin {
                 try {
                     fileId = findSyncFileId(token);
                 } catch (Exception e) {
-                    if (e.getMessage() != null && e.getMessage().contains("401")) {
+                    if (e.getMessage() != null && e.getMessage().contains("401 Unauthorized")) {
+                        clearCachedToken(token);
                         currentAccessToken = null;
                         token = refreshAccessToken();
                         fileId = findSyncFileId(token);
@@ -458,6 +478,7 @@ public class CloudSyncPlugin extends Plugin {
                 if (fileId != null) {
                     responseCode = uploadPatch(fileId, content, token);
                     if (responseCode == 401) {
+                        clearCachedToken(token);
                         currentAccessToken = null;
                         token = refreshAccessToken();
                         responseCode = uploadPatch(fileId, content, token);
@@ -465,6 +486,7 @@ public class CloudSyncPlugin extends Plugin {
                 } else {
                     responseCode = uploadMultipart(content, token);
                     if (responseCode == 401) {
+                        clearCachedToken(token);
                         currentAccessToken = null;
                         token = refreshAccessToken();
                         responseCode = uploadMultipart(content, token);
@@ -486,7 +508,7 @@ public class CloudSyncPlugin extends Plugin {
             } catch (Exception e) {
                 Log.e(TAG, "pushFile failed", e);
                 String msg = e.getMessage() != null ? e.getMessage() : e.toString();
-                if (msg.contains("401")) {
+                if (msg.contains("401 Unauthorized")) {
                     currentAccessToken = null;
                     clearLinkedState();
                     call.reject("401 Unauthorized");

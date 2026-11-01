@@ -59,6 +59,16 @@ function toErrorAuthState(err: unknown): CloudSyncAuthState {
   };
 }
 
+function isUnauthorizedError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return (
+    /\b401\s+Unauthorized\b/i.test(message) ||
+    /\bHTTP\s+401\b/i.test(message) ||
+    /\bstatus(?:\s*code)?\s*[:=]?\s*401\b/i.test(message) ||
+    /\bUnauthorized\b/i.test(message)
+  );
+}
+
 /**
  * Android 実機実行用の Capacitor CloudSync プラグインラッパー実装
  */
@@ -111,11 +121,7 @@ export class CapacitorCloudSyncBridge implements CloudSyncBridge {
   }
 
   private async handleAuthErrorIfNeeded(err: unknown): Promise<void> {
-    const message = err instanceof Error ? err.message : String(err);
-    if (
-      message.includes("401") ||
-      message.toLowerCase().includes("unauthorized")
-    ) {
+    if (isUnauthorizedError(err)) {
       try {
         await this.signOut();
       } catch {
