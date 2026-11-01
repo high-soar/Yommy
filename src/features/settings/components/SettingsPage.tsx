@@ -8,6 +8,15 @@ import type {
 import type { CloudSyncAuthState } from "../../../bridges/cloud-sync/types";
 import { SampleTextPreview } from "./SampleTextPreview";
 import { CloudSyncSection } from "./CloudSyncSection";
+import {
+  FONT_FAMILY_OPTIONS,
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_PAGE_MARGIN_PX,
+  MIN_PAGE_MARGIN_PX,
+  MAX_PAGE_MARGIN_PX,
+  PAGE_MARGIN_STEP_PX,
+  clampPageMargin,
+} from "../../../shared/constants/typography";
 
 export interface SettingsPageProps {
   /** 現在の組み方向 */
@@ -132,6 +141,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   theme,
   fontSizePx = 18,
   lineHeight = 1.8,
+  fontFamily = DEFAULT_FONT_FAMILY,
+  pageMarginPx = DEFAULT_PAGE_MARGIN_PX,
   pagingMode = "auto",
   isLoading = false,
   error = null,
@@ -143,6 +154,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onChangeTheme,
   onChangeFontSize,
   onChangeLineHeight,
+  onChangeFontFamily,
+  onChangePageMargin,
   onChangePagingMode,
   onSignInGoogle,
   onSignOutGoogle,
@@ -156,6 +169,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const isMaxFontSize = fontSizePx >= MAX_FONT_SIZE_PX;
   const isMinLineHeight = lineHeight <= MIN_LINE_HEIGHT;
   const isMaxLineHeight = lineHeight >= MAX_LINE_HEIGHT;
+  const isMinPageMargin = pageMarginPx <= MIN_PAGE_MARGIN_PX;
+  const isMaxPageMargin = pageMarginPx >= MAX_PAGE_MARGIN_PX;
 
   const handleDecreaseFontSize = () => {
     onChangeFontSize(clampFontSize(fontSizePx - FONT_SIZE_STEP_PX));
@@ -173,6 +188,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     onChangeLineHeight(clampLineHeight(lineHeight + LINE_HEIGHT_STEP));
   };
 
+  const handleDecreasePageMargin = () => {
+    onChangePageMargin?.(clampPageMargin(pageMarginPx - PAGE_MARGIN_STEP_PX));
+  };
+
+  const handleIncreasePageMargin = () => {
+    onChangePageMargin?.(clampPageMargin(pageMarginPx + PAGE_MARGIN_STEP_PX));
+  };
+
   return (
     <div
       data-testid="settings-page"
@@ -180,6 +203,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       data-theme={theme}
       data-font-size={fontSizePx}
       data-line-height={lineHeight}
+      data-font-family={fontFamily}
+      data-page-margin={pageMarginPx}
       data-paging-mode={pagingMode}
       data-cloud-sync-status={cloudSyncAuthState.status}
       data-is-loading={isLoading ? "true" : undefined}
@@ -314,6 +339,38 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             </div>
           </div>
 
+          <div className="py-3 border-b border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between">
+              <div>
+                <label
+                  htmlFor="font-family-select"
+                  className="text-sm font-medium text-slate-700 dark:text-slate-300"
+                >
+                  フォント種別
+                </label>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  読書時のフォント（明朝/ゴシック/教科書体）を選択します
+                </p>
+              </div>
+              <select
+                id="font-family-select"
+                data-testid="font-family-select"
+                disabled={isLoading}
+                value={fontFamily}
+                onChange={(e) =>
+                  onChangeFontFamily?.(e.target.value as ReaderFontFamily)
+                }
+                className="text-xs md:text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 text-slate-700 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
+              >
+                {FONT_FAMILY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           <div className="flex items-center justify-between py-3 border-b border-slate-200 dark:border-slate-800">
             <div>
               <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -391,6 +448,45 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               </button>
             </div>
           </div>
+
+          <div className="flex items-center justify-between py-3 border-b border-slate-200 dark:border-slate-800">
+            <div>
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                画面余白
+              </span>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                8px 〜 48px（4px刻み）
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                data-testid="page-margin-decrease"
+                aria-label="画面余白を縮小"
+                disabled={isLoading || isMinPageMargin}
+                onClick={handleDecreasePageMargin}
+                className={STEPPER_BUTTON_BASE}
+              >
+                −
+              </button>
+              <span
+                data-testid="page-margin-value"
+                className="w-12 text-center font-mono text-sm font-medium text-slate-900 dark:text-slate-100 select-none"
+              >
+                {pageMarginPx}px
+              </span>
+              <button
+                type="button"
+                data-testid="page-margin-increase"
+                aria-label="画面余白を拡大"
+                disabled={isLoading || isMaxPageMargin}
+                onClick={handleIncreasePageMargin}
+                className={STEPPER_BUTTON_BASE}
+              >
+                ＋
+              </button>
+            </div>
+          </div>
         </section>
 
         <section
@@ -406,6 +502,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             theme={theme}
             fontSizePx={fontSizePx}
             lineHeight={lineHeight}
+            fontFamily={fontFamily}
+            pageMarginPx={pageMarginPx}
           />
         </section>
 

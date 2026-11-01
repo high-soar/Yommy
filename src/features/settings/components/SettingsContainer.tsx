@@ -24,6 +24,8 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
     theme,
     fontSizePx,
     lineHeight,
+    fontFamily,
+    pageMarginPx,
     pagingMode,
     isLoading,
     error,
@@ -31,6 +33,8 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
     changeTheme,
     changeFontSize,
     changeLineHeight,
+    changeFontFamily,
+    changePageMargin,
     changePagingMode,
   } = useSettings();
 
@@ -50,6 +54,8 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
       theme={theme}
       fontSizePx={fontSizePx}
       lineHeight={lineHeight}
+      fontFamily={fontFamily}
+      pageMarginPx={pageMarginPx}
       pagingMode={pagingMode}
       isLoading={isLoading}
       error={error}
@@ -61,6 +67,8 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
       onChangeTheme={changeTheme}
       onChangeFontSize={changeFontSize}
       onChangeLineHeight={changeLineHeight}
+      onChangeFontFamily={changeFontFamily}
+      onChangePageMargin={changePageMargin}
       onChangePagingMode={changePagingMode}
       onSignInGoogle={onSignInGoogle}
       onSignOutGoogle={onSignOutGoogle}
