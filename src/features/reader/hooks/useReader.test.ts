@@ -16,6 +16,7 @@ import { SqlNovelRepository } from "../../../storage/repositories/novelRepositor
 import { SqlChapterRepository } from "../../../storage/repositories/chapterRepository";
 import { SqlSettingsRepository } from "../../../storage/repositories/settingsRepository";
 import { MockHttpClient } from "../../../bridges/http/mockHttpClient";
+import type { HttpClientBridge } from "../../../bridges/http/types";
 import { createDefaultParserRegistry } from "../../../parsers/parserRegistry";
 import type {
   ChapterRecord,
@@ -3489,19 +3490,17 @@ describe("useReader", () => {
           unblockPrefetch = r;
         });
 
-        const mockHttpClient = new MockHttpClient();
-        mockHttpClient.setResponse(
-          `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[2]}`,
-          async () => {
+        const customHttpClient: HttpClientBridge = {
+          getHtml: async (options) => {
             await prefetchBlocker;
             return {
               status: 200,
-              url: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[2]}`,
+              url: options.url,
               headers: {},
               html: "<html><body><div class='widget-episodeBody'>第3話本文</div></body></html>",
             };
           },
-        );
+        };
 
         const { result } = renderHook(
           () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
@@ -3509,7 +3508,7 @@ describe("useReader", () => {
             wrapper: createWrapper({
               novelRepository: novelRepo,
               chapterRepository: chapterRepo,
-              httpClient: mockHttpClient,
+              httpClient: customHttpClient,
             }),
           },
         );
@@ -3610,19 +3609,17 @@ describe("useReader", () => {
           unblockPrefetch = r;
         });
 
-        const mockHttpClient = new MockHttpClient();
-        mockHttpClient.setResponse(
-          `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[2]}`,
-          async () => {
+        const customHttpClient: HttpClientBridge = {
+          getHtml: async (options) => {
             await prefetchBlocker;
             return {
               status: 200,
-              url: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[2]}`,
+              url: options.url,
               headers: {},
               html: "<html><body><div class='widget-episodeBody'>第3話本文</div></body></html>",
             };
           },
-        );
+        };
 
         const { result, unmount } = renderHook(
           () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
@@ -3630,7 +3627,7 @@ describe("useReader", () => {
             wrapper: createWrapper({
               novelRepository: novelRepo,
               chapterRepository: chapterRepo,
-              httpClient: mockHttpClient,
+              httpClient: customHttpClient,
             }),
           },
         );
@@ -3672,10 +3669,8 @@ describe("useReader", () => {
           resolveGetHtml = r;
         });
 
-        const mockHttpClient = new MockHttpClient();
-        mockHttpClient.setResponse(
-          `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[1]}`,
-          async (options) => {
+        const customHttpClient: HttpClientBridge = {
+          getHtml: async (options) => {
             receivedSignal = options.signal;
             await getHtmlGate;
             return {
@@ -3685,7 +3680,7 @@ describe("useReader", () => {
               html: "<html><body><div class='widget-episodeBody'>第2話本文</div></body></html>",
             };
           },
-        );
+        };
 
         const { result, unmount } = renderHook(
           () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
@@ -3693,7 +3688,7 @@ describe("useReader", () => {
             wrapper: createWrapper({
               novelRepository: novelRepo,
               chapterRepository: chapterRepo,
-              httpClient: mockHttpClient,
+              httpClient: customHttpClient,
             }),
           },
         );
