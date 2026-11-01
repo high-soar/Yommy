@@ -956,8 +956,8 @@ describe("ReaderContainer", () => {
         writable: true,
       });
 
-      await act(async () => {
-        readerView.dispatchEvent(new Event("scroll"));
+      act(() => {
+        fireEvent.scroll(readerView);
       });
 
       await waitFor(
