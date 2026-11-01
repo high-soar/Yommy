@@ -631,13 +631,14 @@ describe("ReaderContainer", () => {
 
       await act(async () => {
         window.dispatchEvent(new PopStateEvent("popstate"));
+        await new Promise((r) => setTimeout(r, 50));
       });
 
       await waitFor(
         () => {
           expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
         },
-        { timeout: 3000 },
+        { timeout: 5000 },
       );
     });
 

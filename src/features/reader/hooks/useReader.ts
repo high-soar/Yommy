@@ -178,14 +178,6 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   const isFirstPageMeasurementRef = useRef<boolean>(true);
   const prefetchAbortControllerRef = useRef<AbortController | null>(null);
   const activePrefetchPromiseRef = useRef<Promise<void> | null>(null);
-  const isMountedRef = useRef<boolean>(true);
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
 
   useEffect(() => {
     novelRef.current = novel;
