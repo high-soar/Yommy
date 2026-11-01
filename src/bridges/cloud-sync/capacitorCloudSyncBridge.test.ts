@@ -373,5 +373,32 @@ describe("CapacitorCloudSyncBridge", () => {
 
       expect(mockPlugin.signOut).not.toHaveBeenCalled();
     });
+
+    it("ファイルIDやURLの一部に '401' を含むだけの非認証エラーでは signOut を呼び出さないこと (R2-14)", async () => {
+      vi.mocked(mockPlugin.pullFile).mockRejectedValueOnce(
+        new Error("Network timeout fetching file 1040199"),
+      );
+      vi.mocked(mockPlugin.pushFile).mockRejectedValueOnce(
+        new Error(
+          "Failed to upload https://kakuyomu.jp/works/16817330658027210401",
+        ),
+      );
+
+      const bridge = new CapacitorCloudSyncBridge(mockPlugin);
+      await expect(bridge.pullFile()).rejects.toThrow(
+        "Network timeout fetching file 1040199",
+      );
+      await expect(bridge.pushFile('{"version": 1}')).rejects.toThrow(
+        "16817330658027210401",
+      );
+      expect(mockPlugin.signOut).not.toHaveBeenCalled();
+
+      // status code 401 形式では signOut が呼ばれること
+      vi.mocked(mockPlugin.pullFile).mockRejectedValueOnce(
+        new Error("Request failed with status code 401"),
+      );
+      await expect(bridge.pullFile()).rejects.toThrow("status code 401");
+      expect(mockPlugin.signOut).toHaveBeenCalledTimes(1);
+    });
   });
 });

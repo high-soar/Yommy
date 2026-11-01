@@ -163,6 +163,31 @@ describe("useCloudSync", () => {
         });
       });
     });
+
+    it("初期マウント時に bridge.getAuthState が error 状態を返した場合、authState と error の双方にエラーメッセージが設定されること (R2-03)", async () => {
+      const bridge = createMockBridge({
+        status: "error",
+        message: "Network offline",
+      });
+      const appSettings = createMockAppSettings();
+      const syncEngine = createMockSyncEngine();
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+          syncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.authState).toEqual({
+          status: "error",
+          message: "Network offline",
+        });
+      });
+      expect(result.current.error).toBe("Network offline");
+    });
   });
 
   describe("アカウント連携 (signIn, AC-ST-08, AC-ST-11)", () => {
