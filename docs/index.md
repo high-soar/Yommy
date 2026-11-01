@@ -30,9 +30,9 @@ docs/
 │   ├── parsers/                       # [App全体正本] 小説サイト別の現在スクレイピング・DOM解析仕様書
 │   │   └── kakuyomu.md                # カクヨム パーサー・スクレイピング仕様書（kakuyomu.jp）
 │   └── changes/                       # [差分仕様 (Delta Specs)] 要望（親Issue）ごとの設計差分・テスト計画・Sub-issue分割
-│       ├── issue-168-reader-pagination-and-touch-refinement.md # [Review (#168)] リーダーページめくり・スクロール実機不具合修正と横書きスクロール限定化 (#168)
 │       ├── issue-170-cache-management-and-capacity-visualization.md # [Review (#170)] キャッシュデータ容量可視化と既読/本文キャッシュ削除機能の差分仕様 (#170)
 │       └── archive/                   # 完了済みの差分仕様アーカイブ（親Issueクローズ時に git mv で移動）
+│           ├── issue-168-reader-pagination-and-touch-refinement.md # [Archived] リーダーページめくり・スクロール実機不具合修正と横書きスクロール限定化 (#168)
 │           ├── issue-12-bookshelf-and-routing.md # [Archived] 本棚画面・共通ルーティング基盤の差分仕様 (#12)
 │           ├── issue-13-novel-detail-and-toc.md # [Archived] 作品詳細・目次画面・オンデマンド取得の差分仕様 (#13)
 │           ├── issue-14-reader-navigation-bookmark-settings.md # [Archived] 小説リーダー・前後話ナビ・しおり・組版設定の差分仕様 (#14)

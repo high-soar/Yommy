@@ -8,7 +8,7 @@ tags: [quality, bug-log, handover, dre, kaizen]
 related_specs:
   - docs/specs/changes/issue-169-font-and-margin-customization.md
   - docs/specs/changes/issue-170-cache-management-and-capacity-visualization.md
-  - docs/specs/changes/issue-168-reader-pagination-and-touch-refinement.md
+  - docs/specs/changes/archive/issue-168-reader-pagination-and-touch-refinement.md
   - docs/specs/changes/archive/issue-122-reader-page-turning.md
   - docs/specs/changes/archive/issue-123-reader-bottom-overlay-ui-improvement.md
   - docs/specs/changes/archive/issue-124-settings-back-button-navigation.md
@@ -86,7 +86,7 @@ related_tests: []
 | :-----: | :---------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :-------------------------------------- | :--------------------- | :------------------------: |
 | `HO-15` |        #78        | Android 実機での APK 上書きインストール実証（GitHub Actions 生成 APK を実機へアンインストールなしで上書きアップデートできることの検証）                                   | Issue #168 実機検証にて確認完了（v0.5） | 実機インストール確認時 |         `Resolved`         |
 | `HO-22` |       #120        | Google Drive appDataFolder クラウド同期の Android 実機 / Google Play 開発者サービス環境での OAuth 認可フローおよび `AuthorizationClient` 連携の実機検証                   | Issue #168 実機検証にて確認完了（v0.5） | 実機インストール確認時 |         `Resolved`         |
-| `HO-23` |       #122        | リーダー縦書きページめくりにおける Android 実機（90Hz/120Hz）でのタッチイベント・スワイプリアルタイム指追従パフォーマンスおよびラバーバンド描画負荷の検証                 | Issue #168（v0.5抜本修正・実機確認）    | 実機インストール確認時 |           `Open`           |
+| `HO-23` |       #122        | リーダー縦書きページめくりにおける Android 実機（90Hz/120Hz）でのタッチイベント・スワイプリアルタイム指追従パフォーマンスおよびラバーバンド描画負荷の検証                 | Issue #168（v0.5抜本修正・実機確認）    | 実機インストール確認時 |         `Resolved`         |
 | `HO-24` |       #170        | Android 実機での本文キャッシュ削除（既読のみ／全話）および作品詳細・設定画面でのキャッシュ容量・各話バッジ即時反映の動作確認・検証                                        | Issue #170（Sub-issue ④ / 実機確認時）  | 実機確認時             |           `Open`           |
 | `HO-25` |       #169        | Android 実機環境におけるフォント種別（明朝/ゴシック/UD明朝/UDゴシック/Klee教科書体）のフォールバック表示および画面余白（8〜48px）変更時の文字切れ・折り返し描画の実機確認 | Issue #169（v0.5実装・実機確認）        | 実機インストール確認時 |           `Open`           |
 

@@ -3,7 +3,7 @@ type: spec-delta
 title: "リーダーのページめくり・スクロール実機不具合修正と横書きスクロール限定化の設計"
 description: "Issue #168 に対する差分仕様、影響する全体正本、テスト計画、および実装Sub-issue分割計画。"
 issue: "#168"
-status: "Review (#168)"
+status: "Completed (Archived)"
 updated: "2026-11-01"
 tags:
   - delta
@@ -231,4 +231,4 @@ export function resolveEffectivePagingMode(
 | :-----: | :----: | :-------------------------------------------------------------------------------- | :----------------------: | :--------: |
 | `HO-15` |  #78   | Android 実機での APK 上書きインストール実証                                       |         実機検証         | `Resolved` |
 | `HO-22` |  #120  | Google Drive appDataFolder クラウド同期の Android 実機疎通検証                    |         実機検証         | `Resolved` |
-| `HO-23` |  #122  | リーダー縦書きページめくりにおける Android 実機でのタッチ・スワイプおよび組版検証 | Issue #168 / Sub-issue ④ |   `Open`   |
+| `HO-23` |  #122  | リーダー縦書きページめくりにおける Android 実機でのタッチ・スワイプおよび組版検証 | Issue #168 / Sub-issue ④ | `Resolved` |

@@ -36,7 +36,7 @@ tags:
   - ho-24
 related_specs:
   - docs/specs/changes/issue-169-font-and-margin-customization.md
-  - docs/specs/changes/issue-168-reader-pagination-and-touch-refinement.md
+  - docs/specs/changes/archive/issue-168-reader-pagination-and-touch-refinement.md
   - docs/specs/changes/archive/issue-122-reader-page-turning.md
   - docs/specs/changes/archive/issue-120-cloud-sync-google-drive.md
   - docs/specs/architecture.md

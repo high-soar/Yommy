@@ -332,9 +332,70 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(readerView).toHaveAttribute("data-current-page", "2");
     await expect(pageIndicator).toHaveText(`2 / ${totalPagesStr}`);
 
+    // 最終ページでの端 2 段階タップによる前後話遷移（AC-RD-18, TR-05）
+    // 1 回目の左端タップ（幅約 20%）で案内ヒントが表示されることを確認
+    const boundaryHint = page.getByTestId("reader-episode-boundary-hint");
+    if (readerBox) {
+      await page.mouse.click(
+        readerBox.x + readerBox.width * 0.1,
+        readerBox.y + readerBox.height * 0.4,
+      );
+    }
+    await expect(boundaryHint).toBeVisible();
+    await expect(boundaryHint).toHaveText("もう一度タップで次の話へ");
+
+    // 2.5 秒以内に 2 回目の左端タップを行うことで第 2 話へ遷移することを確認
+    if (readerBox) {
+      await page.mouse.click(
+        readerBox.x + readerBox.width * 0.1,
+        readerBox.y + readerBox.height * 0.4,
+      );
+    }
+
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/2/,
+    );
+    await expect(boundaryHint).not.toBeVisible();
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "第1話 見知らぬ空",
+    );
+    await expect(readerView).toHaveAttribute("data-current-page", "1");
+
+    // 第2話の先頭ページでの端 2 段階タップ（右端タップ）による前話遷移および末尾ページ復元（AC-RD-18, TR-05）
+    if (readerBox) {
+      await page.mouse.click(
+        readerBox.x + readerBox.width * 0.9,
+        readerBox.y + readerBox.height * 0.4,
+      );
+    }
+    await expect(boundaryHint).toBeVisible();
+    await expect(boundaryHint).toHaveText("もう一度タップで前の話へ");
+
+    // 2回目の右端タップで第1話へ復帰
+    if (readerBox) {
+      await page.mouse.click(
+        readerBox.x + readerBox.width * 0.9,
+        readerBox.y + readerBox.height * 0.4,
+      );
+    }
+
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1/,
+    );
+    await expect(boundaryHint).not.toBeVisible();
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "プロローグ：目覚め",
+    );
+    await expect(readerView).toHaveAttribute(
+      "data-current-page",
+      totalPagesStr,
+    );
+    await expect(pageIndicator).toHaveText(
+      `${totalPagesStr} / ${totalPagesStr}`,
+    );
+
     // 最終ページでのドラッグ離上によるシームレス次話遷移（第2話、AC-RD-18, TR-05）
     // 画面幅の30%以上左から右（→）へドラッグしてヒントバッジが表示されることを確認
-    const boundaryHint = page.getByTestId("reader-episode-boundary-hint");
     if (readerBox) {
       const startX = readerBox.x + 100;
       const startY = readerBox.y + readerBox.height * 0.4;
@@ -521,6 +582,57 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     });
     expect(verticalMaxScroll).toBeGreaterThan(0);
     await expect(overlay).toHaveClass(/translate-y-full/);
+
+    // 縦書き連続スクロール時の本文先頭「前の話へ」ボタン・本文末尾「次の話へ」ボタンによる前後話遷移（AC-RD-19, TR-05）
+    // 第1話では先頭「前の話へ」ボタンが無効（disabled）化されていることを確認
+    const scrollPrevButton = page.getByTestId("reader-scroll-prev-chapter");
+    const scrollNextButton = page.getByTestId("reader-scroll-next-chapter");
+    await expect(scrollPrevButton).toBeVisible();
+    await expect(scrollPrevButton).toBeDisabled();
+    await expect(scrollNextButton).toBeVisible();
+    await expect(scrollNextButton).toBeEnabled();
+
+    // 末尾「次の話へ」ボタンをクリックして第2話へ遷移（TR-05 / AC-RD-19）
+    await scrollNextButton.click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/2/,
+    );
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "第1話 見知らぬ空",
+    );
+
+    // 第2話では先頭「前の話へ」ボタンが有効化されており、クリックして第1話へ戻ることを確認
+    await expect(scrollPrevButton).toBeVisible();
+    await expect(scrollPrevButton).toBeEnabled();
+    await scrollPrevButton.click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1/,
+    );
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "プロローグ：目覚め",
+    );
+
+    // 再度設定画面へ遷移して横書きに切り替えた場合、自動的に連続スクロール固定となることを確認（AC-RD-15, SYS-REQ-11）
+    await touchZone.click();
+    await expect(overlay).toHaveClass(/translate-y-0/);
+    await readerSettingsTab.click();
+    await expect(page).toHaveURL("/settings");
+    await toggleOrientation.click(); // 横書きへ
+    await expect(page.getByTestId("paging-mode-select")).toBeDisabled();
+    await expect(page.getByTestId("paging-mode-note")).toBeVisible();
+    await expect(page.getByTestId("paging-mode-note")).toHaveText(
+      "※横書き表示時は連続スクロール固定となります",
+    );
+
+    // 縦書きへ戻す
+    await toggleOrientation.click();
+    await expect(page.getByTestId("paging-mode-select")).toBeEnabled();
+
+    // リーダーへ復帰
+    await page.goBack();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1/,
+    );
 
     // 縦書きモードにおいて負の scrollLeft（scrollLeft < 0）が設定されていることを確認（R1-01）
     const currentScrollLeft = await page.evaluate(() => {

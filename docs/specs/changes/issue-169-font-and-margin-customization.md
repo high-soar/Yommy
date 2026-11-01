@@ -22,7 +22,7 @@ related_specs:
   - docs/specs/screen-transitions.md
   - docs/specs/features/reader-view.md
   - docs/specs/features/settings.md
-  - docs/specs/changes/issue-168-reader-pagination-and-touch-refinement.md
+  - docs/specs/changes/archive/issue-168-reader-pagination-and-touch-refinement.md
 related_tests:
   - src/storage/schema.test.ts
   - src/storage/repositories/settingsRepository.test.ts
