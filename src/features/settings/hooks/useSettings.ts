@@ -6,6 +6,11 @@ import type {
   ReaderTheme,
   WritingMode,
 } from "../../../storage/types";
+import {
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_PAGE_MARGIN_PX,
+  clampPageMargin,
+} from "../../../shared/constants/typography";
 
 export interface UseSettingsResult {
   writingMode: WritingMode;
@@ -34,15 +39,20 @@ function toErrorMessage(error: unknown): string {
 }
 
 /**
- * リーダー設定の読み出し・更新・永続化を行うカスタムフック（SCR-05 / AC-ST-03〜05, AC-ST-13）
+ * リーダー設定の読み出し・更新・永続化を行うカスタムフック（SCR-05 / AC-ST-03〜05, AC-ST-07, AC-ST-13, AC-ST-17, AC-ST-18）
  */
 export function useSettings(): UseSettingsResult {
   const { settingsRepository, isReady } = useServices();
 
   const [writingMode, setWritingMode] = useState<WritingMode>("vertical-rl");
   const [theme, setTheme] = useState<ReaderTheme>("light");
+  const [fontFamily, setFontFamily] =
+    useState<ReaderFontFamily>(DEFAULT_FONT_FAMILY);
   const [fontSizePx, setFontSizePx] = useState<number>(18);
   const [lineHeight, setLineHeight] = useState<number>(1.8);
+  const [pageMarginPx, setPageMarginPx] = useState<number>(
+    DEFAULT_PAGE_MARGIN_PX,
+  );
   const [pagingMode, setPagingMode] = useState<ReaderPagingMode>("auto");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,8 +72,14 @@ export function useSettings(): UseSettingsResult {
         if (isMounted && settings) {
           setWritingMode(settings.writingMode);
           setTheme(settings.theme);
+          if (settings.fontFamily) {
+            setFontFamily(settings.fontFamily);
+          }
           setFontSizePx(settings.fontSizePx);
           setLineHeight(settings.lineHeight);
+          if (typeof settings.pageMarginPx === "number") {
+            setPageMarginPx(settings.pageMarginPx);
+          }
           if (settings.pagingMode) {
             setPagingMode(settings.pagingMode);
           }
@@ -113,6 +129,23 @@ export function useSettings(): UseSettingsResult {
     [theme, settingsRepository],
   );
 
+  const changeFontFamily = useCallback(
+    async (nextFamily: ReaderFontFamily): Promise<void> => {
+      const prevFamily = fontFamily;
+      setFontFamily(nextFamily);
+      try {
+        await settingsRepository.updateReaderSettings({
+          fontFamily: nextFamily,
+        });
+        setError(null);
+      } catch (err: unknown) {
+        setFontFamily(prevFamily);
+        setError(toErrorMessage(err));
+      }
+    },
+    [fontFamily, settingsRepository],
+  );
+
   const changeFontSize = useCallback(
     async (nextFontSizePx: number): Promise<void> => {
       const prevFontSize = fontSizePx;
@@ -146,6 +179,24 @@ export function useSettings(): UseSettingsResult {
     [lineHeight, settingsRepository],
   );
 
+  const changePageMargin = useCallback(
+    async (nextMarginPx: number): Promise<void> => {
+      const prevMargin = pageMarginPx;
+      const clamped = clampPageMargin(nextMarginPx);
+      setPageMarginPx(clamped);
+      try {
+        await settingsRepository.updateReaderSettings({
+          pageMarginPx: clamped,
+        });
+        setError(null);
+      } catch (err: unknown) {
+        setPageMarginPx(prevMargin);
+        setError(toErrorMessage(err));
+      }
+    },
+    [pageMarginPx, settingsRepository],
+  );
+
   const changePagingMode = useCallback(
     async (nextPagingMode: ReaderPagingMode): Promise<void> => {
       const prevPagingMode = pagingMode;
@@ -166,15 +217,19 @@ export function useSettings(): UseSettingsResult {
   return {
     writingMode,
     theme,
+    fontFamily,
     fontSizePx,
     lineHeight,
+    pageMarginPx,
     pagingMode,
     isLoading,
     error,
     toggleWritingMode,
     changeTheme,
+    changeFontFamily,
     changeFontSize,
     changeLineHeight,
+    changePageMargin,
     changePagingMode,
-  } as unknown as UseSettingsResult;
+  };
 }
