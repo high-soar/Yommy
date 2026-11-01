@@ -470,7 +470,8 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     // 設定画面（SCR-05）での「スクロール」切替およびリーダーでの連続スクロール表示切替検証（AC-RD-15, AC-ST-13）
     const pagingModeSelect = page.getByTestId("paging-mode-select");
     await expect(pagingModeSelect).toBeVisible();
-    await expect(pagingModeSelect).toHaveValue("auto");
+    // 初期値 auto は2択化により paged（ページめくり（縦書き時））として選択表示される (v0.5 Issue #168, #173)
+    await expect(pagingModeSelect).toHaveValue("paged");
     await pagingModeSelect.selectOption("scroll");
     await expect(pagingModeSelect).toHaveValue("scroll");
 
