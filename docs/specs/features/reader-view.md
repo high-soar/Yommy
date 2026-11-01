@@ -99,7 +99,7 @@ related_tests:
   - ハードウェア音量キー（`enableVolumeKeyPaging`）による1画面ジャンプ送り（Milestone `v0.5〜`：`SYS-REQ-11` 拡張、本Issueでは対象外）
   - 3D カール等の過剰な描画エフェクト（2D 横スライドアニメーションを採用）
   - 画面余白（`pageMarginPx`）・フォント種別（`fontFamily`）の UI カスタマイズ（Milestone `v0.5〜`：`SYS-REQ-09` 拡張）
-  - 取得失敗時の内蔵 WebView フォールバック遷移 `TR-10`（Milestone `v0.4`：`SYS-REQ-13`）
+  - 取得失敗時の内蔵 WebView フォールバック遷移 `TR-10`（Milestone `v0.5〜`：`SYS-REQ-13`）
 
 ---
 
