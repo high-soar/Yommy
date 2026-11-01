@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { NovelDetailHeader } from "./NovelDetailHeader";
 import { EpisodeList } from "./EpisodeList";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
+import { ClearCacheConfirmDialog } from "./ClearCacheConfirmDialog";
 import type { NovelDetailPageProps } from "../types";
 
 export type { NovelDetailPageProps } from "../types";
@@ -21,6 +22,8 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
   isAllCached,
   isDeleteDialogOpen,
   isDeleting,
+  isClearCacheDialogOpen,
+  isClearingCache,
   refreshMessage,
   error,
   onBackToBookshelf,
@@ -33,6 +36,9 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
   onOpenDeleteDialog,
   onCloseDeleteDialog,
   onConfirmDelete,
+  onOpenClearCacheDialog,
+  onCloseClearCacheDialog,
+  onConfirmClearCache,
 }) => {
   const episodeContainerRef = useRef<HTMLElement | null>(null);
   const scrolledNovelIdRef = useRef<string | null>(null);
@@ -128,6 +134,7 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
               onStartBatchCache={onStartBatchCache}
               onCancelBatchCache={onCancelBatchCache}
               onOpenDeleteDialog={onOpenDeleteDialog}
+              onOpenClearCacheDialog={onOpenClearCacheDialog}
             />
           </div>
 
@@ -151,6 +158,14 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
             isDeleting={isDeleting}
             onClose={onCloseDeleteDialog}
             onConfirm={onConfirmDelete}
+          />
+
+          <ClearCacheConfirmDialog
+            isOpen={Boolean(isClearCacheDialogOpen)}
+            novelTitle={novel.title}
+            isClearing={Boolean(isClearingCache)}
+            onClose={onCloseClearCacheDialog ?? (() => {})}
+            onConfirm={onConfirmClearCache ?? (() => {})}
           />
         </>
       )}

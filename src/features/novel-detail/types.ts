@@ -86,7 +86,7 @@ export interface ClearCacheConfirmDialogProps {
   novelTitle: string;
   isClearing: boolean;
   onClose: () => void;
-  onConfirm: (options: { onlyRead: boolean }) => void | Promise<void>;
+  onConfirm: (options: { onlyRead: boolean }) => void | Promise<void | number>;
 }
 
 /**
@@ -120,7 +120,7 @@ export interface NovelDetailPageProps {
   onCloseClearCacheDialog?: () => void;
   onConfirmClearCache?: (options: {
     onlyRead: boolean;
-  }) => void | Promise<void>;
+  }) => void | Promise<void | number>;
 }
 
 /**
