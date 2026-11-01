@@ -3654,6 +3654,70 @@ describe("useReader", () => {
         unblockPrefetch();
         await new Promise((r) => setTimeout(r, 50));
       });
+
+      it("startPrefetch が httpClient.getHtml に AbortSignal を伝播し、getHtml 解決前に abort された場合は saveChapterBody を呼び出さないこと (R2-13)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const saveBodySpy = vi.spyOn(chapterRepo, "saveChapterBody");
+
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 3,
+          cachedCount: 1,
+        });
+
+        let receivedSignal: AbortSignal | undefined;
+        let resolveGetHtml!: () => void;
+        const getHtmlGate = new Promise<void>((r) => {
+          resolveGetHtml = r;
+        });
+
+        const mockHttpClient = new MockHttpClient();
+        mockHttpClient.setResponse(
+          `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[1]}`,
+          async (options) => {
+            receivedSignal = options.signal;
+            await getHtmlGate;
+            return {
+              status: 200,
+              url: options.url,
+              headers: {},
+              html: "<html><body><div class='widget-episodeBody'>第2話本文</div></body></html>",
+            };
+          },
+        );
+
+        const { result, unmount } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              httpClient: mockHttpClient,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+        saveBodySpy.mockClear();
+
+        // 1.5秒待って第2話の先読みリクエストを開始させる
+        await new Promise((r) => setTimeout(r, 1600));
+        expect(receivedSignal).toBeDefined();
+        expect(receivedSignal?.aborted).toBe(false);
+
+        // getHtml が解決する前にアンマウントして abort させる
+        unmount();
+        expect(receivedSignal?.aborted).toBe(true);
+
+        // getHtml を正常解決させる（abort 済みのため saveChapterBody はスキップされること）
+        resolveGetHtml();
+        await new Promise((r) => setTimeout(r, 50));
+
+        expect(saveBodySpy).not.toHaveBeenCalled();
+      });
     });
   });
 });
