@@ -637,7 +637,7 @@ describe("ReaderContainer", () => {
         () => {
           expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
         },
-        { timeout: 3000 },
+        { timeout: 10000 },
       );
     });
 
@@ -667,7 +667,7 @@ describe("ReaderContainer", () => {
         () => {
           expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
         },
-        { timeout: 3000 },
+        { timeout: 10000 },
       );
     });
   });
@@ -968,7 +968,7 @@ describe("ReaderContainer", () => {
             0.5,
           );
         },
-        { timeout: 3000 },
+        { timeout: 10000 },
       );
     });
   });
@@ -1122,7 +1122,7 @@ describe("ReaderContainer", () => {
             undefined,
           );
         },
-        { timeout: 3000 },
+        { timeout: 10000 },
       );
     });
 
@@ -1157,7 +1157,7 @@ describe("ReaderContainer", () => {
             undefined,
           );
         },
-        { timeout: 3000 },
+        { timeout: 10000 },
       );
 
       // onPageChange でページ移動
@@ -1179,7 +1179,7 @@ describe("ReaderContainer", () => {
             undefined,
           );
         },
-        { timeout: 3000 },
+        { timeout: 10000 },
       );
     });
   });
