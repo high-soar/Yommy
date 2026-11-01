@@ -38,44 +38,33 @@ function clampProgress(value: number): number {
 }
 
 /**
- * ページめくり表示における横スライド変位量（translateX）を算出する純粋関数
- */
-function calculateSlideTranslateX(
-  isVertical: boolean,
-  currentPage: number,
-  pageWidth: number,
-  slideOffsetPx: number,
-): number {
-  if (pageWidth <= 0) return 0;
-  return isVertical
-    ? (currentPage - 1) * pageWidth + slideOffsetPx
-    : -(currentPage - 1) * pageWidth + slideOffsetPx;
-}
-
-/**
- * ページ確定変位（translateY）およびスワイプ追従変位（translateX）を算出する純粋関数（スタブ）
+ * ページ確定変位（translateY）およびスワイプ追従変位（translateX）を算出する純粋関数
  */
 function calculatePageTransforms(
   currentPage: number,
   pageHeight: number,
   slideOffsetPx: number,
 ): { transform: string; transition: string } {
-  void currentPage;
-  void pageHeight;
-  void slideOffsetPx;
-  return { transform: "", transition: "" };
+  const pageStride = pageHeight;
+  const translateY = pageHeight > 0 ? -(currentPage - 1) * pageStride : 0;
+  const transform =
+    slideOffsetPx !== 0
+      ? `translateY(${translateY}px) translateX(${slideOffsetPx}px)`
+      : `translateY(${translateY}px)`;
+  const transition = slideOffsetPx !== 0 ? "none" : "transform 200ms ease-out";
+  return { transform, transition };
 }
 
 /**
- * コンテナ寸法から総ページ数を算出する純粋関数
+ * マルチカラム要素の scrollHeight とコンテナ高さから総ページ数を算出する純粋関数
+ * （gap = 48px, pageStride = pageHeight）
  */
 function calculateMeasuredTotalPages(
-  scrollWidth: number,
-  clientWidth: number,
+  scrollHeight: number,
+  pageHeight: number,
 ): number {
-  return clientWidth > 0
-    ? Math.max(1, Math.ceil(scrollWidth / clientWidth))
-    : 1;
+  if (pageHeight <= 0) return 1;
+  return Math.max(1, Math.round((scrollHeight + 48) / pageHeight));
 }
 
 /**
@@ -112,7 +101,7 @@ function restoreScrollPosition(
 }
 
 /**
- * 1ページ組版およびスライドアニメーションのインラインスタイルを生成する純粋関数
+ * 縦書き 1ページ CSS マルチカラム組版およびスライドアニメーションのインラインスタイルを生成する純粋関数
  * （※ページめくりは縦書き専用）
  */
 function getPagedContentStyle(
@@ -123,18 +112,31 @@ function getPagedContentStyle(
   containerWidth?: number,
   containerHeight?: number,
 ): React.CSSProperties | undefined {
-  void containerWidth;
-  void containerHeight;
   if (!isPaged) return undefined;
+
+  const width =
+    containerWidth && containerWidth > 48
+      ? `${containerWidth - 48}px`
+      : undefined;
+  const height =
+    containerHeight && containerHeight > 48
+      ? `${containerHeight - 48}px`
+      : undefined;
+
   const { transform, transition } = calculatePageTransforms(
     currentPage,
     pageHeight,
     slideOffsetPx,
   );
+
   return {
-    transform: transform || "translateX(0px)",
-    transition:
-      transition || (slideOffsetPx !== 0 ? "none" : "transform 200ms ease-out"),
+    columns: 1,
+    columnGap: "48px",
+    columnFill: "auto",
+    ...(width ? { width, columnWidth: width } : {}),
+    ...(height ? { height } : {}),
+    transform,
+    transition,
   };
 }
 
@@ -161,6 +163,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   onTotalPagesChange,
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const contentRef = React.useRef<HTMLDivElement>(null);
   const isVertical = writingMode === "vertical-rl";
   const effectivePagingMode = resolveEffectivePagingMode(
     pagingMode,
@@ -168,21 +171,26 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   );
   const isPaged = effectivePagingMode === "paged";
 
-  // コンテナ幅の動的追従（リサイズおよび初期計測）
+  // コンテナ寸法の動的追従（リサイズおよび初期計測）
   const [containerWidth, setContainerWidth] = useState<number>(0);
+  const [containerHeight, setContainerHeight] = useState<number>(0);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     setContainerWidth(el.clientWidth);
+    setContainerHeight(el.clientHeight);
 
     const handleResize = () => {
       if (containerRef.current) {
-        setContainerWidth(containerRef.current.clientWidth);
-        if (isPaged) {
+        const w = containerRef.current.clientWidth;
+        const h = containerRef.current.clientHeight;
+        setContainerWidth(w);
+        setContainerHeight(h);
+        if (isPaged && contentRef.current) {
           const measuredPages = calculateMeasuredTotalPages(
-            containerRef.current.scrollWidth,
-            containerRef.current.clientWidth,
+            contentRef.current.scrollHeight,
+            h,
           );
           onTotalPagesChange?.(measuredPages);
         }
@@ -192,15 +200,17 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     return () => window.removeEventListener("resize", handleResize);
   }, [isPaged, onTotalPagesChange]);
 
-  // DOM 寸法計測（総ページ数算出）: マウント時および chapterTitle, bodyHtml, initialScrollProgress, writingMode, fontSizePx, lineHeight, pagingMode, containerWidth 変更時
+  // DOM 寸法計測（総ページ数算出）: マウント時および chapterTitle, bodyHtml, initialScrollProgress, writingMode, fontSizePx, lineHeight, pagingMode, containerHeight 変更時
   useEffect(() => {
     if (!isPaged) return;
-    const el = containerRef.current;
-    if (!el) return;
+    const container = containerRef.current;
+    const content = contentRef.current;
+    if (!container || !content) return;
 
+    const pageHeight = container.clientHeight || containerHeight;
     const measuredPages = calculateMeasuredTotalPages(
-      el.scrollWidth,
-      el.clientWidth,
+      content.scrollHeight,
+      pageHeight,
     );
     onTotalPagesChange?.(measuredPages);
   }, [
@@ -212,7 +222,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     fontSizePx,
     lineHeight,
     pagingMode,
-    containerWidth,
+    containerHeight,
     onTotalPagesChange,
   ]);
 
@@ -232,7 +242,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     if (!el) return;
 
     if (isPaged) {
-      // 実効 paged モード時は translateX で位置管理するためスクロールオフセットを 0 にリセット（二重変位防止: R1-27）
+      // 実効 paged モード時は translateY/translateX で位置管理するためスクロールオフセットを 0 にリセット（二重変位防止: R1-27）
       el.scrollLeft = 0;
       el.scrollTop = 0;
     } else {
@@ -240,14 +250,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     }
   }, [initialScrollProgress, bodyHtml, writingMode, pagingMode, isPaged]);
 
-  // pageWidth はコンテナの clientWidth（取得できない場合は 0）
+  // pageWidth / pageHeight の解決
   const pageWidth = containerRef.current?.clientWidth ?? containerWidth;
-  const slideTranslateX = calculateSlideTranslateX(
-    isVertical,
-    currentPage,
-    pageWidth,
-    slideOffsetPx,
-  );
+  const pageHeight = containerRef.current?.clientHeight ?? containerHeight;
 
   // 将来のジェスチャー遷移連携・アニメーション中制御のために参照
   void isAnimating;
@@ -280,9 +285,17 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       }}
     >
       <div
+        ref={contentRef}
         data-testid="reader-content"
-        className={`h-full w-full ${isPaged ? "p-6" : ""}`}
-        style={getPagedContentStyle(isPaged, slideTranslateX, slideOffsetPx)}
+        className={`h-full w-full ${isPaged ? "m-auto" : ""}`}
+        style={getPagedContentStyle(
+          isPaged,
+          currentPage,
+          pageHeight,
+          slideOffsetPx,
+          pageWidth,
+          pageHeight,
+        )}
       >
         {(title || chapterTitle) && (
           <header
