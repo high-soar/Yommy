@@ -51,7 +51,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(samplePreview.locator("ruby").first()).toBeVisible();
     await expect(samplePreview.locator("em.bouten").first()).toBeVisible();
 
-    // 初期設定値の確認（縦書き・ライト・18px・1.8）
+    // 初期設定値の確認（縦書き・ライト・18px・1.8・UD明朝・余白20px）
     await expect(samplePreview).toHaveAttribute(
       "data-writing-mode",
       "vertical-rl",
@@ -59,6 +59,19 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(samplePreview).toHaveAttribute("data-theme", "light");
     await expect(samplePreview).toHaveAttribute("data-font-size", "18");
     await expect(samplePreview).toHaveAttribute("data-line-height", "1.8");
+    await expect(samplePreview).toHaveAttribute(
+      "data-font-family",
+      "biz-ud-mincho",
+    );
+    await expect(samplePreview).toHaveAttribute("data-page-margin", "20");
+
+    const fontFamilySelect = page.getByTestId("font-family-select");
+    await expect(fontFamilySelect).toBeVisible();
+    await expect(fontFamilySelect).toHaveValue("biz-ud-mincho");
+
+    const pageMarginValue = page.getByTestId("page-margin-value");
+    await expect(pageMarginValue).toBeVisible();
+    await expect(pageMarginValue).toHaveText("20px");
 
     // 組版設定の変更:
     // (a) 組み方向を横書きへ切替し、プレビュー確認後に再度縦書きへ戻す（R1-01 / 縦書き負の scrollLeft 回帰保証のため）
@@ -90,6 +103,21 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await lineHeightIncrease.click();
     await expect(page.getByTestId("line-height-value")).toHaveText("2.0");
     await expect(samplePreview).toHaveAttribute("data-line-height", "2");
+
+    // (e) フォント種別を「教科書体（Klee）」に変更
+    await fontFamilySelect.selectOption("klee");
+    await expect(samplePreview).toHaveAttribute("data-font-family", "klee");
+    const kleePreviewStyle = await samplePreview.getAttribute("style");
+    expect(kleePreviewStyle).toContain("Klee");
+
+    // (f) 画面余白を 28px へ拡大（+4px を 2回クリック）
+    const pageMarginIncrease = page.getByTestId("page-margin-increase");
+    await pageMarginIncrease.click(); // 24px
+    await pageMarginIncrease.click(); // 28px
+    await expect(pageMarginValue).toHaveText("28px");
+    await expect(samplePreview).toHaveAttribute("data-page-margin", "28");
+    const marginPreviewStyle = await samplePreview.getAttribute("style");
+    expect(marginPreviewStyle).toContain("padding: 28px");
 
     // 選択中の「設定」タブを再タップしても重複履歴が追加されず、戻り先が破壊されないことを確認（R1-21）
     await tabSettings.click();
@@ -228,7 +256,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     const readerView = page.getByTestId("reader-view");
     await expect(readerView).toBeVisible();
 
-    // 設定画面（/settings）で変更した組版設定（縦書き・セピア・20px・2.0）がリーダー本文へ適用されていることの確認
+    // 設定画面（/settings）で変更した組版設定（縦書き・セピア・20px・2.0・教科書体klee・余白28px）がリーダー本文へ適用されていることの確認
     await expect(readerView).toHaveAttribute(
       "data-writing-mode",
       "vertical-rl",
@@ -236,6 +264,17 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(readerView).toHaveAttribute("data-theme", "sepia");
     await expect(readerView).toHaveAttribute("data-font-size", "20");
     await expect(readerView).toHaveAttribute("data-line-height", "2");
+    await expect(readerView).toHaveAttribute("data-font-family", "klee");
+    await expect(readerView).toHaveAttribute("data-page-margin", "28");
+
+    const readerStyle = await readerView.getAttribute("style");
+    expect(readerStyle).toContain("Klee");
+
+    const readerContent = page.getByTestId("reader-content");
+    await expect(readerContent).toBeVisible();
+    // 縦書きマルチカラム組版時の columnGap は pageMarginPx * 2 = 56px
+    const readerContentStyle = await readerContent.getAttribute("style");
+    expect(readerContentStyle).toContain("column-gap: 56px");
 
     // デフォルト縦書き時のページめくりモード初期有効化・行途切れなし（overflow-hidden）・ページインジケーター（1 / N）の検証（AC-RD-15, AC-RD-16）
     await expect(readerView).toHaveAttribute("data-paging-mode", "auto");
@@ -910,5 +949,176 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     });
     expect(exitInfo.exitAppCalled).toBe(true);
     expect(exitInfo.exitAppCount).toBe(1);
+  });
+
+  test("設定画面での全フォント種別（5種）選択・画面余白（8px〜48px境界値）操作とサンプルプレビューおよびリーダー画面（縦書き・横書き）への組版反映が正常に機能する", async ({
+    page,
+  }) => {
+    // 1. 設定画面（/settings）へ遷移
+    await page.goto("/settings");
+    const settingsPage = page.getByTestId("settings-page");
+    await expect(settingsPage).toBeVisible();
+
+    const samplePreview = page.getByTestId("sample-text-preview");
+    await expect(samplePreview).toBeVisible();
+
+    const fontFamilySelect = page.getByTestId("font-family-select");
+    await expect(fontFamilySelect).toBeVisible();
+
+    // 2. 5種すべてのフォント種別（biz-ud-mincho, mincho, biz-ud-gothic, gothic, klee）の選択切り替えとプレビュー属性・スタイルの即時反映を検証
+    const fontFamilies = [
+      { id: "biz-ud-mincho", fontNameSnippet: "BIZ UDMincho" },
+      { id: "mincho", fontNameSnippet: "Noto Serif CJK JP" },
+      { id: "biz-ud-gothic", fontNameSnippet: "BIZ UDGothic" },
+      { id: "gothic", fontNameSnippet: "Noto Sans CJK JP" },
+      { id: "klee", fontNameSnippet: "Klee" },
+    ] as const;
+
+    for (const font of fontFamilies) {
+      await fontFamilySelect.selectOption(font.id);
+      await expect(samplePreview).toHaveAttribute("data-font-family", font.id);
+      const previewStyle = await samplePreview.getAttribute("style");
+      expect(previewStyle).toContain(font.fontNameSnippet);
+    }
+
+    // 3. 画面余白ステッパーの境界値操作（MIN: 8px, MAX: 48px）とプレビュー反映の検証
+    const pageMarginDecrease = page.getByTestId("page-margin-decrease");
+    const pageMarginIncrease = page.getByTestId("page-margin-increase");
+    const pageMarginValue = page.getByTestId("page-margin-value");
+
+    // (a) 最小値（8px）まで縮小: 20 -> 16 -> 12 -> 8 (3回クリック)
+    for (let i = 0; i < 3; i++) {
+      await pageMarginDecrease.click();
+    }
+    await expect(pageMarginValue).toHaveText("8px");
+    await expect(pageMarginDecrease).toBeDisabled();
+    await expect(samplePreview).toHaveAttribute("data-page-margin", "8");
+    const minPreviewStyle = await samplePreview.getAttribute("style");
+    expect(minPreviewStyle).toContain("padding: 8px");
+
+    // (b) 最大値（48px）まで拡大: 8 -> 12 -> ... -> 48 (10回クリック)
+    for (let i = 0; i < 10; i++) {
+      await pageMarginIncrease.click();
+    }
+    await expect(pageMarginValue).toHaveText("48px");
+    await expect(pageMarginIncrease).toBeDisabled();
+    await expect(samplePreview).toHaveAttribute("data-page-margin", "48");
+    const maxPreviewStyle = await samplePreview.getAttribute("style");
+    expect(maxPreviewStyle).toContain("padding: 48px");
+
+    // (c) 扱いやすい中間値（32px）へ調整（4回縮小: 48 -> 44 -> 40 -> 36 -> 32）し、フォントを 'biz-ud-gothic' に設定
+    for (let i = 0; i < 4; i++) {
+      await pageMarginDecrease.click();
+    }
+    await expect(pageMarginValue).toHaveText("32px");
+    await fontFamilySelect.selectOption("biz-ud-gothic");
+    await expect(samplePreview).toHaveAttribute(
+      "data-font-family",
+      "biz-ud-gothic",
+    );
+    await expect(samplePreview).toHaveAttribute("data-page-margin", "32");
+
+    // 4. 設定の永続化確認（リロード後も維持されていること）
+    await page.reload();
+    await expect(fontFamilySelect).toHaveValue("biz-ud-gothic");
+    await expect(pageMarginValue).toHaveText("32px");
+    await expect(samplePreview).toHaveAttribute(
+      "data-font-family",
+      "biz-ud-gothic",
+    );
+    await expect(samplePreview).toHaveAttribute("data-page-margin", "32");
+
+    // 5. 作品データをシードしてリーダー画面（SCR-03）へ直接遷移
+    await page.waitForFunction(
+      () =>
+        typeof window.__yommyServices !== "undefined" &&
+        window.__yommyServices.isReady,
+    );
+    await page.evaluate(async () => {
+      const services = window.__yommyServices!;
+      const sampleUrl = "https://kakuyomu.jp/works/16817330658027210412";
+      const response = await services.httpClient.getHtml({ url: sampleUrl });
+      const parser = services.parserRegistry.requireParser(sampleUrl);
+      const parsedIndex = parser.parseNovelIndex(response.html, sampleUrl);
+      await services.novelRepository.upsertNovelWithToc(
+        parsedIndex,
+        new Date().toISOString(),
+      );
+    });
+
+    await page.goto("/novels/kakuyomu:16817330658027210412/chapters/1");
+    const readerView = page.getByTestId("reader-view");
+    await expect(readerView).toBeVisible();
+
+    // 6. リーダー縦書きページめくり組版への反映確認
+    await expect(readerView).toHaveAttribute(
+      "data-font-family",
+      "biz-ud-gothic",
+    );
+    await expect(readerView).toHaveAttribute("data-page-margin", "32");
+    await expect(readerView).toHaveAttribute(
+      "data-effective-paging-mode",
+      "paged",
+    );
+
+    const readerStyle = await readerView.getAttribute("style");
+    expect(readerStyle).toContain("BIZ UDGothic");
+
+    const readerContent = page.getByTestId("reader-content");
+    await expect(readerContent).toBeVisible();
+    // 縦書きマルチカラムの段送り余白 columnGap = pageMarginPx * 2 = 64px
+    const readerContentStyle = await readerContent.getAttribute("style");
+    expect(readerContentStyle).toContain("column-gap: 64px");
+
+    // ページ送り（次ページへタップ）が正常に機能すること
+    const readerBox = await readerView.boundingBox();
+    expect(readerBox).not.toBeNull();
+    if (readerBox) {
+      await page.mouse.click(
+        readerBox.x + readerBox.width * 0.1,
+        readerBox.y + readerBox.height * 0.4,
+      );
+    }
+    await expect(readerView).toHaveAttribute("data-current-page", "2");
+
+    // 前ページへタップ
+    if (readerBox) {
+      await page.mouse.click(
+        readerBox.x + readerBox.width * 0.9,
+        readerBox.y + readerBox.height * 0.4,
+      );
+    }
+    await expect(readerView).toHaveAttribute("data-current-page", "1");
+
+    // 7. 横書きスクロール表示時の余白スタイル反映確認
+    // 設定画面へ移動して横書きへ切り替え
+    await page.goto("/settings");
+    const toggleOrientation = page.getByTestId("toggle-orientation");
+    await toggleOrientation.click();
+    await expect(samplePreview).toHaveAttribute(
+      "data-writing-mode",
+      "horizontal-tb",
+    );
+
+    // リーダーへ戻る
+    await page.goto("/novels/kakuyomu:16817330658027210412/chapters/1");
+    await expect(readerView).toBeVisible();
+    await expect(readerView).toHaveAttribute(
+      "data-writing-mode",
+      "horizontal-tb",
+    );
+    await expect(readerView).toHaveAttribute(
+      "data-effective-paging-mode",
+      "scroll",
+    );
+    await expect(readerView).toHaveAttribute(
+      "data-font-family",
+      "biz-ud-gothic",
+    );
+    await expect(readerView).toHaveAttribute("data-page-margin", "32");
+
+    // 横書きスクロール時は container の padding が 32px
+    const horizReaderStyle = await readerView.getAttribute("style");
+    expect(horizReaderStyle).toContain("padding: 32px");
   });
 });

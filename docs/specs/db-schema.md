@@ -2,8 +2,8 @@
 type: spec-db-schema
 title: ローカル DB スキーマ定義（App 全体正本）
 description: SQLite（novels, chapters, download_queue, reader_settings, app_settings）のER図、テーブル構造、およびDDL定義の正本。
-status: "Review (#169)"
-updated: "2026-11-01"
+status: "Approved (#169)"
+updated: "2026-11-02"
 tags:
   [
     database,
@@ -27,7 +27,7 @@ tags:
     ho-24,
   ]
 related_specs:
-  - docs/specs/changes/issue-169-font-and-margin-customization.md
+  - docs/specs/changes/archive/issue-169-font-and-margin-customization.md
   - docs/specs/changes/issue-170-cache-management-and-capacity-visualization.md
   - docs/specs/changes/archive/issue-168-reader-pagination-and-touch-refinement.md
   - docs/specs/changes/archive/issue-122-reader-page-turning.md
