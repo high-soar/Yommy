@@ -139,6 +139,29 @@ describe("useStorageCache", () => {
     });
   });
 
+  it("chapterRepository 自体が null の場合も安全にフォールバックすること", async () => {
+    const services = createMockServices({
+      chapterRepository: null as unknown as ChapterRepository,
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ServiceContext.Provider value={services}>
+        {children}
+      </ServiceContext.Provider>
+    );
+
+    const { result } = renderHook(() => useStorageCache(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.summary).toEqual({
+      totalCachedChapters: 0,
+      totalByteSize: 0,
+    });
+  });
+
   it("getStorageCacheSummary が例外をスローした場合、安全にフォールバックし error を設定すること", async () => {
     const services = createMockServices({
       chapterRepoOverrides: {
@@ -165,6 +188,34 @@ describe("useStorageCache", () => {
       totalByteSize: 0,
     });
     expect(result.current.error).toBe("DB 読み込みエラー");
+  });
+
+  it("getStorageCacheSummary が Error 以外の例外をスローした場合、既定メッセージを設定すること", async () => {
+    const services = createMockServices({
+      chapterRepoOverrides: {
+        getStorageCacheSummary: vi.fn(async () => {
+          throw "不明なエラー";
+        }),
+      },
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ServiceContext.Provider value={services}>
+        {children}
+      </ServiceContext.Provider>
+    );
+
+    const { result } = renderHook(() => useStorageCache(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.summary).toEqual({
+      totalCachedChapters: 0,
+      totalByteSize: 0,
+    });
+    expect(result.current.error).toBe("キャッシュ情報の取得に失敗しました");
   });
 
   it("clearCache({ onlyRead: true }) で既読話キャッシュのみ削除し、再集計と通知が更新されること (AC-ST-15, AC-ST-16)", async () => {
@@ -267,6 +318,33 @@ describe("useStorageCache", () => {
       chapterRepoOverrides: {
         deleteAllCachedBodies: undefined,
       },
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ServiceContext.Provider value={services}>
+        {children}
+      </ServiceContext.Provider>
+    );
+
+    const { result } = renderHook(() => useStorageCache(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    await act(async () => {
+      await expect(
+        result.current.clearCache({ onlyRead: true }),
+      ).rejects.toThrow("キャッシュ削除機能が利用できません");
+    });
+
+    expect(result.current.error).toBe("キャッシュ削除機能が利用できません");
+    expect(result.current.isClearing).toBe(false);
+  });
+
+  it("chapterRepository 自体が null の状態で clearCache を呼び出した場合もエラーをスローすること", async () => {
+    const services = createMockServices({
+      chapterRepository: null as unknown as ChapterRepository,
     });
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
