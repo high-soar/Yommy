@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Review (#170)"
+status: "Review (#169)"
 updated: "2026-11-01"
 tags:
   - architecture
@@ -26,9 +26,12 @@ tags:
   - paging
   - gestures
   - pagination
+  - font-family
+  - page-margin
   - ho-23
   - ho-24
 related_specs:
+  - docs/specs/changes/issue-169-font-and-margin-customization.md
   - docs/specs/changes/issue-170-cache-management-and-capacity-visualization.md
   - docs/specs/changes/issue-168-reader-pagination-and-touch-refinement.md
   - docs/specs/changes/archive/issue-122-reader-page-turning.md
@@ -472,6 +475,17 @@ export interface ChapterRepository {
     totalByteSize: number;
   }>;
 }
+
+/**
+ * フォント種別（v0.5 Issue #169）
+ * - biz-ud-mincho: UD明朝（既定値、'BIZ UDMincho', 'Noto Serif CJK JP', 'Noto Serif JP', 'IPAexMincho', serif）
+ * - mincho: 明朝体（'Noto Serif CJK JP', 'Noto Serif JP', 'IPAexMincho', 'Hiragino Mincho ProN', 'Yu Mincho', serif）
+ * - biz-ud-gothic: UDゴシック（'BIZ UDGothic', 'Noto Sans CJK JP', 'Noto Sans JP', 'IPAexGothic', sans-serif）
+ * - gothic: ゴシック体（'Noto Sans CJK JP', 'Noto Sans JP', 'IPAexGothic', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif）
+ * - klee: 教科書体（'Klee One', 'Klee', 'Noto Serif CJK JP', serif）
+ */
+export type ReaderFontFamily =
+  "biz-ud-mincho" | "mincho" | "biz-ud-gothic" | "gothic" | "klee";
 
 /**
  * ページ送り動作モード
