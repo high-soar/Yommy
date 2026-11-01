@@ -55,6 +55,8 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
     theme,
     fontSizePx,
     lineHeight,
+    fontFamily,
+    pageMarginPx,
     initialScrollProgress,
     pagingMode,
     currentPage,
@@ -151,6 +153,8 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
       theme={theme}
       fontSizePx={fontSizePx}
       lineHeight={lineHeight}
+      fontFamily={fontFamily}
+      pageMarginPx={pageMarginPx}
       initialScrollProgress={initialScrollProgress}
       pagingMode={pagingMode}
       currentPage={currentPage}
