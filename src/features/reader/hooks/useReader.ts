@@ -15,6 +15,10 @@ import {
   PREFETCH_COUNT,
 } from "../../../shared/constants/cache";
 import {
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_PAGE_MARGIN_PX,
+} from "../../../shared/constants/typography";
+import {
   isChapterFresh,
   delay,
   toErrorMessage,
@@ -165,6 +169,11 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   const [theme, setTheme] = useState<ReaderTheme>("light");
   const [fontSizePx, setFontSizePx] = useState<number>(18);
   const [lineHeight, setLineHeight] = useState<number>(1.8);
+  const [fontFamily, setFontFamily] =
+    useState<ReaderFontFamily>(DEFAULT_FONT_FAMILY);
+  const [pageMarginPx, setPageMarginPx] = useState<number>(
+    DEFAULT_PAGE_MARGIN_PX,
+  );
   const [pagingMode, setPagingMode] = useState<ReaderPagingMode>("auto");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPagesState] = useState<number>(1);
@@ -453,6 +462,12 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             setTheme(settings.theme);
             setFontSizePx(settings.fontSizePx);
             setLineHeight(settings.lineHeight);
+            if (settings.fontFamily) {
+              setFontFamily(settings.fontFamily);
+            }
+            if (typeof settings.pageMarginPx === "number") {
+              setPageMarginPx(settings.pageMarginPx);
+            }
             if (settings.pagingMode) {
               setPagingMode(settings.pagingMode);
             }
@@ -987,6 +1002,8 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     theme,
     fontSizePx,
     lineHeight,
+    fontFamily,
+    pageMarginPx,
     initialScrollProgress,
     scrollProgress,
     pagingMode,
@@ -1010,5 +1027,5 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     flushBookmark,
     goToChapter,
     fetchNovelFromUrl,
-  } as unknown as UseReaderResult;
+  };
 }
