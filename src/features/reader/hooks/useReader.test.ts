@@ -2601,30 +2601,27 @@ describe("useReader", () => {
 
   describe("ページ送りモード・ページネーション状態管理 (v0.4 Issue #122, #150)", () => {
     describe("resolveEffectivePagingMode", () => {
-      it("pagingMode が 'paged' の場合、組み方向に関わらず 'paged' を返すこと", () => {
-        expect(resolveEffectivePagingMode("paged", "vertical-rl")).toBe(
-          "paged",
-        );
+      it("横書き（horizontal-tb）の場合、pagingMode に関わらず常に 'scroll' を返すこと (AC-RD-15, v0.5 Issue #168, #173)", () => {
         expect(resolveEffectivePagingMode("paged", "horizontal-tb")).toBe(
-          "paged",
-        );
-      });
-
-      it("pagingMode が 'scroll' の場合、組み方向に関わらず 'scroll' を返すこと", () => {
-        expect(resolveEffectivePagingMode("scroll", "vertical-rl")).toBe(
           "scroll",
         );
         expect(resolveEffectivePagingMode("scroll", "horizontal-tb")).toBe(
           "scroll",
         );
+        expect(resolveEffectivePagingMode("auto", "horizontal-tb")).toBe(
+          "scroll",
+        );
       });
 
-      it("pagingMode が 'auto' かつ縦書き（vertical-rl）の場合、'paged' を返すこと (AC-RD-15)", () => {
+      it("縦書き（vertical-rl）かつ pagingMode が 'paged' または 'auto' の場合、'paged' を返すこと (AC-RD-15)", () => {
+        expect(resolveEffectivePagingMode("paged", "vertical-rl")).toBe(
+          "paged",
+        );
         expect(resolveEffectivePagingMode("auto", "vertical-rl")).toBe("paged");
       });
 
-      it("pagingMode が 'auto' かつ横書き（horizontal-tb）の場合、'scroll' を返すこと (AC-RD-15)", () => {
-        expect(resolveEffectivePagingMode("auto", "horizontal-tb")).toBe(
+      it("縦書き（vertical-rl）かつ pagingMode が 'scroll' の場合、'scroll' を返すこと (AC-RD-15)", () => {
+        expect(resolveEffectivePagingMode("scroll", "vertical-rl")).toBe(
           "scroll",
         );
       });
@@ -2845,6 +2842,38 @@ describe("useReader", () => {
 
         expect(result.current.writingMode).toBe("vertical-rl");
         expect(result.current.effectivePagingMode).toBe("paged");
+      });
+
+      it("pagingMode が 'paged' であっても横書き（horizontal-tb）時は effectivePagingMode が 'scroll' 固定となること (v0.5 Issue #168, #173)", async () => {
+        const db = await resetTestDb();
+        const settingsRepo = new SqlSettingsRepository(db);
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo);
+
+        await settingsRepo.updateReaderSettings({
+          writingMode: "horizontal-tb",
+          pagingMode: "paged",
+        });
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              settingsRepository: settingsRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        expect(result.current.writingMode).toBe("horizontal-tb");
+        expect(result.current.pagingMode).toBe("paged");
+        expect(result.current.effectivePagingMode).toBe("scroll");
       });
     });
 
