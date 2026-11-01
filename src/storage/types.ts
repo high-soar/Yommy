@@ -139,6 +139,11 @@ export interface ChapterRepository {
     novelId: string,
     options?: { onlyRead?: boolean },
   ): Promise<number>;
+  deleteAllCachedBodies?(options?: { onlyRead?: boolean }): Promise<number>;
+  getStorageCacheSummary?(): Promise<{
+    totalCachedChapters: number;
+    totalByteSize: number;
+  }>;
 }
 
 export interface SettingsRepository {

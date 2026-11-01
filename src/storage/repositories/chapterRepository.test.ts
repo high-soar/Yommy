@@ -255,4 +255,288 @@ describe("SqlChapterRepository", () => {
       expect(novel?.totalByteSize).toBe(300);
     });
   });
+
+  describe("getStorageCacheSummary", () => {
+    it("空DBの場合は 0 件かつ 0 B を返すこと", async () => {
+      const emptyAdapter = await resetTestDb();
+      const emptyChapterRepo = new SqlChapterRepository(emptyAdapter);
+      const summary = await emptyChapterRepo.getStorageCacheSummary();
+      expect(summary).toEqual({
+        totalCachedChapters: 0,
+        totalByteSize: 0,
+      });
+    });
+
+    it("複数作品・未キャッシュ話混在時に全作品の合計キャッシュ話数と合計容量が取得できること", async () => {
+      const secondNovelId = "narou:n1234ab";
+      await novelRepo.upsertNovelWithToc(
+        {
+          siteType: "narou",
+          remoteWorkId: "n1234ab",
+          canonicalUrl: "https://ncode.syosetu.com/n1234ab/",
+          title: "第二小説",
+          author: "第二作者",
+          synopsis: "あらすじ2",
+          nextTocPageUrl: null,
+          chapters: [
+            {
+              chapterIndex: 1,
+              remoteChapterId: "1",
+              partTitle: null,
+              title: "話1",
+              url: "https://ncode.syosetu.com/n1234ab/1/",
+              publishedAt: "2026-01-01T00:00:00Z",
+            },
+            {
+              chapterIndex: 2,
+              remoteChapterId: "2",
+              partTitle: null,
+              title: "話2",
+              url: "https://ncode.syosetu.com/n1234ab/2/",
+              publishedAt: "2026-01-02T00:00:00Z",
+            },
+          ],
+        },
+        "2026-01-01T00:00:00Z",
+      );
+
+      // novel1 の 1話と 2話にキャッシュ保存 (100B + 200B)
+      await chapterRepo.saveChapterBody(
+        novelId,
+        1,
+        {
+          remoteChapterId: "ep1",
+          title: "1",
+          bodyHtml: "<p>1</p>",
+          byteSize: 100,
+          prevChapterUrl: null,
+          nextChapterUrl: null,
+        },
+        "2026-01-05T00:00:00Z",
+      );
+      await chapterRepo.saveChapterBody(
+        novelId,
+        2,
+        {
+          remoteChapterId: "ep2",
+          title: "2",
+          bodyHtml: "<p>2</p>",
+          byteSize: 200,
+          prevChapterUrl: null,
+          nextChapterUrl: null,
+        },
+        "2026-01-05T00:00:00Z",
+      );
+
+      // novel2 の 1話にキャッシュ保存 (500B)、2話は未キャッシュ
+      await chapterRepo.saveChapterBody(
+        secondNovelId,
+        1,
+        {
+          remoteChapterId: "1",
+          title: "話1",
+          bodyHtml: "<p>第二小説1</p>",
+          byteSize: 500,
+          prevChapterUrl: null,
+          nextChapterUrl: null,
+        },
+        "2026-01-05T00:00:00Z",
+      );
+
+      const summary = await chapterRepo.getStorageCacheSummary();
+      expect(summary).toEqual({
+        totalCachedChapters: 3,
+        totalByteSize: 800,
+      });
+    });
+  });
+
+  describe("deleteAllCachedBodies", () => {
+    const secondNovelId = "narou:n1234ab";
+
+    beforeEach(async () => {
+      // 2つ目の作品を追加
+      await novelRepo.upsertNovelWithToc(
+        {
+          siteType: "narou",
+          remoteWorkId: "n1234ab",
+          canonicalUrl: "https://ncode.syosetu.com/n1234ab/",
+          title: "第二小説",
+          author: "第二作者",
+          synopsis: "あらすじ2",
+          nextTocPageUrl: null,
+          chapters: [
+            {
+              chapterIndex: 1,
+              remoteChapterId: "1",
+              partTitle: null,
+              title: "話1",
+              url: "https://ncode.syosetu.com/n1234ab/1/",
+              publishedAt: "2026-01-01T00:00:00Z",
+            },
+            {
+              chapterIndex: 2,
+              remoteChapterId: "2",
+              partTitle: null,
+              title: "話2",
+              url: "https://ncode.syosetu.com/n1234ab/2/",
+              publishedAt: "2026-01-02T00:00:00Z",
+            },
+          ],
+        },
+        "2026-01-01T00:00:00Z",
+      );
+
+      // novelId: 1話(既読 100B), 2話(既読 200B), 3話(未読 300B)
+      await chapterRepo.saveChapterBody(
+        novelId,
+        1,
+        {
+          remoteChapterId: "ep1",
+          title: "1",
+          bodyHtml: "<p>1</p>",
+          byteSize: 100,
+          prevChapterUrl: null,
+          nextChapterUrl: null,
+        },
+        "2026-01-05T00:00:00Z",
+      );
+      await chapterRepo.saveChapterBody(
+        novelId,
+        2,
+        {
+          remoteChapterId: "ep2",
+          title: "2",
+          bodyHtml: "<p>2</p>",
+          byteSize: 200,
+          prevChapterUrl: null,
+          nextChapterUrl: null,
+        },
+        "2026-01-05T00:00:00Z",
+      );
+      await chapterRepo.saveChapterBody(
+        novelId,
+        3,
+        {
+          remoteChapterId: "ep3",
+          title: "3",
+          bodyHtml: "<p>3</p>",
+          byteSize: 300,
+          prevChapterUrl: null,
+          nextChapterUrl: null,
+        },
+        "2026-01-05T00:00:00Z",
+      );
+      await chapterRepo.markChapterRead(novelId, 1, true);
+      await chapterRepo.markChapterRead(novelId, 2, true);
+      await novelRepo.updateBookmark(novelId, 2, 0.5);
+
+      // secondNovelId: 1話(既読 500B), 2話(未読 未キャッシュ)
+      await chapterRepo.saveChapterBody(
+        secondNovelId,
+        1,
+        {
+          remoteChapterId: "1",
+          title: "話1",
+          bodyHtml: "<p>第二小説1</p>",
+          byteSize: 500,
+          prevChapterUrl: null,
+          nextChapterUrl: null,
+        },
+        "2026-01-05T00:00:00Z",
+      );
+      await chapterRepo.markChapterRead(secondNovelId, 1, true);
+      await novelRepo.updateBookmark(secondNovelId, 1, 0.8);
+    });
+
+    it("options 未指定（または onlyRead: false）時は全作品の全本文キャッシュを削除し作品ステータスが0に再計算されること", async () => {
+      const deletedCount = await chapterRepo.deleteAllCachedBodies();
+      expect(deletedCount).toBe(4);
+
+      // novelId の全チャプター確認
+      const ch1 = await chapterRepo.getChapter(novelId, 1);
+      const ch2 = await chapterRepo.getChapter(novelId, 2);
+      const ch3 = await chapterRepo.getChapter(novelId, 3);
+      expect(ch1?.bodyHtml).toBeNull();
+      expect(ch1?.byteSize).toBe(0);
+      expect(ch1?.downloadedAt).toBeNull();
+      expect(ch1?.isRead).toBe(true);
+
+      expect(ch2?.bodyHtml).toBeNull();
+      expect(ch2?.byteSize).toBe(0);
+      expect(ch2?.isRead).toBe(true);
+
+      expect(ch3?.bodyHtml).toBeNull();
+      expect(ch3?.byteSize).toBe(0);
+      expect(ch3?.isRead).toBe(false);
+
+      // secondNovelId のチャプター確認
+      const chSecond1 = await chapterRepo.getChapter(secondNovelId, 1);
+      expect(chSecond1?.bodyHtml).toBeNull();
+      expect(chSecond1?.byteSize).toBe(0);
+      expect(chSecond1?.isRead).toBe(true);
+
+      // 各親作品レコードの再計算値確認 (cachedChapters = 0, totalByteSize = 0)
+      const novel1 = await novelRepo.getNovelById(novelId);
+      expect(novel1?.cachedChapters).toBe(0);
+      expect(novel1?.totalByteSize).toBe(0);
+      expect(novel1?.bookmarkChapterIndex).toBe(2);
+      expect(novel1?.bookmarkScrollProgress).toBe(0.5);
+
+      const novel2 = await novelRepo.getNovelById(secondNovelId);
+      expect(novel2?.cachedChapters).toBe(0);
+      expect(novel2?.totalByteSize).toBe(0);
+      expect(novel2?.bookmarkChapterIndex).toBe(1);
+      expect(novel2?.bookmarkScrollProgress).toBe(0.8);
+    });
+
+    it("onlyRead: false を明示指定した場合も全キャッシュが削除されること", async () => {
+      const deletedCount = await chapterRepo.deleteAllCachedBodies({
+        onlyRead: false,
+      });
+      expect(deletedCount).toBe(4);
+
+      const summary = await chapterRepo.getStorageCacheSummary();
+      expect(summary.totalCachedChapters).toBe(0);
+      expect(summary.totalByteSize).toBe(0);
+    });
+
+    it("onlyRead: true の場合は既読話のみ削除され、未読キャッシュ話は保持されること", async () => {
+      const deletedCount = await chapterRepo.deleteAllCachedBodies({
+        onlyRead: true,
+      });
+      expect(deletedCount).toBe(3);
+
+      const ch1 = await chapterRepo.getChapter(novelId, 1);
+      expect(ch1?.bodyHtml).toBeNull();
+      expect(ch1?.byteSize).toBe(0);
+
+      const ch3 = await chapterRepo.getChapter(novelId, 3);
+      expect(ch3?.bodyHtml).toBe("<p>3</p>");
+      expect(ch3?.byteSize).toBe(300);
+
+      const chSecond1 = await chapterRepo.getChapter(secondNovelId, 1);
+      expect(chSecond1?.bodyHtml).toBeNull();
+      expect(chSecond1?.byteSize).toBe(0);
+
+      const novel1 = await novelRepo.getNovelById(novelId);
+      expect(novel1?.cachedChapters).toBe(1);
+      expect(novel1?.totalByteSize).toBe(300);
+
+      const novel2 = await novelRepo.getNovelById(secondNovelId);
+      expect(novel2?.cachedChapters).toBe(0);
+      expect(novel2?.totalByteSize).toBe(0);
+    });
+
+    it("キャッシュ対象が存在しない場合は 0 を返し、エラーなく正常終了すること", async () => {
+      await chapterRepo.deleteAllCachedBodies();
+
+      const deletedCount = await chapterRepo.deleteAllCachedBodies();
+      expect(deletedCount).toBe(0);
+
+      const summary = await chapterRepo.getStorageCacheSummary();
+      expect(summary.totalCachedChapters).toBe(0);
+      expect(summary.totalByteSize).toBe(0);
+    });
+  });
 });
