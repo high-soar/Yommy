@@ -12,6 +12,7 @@ import rankingEmptyHtml from "../../../parsers/kakuyomu/__fixtures__/ranking_res
 import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 import { sampleRankingItem1, sampleRankingItem2 } from "../types";
 import type { HttpResponse } from "../../../bridges/http/types";
+import type { SyncEngine } from "../../cloud-sync/services/syncEngine";
 
 describe("useNovelRanking", () => {
   let mockHttpClient: MockHttpClient;
@@ -247,6 +248,46 @@ describe("useNovelRanking", () => {
     expect(savedId).toBeNull();
     expect(result.current.error).toBe("Work Detail Fetch Failed");
     expect(result.current.addingWorkId).toBeNull();
+  });
+
+  it("addNovelToBookshelf で作品追加に成功した際、syncEngine.notifyChanged が呼び出されること (R1-26)", async () => {
+    const mockSyncEngine = {
+      notifyChanged: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const wrapperWithSyncEngine = ({
+      children,
+    }: {
+      children: React.ReactNode;
+    }) =>
+      React.createElement(
+        ServiceProvider,
+        {
+          services: {
+            httpClient: mockHttpClient,
+            syncEngine: mockSyncEngine as unknown as SyncEngine,
+          },
+        },
+        React.createElement(
+          RouterProvider,
+          { initialPath: "/ranking" },
+          children,
+        ),
+      );
+
+    const { result } = renderHook(() => useNovelRanking(), {
+      wrapper: wrapperWithSyncEngine,
+    });
+
+    await waitFor(() => {
+      expect(result.current.items.length).toBeGreaterThan(0);
+    });
+
+    await act(async () => {
+      await result.current.addNovelToBookshelf(sampleRankingItem1);
+    });
+
+    expect(mockSyncEngine.notifyChanged).toHaveBeenCalled();
   });
 
   it("先行する作品追加完了時に後続作品の addingWorkId が上書き解除されないこと", async () => {

@@ -160,16 +160,6 @@ Yommy/
     │   └── webview/
     │       ├── types.ts               # WebViewDomBridge インターフェース定義（v0.4〜）
     │       └── webviewDomBridge.ts    # 内蔵WebView DOMキャプチャ実装
-    ├── features/                      # 【機能別モジュール群】
-    │   ├── bookshelf/                 # 本棚画面（SCR-01）
-    │   ├── novel-detail/              # 作品詳細・目次画面（SCR-02）
-    │   ├── reader/                    # 小説リーダー画面（SCR-03）
-    │   ├── search/                    # 検索画面（SCR-06）
-    │   ├── ranking/                   # ランキング画面（SCR-07）
-    │   ├── settings/                  # 設定画面（SCR-05）
-    │   └── cloud-sync/                # クラウド同期（Google Drive appDataFolder・SyncEngine）（Issue #120）
-    │       ├── types.ts               # YommySyncState, SyncNovelData 等の同期データ型定義
-    │       └── services/              # スキーマ検証・競合マージ・デバウンス同期エンジン
     ├── parsers/                       # 【1. Parser Layer（スクレイピング・DOM解析層）】
     │   ├── types.ts                   # NovelParser, ParsedNovelMetadata, ParsedChapterContent, ParsedSearchResult, ParsedRankingResult 等の型契約
     │   ├── parserRegistry.ts          # URL から対応サイト（kakuyomu / narou 等）を判定・ディスパッチ
@@ -203,7 +193,10 @@ Yommy/
     │   ├── webview-import/            # SCR-04: 内蔵ブラウザ表示・DOMインポート（v0.4〜）
     │   ├── settings/                  # SCR-05: 設定画面（組版・テーマ設定・サンプル文章プレビュー、v0.2〜）
     │   ├── search/                    # SCR-06: 検索画面（カクヨム作品検索・カードから本棚追加・SCR-02遷移、v0.3〜）
-    │   └── ranking/                   # SCR-07: ランキング画面（期間/ジャンル別ランキング・カードから本棚追加・SCR-02遷移、v0.3〜）
+    │   ├── ranking/                   # SCR-07: ランキング画面（期間/ジャンル別ランキング・カードから本棚追加・SCR-02遷移、v0.3〜）
+    │   └── cloud-sync/                # クラウド同期（Google Drive appDataFolder・SyncEngine）（Issue #120）
+    │       ├── types.ts               # YommySyncState, SyncNovelData 等の同期データ型定義
+    │       └── services/              # スキーマ検証・競合マージ・デバウンス同期エンジン
     └── shared/                        # 複数機能で共有する汎用 UI コンポーネント・ユーティリティ
         ├── constants/                 # キャッシュ・レートリミット等の共有定数（cache.ts）
         ├── utils/                     # キャッシュ判定等の共有ユーティリティ（cache.ts）
@@ -601,14 +594,19 @@ export interface CloudSyncBridge {
 - **ゼロトラスト検証**:
   - 受信した JSON に対し、通信前に厳格なランタイムスキーマ検証（`version === 1`、必須フィールド、数値範囲、プロトタイプ汚染防止）を実行する。
   - 作品 ID（`id`）が `${siteType}:${remoteWorkId}` と厳密に一致することを検証する。
-  - `deletedNovels` のキーが空文字（`""`）や空白文字でないことを検証し、`novels` と `deletedNovels` の双方に同一キーが存在する場合は、本棚現存作品を優先し `deletedNovels` から安全に除外する。
+  - `deletedNovels` のキーが空文字（`""`）や空白文字でないことを検証し、`novels` と `deletedNovels` の双方に同一キーが存在する場合は、作品の `updatedAt` と `deletedAt` を比較し、`updatedAt >= deletedAt` であれば再登録を優先して `deletedNovels` から除外、`deletedAt > updatedAt` であれば削除を優先して `novels` から該当作品を除去する（R1-28）。
   - 未登録作品の自動目次取得（`upsertNovelWithToc`）前に、`canonicalUrl` を既存の `parseNovelUrl`（`https://kakuyomu.jp/works/<id>` ホワイトリスト検証）にかけ、不正な URL や未知ドメインへのリクエスト（SSRF）を遮断する。さらに `canonicalUrl` から抽出した `siteType` / `workId` とリモート作品データの整合性を検証し、正規化 URL で通信を行う。
+  - 401 Unauthorized エラーの判定は、作品 URL や作品 ID に偶然 `401` が含まれている場合の誤爆を防ぐため、HTTP ステータスコード 401、または単語境界を考慮した正規表現（`/\b401\s+Unauthorized\b/i` 等）を用いて厳格に行う（R1-13）。
 - **競合解決（マージ）ルール**:
-  - 新規作品の自動目次補完: リモートにのみ存在する作品は `canonicalUrl` から目次を自動取得してローカル DB に登録し、リモートのしおり話数・既読状態を即時反映する。
-  - 作品削除の伝播（Tombstone）と再登録保護: `deletedNovels` の削除日時がローカル作品の登録/更新日時より新しければローカル DB からカスケード削除する。ただし、リモートの `novels` に同一作品 ID が存在し `updatedAt >= deletedAt` である場合は、リモート再登録作品と判定してローカル削除伝播をスキップする。ローカルで削除された作品も `deleted_novels` テーブルに Tombstone を記録し次回 Push 時に結合する。本棚現存作品の ID は Push 時の `deletedNovels` から除外し、`pushCurrentState` および `pullAndMerge` 完了時にローカルの古い Tombstone をパージ（`purgeDeletedNovels`）する。
+  - 新規作品の自動目次補完: リモートにのみ存在する作品は `canonicalUrl` から目次を自動取得してローカル DB に登録し、リモートのしおり話数・既読状態、および最終読了日時（`lastReadAt`）・お気に入りフラグ（`isFavorite`）を正しく復元・反映する（`novelRepository.updateSyncMetadata`、R1-12）。
+  - 作品単位のエラーハンドリング: リモート作品の目次取得・保存処理は作品単位で `try/catch` され、通信障害やパーサー不整合等で 1 作品の取り込みに失敗した場合でも警告ログを出力してスキップし、他の正常な作品の同期処理を継続する（R1-05）。
+  - 作品削除の伝播（Tombstone）と再登録保護: `deletedNovels` の削除日時がローカル作品の登録/更新日時より新しければローカル DB からカスケード削除する。ローカルで削除された作品は、削除後に他端末で明示的に再追加された場合（リモートの `createdAt` がローカルの `deletedAt` より後である場合）にのみ復元を許可し、単なる `updatedAt` の更新による意図しない削除作品の復活を防止する（R1-11）。本棚へ作品が再登録された際は `deleted_novels` テーブルから該当作品 ID の Tombstone を即座に削除する（R1-28）。
+  - Push 前の作品和集合マージ: `pushCurrentState` 実行時、ローカルの `novels` のみでリモートを全上書きするのではなく、リモートに存在する `novels` と和集合をとってマージする。これにより、他端末で追加された作品が自端末の Push によって消失することを防止する（R1-10）。
+  - 30日経過 Tombstone の自動パージ: 削除日時から30日（`TOMBSTONE_RETENTION_MS` = 30日）以上経過した古い Tombstone はローカル DB（`purgeExpiredDeletedNovels`）およびリモートへの Push 対象から自動的にパージし、同期データ容量の肥大化を防止する（R1-28）。
   - しおり話数のマージ: 同一作品が両端末にある場合、`lastReadAt` が新しい方の `bookmarkChapterIndex` を採用する（話数変更時はスクロール率を `0.0` にリセット、同一話数の場合は端末ローカルのスクロール率を維持）。
   - 既読状態のマージ: 両端末の既読エピソード ID の和集合（Union）を採用する。
 - **自動同期トリガーと排他・デバウンス制御**:
+  - 未連携時のガード: `cloudSyncBridge.getAuthState()` が `connected` 状態でない場合、`pullAndMerge()` および `pushCurrentState()` は通信を行わず即座に安全にリターンする（R1-14）。
   - 自動 Pull: アプリ起動時、およびバックグラウンド復帰時（休止から5分以上経過）。未送信ローカル変更がある場合はマージ後に自動 Push。
   - 自動 Push: 本棚作品追加・削除、およびリーダー話数遷移・既読更新時に 2〜3秒（2500ms）デバウンス付き非同期実行。
   - 多重並行実行防止（排他制御・Single-flight）: `SyncEngine` 内部に排他制御機構（`isSyncing` フラグおよび FIFO キュー排他制御）を導入し、`pullAndMerge`、`pushCurrentState`、`sync` が同時に重なって実行されないよう安全にガードする。`sync()` が実行中に重複して呼び出された場合、実行中の Promise を再利用して単一実行に合流（Single-flight）させる。`scheduleDebouncedPush()` では生成した Promise に内部で `.catch(() => {})` を登録し、未処理例外（`UnhandledPromiseRejection`）を防止する。

@@ -69,6 +69,7 @@ export function useBookshelf(
     novelRepository,
     appSettingsRepository,
     syncEngine,
+    cloudSyncBridge,
     isReady,
   } = useServices();
 
@@ -221,24 +222,28 @@ export function useBookshelf(
           runSequentialUpdateCheck(autoTargets);
         }
 
-        // クラウド同期連携: 初回自動 Pull (AC-BS-13)
+        // クラウド同期連携: 初回自動 Pull (AC-BS-13, R1-14)
         if (syncEngine) {
-          syncEngine
-            .pullAndMerge()
-            .then(async () => {
-              if (!cancelled && isMountedRef.current) {
-                const refreshed = await novelRepository.listNovels(
-                  sortOrderRef.current,
-                );
-                if (!cancelled && isMountedRef.current) {
-                  setNovels(refreshed);
-                  novelsRef.current = refreshed;
-                }
+          (async () => {
+            if (cloudSyncBridge?.getAuthState) {
+              const authState = await cloudSyncBridge.getAuthState();
+              if (authState.status !== "connected") {
+                return;
               }
-            })
-            .catch(() => {
-              // オフライン時等の Pull 失敗は既存表示を維持
-            });
+            }
+            await syncEngine.pullAndMerge();
+            if (!cancelled && isMountedRef.current) {
+              const refreshed = await novelRepository.listNovels(
+                sortOrderRef.current,
+              );
+              if (!cancelled && isMountedRef.current) {
+                setNovels(refreshed);
+                novelsRef.current = refreshed;
+              }
+            }
+          })().catch(() => {
+            // オフライン時等の Pull 失敗は既存表示を維持
+          });
         }
       } catch (err: unknown) {
         if (!cancelled) {
@@ -255,6 +260,7 @@ export function useBookshelf(
     };
   }, [
     appSettingsRepository,
+    cloudSyncBridge,
     isReady,
     novelRepository,
     runSequentialUpdateCheck,
@@ -274,20 +280,24 @@ export function useBookshelf(
           const elapsed = Date.now() - lastHiddenAt;
           lastHiddenAt = null;
           if (elapsed >= backgroundThresholdMs && syncEngine) {
-            syncEngine
-              .pullAndMerge()
-              .then(async () => {
-                if (isMountedRef.current) {
-                  const refreshed = await novelRepository.listNovels(
-                    sortOrderRef.current,
-                  );
-                  if (isMountedRef.current) {
-                    setNovels(refreshed);
-                    novelsRef.current = refreshed;
-                  }
+            (async () => {
+              if (cloudSyncBridge?.getAuthState) {
+                const authState = await cloudSyncBridge.getAuthState();
+                if (authState.status !== "connected") {
+                  return;
                 }
-              })
-              .catch(() => {});
+              }
+              await syncEngine.pullAndMerge();
+              if (isMountedRef.current) {
+                const refreshed = await novelRepository.listNovels(
+                  sortOrderRef.current,
+                );
+                if (isMountedRef.current) {
+                  setNovels(refreshed);
+                  novelsRef.current = refreshed;
+                }
+              }
+            })().catch(() => {});
           }
         }
       }
@@ -304,7 +314,7 @@ export function useBookshelf(
         );
       }
     };
-  }, [novelRepository, syncEngine]);
+  }, [cloudSyncBridge, novelRepository, syncEngine]);
 
   const setSortOrder = useCallback(
     async (order: BookshelfSortOrder): Promise<void> => {
