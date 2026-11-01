@@ -456,5 +456,115 @@ describe("NovelDetailPage", () => {
         expect(onSelectEpisode).not.toHaveBeenCalled();
       });
     });
+
+    describe("本文キャッシュ整理ダイアログ連携 (AC-ND-21, AC-ND-22, TR-19)", () => {
+      it("isClearCacheDialogOpen === true のとき ClearCacheConfirmDialog が描画されること (AC-ND-21)", () => {
+        render(
+          <NovelDetailPage
+            {...defaultPageProps}
+            isClearCacheDialogOpen={true}
+          />,
+        );
+
+        expect(
+          screen.getByTestId("clear-cache-confirm-dialog"),
+        ).toBeInTheDocument();
+      });
+
+      it("isClearCacheDialogOpen が false または未定義のとき ClearCacheConfirmDialog が非表示であること", () => {
+        render(
+          <NovelDetailPage
+            {...defaultPageProps}
+            isClearCacheDialogOpen={false}
+          />,
+        );
+
+        expect(
+          screen.queryByTestId("clear-cache-confirm-dialog"),
+        ).not.toBeInTheDocument();
+      });
+
+      it("ヘッダーの「本文キャッシュ整理」クリック時に onOpenClearCacheDialog が呼び出されること", async () => {
+        const user = userEvent.setup();
+        const onOpenClearCacheDialog = vi.fn();
+
+        render(
+          <NovelDetailPage
+            {...defaultPageProps}
+            onOpenClearCacheDialog={onOpenClearCacheDialog}
+          />,
+        );
+
+        const openButton = screen.getByTestId("open-clear-cache-dialog-button");
+        await user.click(openButton);
+        expect(onOpenClearCacheDialog).toHaveBeenCalledTimes(1);
+      });
+
+      it("ダイアログで既読のみ削除をクリックすると onConfirmClearCache({ onlyRead: true }) が呼び出されること (AC-ND-21)", async () => {
+        const user = userEvent.setup();
+        const onConfirmClearCache = vi.fn();
+
+        render(
+          <NovelDetailPage
+            {...defaultPageProps}
+            isClearCacheDialogOpen={true}
+            onConfirmClearCache={onConfirmClearCache}
+          />,
+        );
+
+        const readButton = screen.getByTestId(
+          "confirm-clear-read-cache-button",
+        );
+        await user.click(readButton);
+        expect(onConfirmClearCache).toHaveBeenCalledWith({ onlyRead: true });
+      });
+
+      it("ダイアログですべて削除をクリックすると onConfirmClearCache({ onlyRead: false }) が呼び出されること (AC-ND-21)", async () => {
+        const user = userEvent.setup();
+        const onConfirmClearCache = vi.fn();
+
+        render(
+          <NovelDetailPage
+            {...defaultPageProps}
+            isClearCacheDialogOpen={true}
+            onConfirmClearCache={onConfirmClearCache}
+          />,
+        );
+
+        const allButton = screen.getByTestId("confirm-clear-all-cache-button");
+        await user.click(allButton);
+        expect(onConfirmClearCache).toHaveBeenCalledWith({ onlyRead: false });
+      });
+
+      it("ダイアログでキャンセルをクリックすると onCloseClearCacheDialog が呼び出されること", async () => {
+        const user = userEvent.setup();
+        const onCloseClearCacheDialog = vi.fn();
+
+        render(
+          <NovelDetailPage
+            {...defaultPageProps}
+            isClearCacheDialogOpen={true}
+            onCloseClearCacheDialog={onCloseClearCacheDialog}
+          />,
+        );
+
+        const cancelButton = screen.getByTestId("cancel-clear-cache-button");
+        await user.click(cancelButton);
+        expect(onCloseClearCacheDialog).toHaveBeenCalledTimes(1);
+      });
+
+      it("refreshMessage にキャッシュ削除完了メッセージが設定された場合、インライン通知に表示されること (AC-ND-22)", () => {
+        render(
+          <NovelDetailPage
+            {...defaultPageProps}
+            refreshMessage="本文キャッシュを削除しました（2話）"
+          />,
+        );
+
+        const notice = screen.getByTestId("novel-detail-notice");
+        expect(notice).toBeInTheDocument();
+        expect(notice).toHaveTextContent("本文キャッシュを削除しました（2話）");
+      });
+    });
   });
 });
