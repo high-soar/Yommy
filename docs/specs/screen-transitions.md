@@ -29,7 +29,7 @@ tags:
   - ho-25
 related_specs:
   - docs/specs/changes/archive/issue-169-font-and-margin-customization.md
-  - docs/specs/changes/issue-170-cache-management-and-capacity-visualization.md
+  - docs/specs/changes/archive/issue-170-cache-management-and-capacity-visualization.md
   - docs/specs/changes/archive/issue-168-reader-pagination-and-touch-refinement.md
   - docs/specs/requirements.md
   - docs/specs/architecture.md

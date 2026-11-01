@@ -27,7 +27,7 @@ tags:
   ]
 related_specs:
   - docs/specs/changes/archive/issue-169-font-and-margin-customization.md
-  - docs/specs/changes/issue-170-cache-management-and-capacity-visualization.md
+  - docs/specs/changes/archive/issue-170-cache-management-and-capacity-visualization.md
   - docs/specs/changes/archive/issue-168-reader-pagination-and-touch-refinement.md
   - docs/specs/changes/archive/issue-122-reader-page-turning.md
   - docs/specs/changes/archive/issue-120-cloud-sync-google-drive.md

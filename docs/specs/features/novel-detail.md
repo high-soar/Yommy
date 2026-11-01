@@ -2,7 +2,7 @@
 type: spec-feature
 title: "作品詳細・目次画面仕様書（SCR-02: Novel Detail & TOC）"
 description: 登録済み作品のヘッダー情報・あらすじ表示、章見出し付きエピソード一覧（キャッシュ済み・既読・しおり状態）、目次更新（再取得）、作品削除、およびリーダー画面への閲覧遷移を提供する作品詳細・目次画面（SCR-02）の正本仕様。
-status: "Review (#170)"
+status: "Approved"
 updated: "2026-11-01"
 tags:
   [
@@ -22,7 +22,7 @@ tags:
     ho-24,
   ]
 related_specs:
-  - docs/specs/changes/issue-170-cache-management-and-capacity-visualization.md
+  - docs/specs/changes/archive/issue-170-cache-management-and-capacity-visualization.md
   - docs/specs/requirements.md
   - docs/specs/architecture.md
   - docs/specs/db-schema.md
@@ -448,10 +448,10 @@ export interface UseNovelDetailResult {
    - `AbortController` を生成し、1話ごとに `PREFETCH_INTERVAL_MS`（1.5秒）のウェイト間隔を空けながら直列に取得を実行する。
      - 7日経過キャッシュが存在する場合は短タイムアウト（3秒）、未キャッシュ話は標準タイムアウト（10秒）で取得する。
      - HTML 取得後、パーサーで解析して `chapterRepository.saveChapterBody` で SQLite に保存する。
-     - 1話保存成功ごとに `novel`（`cachedChapters` 更新）および `chapters`（`downloadedAt` 更新）の State を即時更新し、画面にリアルタイム反映する。
+     - 1話保存成功ごとに `novel`（`cachedChapters` および `totalByteSize` 更新）および `chapters`（`downloadedAt` / `byteSize` 更新）の State を即時更新し、画面にリアルタイム反映する。
      - 進捗 `batchCacheProgress = { current: i + 1, total: targets.length }` を更新する。
    - 手動中断（`cancelBatchCache`）または画面離脱（アンマウント）時は `AbortController.abort()` で直ちに安全に処理を停止する（取得済み話数は SQLite 内に保持される）。
-   - 全話取得成功時は `refreshMessage = "全話のキャッシュを取得しました"`（または `"N話のキャッシュを取得しました"`）を設定し、`isBatchCaching = false`, `batchCacheProgress = null` とする。
+   - 全話取得成功時は `novelRepository.getNovelById(novelId)` で作品最新情報を再取得・同期し、`refreshMessage = "全話のキャッシュを取得しました"`（または `"N話のキャッシュを取得しました"`）を設定し、`isBatchCaching = false`, `batchCacheProgress = null` とする。
    - 取得失敗時は処理を中断し、`error = "第X話の取得に失敗したためキャッシュを中断しました"` を設定して `isBatchCaching = false` とする。
 6. **本文キャッシュ削除パイプライン（`TR-19`、`v0.5` Issue #170）**:
    - `isClearingCache = true`, `error = null` にセットする。
@@ -479,7 +479,7 @@ export interface UseNovelDetailResult {
 | **`AC-ND-08`** | しおり位置への初期スクロール自動調整                     | 対象作品に `bookmarkChapterIndex` が設定されている場合、初回データ読み込み完了時に該当話（`data-chapter-index`）の要素が各話リストスクロール領域の先頭（上端）に来るよう自動スクロールされること。また、「目次を更新」実行時には自動スクロールが再発火せず、ユーザーの現在スクロール位置が維持されること。                                                                                                                                                              | `SYS-REQ-01, 12`                              |
 | **`AC-ND-09`** | 100dvh 全画面シェル・下部タブ・階層復帰                  | 作品詳細画面が `h-full flex flex-col overflow-hidden` の全画面シェル内に配置され、中間コンテンツ領域（`flex-1 min-h-0 overflow-y-auto`）のみがスクロール可能であること。画面下部に共通 `BottomTabBar`（`bottom-tab-bar`）が 4 タブ構成で表示され、各タブタップ（`TR-01`, `TR-01b`）により各画面へ遷移でき、OS バックキー（`TR-07`）により直前の遷移元画面（本棚 `SCR-01`、検索 `SCR-06`、ランキング `SCR-07`、履歴なし時は本棚 `/`）へ論理復帰できること。              | `SYS-REQ-16, 20` / `TR-01`, `TR-01b`, `TR-07` |
 | **`AC-ND-10`** | 作品詳細表示による本棚「NEW」バッジ解除                  | 本棚で「NEW」バッジが表示されていた作品の詳細画面（`SCR-02`）を開いた際（`TR-02` 等）、`clearNewUpdate` が実行されて作品の `has_new_update` が 0 に解除され、本棚へ戻った際（`TR-07`）に対象作品カードの「NEW」バッジが消去されていること。                                                                                                                                                                                                                             | `SYS-REQ-04` / `TR-02`, `TR-07`               |
-| **`AC-ND-11`** | 未取得話の一括キャッシュ実行と進捗表示                   | 「未取得話を一括キャッシュ」ボタンを押下すると、未キャッシュ話を対象に 1.5秒間隔のウェイト制御を挟んで順次本文を取得して SQLite に保存し、進行状況（`batch-cache-progress`）が表示され、各話取得ごとに取得済み話数・キャッシュバッジ（`取得済み`）が即時更新されること。                                                                                                                                                                                                | `SYS-REQ-02, 03, 05` / `TR-18`                |
+| **`AC-ND-11`** | 未取得話の一括キャッシュ実行と進捗表示                   | 「未取得話を一括キャッシュ」ボタンを押下すると、未キャッシュ話を対象に 1.5秒間隔のウェイト制御を挟んで順次本文を取得して SQLite に保存し、進行状況（`batch-cache-progress`）が表示され、各話取得ごとに取得済み話数・キャッシュ容量・キャッシュバッジ（`取得済み`）が即時更新されること。                                                                                                                                                                                | `SYS-REQ-02, 03, 05` / `TR-18`                |
 | **`AC-ND-12`** | 一括キャッシュの中断と安全性                             | 一括キャッシュ実行中に「中断」ボタン（`batch-cache-cancel-button`）を押下した際、または画面離脱（アンマウント）時に `AbortController` により直ちに通信が停止し、それまでに保存された本文データが破損せず SQLite に保持されること。                                                                                                                                                                                                                                      | `SYS-REQ-02, 03, 05` / `TR-18`                |
 | **`AC-ND-13`** | 全話取得済み時のボタン状態制御                           | 対象作品にエピソードが存在し（`chapters.length > 0`）、かつ全エピソードがキャッシュ済みかつ有効期間内（7日以内）である場合、一括キャッシュボタンが disabled 化され「全話キャッシュ済み」と表示されること。エピソードが 0 話の場合は `isAllCached = false` かつ一括キャッシュボタンが disabled（「未取得話を一括キャッシュ」）となること。                                                                                                                               | `SYS-REQ-02, 05` / `TR-18`                    |
 | **`AC-ND-20`** | 作品ヘッダーでのキャッシュ容量表示                       | 作品詳細ヘッダー（`data-testid="novel-detail-stats"`）において、`全 {novel.totalChapters} 話（取得済み {novel.cachedChapters} 話 / {formatByteSize(novel.totalByteSize)}）` の形式でキャッシュ容量がフォーマット表示されること。                                                                                                                                                                                                                                        | `SYS-REQ-05` / `TR-02`                        |
