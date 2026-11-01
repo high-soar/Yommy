@@ -8,14 +8,18 @@ const meta: Meta<typeof SettingsPage> = {
   args: {
     writingMode: "vertical-rl",
     theme: "light",
+    fontFamily: "biz-ud-mincho",
     fontSizePx: 18,
     lineHeight: 1.8,
+    pageMarginPx: 20,
     pagingMode: "auto",
     isLoading: false,
     onToggleWritingMode: fn(),
     onChangeTheme: fn(),
     onChangeFontSize: fn(),
     onChangeLineHeight: fn(),
+    onChangeFontFamily: fn(),
+    onChangePageMargin: fn(),
     onChangePagingMode: fn(),
   },
 };
@@ -24,15 +28,17 @@ export default meta;
 type Story = StoryObj<typeof SettingsPage>;
 
 /**
- * デフォルト表示（縦書き・ライトテーマ、文字サイズ 18px、行間 1.8）
+ * デフォルト表示（縦書き・ライトテーマ、文字サイズ 18px、行間 1.8、UD明朝、余白 20px）
  */
 export const Default: Story = {
   name: "デフォルト（縦書き・ライト）",
   args: {
     writingMode: "vertical-rl",
     theme: "light",
+    fontFamily: "biz-ud-mincho",
     fontSizePx: 18,
     lineHeight: 1.8,
+    pageMarginPx: 20,
     isLoading: false,
   },
 };
@@ -52,31 +58,33 @@ export const HorizontalSepia: Story = {
 };
 
 /**
- * 最小境界値表示（文字サイズ 12px、行間 1.4、ダークテーマ）
+ * 最小境界値表示（文字サイズ 12px、行間 1.4、余白 8px、ダークテーマ）
  * 縮小ステッパーボタンが無効（disabled）になる
  */
 export const MinBoundaries: Story = {
-  name: "最小境界値（12px / 1.4・ダーク）",
+  name: "最小境界値（12px / 1.4 / 8px・ダーク）",
   args: {
     writingMode: "vertical-rl",
     theme: "dark",
     fontSizePx: 12,
     lineHeight: 1.4,
+    pageMarginPx: 8,
     isLoading: false,
   },
 };
 
 /**
- * 最大境界値表示（文字サイズ 32px、行間 2.4、ブラックテーマ）
+ * 最大境界値表示（文字サイズ 32px、行間 2.4、余白 48px、ブラックテーマ）
  * 拡大ステッパーボタンが無効（disabled）になる
  */
 export const MaxBoundaries: Story = {
-  name: "最大境界値（32px / 2.4・ブラック）",
+  name: "最大境界値（32px / 2.4 / 48px・ブラック）",
   args: {
     writingMode: "vertical-rl",
     theme: "black",
     fontSizePx: 32,
     lineHeight: 2.4,
+    pageMarginPx: 48,
     isLoading: false,
   },
 };
@@ -158,6 +166,22 @@ export const HorizontalWithPagingModeDisabled: Story = {
     fontSizePx: 18,
     lineHeight: 1.8,
     pagingMode: "paged",
+    isLoading: false,
+  },
+};
+
+/**
+ * フォント種別選択表示（教科書体 Klee 選択時、v0.5 Issue #169）
+ */
+export const FontSelectionKlee: Story = {
+  name: "フォント種別選択（教科書体 Klee）",
+  args: {
+    writingMode: "vertical-rl",
+    theme: "light",
+    fontFamily: "klee",
+    fontSizePx: 18,
+    lineHeight: 1.8,
+    pageMarginPx: 20,
     isLoading: false,
   },
 };
