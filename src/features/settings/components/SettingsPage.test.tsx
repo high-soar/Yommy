@@ -15,6 +15,7 @@ const {
   CloudSyncConnected,
   PagingModeSelection,
   HorizontalWithPagingModeDisabled,
+  FontSelectionKlee,
 } = composeStories(stories);
 
 describe("SettingsPage", () => {
@@ -26,6 +27,8 @@ describe("SettingsPage", () => {
       const page = screen.getByTestId("settings-page");
       expect(page).toBeInTheDocument();
       expect(page).toHaveClass("h-full", "flex", "flex-col", "overflow-y-auto");
+      expect(page).toHaveAttribute("data-font-family", "biz-ud-mincho");
+      expect(page).toHaveAttribute("data-page-margin", "20");
 
       // ヘッダー
       const header = screen.getByTestId("settings-header");
@@ -66,6 +69,19 @@ describe("SettingsPage", () => {
       expect(darkThemeBtn).toHaveAttribute("aria-pressed", "false");
       expect(blackThemeBtn).toHaveAttribute("aria-pressed", "false");
 
+      // フォント種別選択ドロップダウン（5種、UD明朝が初期値） (AC-ST-17)
+      const fontSelect = screen.getByTestId("font-family-select");
+      expect(fontSelect).toBeInTheDocument();
+      expect(fontSelect).toHaveValue("biz-ud-mincho");
+      expect(fontSelect).toBeEnabled();
+      const options = fontSelect.querySelectorAll("option");
+      expect(options).toHaveLength(5);
+      expect(options[0]).toHaveValue("biz-ud-mincho");
+      expect(options[1]).toHaveValue("mincho");
+      expect(options[2]).toHaveValue("biz-ud-gothic");
+      expect(options[3]).toHaveValue("gothic");
+      expect(options[4]).toHaveValue("klee");
+
       // 文字サイズステッパー（18px）
       expect(screen.getByTestId("font-size-value")).toHaveTextContent("18px");
       expect(screen.getByTestId("font-size-decrease")).toBeEnabled();
@@ -75,6 +91,11 @@ describe("SettingsPage", () => {
       expect(screen.getByTestId("line-height-value")).toHaveTextContent("1.8");
       expect(screen.getByTestId("line-height-decrease")).toBeEnabled();
       expect(screen.getByTestId("line-height-increase")).toBeEnabled();
+
+      // 画面余白ステッパー（20px） (AC-ST-18)
+      expect(screen.getByTestId("page-margin-value")).toHaveTextContent("20px");
+      expect(screen.getByTestId("page-margin-decrease")).toBeEnabled();
+      expect(screen.getByTestId("page-margin-increase")).toBeEnabled();
 
       // プレビューセクション
       const previewSection = screen.getByTestId("preview-section");
@@ -108,7 +129,7 @@ describe("SettingsPage", () => {
       expect(screen.getByTestId("sample-text-preview")).toBeInTheDocument();
     });
 
-    it("MinBoundaries: 最小境界値（12px / 1.4）で縮小ボタンが無効化されること (AC-ST-05)", () => {
+    it("MinBoundaries: 最小境界値（12px / 1.4 / 8px）で縮小ボタンが無効化されること (AC-ST-05, AC-ST-18)", () => {
       render(<MinBoundaries />);
 
       // ダークテーマ選択
@@ -126,9 +147,14 @@ describe("SettingsPage", () => {
       expect(screen.getByTestId("line-height-value")).toHaveTextContent("1.4");
       expect(screen.getByTestId("line-height-decrease")).toBeDisabled();
       expect(screen.getByTestId("line-height-increase")).toBeEnabled();
+
+      // 画面余白 8px: 縮小ボタン無効、拡大ボタン有効 (AC-ST-18)
+      expect(screen.getByTestId("page-margin-value")).toHaveTextContent("8px");
+      expect(screen.getByTestId("page-margin-decrease")).toBeDisabled();
+      expect(screen.getByTestId("page-margin-increase")).toBeEnabled();
     });
 
-    it("MaxBoundaries: 最大境界値（32px / 2.4）で拡大ボタンが無効化されること (AC-ST-05)", () => {
+    it("MaxBoundaries: 最大境界値（32px / 2.4 / 48px）で拡大ボタンが無効化されること (AC-ST-05, AC-ST-18)", () => {
       render(<MaxBoundaries />);
 
       // ブラックテーマ選択
@@ -146,6 +172,11 @@ describe("SettingsPage", () => {
       expect(screen.getByTestId("line-height-value")).toHaveTextContent("2.4");
       expect(screen.getByTestId("line-height-decrease")).toBeEnabled();
       expect(screen.getByTestId("line-height-increase")).toBeDisabled();
+
+      // 画面余白 48px: 縮小ボタン有効、拡大ボタン無効 (AC-ST-18)
+      expect(screen.getByTestId("page-margin-value")).toHaveTextContent("48px");
+      expect(screen.getByTestId("page-margin-decrease")).toBeEnabled();
+      expect(screen.getByTestId("page-margin-increase")).toBeDisabled();
     });
 
     it("Loading: isLoading が true のとき全操作ボタンが無効化されること", () => {
@@ -160,6 +191,9 @@ describe("SettingsPage", () => {
       expect(screen.getByTestId("theme-dark")).toBeDisabled();
       expect(screen.getByTestId("theme-black")).toBeDisabled();
 
+      // フォント種別セレクター (AC-ST-17)
+      expect(screen.getByTestId("font-family-select")).toBeDisabled();
+
       // 文字サイズステッパーボタン
       expect(screen.getByTestId("font-size-decrease")).toBeDisabled();
       expect(screen.getByTestId("font-size-increase")).toBeDisabled();
@@ -168,8 +202,23 @@ describe("SettingsPage", () => {
       expect(screen.getByTestId("line-height-decrease")).toBeDisabled();
       expect(screen.getByTestId("line-height-increase")).toBeDisabled();
 
+      // 画面余白ステッパーボタン (AC-ST-18)
+      expect(screen.getByTestId("page-margin-decrease")).toBeDisabled();
+      expect(screen.getByTestId("page-margin-increase")).toBeDisabled();
+
       // ページ送りモードセレクター
       expect(screen.getByTestId("paging-mode-select")).toBeDisabled();
+    });
+
+    it("FontSelectionKlee: 教科書体 Klee が選択状態として反映されること (AC-ST-17)", () => {
+      render(<FontSelectionKlee />);
+
+      const fontSelect = screen.getByTestId("font-family-select");
+      expect(fontSelect).toBeInTheDocument();
+      expect(fontSelect).toHaveValue("klee");
+
+      const page = screen.getByTestId("settings-page");
+      expect(page).toHaveAttribute("data-font-family", "klee");
     });
 
     it("PagingModeSelection: ページ送りモードで paged が選択状態として反映されること (AC-ST-13)", () => {
@@ -432,7 +481,95 @@ describe("SettingsPage", () => {
       expect(onChangeLineHeight).toHaveBeenLastCalledWith(2.4);
     });
 
-    it("オプショナルプロパティ省略時にデフォルト値（18px, 1.8, isLoading: false）が適用されること", () => {
+    it("フォント種別セレクター変更時に onChangeFontFamily が呼び出されること (AC-ST-17)", async () => {
+      const user = userEvent.setup();
+      const onChangeFontFamily = vi.fn();
+
+      render(
+        <SettingsPage
+          writingMode="vertical-rl"
+          theme="light"
+          onToggleWritingMode={vi.fn()}
+          onChangeTheme={vi.fn()}
+          onChangeFontSize={vi.fn()}
+          onChangeLineHeight={vi.fn()}
+          onChangeFontFamily={onChangeFontFamily}
+        />,
+      );
+
+      const fontSelect = screen.getByTestId("font-family-select");
+      await user.selectOptions(fontSelect, "klee");
+      expect(onChangeFontFamily).toHaveBeenCalledWith("klee");
+
+      await user.selectOptions(fontSelect, "biz-ud-gothic");
+      expect(onChangeFontFamily).toHaveBeenCalledWith("biz-ud-gothic");
+    });
+
+    it("画面余白ステッパー押下時に step 刻みで onChangePageMargin が呼び出されること (AC-ST-18)", async () => {
+      const user = userEvent.setup();
+      const onChangePageMargin = vi.fn();
+
+      render(
+        <SettingsPage
+          writingMode="vertical-rl"
+          theme="light"
+          pageMarginPx={20}
+          onToggleWritingMode={vi.fn()}
+          onChangeTheme={vi.fn()}
+          onChangeFontSize={vi.fn()}
+          onChangeLineHeight={vi.fn()}
+          onChangePageMargin={onChangePageMargin}
+        />,
+      );
+
+      // 縮小: 20 - 4 = 16
+      await user.click(screen.getByTestId("page-margin-decrease"));
+      expect(onChangePageMargin).toHaveBeenLastCalledWith(16);
+
+      // 拡大: 20 + 4 = 24
+      await user.click(screen.getByTestId("page-margin-increase"));
+      expect(onChangePageMargin).toHaveBeenLastCalledWith(24);
+    });
+
+    it("画面余白ステッパーの境界クランプが安全に処理されること (AC-ST-18)", async () => {
+      const user = userEvent.setup();
+      const onChangePageMargin = vi.fn();
+
+      const { rerender } = render(
+        <SettingsPage
+          writingMode="vertical-rl"
+          theme="light"
+          pageMarginPx={10}
+          onToggleWritingMode={vi.fn()}
+          onChangeTheme={vi.fn()}
+          onChangeFontSize={vi.fn()}
+          onChangeLineHeight={vi.fn()}
+          onChangePageMargin={onChangePageMargin}
+        />,
+      );
+
+      // 10px から縮小 -> Math.max(8, 10 - 4) = 8
+      await user.click(screen.getByTestId("page-margin-decrease"));
+      expect(onChangePageMargin).toHaveBeenLastCalledWith(8);
+
+      // 46px から拡大 -> Math.min(48, 46 + 4) = 48
+      rerender(
+        <SettingsPage
+          writingMode="vertical-rl"
+          theme="light"
+          pageMarginPx={46}
+          onToggleWritingMode={vi.fn()}
+          onChangeTheme={vi.fn()}
+          onChangeFontSize={vi.fn()}
+          onChangeLineHeight={vi.fn()}
+          onChangePageMargin={onChangePageMargin}
+        />,
+      );
+      await user.click(screen.getByTestId("page-margin-increase"));
+      expect(onChangePageMargin).toHaveBeenLastCalledWith(48);
+    });
+
+    it("オプショナルプロパティ省略時にデフォルト値（18px, 1.8, UD明朝, 20px, isLoading: false）が適用されること", () => {
       render(
         <SettingsPage
           writingMode="vertical-rl"
@@ -446,6 +583,10 @@ describe("SettingsPage", () => {
 
       expect(screen.getByTestId("font-size-value")).toHaveTextContent("18px");
       expect(screen.getByTestId("line-height-value")).toHaveTextContent("1.8");
+      expect(screen.getByTestId("font-family-select")).toHaveValue(
+        "biz-ud-mincho",
+      );
+      expect(screen.getByTestId("page-margin-value")).toHaveTextContent("20px");
       expect(screen.getByTestId("toggle-orientation")).toBeEnabled();
     });
 

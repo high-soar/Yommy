@@ -40,12 +40,22 @@ describe("SettingsContainer", () => {
       // 行間の初期値: 1.8
       expect(screen.getByTestId("line-height-value")).toHaveTextContent("1.8");
 
+      // フォント種別の初期値: biz-ud-mincho (AC-ST-17)
+      expect(screen.getByTestId("font-family-select")).toHaveValue(
+        "biz-ud-mincho",
+      );
+
+      // 画面余白の初期値: 20px (AC-ST-18)
+      expect(screen.getByTestId("page-margin-value")).toHaveTextContent("20px");
+
       // SettingsPage への初期値 Props 反映 (R1-32)
       const page = screen.getByTestId("settings-page");
       expect(page).toHaveAttribute("data-writing-mode", "vertical-rl");
       expect(page).toHaveAttribute("data-theme", "light");
       expect(page).toHaveAttribute("data-font-size", "18");
       expect(page).toHaveAttribute("data-line-height", "1.8");
+      expect(page).toHaveAttribute("data-font-family", "biz-ud-mincho");
+      expect(page).toHaveAttribute("data-page-margin", "20");
       expect(page).toHaveAttribute("data-paging-mode", "auto");
     });
 
@@ -165,6 +175,57 @@ describe("SettingsContainer", () => {
           "1.8",
         );
       });
+    });
+
+    it("フォント種別セレクターを操作したとき、フォントが変更され永続化されること (AC-ST-17)", async () => {
+      const user = userEvent.setup();
+      render(<Default />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+      });
+
+      const fontSelect = screen.getByTestId("font-family-select");
+      await user.selectOptions(fontSelect, "klee");
+
+      await waitFor(() => {
+        expect(screen.getByTestId("settings-page")).toHaveAttribute(
+          "data-font-family",
+          "klee",
+        );
+      });
+      expect(fontSelect).toHaveValue("klee");
+    });
+
+    it("画面余白ステッパーを操作したとき、画面余白が変更され永続化されること (AC-ST-18)", async () => {
+      const user = userEvent.setup();
+      render(<Default />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+      });
+
+      const increaseBtn = screen.getByTestId("page-margin-increase");
+      await user.click(increaseBtn);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("settings-page")).toHaveAttribute(
+          "data-page-margin",
+          "24",
+        );
+      });
+      expect(screen.getByTestId("page-margin-value")).toHaveTextContent("24px");
+
+      const decreaseBtn = screen.getByTestId("page-margin-decrease");
+      await user.click(decreaseBtn);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("settings-page")).toHaveAttribute(
+          "data-page-margin",
+          "20",
+        );
+      });
+      expect(screen.getByTestId("page-margin-value")).toHaveTextContent("20px");
     });
 
     it("ページ送りモードセレクターを操作したとき、設定が変更・永続化されること (AC-ST-13)", async () => {

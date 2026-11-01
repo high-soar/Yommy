@@ -15,10 +15,10 @@ export function createMockSettingsRepository(
   let settingsState: ReaderSettings = {
     writingMode: "vertical-rl",
     theme: "light",
-    fontFamily: "mincho",
+    fontFamily: "biz-ud-mincho",
     fontSizePx: 18,
     lineHeight: 1.8,
-    pageMarginPx: 16,
+    pageMarginPx: 20,
     enableTapPaging: true,
     enableVolumeKeyPaging: false,
     pagingMode: "auto",

@@ -2,6 +2,7 @@ import React from "react";
 import type {
   WritingMode,
   ReaderTheme,
+  ReaderFontFamily,
   ReaderPagingMode,
 } from "../../../storage/types";
 import type { CloudSyncAuthState } from "../../../bridges/cloud-sync/types";
@@ -17,6 +18,10 @@ export interface SettingsPageProps {
   fontSizePx?: number;
   /** 現在の行間倍率（省略時: 1.8） */
   lineHeight?: number;
+  /** 現在のフォント種別（省略時: "biz-ud-mincho"、v0.5 Issue #169） */
+  fontFamily?: ReaderFontFamily;
+  /** 現在の画面余白 px（省略時: 20、v0.5 Issue #169） */
+  pageMarginPx?: number;
   /** 現在のページ送りモード（省略時: "auto"、v0.4 Issue #122） */
   pagingMode?: ReaderPagingMode;
   /** 設定読み込み中フラグ（省略時: false） */
@@ -29,6 +34,10 @@ export interface SettingsPageProps {
   onChangeFontSize: (nextSizePx: number) => void;
   /** 行間変更ボタン押下時のコールバック */
   onChangeLineHeight: (nextHeight: number) => void;
+  /** フォント種別選択時のコールバック（v0.5 Issue #169） */
+  onChangeFontFamily?: (family: ReaderFontFamily) => void;
+  /** 画面余白変更ボタン押下時のコールバック（v0.5 Issue #169） */
+  onChangePageMargin?: (marginPx: number) => void;
   /** ページ送りモード変更時のコールバック（v0.4 Issue #122） */
   onChangePagingMode?: (mode: ReaderPagingMode) => void;
   /** Google アカウント認証状態（v0.4） */
