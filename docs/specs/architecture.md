@@ -160,16 +160,6 @@ Yommy/
     │   └── webview/
     │       ├── types.ts               # WebViewDomBridge インターフェース定義（v0.4〜）
     │       └── webviewDomBridge.ts    # 内蔵WebView DOMキャプチャ実装
-    ├── features/                      # 【機能別モジュール群】
-    │   ├── bookshelf/                 # 本棚画面（SCR-01）
-    │   ├── novel-detail/              # 作品詳細・目次画面（SCR-02）
-    │   ├── reader/                    # 小説リーダー画面（SCR-03）
-    │   ├── search/                    # 検索画面（SCR-06）
-    │   ├── ranking/                   # ランキング画面（SCR-07）
-    │   ├── settings/                  # 設定画面（SCR-05）
-    │   └── cloud-sync/                # クラウド同期（Google Drive appDataFolder・SyncEngine）（Issue #120）
-    │       ├── types.ts               # YommySyncState, SyncNovelData 等の同期データ型定義
-    │       └── services/              # スキーマ検証・競合マージ・デバウンス同期エンジン
     ├── parsers/                       # 【1. Parser Layer（スクレイピング・DOM解析層）】
     │   ├── types.ts                   # NovelParser, ParsedNovelMetadata, ParsedChapterContent, ParsedSearchResult, ParsedRankingResult 等の型契約
     │   ├── parserRegistry.ts          # URL から対応サイト（kakuyomu / narou 等）を判定・ディスパッチ
@@ -203,7 +193,10 @@ Yommy/
     │   ├── webview-import/            # SCR-04: 内蔵ブラウザ表示・DOMインポート（v0.4〜）
     │   ├── settings/                  # SCR-05: 設定画面（組版・テーマ設定・サンプル文章プレビュー、v0.2〜）
     │   ├── search/                    # SCR-06: 検索画面（カクヨム作品検索・カードから本棚追加・SCR-02遷移、v0.3〜）
-    │   └── ranking/                   # SCR-07: ランキング画面（期間/ジャンル別ランキング・カードから本棚追加・SCR-02遷移、v0.3〜）
+    │   ├── ranking/                   # SCR-07: ランキング画面（期間/ジャンル別ランキング・カードから本棚追加・SCR-02遷移、v0.3〜）
+    │   └── cloud-sync/                # クラウド同期（Google Drive appDataFolder・SyncEngine）（Issue #120）
+    │       ├── types.ts               # YommySyncState, SyncNovelData 等の同期データ型定義
+    │       └── services/              # スキーマ検証・競合マージ・デバウンス同期エンジン
     └── shared/                        # 複数機能で共有する汎用 UI コンポーネント・ユーティリティ
         ├── constants/                 # キャッシュ・レートリミット等の共有定数（cache.ts）
         ├── utils/                     # キャッシュ判定等の共有ユーティリティ（cache.ts）
@@ -601,7 +594,7 @@ export interface CloudSyncBridge {
 - **ゼロトラスト検証**:
   - 受信した JSON に対し、通信前に厳格なランタイムスキーマ検証（`version === 1`、必須フィールド、数値範囲、プロトタイプ汚染防止）を実行する。
   - 作品 ID（`id`）が `${siteType}:${remoteWorkId}` と厳密に一致することを検証する。
-  - `deletedNovels` のキーが空文字（`""`）や空白文字でないことを検証し、`novels` と `deletedNovels` の双方に同一キーが存在する場合は、本棚現存作品を優先し `deletedNovels` から安全に除外する。
+  - `deletedNovels` のキーが空文字（`""`）や空白文字でないことを検証し、`novels` と `deletedNovels` の双方に同一キーが存在する場合は、作品の `updatedAt` と `deletedAt` を比較し、`updatedAt >= deletedAt` であれば再登録を優先して `deletedNovels` から除外、`deletedAt > updatedAt` であれば削除を優先して `novels` から該当作品を除去する（R1-28）。
   - 未登録作品の自動目次取得（`upsertNovelWithToc`）前に、`canonicalUrl` を既存の `parseNovelUrl`（`https://kakuyomu.jp/works/<id>` ホワイトリスト検証）にかけ、不正な URL や未知ドメインへのリクエスト（SSRF）を遮断する。さらに `canonicalUrl` から抽出した `siteType` / `workId` とリモート作品データの整合性を検証し、正規化 URL で通信を行う。
   - 401 Unauthorized エラーの判定は、作品 URL や作品 ID に偶然 `401` が含まれている場合の誤爆を防ぐため、HTTP ステータスコード 401、または単語境界を考慮した正規表現（`/\b401\s+Unauthorized\b/i` 等）を用いて厳格に行う（R1-13）。
 - **競合解決（マージ）ルール**:

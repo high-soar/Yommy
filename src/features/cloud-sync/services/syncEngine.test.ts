@@ -363,20 +363,38 @@ describe("syncEngine", () => {
       ).toThrow(/key must be non-empty/i);
     });
 
-    it("raw.novels と raw.deletedNovels の双方に同一キーが存在する場合は本棚現存を優先し deletedNovels から安全に除外すること", () => {
-      const stateWithDuplicateKey = {
+    it("raw.novels と raw.deletedNovels の双方に同一キーが存在する場合、タイムスタンプ比較により新しい方を採用すること", () => {
+      // ケース1: novels の updatedAt >= deletedNovels の deletedAt -> novels 優先、deletedNovels から除外
+      const stateWithReaddedNovel = {
         ...validState,
         deletedNovels: {
-          "kakuyomu:16817330658027210412": "2026-10-25T08:00:00.000Z",
+          "kakuyomu:16817330658027210412": "2026-10-25T08:00:00.000Z", // validState の updatedAt (2026-10-31) より古い
           "kakuyomu:other-deleted": "2026-10-20T08:00:00.000Z",
         },
       };
-      const result = validateSyncState(stateWithDuplicateKey);
-      expect(result.novels["kakuyomu:16817330658027210412"]).toBeDefined();
+      const result1 = validateSyncState(stateWithReaddedNovel);
+      expect(result1.novels["kakuyomu:16817330658027210412"]).toBeDefined();
       expect(
-        result.deletedNovels["kakuyomu:16817330658027210412"],
+        result1.deletedNovels["kakuyomu:16817330658027210412"],
       ).toBeUndefined();
-      expect(result.deletedNovels["kakuyomu:other-deleted"]).toBe(
+      expect(result1.deletedNovels["kakuyomu:other-deleted"]).toBe(
+        "2026-10-20T08:00:00.000Z",
+      );
+
+      // ケース2: deletedNovels の deletedAt > novels の updatedAt -> 削除優先、novels から除去
+      const stateWithDeletedPriority = {
+        ...validState,
+        deletedNovels: {
+          "kakuyomu:16817330658027210412": "2026-11-05T08:00:00.000Z", // validState の updatedAt より新しい
+          "kakuyomu:other-deleted": "2026-10-20T08:00:00.000Z",
+        },
+      };
+      const result2 = validateSyncState(stateWithDeletedPriority);
+      expect(result2.novels["kakuyomu:16817330658027210412"]).toBeUndefined();
+      expect(result2.deletedNovels["kakuyomu:16817330658027210412"]).toBe(
+        "2026-11-05T08:00:00.000Z",
+      );
+      expect(result2.deletedNovels["kakuyomu:other-deleted"]).toBe(
         "2026-10-20T08:00:00.000Z",
       );
     });
@@ -2176,6 +2194,71 @@ describe("syncEngine", () => {
       expect(novel).not.toBeNull();
       expect(novel?.isFavorite).toBe(true);
       expect(novel?.lastReadAt).toBe("2026-10-30T10:00:00.000Z");
+    });
+
+    it("新規作品取込時に bookmarkChapterIndex があっても、リモートの lastReadAt が null の場合は null が保持されること (R1-12)", async () => {
+      await resetTestDb();
+      const db = await createInMemoryDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const appSettingsRepo = new SqlAppSettingsRepository(db);
+      const bridge = new MockCloudSyncBridge();
+      await bridge.signIn();
+
+      const parserRegistry = createDefaultParserRegistry();
+      const httpClient = new MockHttpClient();
+
+      const novelId = "kakuyomu:16817330658027210412";
+      const validUrl = "https://kakuyomu.jp/works/16817330658027210412";
+      httpClient.setResponse(validUrl, (options) => ({
+        status: 200,
+        url: options.url,
+        headers: {},
+        html: workIndexHtml,
+      }));
+
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: new Date().toISOString(),
+        novels: {
+          [novelId]: {
+            id: novelId,
+            siteType: "kakuyomu",
+            remoteWorkId: "16817330658027210412",
+            canonicalUrl: validUrl,
+            title: "境界迷宮と異界の魔術師",
+            author: "小野崎",
+            synopsis: "あらすじ",
+            totalChapters: 3,
+            isFavorite: 0,
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: null,
+            bookmarkChapterIndex: 2,
+            lastReadAt: null,
+            readChapterIds: [],
+            createdAt: "2026-10-20T00:00:00.000Z",
+            updatedAt: "2026-10-30T10:00:00.000Z",
+          },
+        },
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      const engine = new SyncEngine({
+        bridge,
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        appSettingsRepository: appSettingsRepo,
+        parserRegistry,
+        httpClient,
+      });
+
+      await engine.pullAndMerge();
+
+      const novel = await novelRepo.getNovelById(novelId);
+      expect(novel).not.toBeNull();
+      expect(novel?.isFavorite).toBe(false);
+      expect(novel?.lastReadAt).toBeNull();
     });
 
     it("未連携（unlinked）時に pullAndMerge / pushCurrentState がスキップされること (R1-14)", async () => {

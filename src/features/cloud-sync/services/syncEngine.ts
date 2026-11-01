@@ -234,9 +234,16 @@ export function validateSyncState(jsonStringOrObj: unknown): YommySyncState {
         `Invalid deletedNovels entry for "${novelId}": key must be non-empty and deletedAt must be a valid ISO 8601 string`,
       );
     }
-    // 本棚現存作品のキーが deletedNovels に重複している場合は安全に除外
+    // novels と deletedNovels の双方に同一キーが存在する場合のタイムスタンプ競合調停:
+    // novels[novelId].updatedAt >= deletedAt の場合は再登録が新しいため deletedNovels から除外
+    // deletedAt > novels[novelId].updatedAt の場合は削除の方が新しいため novels から除去して deletedNovels を優先
     if (novels[novelId]) {
-      continue;
+      const updatedAtMs = Date.parse(novels[novelId].updatedAt);
+      const deletedAtMs = Date.parse(deletedAt);
+      if (updatedAtMs >= deletedAtMs) {
+        continue;
+      }
+      delete novels[novelId];
     }
     deletedNovels[novelId] = deletedAt;
   }
@@ -432,12 +439,11 @@ export class SyncEngine {
     }
 
     // 新規取込時にお気に入りおよび最終読了日時を復元 (R1-12)
-    if (remoteNovel.isFavorite === 1 || remoteNovel.lastReadAt !== null) {
-      await this.deps.novelRepository.updateSyncMetadata?.(novelId, {
-        isFavorite: remoteNovel.isFavorite === 1,
-        lastReadAt: remoteNovel.lastReadAt,
-      });
-    }
+    // （bookmarkChapterIndex 設定による現在時刻上書きも含め、リモートの lastReadAt: null/string を確実に反映）
+    await this.deps.novelRepository.updateSyncMetadata?.(novelId, {
+      isFavorite: remoteNovel.isFavorite === 1,
+      lastReadAt: remoteNovel.lastReadAt,
+    });
 
     if (remoteNovel.readChapterIds.length > 0) {
       const chapters =
