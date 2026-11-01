@@ -2,7 +2,7 @@
 type: spec-db-schema
 title: ローカル DB スキーマ定義（App 全体正本）
 description: SQLite（novels, chapters, download_queue, reader_settings, app_settings）のER図、テーブル構造、およびDDL定義の正本。
-status: Approved
+status: "Review (#168)"
 updated: "2026-11-01"
 tags:
   [
@@ -17,8 +17,11 @@ tags:
     google-drive,
     tombstone,
     paging,
+    pagination,
+    ho-23,
   ]
 related_specs:
+  - docs/specs/changes/issue-168-reader-pagination-and-touch-refinement.md
   - docs/specs/changes/archive/issue-122-reader-page-turning.md
   - docs/specs/changes/archive/issue-120-cloud-sync-google-drive.md
   - docs/specs/requirements.md
@@ -239,7 +242,7 @@ CREATE TABLE IF NOT EXISTS reader_settings (
   page_margin_px INTEGER NOT NULL DEFAULT 20,       -- 8 〜 48
   enable_tap_paging INTEGER NOT NULL DEFAULT 1,     -- 0 or 1
   enable_volume_key_paging INTEGER NOT NULL DEFAULT 0, -- 0 or 1
-  paging_mode TEXT NOT NULL DEFAULT 'auto' CHECK (paging_mode IN ('auto', 'paged', 'scroll')), -- 'auto' | 'paged' | 'scroll' (v0.4 Issue #122)
+  paging_mode TEXT NOT NULL DEFAULT 'auto' CHECK (paging_mode IN ('auto', 'paged', 'scroll')), -- 'auto' | 'paged' | 'scroll' (v0.4 Issue #122, v0.5 Issue #168: 'auto'/'paged'は縦書き時ページめくり、横書き時はスクロール固定として透過処理)
   updated_at TEXT NOT NULL
 );
 

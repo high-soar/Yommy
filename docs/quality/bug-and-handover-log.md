@@ -6,6 +6,7 @@ status: Approved
 updated: "2026-11-01"
 tags: [quality, bug-log, handover, dre, kaizen]
 related_specs:
+  - docs/specs/changes/issue-168-reader-pagination-and-touch-refinement.md
   - docs/specs/changes/archive/issue-122-reader-page-turning.md
   - docs/specs/changes/archive/issue-123-reader-bottom-overlay-ui-improvement.md
   - docs/specs/changes/archive/issue-124-settings-back-button-navigation.md
@@ -95,6 +96,7 @@ related_tests: []
 | 166 |     #126     | 節目横断レビュー (Round 2: `R2-04` 実ブラウザIT検証)           |                製品コード                | `src/features/reader/hooks/useReader.ts`, `src/features/reader/components/ReaderView.tsx`                                                                                                                                                                        |            `S`             | `SCN-01` にて前話遷移時の最終ページ復元（`R2-04`）を実ブラウザ検証した際、`goToChapter` 完了直後のルーター `chapterIndex` 同期で `loadInitialData` が二重実行され `currentPage` が 1 にリセットされる不具合、および `ReaderView` で `chapterTitle` / `initialScrollProgress` 変更時に `onTotalPagesChange` が再発火しない不備を検出。`lastGoToChapterIndexRef` による重複初期化抑止とページ数再計測依存配列の補完を実装是正（コミット: `cf68ffb`）。                                                                                                        |
 | 167 |     #126     | 節目横断レビュー (Round 2: `R2-04`, `R2-07`, `R2-08`)          |                支援成果物                | `test/it/scenarios/scn01-poc-vertical-reader.spec.ts`, `test/it/scenarios/scn02-search-ranking-discovery.spec.ts`, `test/it/scenarios/scn05-cloud-sync.spec.ts`                                                                                                  |            `L`             | `SCN-01` における前話遷移時の最終ページ開扉アサーション欠落（`R2-04`）および `data-total-pages` フォールバック緩み（`R2-07`）、ならびに `SCN-05` の固定 `waitForTimeout(300)` と `SCN-02` リロード後の `isReady` 待機欠落（`R2-08`）を検出。アサーション厳密化および `expect.poll` / `waitForFunction` 待機へ改善是正（コミット: `b99f64a`）。                                                                                                                                                                                                              |
 | 168 |     #126     | 節目横断レビュー (Round 2: `R2-05〜06, 10〜12, 15〜18, R1-23`) |                支援成果物                | `docs/specs/**`, `docs/quality/bug-and-handover-log.md`, `docs/quality/reports/v0.4-cloud-sync-reader-ux.md`, `.github/skills/c-ut-workflow/SKILL.md`                                                                                                            |            `D`             | PR #165 マージ競合解消に伴う正本仕様書の `related_tests` / `related_specs` 欠落・重複、`architecture.md` 節番号重複（`### 3.7`）・`NovelRepository` 契約記載漏れ（PR #166 独立レビュー指摘の `cutoffTimeMs` / オプショナル型 1対1 整合含む）、`HO-15/22/23` 表記揺れ、`bug-and-handover-log.md` のコミット SHA 欠落・§4 v0.4 サマリー未追記、および `c-ut-workflow/SKILL.md` への Kaizen チェックリスト未反映を検出。全ドキュメント・スキル定義を完全同期是正（コード: `bdebe91` / 設計: `bdebe91`, `32e137c`）。                                           |
+| 169 |     #168     | 自動テスト実行中                                               |                支援成果物                | `src/features/cloud-sync/services/syncEngine.test.ts`                                                                                                                                                                                                            |            `B`             | `syncEngine.test.ts` の `pullAndMerge` テストにおいて、リモートの `lastReadAt`/`updatedAt` に固定日時（`2026-11-01T10:00:00.000Z`）が指定されていたため、実時間が当該時刻を超過した時点で `updateBookmark` が生成する現在日時（`local.lastReadAt`）の方が新しくなり、リモートしおり採用の前提条件が崩れてテスト失敗していた不備。リモートの `lastReadAt`/`updatedAt` を未来日付（`2029-01-01`）へ更新し、実時間依存を解消して決定論的テストへ是正。                                                                                                         |
 
 ---
 
@@ -110,11 +112,11 @@ related_tests: []
 > - Milestone `v0.2` で解決済みの申し送り（`HO-10`〜`HO-13`）: [docs/quality/archive/v0.2-ui-ux-log.md](archive/v0.2-ui-ux-log.md)
 > - Milestone `v0.3` で解決済みの申し送り（`HO-14`, `HO-16`〜`HO-21`）: [docs/quality/archive/v0.3-search-prefetch-log.md](archive/v0.3-search-prefetch-log.md)
 
-|   ID    | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                                        | 解決先（対象 Issue / 成果物）                                          | 完了ゲート             | 状態 (`Open` / `Resolved`) |
-| :-----: | :---------------: | :-------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------- | :--------------------- | :------------------------: |
-| `HO-15` |        #78        | Android 実機での APK 上書きインストール実証（GitHub Actions 生成 APK を実機へアンインストールなしで上書きアップデートできることの検証）                   | Milestone `v0.4` Step 5 人間実機確認タスク（未実施時は `v0.5` へ繰越） | 実機インストール確認時 |           `Open`           |
-| `HO-22` |       #120        | Google Drive appDataFolder クラウド同期の Android 実機 / Google Play 開発者サービス環境での OAuth 認可フローおよび `AuthorizationClient` 連携の実機検証   | Milestone `v0.4` Step 5 人間実機確認タスク（未実施時は `v0.5` へ繰越） | 実機インストール確認時 |           `Open`           |
-| `HO-23` |       #122        | リーダー縦書きページめくりにおける Android 実機（90Hz/120Hz）でのタッチイベント・スワイプリアルタイム指追従パフォーマンスおよびラバーバンド描画負荷の検証 | Milestone `v0.4` Step 5 人間実機確認タスク（未実施時は `v0.5` へ繰越） | 実機インストール確認時 |           `Open`           |
+|   ID    | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                                        | 解決先（対象 Issue / 成果物）           | 完了ゲート             | 状態 (`Open` / `Resolved`) |
+| :-----: | :---------------: | :-------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------- | :--------------------- | :------------------------: |
+| `HO-15` |        #78        | Android 実機での APK 上書きインストール実証（GitHub Actions 生成 APK を実機へアンインストールなしで上書きアップデートできることの検証）                   | Issue #168 実機検証にて確認完了（v0.5） | 実機インストール確認時 |         `Resolved`         |
+| `HO-22` |       #120        | Google Drive appDataFolder クラウド同期の Android 実機 / Google Play 開発者サービス環境での OAuth 認可フローおよび `AuthorizationClient` 連携の実機検証   | Issue #168 実機検証にて確認完了（v0.5） | 実機インストール確認時 |         `Resolved`         |
+| `HO-23` |       #122        | リーダー縦書きページめくりにおける Android 実機（90Hz/120Hz）でのタッチイベント・スワイプリアルタイム指追従パフォーマンスおよびラバーバンド描画負荷の検証 | Issue #168（v0.5抜本修正・実機確認）    | 実機インストール確認時 |           `Open`           |
 
 ---
 

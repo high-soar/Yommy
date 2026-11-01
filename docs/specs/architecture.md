@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: Approved
+status: "Review (#168)"
 updated: "2026-11-01"
 tags:
   - architecture
@@ -23,7 +23,10 @@ tags:
   - google-drive
   - paging
   - gestures
+  - pagination
+  - ho-23
 related_specs:
+  - docs/specs/changes/issue-168-reader-pagination-and-touch-refinement.md
   - docs/specs/changes/archive/issue-122-reader-page-turning.md
   - docs/specs/changes/archive/issue-120-cloud-sync-google-drive.md
   - docs/specs/changes/archive/issue-124-settings-back-button-navigation.md
@@ -167,7 +170,7 @@ Yommy/
     ├── features/                      # 【3. Viewer & UI Layer（画面・機能別モジュール）】
     │   ├── bookshelf/                 # SCR-01: 本棚一覧（空状態での検索/ランキング誘導・更新チェック・ソート）
     │   ├── novel-detail/              # SCR-02: 作品詳細・目次一覧・取得操作・一括キャッシュ
-    │   ├── reader/                    # SCR-03: 小説リーダー（全画面100dvh・最下部タッチオーバーレイ・ページめくり・ジェスチャー操作・ルビ・しおり保存）
+    │   ├── reader/                    # SCR-03: 小説リーダー（全画面100dvh・最下部タッチオーバーレイ・縦書きCSSマルチカラム組版・touch-action制御・ページめくり・スクロール前後話ボタン・ルビ・しおり保存）
     │   ├── search/                    # SCR-06: 検索画面（カクヨム作品検索・カードから本棚追加・SCR-02遷移）
     │   ├── ranking/                   # SCR-07: ランキング画面（期間/ジャンル別ランキング・カードから本棚追加・SCR-02遷移）
     │   ├── settings/                  # SCR-05: 設定画面（組版・テーマ設定・サンプル文章プレビュー・クラウド同期連携）
@@ -461,6 +464,13 @@ export interface ChapterRepository {
   ): Promise<number>;
 }
 
+/**
+ * ページ送り動作モード
+ * - auto: 自動（縦書き時はページめくり、横書き時はスクロール）
+ * - paged: ページめくり（縦書き時のみ有効、横書き時はスクロール固定）
+ * - scroll: 常に連続スクロール
+ * ※ v0.5 Issue #168: 横書き時は常に連続スクロールに固定され、設定画面では「ページめくり（縦書き時）」「連続スクロール」の2択に整理される。
+ */
 export type ReaderPagingMode = "auto" | "paged" | "scroll";
 
 export interface ReaderSettings {
