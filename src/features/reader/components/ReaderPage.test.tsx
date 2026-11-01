@@ -857,17 +857,22 @@ describe("ReaderPage", () => {
       fireEvent.scroll(readerView);
 
       // 第2段階: 1回目の再ホイール操作で案内ヒント表示、2.5秒以内の2回目で次話遷移
-      fireEvent.wheel(main, { deltaY: 20 });
-      expect(onNextChapter).not.toHaveBeenCalled();
-      expect(
-        screen.getByTestId("reader-episode-boundary-hint"),
-      ).toHaveTextContent("もう一度スワイプで次の話へ");
+      vi.useFakeTimers();
+      try {
+        fireEvent.wheel(main, { deltaY: 20 });
+        expect(onNextChapter).not.toHaveBeenCalled();
+        expect(
+          screen.getByTestId("reader-episode-boundary-hint"),
+        ).toHaveTextContent("もう一度スワイプで次の話へ");
 
-      act(() => {
-        vi.advanceTimersByTime(500);
-      });
-      fireEvent.wheel(main, { deltaY: 20 });
-      expect(onNextChapter).toHaveBeenCalledTimes(1);
+        act(() => {
+          vi.advanceTimersByTime(500);
+        });
+        fireEvent.wheel(main, { deltaY: 20 });
+        expect(onNextChapter).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("連続スクロールモードでの 2 段階スクロール（先頭到達後の再ホイール）で前話遷移すること（AC-RD-19）", () => {
@@ -903,17 +908,22 @@ describe("ReaderPage", () => {
       fireEvent.scroll(readerView);
 
       // 第2段階: 1回目のホイールでヒント、2回目で前話遷移
-      fireEvent.wheel(main, { deltaY: -20 });
-      expect(onPrevChapter).not.toHaveBeenCalled();
-      expect(
-        screen.getByTestId("reader-episode-boundary-hint"),
-      ).toHaveTextContent("もう一度スワイプで前の話へ");
+      vi.useFakeTimers();
+      try {
+        fireEvent.wheel(main, { deltaY: -20 });
+        expect(onPrevChapter).not.toHaveBeenCalled();
+        expect(
+          screen.getByTestId("reader-episode-boundary-hint"),
+        ).toHaveTextContent("もう一度スワイプで前の話へ");
 
-      act(() => {
-        vi.advanceTimersByTime(500);
-      });
-      fireEvent.wheel(main, { deltaY: -20 });
-      expect(onPrevChapter).toHaveBeenCalledTimes(1);
+        act(() => {
+          vi.advanceTimersByTime(500);
+        });
+        fireEvent.wheel(main, { deltaY: -20 });
+        expect(onPrevChapter).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 

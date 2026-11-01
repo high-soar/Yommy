@@ -166,6 +166,10 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
     handlePointerMove,
     handlePointerUp,
     handlePointerCancel,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+    handleTouchCancel,
     handleMainClick,
     handleWheel,
     handleScrollProgressChange,
@@ -241,12 +245,18 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
       {/* メイン本文領域（排他描画） */}
       <main
         ref={mainRef}
-        className="w-full h-full min-w-0"
+        className={`w-full h-full min-w-0 ${
+          effectivePagingMode === "paged" ? "touch-none" : ""
+        }`}
         onClick={handleMainClick}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchCancel}
         onWheel={handleWheel}
       >
         {error ? (
@@ -304,6 +314,10 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
               slideOffsetPx={slideOffsetPx}
               isAnimating={isAnimating}
               onTotalPagesChange={onTotalPagesChange}
+              chapterIndex={chapterIndex}
+              totalChapters={totalChapters}
+              onPrevChapter={handlePrevChapter}
+              onNextChapter={handleNextChapter}
             />
           </div>
         )}

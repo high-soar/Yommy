@@ -1171,7 +1171,7 @@ describe("ReaderView", () => {
     });
 
     it("横書きスクロール時でも前後話ボタンが表示され、テーマに応じたスタイルが適用されること", () => {
-      render(
+      const { rerender } = render(
         <ReaderView
           bodyHtml="<p>横書き本文</p>"
           writingMode="horizontal-tb"
@@ -1181,10 +1181,58 @@ describe("ReaderView", () => {
           totalChapters={4}
         />,
       );
-      const prevBtn = screen.getByTestId("reader-scroll-prev-chapter");
-      const nextBtn = screen.getByTestId("reader-scroll-next-chapter");
-      expect(prevBtn).toBeInTheDocument();
-      expect(nextBtn).toBeInTheDocument();
+      let prevBtn = screen.getByTestId("reader-scroll-prev-chapter");
+      let nextBtn = screen.getByTestId("reader-scroll-next-chapter");
+      expect(prevBtn).toHaveClass("bg-[#f0e4c8]");
+      expect(nextBtn).toHaveClass("bg-[#f0e4c8]");
+
+      // dark テーマ
+      rerender(
+        <ReaderView
+          bodyHtml="<p>横書き本文</p>"
+          writingMode="horizontal-tb"
+          pagingMode="scroll"
+          theme="dark"
+          chapterIndex={2}
+          totalChapters={4}
+        />,
+      );
+      prevBtn = screen.getByTestId("reader-scroll-prev-chapter");
+      nextBtn = screen.getByTestId("reader-scroll-next-chapter");
+      expect(prevBtn).toHaveClass("bg-slate-800/80");
+      expect(nextBtn).toHaveClass("bg-slate-800/80");
+
+      // black テーマ
+      rerender(
+        <ReaderView
+          bodyHtml="<p>横書き本文</p>"
+          writingMode="horizontal-tb"
+          pagingMode="scroll"
+          theme="black"
+          chapterIndex={2}
+          totalChapters={4}
+        />,
+      );
+      prevBtn = screen.getByTestId("reader-scroll-prev-chapter");
+      nextBtn = screen.getByTestId("reader-scroll-next-chapter");
+      expect(prevBtn).toHaveClass("bg-slate-800/80");
+      expect(nextBtn).toHaveClass("bg-slate-800/80");
+
+      // light テーマ
+      rerender(
+        <ReaderView
+          bodyHtml="<p>横書き本文</p>"
+          writingMode="horizontal-tb"
+          pagingMode="scroll"
+          theme="light"
+          chapterIndex={2}
+          totalChapters={4}
+        />,
+      );
+      prevBtn = screen.getByTestId("reader-scroll-prev-chapter");
+      nextBtn = screen.getByTestId("reader-scroll-next-chapter");
+      expect(prevBtn).toHaveClass("bg-white");
+      expect(nextBtn).toHaveClass("bg-white");
     });
   });
 });
