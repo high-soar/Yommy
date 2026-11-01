@@ -10,6 +10,7 @@ import searchApolloHtml from "../../../parsers/kakuyomu/__fixtures__/search_resu
 import searchEmptyHtml from "../../../parsers/kakuyomu/__fixtures__/search_results_empty.html?raw";
 import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 import type { HttpResponse } from "../../../bridges/http/types";
+import type { SyncEngine } from "../../cloud-sync/services/syncEngine";
 
 describe("useNovelSearch", () => {
   let mockHttpClient: MockHttpClient;
@@ -326,6 +327,50 @@ describe("useNovelSearch", () => {
       true,
     );
     expect(result.current.addingWorkId).toBeNull();
+  });
+
+  it("addNovelToBookshelf で作品追加に成功した際、syncEngine.notifyChanged が呼び出されること (R1-26)", async () => {
+    const mockSyncEngine = {
+      notifyChanged: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const wrapperWithSyncEngine = ({
+      children,
+    }: {
+      children: React.ReactNode;
+    }) =>
+      React.createElement(
+        ServiceProvider,
+        {
+          services: {
+            httpClient: mockHttpClient,
+            syncEngine: mockSyncEngine as unknown as SyncEngine,
+          },
+        },
+        React.createElement(
+          RouterProvider,
+          { initialPath: "/search" },
+          children,
+        ),
+      );
+
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: wrapperWithSyncEngine,
+    });
+
+    act(() => {
+      result.current.setKeyword("異世界");
+    });
+    await act(async () => {
+      await result.current.search();
+    });
+
+    const targetItem = result.current.items[0];
+    await act(async () => {
+      await result.current.addNovelToBookshelf(targetItem);
+    });
+
+    expect(mockSyncEngine.notifyChanged).toHaveBeenCalled();
   });
 
   it("addNovelToBookshelf 実行中にエラーが発生した場合は error が設定され null を返すこと", async () => {

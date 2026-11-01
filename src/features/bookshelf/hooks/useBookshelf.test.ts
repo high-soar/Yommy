@@ -1275,6 +1275,16 @@ describe("useBookshelf", () => {
   });
 
   describe("クラウド同期連携 (AC-BS-13)", () => {
+    const connectedBridge = {
+      getAuthState: vi
+        .fn()
+        .mockResolvedValue({ status: "connected", email: "user@example.com" }),
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+      pullFile: vi.fn(),
+      pushFile: vi.fn(),
+    };
+
     it("初回マウント時に syncEngine.pullAndMerge が実行され、完了後に作品一覧がリロードされること", async () => {
       const mockSyncEngine = {
         pullAndMerge: vi
@@ -1312,6 +1322,7 @@ describe("useBookshelf", () => {
 
       const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
         wrapper: createWrapper({
+          cloudSyncBridge: connectedBridge,
           syncEngine: mockSyncEngine as unknown as SyncEngine,
           novelRepository: customNovelRepo,
         }),
@@ -1339,6 +1350,7 @@ describe("useBookshelf", () => {
 
       const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
         wrapper: createWrapper({
+          cloudSyncBridge: connectedBridge,
           syncEngine: mockSyncEngine as unknown as SyncEngine,
         }),
       });
@@ -1382,6 +1394,7 @@ describe("useBookshelf", () => {
 
       const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
         wrapper: createWrapper({
+          cloudSyncBridge: connectedBridge,
           syncEngine: mockSyncEngine as unknown as SyncEngine,
         }),
       });
@@ -1411,6 +1424,58 @@ describe("useBookshelf", () => {
       document.dispatchEvent(new Event("visibilitychange"));
 
       expect(mockSyncEngine.pullAndMerge).toHaveBeenCalledTimes(1);
+    });
+
+    it("5分以上バックグラウンド休止後に復帰（visibilitychange）したとき、未連携（unlinked）なら pullAndMerge は実行されないこと", async () => {
+      const mockSyncEngine = {
+        pullAndMerge: vi
+          .fn()
+          .mockResolvedValue({ pulled: true, mergedNovels: 0 }),
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+      };
+      const unlinkedBridge = {
+        getAuthState: vi
+          .fn()
+          .mockResolvedValue({ status: "unlinked", email: null }),
+        signIn: vi.fn(),
+        signOut: vi.fn(),
+        pullFile: vi.fn(),
+        pushFile: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          cloudSyncBridge: unlinkedBridge,
+          syncEngine: mockSyncEngine as unknown as SyncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+      expect(mockSyncEngine.pullAndMerge).toHaveBeenCalledTimes(0);
+
+      // バックグラウンドへ移行 (hidden)
+      const now = Date.now();
+      vi.spyOn(Date, "now").mockReturnValue(now);
+      Object.defineProperty(document, "visibilityState", {
+        value: "hidden",
+        writable: true,
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      // 5分1秒経過後にフォアグラウンドへ復帰 (visible)
+      vi.spyOn(Date, "now").mockReturnValue(now + 301000);
+      Object.defineProperty(document, "visibilityState", {
+        value: "visible",
+        writable: true,
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      // 未連携なので pullAndMerge は実行されない
+      expect(mockSyncEngine.pullAndMerge).toHaveBeenCalledTimes(0);
     });
 
     it("作品削除時（deleteNovel）に syncEngine.notifyChanged が呼び出され一覧が更新されること", async () => {
@@ -1535,6 +1600,7 @@ describe("useBookshelf", () => {
 
       const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
         wrapper: createWrapper({
+          cloudSyncBridge: connectedBridge,
           syncEngine: mockSyncEngine as unknown as SyncEngine,
         }),
       });
@@ -1558,6 +1624,33 @@ describe("useBookshelf", () => {
       });
 
       expect(result.current.novels).toEqual([]);
+    });
+
+    it("未連携状態（cloudSyncBridge.getAuthState が unlinked）のとき、pullAndMerge の実行がスキップされること (R1-14)", async () => {
+      const mockBridge = {
+        getAuthState: vi.fn().mockResolvedValue({ status: "unlinked" }),
+        signIn: vi.fn(),
+        signOut: vi.fn(),
+        pullFile: vi.fn(),
+        pushFile: vi.fn(),
+      };
+      const mockSyncEngine = {
+        pullAndMerge: vi.fn(),
+        notifyChanged: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          cloudSyncBridge: mockBridge,
+          syncEngine: mockSyncEngine as unknown as SyncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(mockSyncEngine.pullAndMerge).not.toHaveBeenCalled();
     });
 
     it("deleteNovel で例外が発生したとき、error ステートにメッセージが設定されること", async () => {
