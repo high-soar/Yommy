@@ -432,10 +432,7 @@ export class SyncEngine {
     }
 
     // 新規取込時にお気に入りおよび最終読了日時を復元 (R1-12)
-    if (
-      remoteNovel.isFavorite === 1 ||
-      (remoteNovel.lastReadAt !== null && remoteNovel.lastReadAt !== undefined)
-    ) {
+    if (remoteNovel.isFavorite === 1 || remoteNovel.lastReadAt !== null) {
       await this.deps.novelRepository.updateSyncMetadata?.(novelId, {
         isFavorite: remoteNovel.isFavorite === 1,
         lastReadAt: remoteNovel.lastReadAt,

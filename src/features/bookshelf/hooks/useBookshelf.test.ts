@@ -1426,6 +1426,58 @@ describe("useBookshelf", () => {
       expect(mockSyncEngine.pullAndMerge).toHaveBeenCalledTimes(1);
     });
 
+    it("5分以上バックグラウンド休止後に復帰（visibilitychange）したとき、未連携（unlinked）なら pullAndMerge は実行されないこと", async () => {
+      const mockSyncEngine = {
+        pullAndMerge: vi
+          .fn()
+          .mockResolvedValue({ pulled: true, mergedNovels: 0 }),
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+      };
+      const unlinkedBridge = {
+        getAuthState: vi
+          .fn()
+          .mockResolvedValue({ status: "unlinked", email: null }),
+        signIn: vi.fn(),
+        signOut: vi.fn(),
+        pullFile: vi.fn(),
+        pushFile: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          cloudSyncBridge: unlinkedBridge,
+          syncEngine: mockSyncEngine as unknown as SyncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+      expect(mockSyncEngine.pullAndMerge).toHaveBeenCalledTimes(0);
+
+      // バックグラウンドへ移行 (hidden)
+      const now = Date.now();
+      vi.spyOn(Date, "now").mockReturnValue(now);
+      Object.defineProperty(document, "visibilityState", {
+        value: "hidden",
+        writable: true,
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      // 5分1秒経過後にフォアグラウンドへ復帰 (visible)
+      vi.spyOn(Date, "now").mockReturnValue(now + 301000);
+      Object.defineProperty(document, "visibilityState", {
+        value: "visible",
+        writable: true,
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      // 未連携なので pullAndMerge は実行されない
+      expect(mockSyncEngine.pullAndMerge).toHaveBeenCalledTimes(0);
+    });
+
     it("作品削除時（deleteNovel）に syncEngine.notifyChanged が呼び出され一覧が更新されること", async () => {
       const mockSyncEngine = {
         pullAndMerge: vi

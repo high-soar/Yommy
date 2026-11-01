@@ -1951,6 +1951,92 @@ describe("syncEngine", () => {
       expect(parsed.novels["kakuyomu:16817330658027210412"]).toBeDefined();
     });
 
+    it("Push 前のリモート novels 和集合マージ時、ローカルで削除済みの作品は createdAt と deletedAt の比較により除外または復活すること", async () => {
+      await resetTestDb();
+      const db = await createInMemoryDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const appSettingsRepo = new SqlAppSettingsRepository(db);
+      const bridge = new MockCloudSyncBridge();
+      await bridge.signIn();
+
+      const parserRegistry = createDefaultParserRegistry();
+      const httpClient = new MockHttpClient();
+
+      // ローカルの Tombstone:
+      // novel-1: 削除日時 2026-01-01T12:00:00Z
+      // novel-3: 削除日時 2026-01-01T12:00:00Z
+      const deletedAtMs = Date.parse("2026-01-01T12:00:00.000Z");
+      await db.execute(
+        "INSERT INTO deleted_novels (id, deleted_at) VALUES (?, ?), (?, ?);",
+        ["kakuyomu:del1", deletedAtMs, "kakuyomu:del3", deletedAtMs],
+      );
+
+      // リモートの状態:
+      // del1: createdAt が deletedAt より古い (2026-01-01T10:00:00Z) -> 除外されるべき
+      // del3: createdAt が deletedAt より新しい (2026-01-01T15:00:00Z, 再作成) -> マージされるべき
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: new Date().toISOString(),
+        novels: {
+          "kakuyomu:del1": {
+            id: "kakuyomu:del1",
+            siteType: "kakuyomu",
+            remoteWorkId: "del1",
+            canonicalUrl: "https://kakuyomu.jp/works/del1",
+            title: "古い削除作品",
+            author: "著者",
+            synopsis: "あらすじ",
+            totalChapters: 1,
+            isFavorite: 0,
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: null,
+            bookmarkChapterIndex: null,
+            lastReadAt: null,
+            readChapterIds: [],
+            createdAt: "2026-01-01T10:00:00.000Z",
+            updatedAt: "2026-01-01T14:00:00.000Z",
+          },
+          "kakuyomu:del3": {
+            id: "kakuyomu:del3",
+            siteType: "kakuyomu",
+            remoteWorkId: "del3",
+            canonicalUrl: "https://kakuyomu.jp/works/del3",
+            title: "再作成作品",
+            author: "著者",
+            synopsis: "あらすじ",
+            totalChapters: 1,
+            isFavorite: 0,
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: null,
+            bookmarkChapterIndex: null,
+            lastReadAt: null,
+            readChapterIds: [],
+            createdAt: "2026-01-01T15:00:00.000Z",
+            updatedAt: "2026-01-01T15:00:00.000Z",
+          },
+        },
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      const engine = new SyncEngine({
+        bridge,
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        appSettingsRepository: appSettingsRepo,
+        parserRegistry,
+        httpClient,
+      });
+
+      await engine.pushCurrentState();
+
+      const latestRaw = await bridge.pullFile();
+      const parsed = validateSyncState(latestRaw!);
+      expect(parsed.novels["kakuyomu:del1"]).toBeUndefined();
+      expect(parsed.novels["kakuyomu:del3"]).toBeDefined();
+    });
+
     it("ローカルで削除された作品について、リモートの updatedAt ではなく createdAt が deletedAt より後でない限り復活しないこと (R1-11)", async () => {
       await resetTestDb();
       const db = await createInMemoryDb();
