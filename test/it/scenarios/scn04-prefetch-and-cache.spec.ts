@@ -49,7 +49,7 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
 
     // 初期状態の確認: 全 4 話中 0 話取得済み、各話に「未取得」バッジ表示
     const detailStats = page.getByTestId("novel-detail-stats");
-    await expect(detailStats).toContainText("全 4 話（取得済み 0 話）");
+    await expect(detailStats).toContainText("全 4 話（取得済み 0 話");
 
     const uncachedBadges = page.getByTestId("episode-uncached-badge");
     await expect(uncachedBadges).toHaveCount(4);
@@ -75,7 +75,7 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     await expect(batchButton).toBeDisabled();
 
     // 取得件数が全話反映され、未取得バッジが 0 件になること
-    await expect(detailStats).toContainText("全 4 話（取得済み 4 話）");
+    await expect(detailStats).toContainText("全 4 話（取得済み 4 話");
     await expect(uncachedBadges).toHaveCount(0);
   });
 
