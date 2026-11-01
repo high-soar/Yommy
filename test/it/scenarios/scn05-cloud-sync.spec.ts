@@ -139,9 +139,10 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     );
 
     // =========================================================================
-    // ステップ3: 端末 B（DB リセット状態）での起動時自動 Pull、作品自動取得、第2話しおり復帰確認
+    // ステップ3: 端末 B（DB リセット状態）での起動時自動 Pull、作品自動取得、第2話しおり復帰・既読同期確認
     // =========================================================================
-    // 1. 端末 A の DB バックアップをローカル変数に退避
+    // 1. 直前の DB 永続化（onUpdate -> backup）の完了を確実に待機してからバックアップを退避（R1-19 偽陽性防止）
+    await page.waitForTimeout(300);
     const terminalABackup = await page.evaluate(() =>
       localStorage.getItem("yommy_sqlite_db_backup"),
     );
@@ -156,6 +157,9 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     // 3. 本棚（/）を開く（起動時マウントフック useBookshelf による自動 Pull が実行される）
     await page.goto("/");
 
+    // 偽陽性防止（R1-19）: 端末 B が最初は空本棚から開始することを確認
+    await expect(page.getByTestId("bookshelf-page")).toBeVisible();
+
     // 4. SyncEngine がリモートの作品を検知し、HttpClient 経由で目次を取得してローカル DB に登録し、
     //    本棚画面に当該作品カードが表示されることを確認
     const novelCardB = page.getByTestId("novel-card");
@@ -163,7 +167,10 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     await expect(page.getByTestId("novel-card-title")).toHaveText(
       "境界迷宮と異界の魔術師",
     );
-    await expect(page.getByTestId("novel-card-bookmark")).toContainText("2話");
+    // 厳密なしおり表記完全一致アサーション（R1-25(9)）
+    await expect(page.getByTestId("novel-card-bookmark")).toHaveText(
+      "しおり: 第2話",
+    );
 
     // 5. 作品カードをクリックして作品詳細へ遷移
     await page.getByTestId("novel-card-select").click();
@@ -171,7 +178,14 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
       /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
     );
 
-    // 6. 「続きから読む（第2話）」ボタンが表示され、第2話から再開できることを確認
+    // 6. 既読バッジ同期復元の検証（R1-31, AC-RD-11）: 端末 A で閲覧した第2話に既読バッジが表示されていることを確認
+    const epItemsB = page.getByTestId("episode-item");
+    await expect(epItemsB).toHaveCount(4);
+    await expect(
+      epItemsB.nth(1).getByTestId("episode-read-badge"),
+    ).toBeVisible();
+
+    // 7. 「続きから読む（第2話）」ボタンが表示され、第2話から再開できることを確認
     const resumeButtonB = page.getByTestId("detail-resume-button");
     await expect(resumeButtonB).toBeVisible();
     await expect(resumeButtonB).toContainText("続きから読む（第2話）");
@@ -226,14 +240,21 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
       { timeout: 10000 },
     );
 
-    // 5. 端末 A（端末 A の DB 状態に戻す）をシミュレート
+    // 5. 端末 A（端末 A の DB 状態に戻す）をシミュレート（R1-19 偽陽性防止）
     await page.evaluate((backup) => {
       localStorage.setItem("yommy_sqlite_db_backup", backup!);
     }, terminalABackup);
 
-    // 6. ページをリロードして本棚を表示。起動時自動 Pull によりリモートの Tombstone を検知し、
-    //    端末 A のローカル DB からも作品が削除され、本棚が空状態になることを確認
+    // 6. ページをリロードして本棚を表示。初期化待機を確実に挟む
     await page.reload();
+    await page.waitForFunction(
+      () =>
+        typeof window.__yommyServices !== "undefined" &&
+        window.__yommyServices.isReady,
+    );
+
+    // 起動時自動 Pull によりリモートの Tombstone を検知し、
+    // 端末 A のローカル DB からも作品が削除され、本棚が空状態になることを確認
     await expect(page.getByTestId("bookshelf-empty")).toBeVisible({
       timeout: 15000,
     });
@@ -264,5 +285,57 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     await expect(reauthButton).toBeVisible();
     await expect(reauthButton).toHaveText("Google アカウントと連携");
     await expect(page.getByTestId("cloud-sync-status")).toContainText("未連携");
+
+    // =========================================================================
+    // ステップ6: 手動連携解除とローカルデータ保持確認（AC-ST-10, R1-31）
+    // =========================================================================
+    // 1. 401 シミュレートを解除し、再度 Google アカウントと正常連携
+    await page.evaluate(() => {
+      localStorage.removeItem("yommy_mock_gdrive_401");
+    });
+    await reauthButton.click();
+    await expect(page.getByTestId("cloud-sync-status")).toContainText("連携中");
+
+    // 2. 作品データを本棚に登録（手動連携解除後もローカル作品が保持されることを検証するため）
+    await page.evaluate(async () => {
+      const services = window.__yommyServices!;
+      const sampleUrl = "https://kakuyomu.jp/works/16817330658027210412";
+      const response = await services.httpClient.getHtml({ url: sampleUrl });
+      const parser = services.parserRegistry.requireParser(sampleUrl);
+      const parsedIndex = parser.parseNovelIndex(response.html, sampleUrl);
+      await services.novelRepository.upsertNovelWithToc(
+        parsedIndex,
+        new Date().toISOString(),
+      );
+    });
+
+    // 3. 設定画面で「Google アカウント連携を解除」ボタンをクリック（AC-ST-10）
+    const disconnectBtn = page.getByTestId("cloud-sync-disconnect-button");
+    await expect(disconnectBtn).toBeVisible();
+    await disconnectBtn.click();
+
+    // 4. 確認ダイアログが表示されることを確認
+    const disconnectDialog = page.getByTestId("cloud-sync-disconnect-dialog");
+    await expect(disconnectDialog).toBeVisible();
+
+    // 5. 「連携を解除する」ボタンをクリック
+    const confirmDisconnectBtn = page.getByTestId(
+      "cloud-sync-disconnect-confirm-button",
+    );
+    await expect(confirmDisconnectBtn).toBeVisible();
+    await confirmDisconnectBtn.click();
+
+    // 6. 設定画面で未連携状態（「Google アカウントと連携」ボタン表示）へ遷移することを確認
+    await expect(reauthButton).toBeVisible();
+    await expect(page.getByTestId("cloud-sync-status")).toContainText("未連携");
+
+    // 7. 本棚タブへ戻り、ローカルの作品データが削除されず保持されていることを確認（AC-ST-10）
+    await page.getByTestId("tab-bookshelf").click();
+    await expect(page).toHaveURL("/");
+    const retainedNovelCard = page.getByTestId("novel-card");
+    await expect(retainedNovelCard).toBeVisible();
+    await expect(page.getByTestId("novel-card-title")).toHaveText(
+      "境界迷宮と異界の魔術師",
+    );
   });
 });

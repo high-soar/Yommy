@@ -107,6 +107,11 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
 
     // 3. ページをリロードして本棚を開く（自動更新チェックが走り、作品1に NEW バッジが表示される）
     await page.reload();
+    await page.waitForFunction(
+      () =>
+        typeof window.__yommyServices !== "undefined" &&
+        window.__yommyServices.isReady,
+    );
 
     // 作品カードが2件表示されるのを待つ
     const novelCards = page.getByTestId("novel-card");
@@ -163,6 +168,11 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
       );
     });
     await page.reload();
+    await page.waitForFunction(
+      () =>
+        typeof window.__yommyServices !== "undefined" &&
+        window.__yommyServices.isReady,
+    );
 
     const novelCardWork2WithNew = page
       .getByTestId("novel-card")
@@ -218,6 +228,11 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
 
     // ページをリロードして永続化（app_settings）と復元を確認
     await page.reload();
+    await page.waitForFunction(
+      () =>
+        typeof window.__yommyServices !== "undefined" &&
+        window.__yommyServices.isReady,
+    );
     const reloadedSortSelect = page.getByTestId("bookshelf-sort-select");
     await expect(reloadedSortSelect).toBeVisible();
     await expect(reloadedSortSelect).toHaveValue("title");
