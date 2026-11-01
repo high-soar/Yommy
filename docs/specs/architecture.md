@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Review (#168)"
+status: "Review (#170)"
 updated: "2026-11-01"
 tags:
   - architecture
@@ -19,13 +19,17 @@ tags:
   - prefetch
   - batch-cache
   - cache-rules
+  - cache-management
+  - capacity-visualization
   - cloud-sync
   - google-drive
   - paging
   - gestures
   - pagination
   - ho-23
+  - ho-24
 related_specs:
+  - docs/specs/changes/issue-170-cache-management-and-capacity-visualization.md
   - docs/specs/changes/issue-168-reader-pagination-and-touch-refinement.md
   - docs/specs/changes/archive/issue-122-reader-page-turning.md
   - docs/specs/changes/archive/issue-120-cloud-sync-google-drive.md
@@ -462,6 +466,11 @@ export interface ChapterRepository {
     novelId: string,
     options?: { onlyRead?: boolean },
   ): Promise<number>;
+  deleteAllCachedBodies?(options?: { onlyRead?: boolean }): Promise<number>;
+  getStorageCacheSummary?(): Promise<{
+    totalCachedChapters: number;
+    totalByteSize: number;
+  }>;
 }
 
 /**
@@ -690,6 +699,42 @@ export interface CloudSyncBridge {
    - **安全なファイル作成とライフサイクル管理**: ファイル初回作成時は `multipart/related`（`uploadType=multipart`）の 1 リクエストで作成し空ファイル残存を防止する。Activity 再生成時のコールバック消失防止（`saveCall` / `getSavedCall` / `freeSavedCall`）およびプラグイン破棄時の ExecutorService 解放（`handleOnDestroy`）を徹底する。
 4. **最小権限スコープ（`drive.appdata` 限定）と即時 Revoke**: スコープを `drive.appdata` に限定し、連携解除時は OS トークン破棄＋Google サーバー即時 Revoke を実行。遠隔での認可解除（`401 Unauthorized`）検知時も自動で未連携状態へ安全にフォールバックする。
 5. **SSRF / インジェクション防御**: スキーマ検証と `parseNovelUrl` ホワイトリスト検証を通過したデータのみを処理する。
+
+### 3.9 キャッシュ容量フォーマット規約およびストレージ管理契約（Issue #170）
+
+#### 3.9.1 バイト容量フォーマット共通ユーティリティ（`src/shared/utils/formatByteSize.ts`）
+
+端末ストレージを圧迫するキャッシュデータを視認性高く提示するため、以下の規約でフォーマットする純粋関数を提供します：
+
+```ts
+export function formatByteSize(bytes: number): string {
+  if (bytes <= 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+```
+
+#### 3.9.2 ストレージ・キャッシュ管理フック契約（`src/features/settings/hooks/useStorageCache.ts`）
+
+設定画面（`SCR-05`）における全体キャッシュ容量の可視化と一括本文キャッシュ削除（既読のみ／全話）を管理するカスタムフック契約です：
+
+```ts
+export interface StorageCacheSummary {
+  totalCachedChapters: number;
+  totalByteSize: number;
+}
+
+export interface UseStorageCacheResult {
+  summary: StorageCacheSummary;
+  isLoading: boolean;
+  isClearing: boolean;
+  notice: string | null;
+  error: string | null;
+  clearCache: (options: { onlyRead: boolean }) => Promise<number>;
+  refreshSummary: () => Promise<void>;
+}
+```
 
 ---
 

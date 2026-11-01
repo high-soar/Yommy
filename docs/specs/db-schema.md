@@ -2,7 +2,7 @@
 type: spec-db-schema
 title: ローカル DB スキーマ定義（App 全体正本）
 description: SQLite（novels, chapters, download_queue, reader_settings, app_settings）のER図、テーブル構造、およびDDL定義の正本。
-status: "Review (#168)"
+status: "Review (#170)"
 updated: "2026-11-01"
 tags:
   [
@@ -12,15 +12,20 @@ tags:
     storage,
     settings,
     prefetch,
+    batch-cache,
     cache-rules,
+    cache-management,
+    capacity-visualization,
     cloud-sync,
     google-drive,
     tombstone,
     paging,
     pagination,
     ho-23,
+    ho-24,
   ]
 related_specs:
+  - docs/specs/changes/issue-170-cache-management-and-capacity-visualization.md
   - docs/specs/changes/issue-168-reader-pagination-and-touch-refinement.md
   - docs/specs/changes/archive/issue-122-reader-page-turning.md
   - docs/specs/changes/archive/issue-120-cloud-sync-google-drive.md
@@ -180,7 +185,7 @@ CREATE INDEX IF NOT EXISTS idx_novels_title ON novels(title COLLATE NOCASE ASC);
 
 ### 3.2 `chapters` テーブル（各話目次・本文 HTML キャッシュ）
 
-目次取得時は `body_html = NULL`, `byte_size = 0` でレコードを作成し、本文ダウンロード完了時にサニタイズ済み HTML と `byte_size`, `downloaded_at` を保存します。各話の一意性は `(novel_id, remote_chapter_id)` で保証されるため、連載途中でエピソードが挿入・削除されて `chapter_index` がずれた場合でも、本文キャッシュが別話へ誤って引き継がれることなく安全に維持されます。キャッシュ削除時は目次情報を残したまま `body_html = NULL`, `byte_size = 0`, `downloaded_at = NULL` に更新します（既読フラグ `is_read` は維持）。
+目次取得時は `body_html = NULL`, `byte_size = 0` でレコードを作成し、本文ダウンロード完了時にサニタイズ済み HTML と `byte_size`, `downloaded_at` を保存します。各話の一意性は `(novel_id, remote_chapter_id)` で保証されるため、連載途中でエピソードが挿入・削除されて `chapter_index` がずれた場合でも、本文キャッシュが別話へ誤って引き継がれることなく安全に維持されます。キャッシュ削除時（作品詳細での整理または設定画面での一括整理：`v0.5` Issue #170）は、目次情報・既読フラグ（`is_read`）・しおり位置を完全に残したまま、対象話の `body_html = NULL`, `byte_size = 0`, `downloaded_at = NULL` に更新します（既読話のみ削除時: `body_html IS NOT NULL AND is_read = 1`、全話削除時: `body_html IS NOT NULL`）。更新後、親作品レコードの `novels.cached_chapters` および `novels.total_byte_size` を単一トランザクション内で即時再集計して更新します。
 
 なお、`downloaded_at` はキャッシュ鮮度管理（TTL 7日間判定：`now - downloaded_at < 7 days` での通信スキップ、7日経過後の 3秒短タイムアウト再取得と既存キャッシュフォールバック）の判定基準日時として利用されます（`v0.3` Issue #81）。
 
