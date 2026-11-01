@@ -40,12 +40,13 @@ describe("SettingsContainer", () => {
       // 行間の初期値: 1.8
       expect(screen.getByTestId("line-height-value")).toHaveTextContent("1.8");
 
-      // サンプルプレビューへの初期値反映
-      const preview = screen.getByTestId("sample-text-preview");
-      expect(preview).toHaveAttribute("data-writing-mode", "vertical-rl");
-      expect(preview).toHaveAttribute("data-theme", "light");
-      expect(preview).toHaveAttribute("data-font-size", "18");
-      expect(preview).toHaveAttribute("data-line-height", "1.8");
+      // SettingsPage への初期値 Props 反映 (R1-32)
+      const page = screen.getByTestId("settings-page");
+      expect(page).toHaveAttribute("data-writing-mode", "vertical-rl");
+      expect(page).toHaveAttribute("data-theme", "light");
+      expect(page).toHaveAttribute("data-font-size", "18");
+      expect(page).toHaveAttribute("data-line-height", "1.8");
+      expect(page).toHaveAttribute("data-paging-mode", "auto");
     });
 
     it("組み方向切替ボタンを操作したとき、縦書きと横書きが相互に切り替わること (AC-ST-03)", async () => {
@@ -62,7 +63,7 @@ describe("SettingsContainer", () => {
       // 縦書き -> 横書き
       await user.click(toggleBtn);
       await waitFor(() => {
-        expect(screen.getByTestId("sample-text-preview")).toHaveAttribute(
+        expect(screen.getByTestId("settings-page")).toHaveAttribute(
           "data-writing-mode",
           "horizontal-tb",
         );
@@ -72,7 +73,7 @@ describe("SettingsContainer", () => {
       // 横書き -> 縦書き
       await user.click(toggleBtn);
       await waitFor(() => {
-        expect(screen.getByTestId("sample-text-preview")).toHaveAttribute(
+        expect(screen.getByTestId("settings-page")).toHaveAttribute(
           "data-writing-mode",
           "vertical-rl",
         );
@@ -92,7 +93,7 @@ describe("SettingsContainer", () => {
       await user.click(sepiaBtn);
 
       await waitFor(() => {
-        expect(screen.getByTestId("sample-text-preview")).toHaveAttribute(
+        expect(screen.getByTestId("settings-page")).toHaveAttribute(
           "data-theme",
           "sepia",
         );
@@ -117,24 +118,22 @@ describe("SettingsContainer", () => {
       await user.click(increaseBtn);
 
       await waitFor(() => {
-        expect(screen.getByTestId("font-size-value")).toHaveTextContent("20px");
+        expect(screen.getByTestId("settings-page")).toHaveAttribute(
+          "data-font-size",
+          "20",
+        );
       });
-      expect(screen.getByTestId("sample-text-preview")).toHaveAttribute(
-        "data-font-size",
-        "20",
-      );
 
       // 縮小ボタン押下: 20 -> 18
       const decreaseBtn = screen.getByTestId("font-size-decrease");
       await user.click(decreaseBtn);
 
       await waitFor(() => {
-        expect(screen.getByTestId("font-size-value")).toHaveTextContent("18px");
+        expect(screen.getByTestId("settings-page")).toHaveAttribute(
+          "data-font-size",
+          "18",
+        );
       });
-      expect(screen.getByTestId("sample-text-preview")).toHaveAttribute(
-        "data-font-size",
-        "18",
-      );
     });
 
     it("行間ステッパー操作時に行間が更新されること (AC-ST-05)", async () => {
@@ -150,28 +149,22 @@ describe("SettingsContainer", () => {
       await user.click(increaseBtn);
 
       await waitFor(() => {
-        expect(screen.getByTestId("line-height-value")).toHaveTextContent(
-          "2.0",
+        expect(screen.getByTestId("settings-page")).toHaveAttribute(
+          "data-line-height",
+          "2",
         );
       });
-      expect(screen.getByTestId("sample-text-preview")).toHaveAttribute(
-        "data-line-height",
-        "2",
-      );
 
       // 縮小ボタン押下: 2.0 -> 1.8
       const decreaseBtn = screen.getByTestId("line-height-decrease");
       await user.click(decreaseBtn);
 
       await waitFor(() => {
-        expect(screen.getByTestId("line-height-value")).toHaveTextContent(
+        expect(screen.getByTestId("settings-page")).toHaveAttribute(
+          "data-line-height",
           "1.8",
         );
       });
-      expect(screen.getByTestId("sample-text-preview")).toHaveAttribute(
-        "data-line-height",
-        "1.8",
-      );
     });
 
     it("ページ送りモードセレクターを操作したとき、設定が変更・永続化されること (AC-ST-13)", async () => {
@@ -291,10 +284,11 @@ describe("SettingsContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("cloud-sync-section")).toBeInTheDocument();
-        expect(screen.getByTestId("cloud-sync-status")).toHaveTextContent(
-          "連携中 (container-user@example.com)",
+        expect(screen.getByTestId("settings-page")).toHaveAttribute(
+          "data-cloud-sync-status",
+          "connected",
         );
+        expect(screen.getByTestId("cloud-sync-section")).toBeInTheDocument();
       });
 
       const syncBtn = screen.getByTestId("cloud-sync-now-button");

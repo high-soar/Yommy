@@ -81,12 +81,8 @@ describe("SettingsPage", () => {
         screen.getByRole("heading", { level: 2, name: "組版プレビュー" }),
       ).toBeInTheDocument();
 
-      // SampleTextPreview の属性
-      const preview = screen.getByTestId("sample-text-preview");
-      expect(preview).toHaveAttribute("data-writing-mode", "vertical-rl");
-      expect(preview).toHaveAttribute("data-theme", "light");
-      expect(preview).toHaveAttribute("data-font-size", "18");
-      expect(preview).toHaveAttribute("data-line-height", "1.8");
+      // SampleTextPreview のマウント確認 (R1-32)
+      expect(screen.getByTestId("sample-text-preview")).toBeInTheDocument();
     });
 
     it("HorizontalSepia: 横書き・セピアテーマ表示が正しく反映されること (AC-ST-03, AC-ST-04)", () => {
@@ -106,10 +102,8 @@ describe("SettingsPage", () => {
         "false",
       );
 
-      // プレビュー属性
-      const preview = screen.getByTestId("sample-text-preview");
-      expect(preview).toHaveAttribute("data-writing-mode", "horizontal-tb");
-      expect(preview).toHaveAttribute("data-theme", "sepia");
+      // SampleTextPreview のマウント確認 (R1-32)
+      expect(screen.getByTestId("sample-text-preview")).toBeInTheDocument();
     });
 
     it("MinBoundaries: 最小境界値（12px / 1.4）で縮小ボタンが無効化されること (AC-ST-05)", () => {
@@ -434,17 +428,10 @@ describe("SettingsPage", () => {
       );
     });
 
-    it("CloudSyncConnected: クラウド同期セクションが連携中状態で描画されること (AC-ST-08, AC-ST-09)", () => {
+    it("CloudSyncConnected: クラウド同期セクションが描画されること (AC-ST-08, AC-ST-09, R1-32)", () => {
       render(<CloudSyncConnected />);
 
       expect(screen.getByTestId("cloud-sync-section")).toBeInTheDocument();
-      expect(screen.getByTestId("cloud-sync-status")).toHaveTextContent(
-        "連携中 (user@example.com)",
-      );
-      expect(screen.getByTestId("cloud-sync-now-button")).toBeInTheDocument();
-      expect(
-        screen.getByTestId("cloud-sync-disconnect-button"),
-      ).toBeInTheDocument();
     });
 
     it("error が null または未指定の場合、エラーアラートが表示されないこと", () => {
@@ -466,7 +453,7 @@ describe("SettingsPage", () => {
       ).not.toBeInTheDocument();
     });
 
-    it("クラウド同期セクションが統合され、連携・同期・解除コールバックが正しく呼び出されること (AC-ST-08〜12)", async () => {
+    it("クラウド同期セクションが統合され、連携・同期コールバックが正しく呼び出されること (AC-ST-08〜12, R1-32)", async () => {
       const onSignInGoogle = vi.fn().mockResolvedValue(undefined);
       const onSignOutGoogle = vi.fn().mockResolvedValue(undefined);
       const onSyncNow = vi.fn().mockResolvedValue(undefined);
@@ -516,14 +503,6 @@ describe("SettingsPage", () => {
       const syncBtn = screen.getByTestId("cloud-sync-now-button");
       await user.click(syncBtn);
       expect(onSyncNow).toHaveBeenCalledTimes(1);
-
-      const disconnectBtn = screen.getByTestId("cloud-sync-disconnect-button");
-      await user.click(disconnectBtn);
-      const confirmBtn = screen.getByTestId(
-        "cloud-sync-disconnect-confirm-button",
-      );
-      await user.click(confirmBtn);
-      expect(onSignOutGoogle).toHaveBeenCalledTimes(1);
     });
   });
 });

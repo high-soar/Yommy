@@ -165,7 +165,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   };
 
   return (
-    <div data-testid="settings-page" className={rootClasses}>
+    <div
+      data-testid="settings-page"
+      data-writing-mode={writingMode}
+      data-theme={theme}
+      data-font-size={fontSizePx}
+      data-line-height={lineHeight}
+      data-paging-mode={pagingMode}
+      data-cloud-sync-status={cloudSyncAuthState.status}
+      data-is-loading={isLoading ? "true" : undefined}
+      className={rootClasses}
+    >
       <div className="max-w-2xl mx-auto w-full p-4 md:p-6 pb-20">
         <header
           data-testid="settings-header"

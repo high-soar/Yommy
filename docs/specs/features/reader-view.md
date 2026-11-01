@@ -242,9 +242,12 @@ src/features/reader/
   - `pagingMode === 'auto'`: `writingMode === 'vertical-rl' ? "paged" : "scroll"`
 - **1ページ単位の組版（実効 `"paged"` 時）**:
   - 画面端で行が縦半分に途切れることを防ぐため、ビューポート寸法に応じた 1 ページ区切りの組版（マルチカラム `column-width` / `column-gap` / `column-fill: auto`、またはコンテナ寸法に基づくページ分割スライド）を適用する。
+  - 横書き（`horizontal-tb`）時は、コンテナ内側パディング `p-6`（左右計48px）と送り幅 `clientWidth` を完全に整合させるため、`columns: 1`、`columnGap: 48px`、段幅 `columnWidth: (pageWidth - 48)px` を明示適用し、ページ毎の変位ずれ蓄積を防止する。
   - ページ送り時は、横スライドアニメーション（150〜250ms、`transition: transform 200ms ease-out`）でなめらかに遷移する。
   - ドラッグ操作中は `slideOffsetPx` に応じてリアルタイムに表示が水平追従スライドする。
-  - 画面隅に控えめなページインジケーター（`data-testid="reader-page-indicator"`、例: `3 / 12`）を表示する。
+  - 画面隅に控えめなページインジケーター（`data-testid="reader-page-indicator"`、例: `3 / 12`）を表示する。組み方向に関わらず常に水平表記とするため `writing-mode: horizontal-tb` を固定適用し、縦書き時における画面外クリップ・テキスト途切れを防止する。
+  - 画面回転やウィンドウリサイズ発生時は、`window.addEventListener("resize", ...)` に連動して総ページ数（`totalPages`）の再計測（`onTotalPagesChange`）を自動実行し、レイアウト変更に即座に追従する。
+  - 実効 `paged` モードで再開・ページ遷移した際は、スクロール位置（`scrollLeft` / `scrollTop`）を `0` にリセットし、`restoreScrollPosition` は実効 `!isPaged`（連続スクロールモード）のみに限定して実行することで、`scrollLeft` と `translateX` スライドによる二重変位バグを防止する。
 - **連続スクロール仕様（実効 `"scroll"` 時）**:
   - 縦書き時: CSS `writing-mode: vertical-rl`、`text-orientation: mixed`、水平スクロール（`overflow-x-auto overflow-y-hidden`）。
   - 横書き時: CSS `writing-mode: horizontal-tb`、垂直スクロール（`overflow-y-auto overflow-x-hidden`）。
@@ -329,7 +332,10 @@ src/features/reader/
   - **連続スクロール時**:
     - 一度末尾（または先頭）までスクロールしきった状態から、もう一度同方向へスクロール操作を行った場合に限定して次話（前話）へ遷移（誤遷移防止の 2 段階操作）。
 - **最下部タッチゾーン**:
-  - 実効 `"scroll"` モード時、画面最下部（下端約 72px）のタップ操作によりオーバーレイ開閉をトグルする。
+  - 実効 `"scroll"` モード時: 画面最下部（下端約 72px、全幅 `left-0 right-0`）のタップ操作によりオーバーレイ開閉をトグルする。
+  - 実効 `"paged"` モード時: 左右端 20%（`left-0 w-[20%]` / `right-0 w-[20%]`）の次/前ページめくりタップ領域とのイベント競合・誤動作を解消するため、最下部タッチゾーンを画面中央 60%（`left-[20%] right-[20%]`）に制限して配置する。
+- **ジェスチャータイマークリーンアップ（`useReaderGestures`）**:
+  - ページ送りアニメーション完了タイマー（`animationTimerRef`）およびタップ誤判定防止タイマー（`tapTimerRef`）を保持し、再操作時およびコンポーネントアンマウント時に `clearTimeout` による確実な破棄を行う。
 - **自動非表示（Auto-Hide）**:
   - オーバーレイ表示中に「本文エリアのスクロール／ページ送り操作」「本文エリアの再タップ」「前後話への移動」が行われた場合は、自動的にオーバーレイを閉じる。
 - **メイン表示領域の排他描画ルール**:
@@ -369,6 +375,10 @@ export interface UseReaderOptions {
   initialWorkUrl?: string;
 }
 
+export interface GoToChapterOptions {
+  startAt?: "start" | "end";
+}
+
 export interface UseReaderResult {
   novel: NovelRecord | null;
   chapter: ChapterRecord | null;
@@ -399,7 +409,10 @@ export interface UseReaderResult {
   setTotalPages: (total: number) => void; // 【新設: v0.4 Issue #122】
   updateScrollProgress: (progress: number) => Promise<void>;
   flushBookmark: () => Promise<void>;
-  goToChapter: (targetChapterIndex: number) => Promise<boolean>;
+  goToChapter: (
+    targetChapterIndex: number,
+    options?: GoToChapterOptions,
+  ) => Promise<boolean>;
   fetchNovelFromUrl: () => Promise<void>;
 }
 ```
@@ -428,9 +441,10 @@ export interface UseReaderResult {
    - **スクロール／ページめくり操作時および画面離脱時**:
      - ユーザースクロール時またはページ遷移時（`goToPage(targetPage)` / `nextPage()` / `prevPage()`）、算出された進捗率 `progress = totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0`（`0.0 〜 1.0`）で `scrollProgress` を更新し、`novelRepository.updateBookmark(novel.id, chapterIndex, clampedProgress)` で DB へ自動保存する。
      - OS バックキー（`TR-06`）による目次復帰、または下部オーバーレイの4タブ（本棚 `TR-01b`、検索/ランキング/設定 `TR-01`）遷移時には、`flushBookmark()` により最新の `(chapterIndex, scrollProgress)` を確実に DB 保存してから画面遷移コールバックを呼び出す。
-5. **前後エピソード遷移（`goToChapter(targetChapterIndex)`、`TR-05`）**:
+5. **前後エピソード遷移（`goToChapter(targetChapterIndex, options?: GoToChapterOptions)`、`TR-05`）**:
    - `novel === null`、または `targetChapterIndex < 1` もしくは `targetChapterIndex > totalChapters`（範囲外）が指定された場合は何もせず `false` を返す。
-   - 有効範囲内の場合は、遷移前の現在話（次話遷移時を含む）に対して `chapterRepository.markChapterRead(novel.id, chapterIndex, true)` を実行した上で、`targetChapterIndex` のエピソード読み込み（未キャッシュ時はオンデマンド本文取得・`saveChapterBody` 保存）、表示完了時の `markChapterRead(novel.id, targetChapterIndex, true)`、および新エピソード先頭へのしおり更新（`updateBookmark(novel.id, targetChapterIndex, 0)`、`initialScrollProgress = 0`, `scrollProgress = 0`）を実行し、`true` を返す。
+   - 有効範囲内の場合は、遷移前の現在話（次話遷移時を含む）に対して `chapterRepository.markChapterRead(novel.id, chapterIndex, true)` を実行した上で、`targetChapterIndex` のエピソード読み込み（未キャッシュ時はオンデマンド本文取得・`saveChapterBody` 保存）、表示完了時の `markChapterRead(novel.id, targetChapterIndex, true)`、および新エピソードへのしおり更新を実行し、`true` を返す。
+   - **前話末尾復元（`startAt: "end"`）**: 前話遷移時など `options?.startAt === "end"` が指定された場合、新エピソードのしおり進捗率を `1.0`（`initialScrollProgress = 1.0, scrollProgress = 1.0`）として保存・初期化し、実効 `paged` 時は初回 `setTotalPages` 時に自動的に最終ページへ復元する（`AC-RD-18`）。デフォルト（`startAt === "start"`）は先頭 `0.0`。
 6. **手動作品取得・更新パイプライン（`fetchNovelFromUrl()`）**:
    - 単体検証・手動取得トリガー時、対象 URL を `const targetUrl = novel?.canonicalUrl ?? initialWorkUrl` として解決した上で、**HTTP 通信を行う前に** `parserRegistry.requireParser(targetUrl)` および `parser.normalizeWorkUrl(targetUrl)` を呼び出す（未対応サイトや不正 URL の場合は通信を行わずに直ちに `error` をセットして終了する）。
    - 対応サイトの場合は `httpClient.getHtml({ url: normalizedWorkUrl })` で目次 HTML を取得し、`parser.parseNovelIndex(...)` → `novelRepository.upsertNovelWithToc(...)` で作品および目次を DB 保存する。
@@ -440,6 +454,9 @@ export interface UseReaderResult {
    - 先読み対象: $N+1 \sim \min(N+5, \text{totalChapters})$。
    - 対象エピソードについて、SQLite 内のキャッシュが有効（`downloadedAt` から 7日以内）であれば通信をスキップする。
    - 未キャッシュまたは 7日経過エピソードが存在する場合、1話ごとに `PREFETCH_INTERVAL_MS`（1.5秒）のウェイトを空けて順次直列に取得・保存する（7日経過キャッシュは 3秒短タイムアウト、未キャッシュ話は 10秒標準タイムアウト）。
+   - **先読み直列化とアンマウント保護（R1-29）**:
+     - 先読みタスクの多重並行走行を防止するため、先行する先読みタスク（進行中の HTTP 通信含む）の完了を待機（直列化保証）してから新エピソードの先読み（初期 1.5秒ウェイト）を開始し、小説サイトへのリクエスト間隔が 1.5秒（`PREFETCH_INTERVAL_MS`）を下回る競合状態を防止する。
+     - 初期データ読み込み（`loadInitialData`）の通信完了直後にマウント状態（`isMounted`）を検証し、先読みタスクは `AbortSignal` 連動により、画面離脱・アンマウント後の DB 更新（しおり・既読保存）および同期通知（`syncEngine.notifyChanged`）を確実にスキップする。
    - `AbortController` による制御:
      - ユーザーが `goToChapter` で別エピソードへ移動した際は、直前の先読み処理を直ちに中断（`abort()`）し、新エピソードを起点とする 5話先読みを再開始する。
      - リーダー画面離脱時（アンマウント、OS バックキー、タブ遷移）は直ちに処理を停止し、不要な通信を防止する。

@@ -1209,5 +1209,61 @@ describe("useReaderGestures", () => {
       // 500 / 1024 = 0.488 (中央60%)
       expect(onToggleOverlay).toHaveBeenCalled();
     });
+
+    it("アニメーション進行中等にアンマウントされた場合、タイマーが確実に破棄されること (R1-25(7))", () => {
+      const clearTimeoutSpy = vi.spyOn(window, "clearTimeout");
+      const { result, unmount } = renderHook(() =>
+        useReaderGestures(defaultOptions),
+      );
+
+      // ドラッグ終了でアニメーション開始
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 200, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 200, clientY: 100 }),
+        );
+      });
+
+      unmount();
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+    });
+
+    it("アニメーション進行中に次のジェスチャーが確定した場合、既存のアニメーションタイマーがクリアされること (R1-25(7))", () => {
+      const clearTimeoutSpy = vi.spyOn(window, "clearTimeout");
+      const { result } = renderHook(() => useReaderGestures(defaultOptions));
+
+      // 1回目のドラッグ終了（アニメーション開始）
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 200, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 200, clientY: 100 }),
+        );
+      });
+
+      // 200ms 以内に 2回目のドラッグ終了（既存アニメーションタイマーをクリアして再セット）
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 200, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 200, clientY: 100 }),
+        );
+      });
+
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+    });
   });
 });

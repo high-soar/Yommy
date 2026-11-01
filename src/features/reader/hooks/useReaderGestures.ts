@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import type { WritingMode, ReaderPagingMode } from "../../../storage/types";
 import { resolveEffectivePagingMode } from "./useReader";
 
@@ -100,6 +100,20 @@ export function useReaderGestures({
   );
   const isDraggingRef = useRef(false);
   const hasHandledTapRef = useRef(false);
+  const animationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // アンマウント時にタイマーを確実にクリーンアップ (R1-25(7))
+  useEffect(() => {
+    return () => {
+      if (animationTimerRef.current) {
+        clearTimeout(animationTimerRef.current);
+      }
+      if (tapTimerRef.current) {
+        clearTimeout(tapTimerRef.current);
+      }
+    };
+  }, []);
 
   // 連続スクロールモード用の端到達フラグ（2段階操作用）
   const reachedEndRef = useRef(false);
@@ -233,8 +247,12 @@ export function useReaderGestures({
       // 1. タップ判定（10px 未満 かつ 300ms 未満）
       if (distance < 10 && dt < 300) {
         hasHandledTapRef.current = true;
-        setTimeout(() => {
+        if (tapTimerRef.current) {
+          clearTimeout(tapTimerRef.current);
+        }
+        tapTimerRef.current = setTimeout(() => {
           hasHandledTapRef.current = false;
+          tapTimerRef.current = null;
         }, 100);
         setSlideOffsetPx(0);
         setBoundaryHint(null);
@@ -288,6 +306,17 @@ export function useReaderGestures({
         currentPage >= totalPages && (isVertical ? dx > 0 : dx < 0);
       const isPrevBoundary = currentPage <= 1 && (isVertical ? dx < 0 : dx > 0);
 
+      const triggerAnimationEnd = () => {
+        setIsAnimating(true);
+        if (animationTimerRef.current) {
+          clearTimeout(animationTimerRef.current);
+        }
+        animationTimerRef.current = setTimeout(() => {
+          setIsAnimating(false);
+          animationTimerRef.current = null;
+        }, 200);
+      };
+
       // エピソード境界
       if (isNextBoundary || isPrevBoundary) {
         if (Math.abs(dx) >= width * 0.3) {
@@ -313,21 +342,18 @@ export function useReaderGestures({
           if (currentPage < totalPages) {
             onPageChange?.(currentPage + 1);
             onCloseOverlay();
-            setIsAnimating(true);
-            setTimeout(() => setIsAnimating(false), 200);
+            triggerAnimationEnd();
           }
         } else {
           if (currentPage > 1) {
             onPageChange?.(currentPage - 1);
             onCloseOverlay();
-            setIsAnimating(true);
-            setTimeout(() => setIsAnimating(false), 200);
+            triggerAnimationEnd();
           }
         }
       } else {
         // スナップバック
-        setIsAnimating(true);
-        setTimeout(() => setIsAnimating(false), 200);
+        triggerAnimationEnd();
       }
 
       setSlideOffsetPx(0);

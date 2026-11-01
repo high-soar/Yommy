@@ -631,6 +631,7 @@ describe("ReaderContainer", () => {
 
       await act(async () => {
         window.dispatchEvent(new PopStateEvent("popstate"));
+        await new Promise((r) => setTimeout(r, 50));
       });
 
       await waitFor(

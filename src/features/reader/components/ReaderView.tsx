@@ -105,6 +105,7 @@ function getPagedContentStyle(
   isVertical: boolean,
   slideTranslateX: number,
   slideOffsetPx: number,
+  containerWidth?: number,
 ): React.CSSProperties | undefined {
   if (!isPaged) return undefined;
   return {
@@ -114,9 +115,11 @@ function getPagedContentStyle(
       ? {}
       : {
           columns: "1",
-          columnWidth: "100%",
-          columnGap: "0px",
+          columnGap: "48px",
           columnFill: "auto",
+          ...(containerWidth && containerWidth > 48
+            ? { columnWidth: `${containerWidth - 48}px` }
+            : {}),
         }),
   };
 }
@@ -162,13 +165,20 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     const handleResize = () => {
       if (containerRef.current) {
         setContainerWidth(containerRef.current.clientWidth);
+        if (isPaged) {
+          const measuredPages = calculateMeasuredTotalPages(
+            containerRef.current.scrollWidth,
+            containerRef.current.clientWidth,
+          );
+          onTotalPagesChange?.(measuredPages);
+        }
       }
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, []);
+  }, [isPaged, onTotalPagesChange]);
 
-  // DOM 寸法計測（総ページ数算出）: マウント時および bodyHtml, writingMode, fontSizePx, lineHeight, pagingMode 変更時
+  // DOM 寸法計測（総ページ数算出）: マウント時および bodyHtml, writingMode, fontSizePx, lineHeight, pagingMode, containerWidth 変更時
   useEffect(() => {
     if (!isPaged) return;
     const el = containerRef.current;
@@ -186,6 +196,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     fontSizePx,
     lineHeight,
     pagingMode,
+    containerWidth,
     onTotalPagesChange,
   ]);
 
@@ -204,8 +215,14 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     const el = containerRef.current;
     if (!el) return;
 
-    restoreScrollPosition(el, writingMode, initialScrollProgress);
-  }, [initialScrollProgress, bodyHtml, writingMode, pagingMode]);
+    if (isPaged) {
+      // 実効 paged モード時は translateX で位置管理するためスクロールオフセットを 0 にリセット（二重変位防止: R1-27）
+      el.scrollLeft = 0;
+      el.scrollTop = 0;
+    } else {
+      restoreScrollPosition(el, writingMode, initialScrollProgress);
+    }
+  }, [initialScrollProgress, bodyHtml, writingMode, pagingMode, isPaged]);
 
   // pageWidth はコンテナの clientWidth（取得できない場合は 0）
   const pageWidth = containerRef.current?.clientWidth ?? containerWidth;
@@ -254,6 +271,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           isVertical,
           slideTranslateX,
           slideOffsetPx,
+          pageWidth,
         )}
       >
         {(title || chapterTitle) && (
@@ -293,7 +311,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       {isPaged && (
         <div
           data-testid="reader-page-indicator"
-          className="absolute bottom-3 right-4 pointer-events-none select-none text-xs opacity-60 tabular-nums font-sans"
+          className="absolute bottom-3 right-4 pointer-events-none select-none text-xs opacity-60 tabular-nums font-sans [writing-mode:horizontal-tb]"
         >
           {currentPage} / {totalPages}
         </div>
