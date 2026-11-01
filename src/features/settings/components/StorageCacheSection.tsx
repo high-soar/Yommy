@@ -36,6 +36,7 @@ export const StorageCacheSection: React.FC<StorageCacheSectionProps> = ({
 }) => {
   const [showDialog, setShowDialog] = useState<boolean>(initialShowDialog);
 
+  // ダイアログ表示時の Escape キー制御（キーボードアクセシビリティ対応）
   useEffect(() => {
     if (!showDialog) {
       return;
