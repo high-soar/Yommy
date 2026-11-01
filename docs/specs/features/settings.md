@@ -2,7 +2,7 @@
 type: spec-feature
 title: "設定画面仕様書（SCR-05: Settings）"
 description: 小説リーダーの組版設定（縦書き/横書き、ページ送りモード、4カラーテーマ、文字サイズ、行間）の一括カスタマイズ・永続化、ルビ・傍点を含むサンプル文章プレビュー、Google Drive クラウド同期連携、および下部タブ・OSバックキー連携を提供する設定画面（SCR-05）の正本仕様。
-status: Approved
+status: "Review (#168)"
 updated: "2026-11-01"
 tags:
   [
@@ -16,8 +16,11 @@ tags:
     cloud-sync,
     google-drive,
     paging,
+    pagination,
+    ho-23,
   ]
 related_specs:
+  - docs/specs/changes/issue-168-reader-pagination-and-touch-refinement.md
   - docs/specs/changes/archive/issue-122-reader-page-turning.md
   - docs/specs/changes/archive/issue-120-cloud-sync-google-drive.md
   - docs/specs/changes/archive/issue-124-settings-back-button-navigation.md
@@ -61,7 +64,7 @@ related_tests:
   - `SYS-REQ-08`（縦書き `vertical-rl` / 横書き `horizontal-tb` 切り替え）
   - `SYS-REQ-09`（文字サイズ `12〜32px`、行間 `1.4〜2.4` のカスタマイズと永続化 ※フォント種別・余白は `v0.5〜`）
   - `SYS-REQ-10`（4カラーテーマ `light` / `sepia` / `dark` / `black` 切り替え）
-  - `SYS-REQ-11`（ページ送りモード［自動/ページめくり/スクロール］の選択と永続化、v0.4 Issue #122）
+  - `SYS-REQ-11`（ページ送りモード［ページめくり（縦書き時）/ 連続スクロール］の選択と永続化、横書き時 disabled 化とスクロール固定注記表示、v0.4 Issue #122、v0.5 Issue #168）
   - `SYS-REQ-16`（全画面シェル・下部タブバー・論理階層遷移：下部タブ「設定」からの直接遷移、および OS バックキーによる直前画面［リーダー・作品詳細］またはホーム［本棚 `/`］への復帰）
   - `SYS-REQ-20`（下部4タブナビゲーションおよびOSバックキー論理階層遷移）
 - **関連画面遷移**:
@@ -180,9 +183,10 @@ src/features/settings/
   1. **表示・組版設定セクション (`data-testid="typography-settings-section"`)**:
      - **組み方向切替**: `data-testid="toggle-orientation"` ボタン
        - 現在が縦書き（`vertical-rl`）のときは `横書き表示に切替`、横書き（`horizontal-tb`）のときは `縦書き表示に切替` を表示。
-     - **ページ送りモード切替 (`data-testid="paging-mode-select"`, v0.4 Issue #122)**:
-       - 選択肢: 「自動（縦書き: めくり / 横書き: スクロール）」（`auto`）、「ページめくり」（`paged`）、「連続スクロール」（`scroll`）。
-       - 選択変更時に `onChangePagingMode(mode)` を呼び出し、即座に State 更新および `reader_settings` へ非同期永続化。
+     - **ページ送りモード切替 (`data-testid="paging-mode-select"`, v0.4 Issue #122, v0.5 Issue #168)**:
+       - 選択肢: 「ページめくり（縦書き時）」（`paged` または `auto`）、「連続スクロール」（`scroll`）の 2 択に整理。
+       - 横書き（`writingMode === 'horizontal-tb'`）時は、セレクターを無効化（`disabled`）し、注記要素 `data-testid="paging-mode-note"`（「※横書き時は連続スクロール固定となります」）を表示する。
+       - 選択変更時に `onChangePagingMode(mode)` を呼び出し、即座に State 更新および `reader_settings` へ非同期永続化（DB 既存値 `'auto'` / `'paged'` はともに「ページめくり（縦書き時）」として透過的に扱う）。
      - **カラーテーマ選択**: `data-testid="theme-{light|sepia|dark|black}"` ボタングループ
        - 各テーマボタン（ライト、セピア、ダーク、ブラック）。選択中のボタンには `aria-pressed="true"` を設定。
      - **文字サイズステッパー (`12px 〜 32px`、`±2px` 刻み)**:
@@ -335,4 +339,4 @@ export interface UseCloudSyncResult {
 | **`AC-ST-10`** | 連携解除確認と Revoke・ローカル保持                         | 「連携解除」ボタン押下時に確認ダイアログが表示され、確定時に Google サーバーへの Revoke および OS トークン破棄が実行され、未連携状態に戻ること（端末内の登録作品・しおりデータは消去されず安全に保持されること）。                                                                                                                                                                                                                                                                                                                                                                                                                          | `SYS-REQ-06`                   |
 | **`AC-ST-11`** | 遠隔認可解除（401）検知時の未連携フォールバック             | Google アカウント管理から遠隔で権限が取り消された場合、次回通信時の 401 Unauthorized を検知して自動的に安全な未連携状態へ遷移し、セクション内にエラー通知が表示されること。                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `SYS-REQ-06`                   |
 | **`AC-ST-12`** | 境界値・未設定フォールバック・起動時一時エラー保護          | Android ネイティブ環境では APK パッケージ名（`com.yommy.app`）と署名鍵 SHA-1 により Google Identity Services（`AuthorizationClient`）が OAuth クライアントを自動識別し、Web / テスト環境では `.env.local`（`VITE_GOOGLE_CLIENT_ID`）の有無に関わらず `MockCloudSyncBridge` にフォールバックして動作すること（R2-18）。また `syncEngine` 未注入や `appSettingsRepository` のオプショナルメソッド欠落時にもクラッシュせず安全にフォールバックし（R1-15）、起動時の `getAuthState()` でオフライン等の一時エラー（`{ status: "error", message }`）が発生した場合は連携状態を保持したまま「認証エラー」とエラーアラートを表示すること（R2-03）。 | `SYS-REQ-06`                   |
-| **`AC-ST-13`** | ページ送りモード切替と永続化                                | ページ送りモードセレクター（`paging-mode-select`）で「自動 / ページめくり / 連続スクロール」を切り替えられ、`reader_settings` テーブルへ永続化され、リロード後およびリーダー画面（`SCR-03`）でも設定が維持・反映されること。                                                                                                                                                                                                                                                                                                                                                                                                                | `SYS-REQ-11`                   |
+| **`AC-ST-13`** | ページ送りモード切替と永続化                                | ページ送りモードセレクター（`paging-mode-select`）で「ページめくり（縦書き時）」「連続スクロール」の2択を切り替えられ、横書き（`horizontal-tb`）選択時はセレクターが `disabled` となり注記（`paging-mode-note`）が表示されること。選択結果は `reader_settings` テーブルへ永続化され、リロード後およびリーダー画面（`SCR-03`）でも設定が維持・反映されること。                                                                                                                                                                                                                                                                               | `SYS-REQ-11`                   |
