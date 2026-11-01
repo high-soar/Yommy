@@ -2,8 +2,8 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Review (#122)"
-updated: "2026-10-31"
+status: "Review (#158)"
+updated: "2026-11-01"
 tags:
   - architecture
   - parser
@@ -615,7 +615,7 @@ export interface CloudSyncBridge {
 
 1. **クライアント設定の非公開化**: クライアント ID 等はコードにハードコードせず、GitHub Secrets（`VITE_GOOGLE_CLIENT_ID`）および `.env.local` から注入する。
 2. **非公開 Keystore 管理**: 公開 `android/debug.keystore` の SHA-1 は GCP に登録せず、GitHub Secrets で保護された非公開 Keystore の SHA-1 のみを登録して偽造 APK のなりすましを防ぐ。
-3. **ネイティブ `AuthorizationClient` 認証**: サードパーティプラグインに依存せず、社内 Capacitor プラグイン経由で Android 公式 `Identity.getAuthorizationClient` を呼び出し、`client_secret` 排除・WebView 内トークン保存ゼロ（OS 側で短寿命アクセストークンを都度取得）とする。
+3. **ネイティブ `AuthorizationClient` 認証**: サードパーティプラグインに依存せず、社内 Capacitor プラグイン（`CloudSyncPlugin.java`）経由で Android 公式 `Identity.getAuthorizationClient` を呼び出し、`client_secret` 排除・WebView 内トークン保存ゼロ（OS 側で短寿命アクセストークンを都度取得）とする。アプリ再起動時は `SharedPreferences`（`yommy_cloud_sync`）の連携状態に基づきサイレント再認可（`authorize`）でトークンを復元し、401 失効時はサイレント自動リフレッシュおよびリトライを行う。またファイル初回作成時は `multipart/related`（`uploadType=multipart`）の 1 リクエストで作成し空ファイル残存を防止する。Activity 再生成時のコールバック消失防止（`saveCall`）およびプラグイン破棄時の ExecutorService 解放（`handleOnDestroy`）を徹底する。
 4. **最小権限スコープ（`drive.appdata` 限定）と即時 Revoke**: スコープを `drive.appdata` に限定し、連携解除時は OS トークン破棄＋Google サーバー即時 Revoke を実行。遠隔での認可解除（`401 Unauthorized`）検知時も自動で未連携状態へ安全にフォールバックする。
 5. **SSRF / インジェクション防御**: スキーマ検証と `parseNovelUrl` ホワイトリスト検証を通過したデータのみを処理する。
 
@@ -625,7 +625,7 @@ export interface CloudSyncBridge {
 
 - `src/app/ServiceProvider.tsx` を介して `HttpClientBridge`、`AppBridge`、`CloudSyncBridge`、各 `Repository`（および基底の `DatabaseAdapter`）を React Context 経由で提供する。
 - **Android / iOS ネイティブ実行時**: `Capacitor.isNativePlatform()` によりネイティブ環境を自動検知し、`CapacitorHttpClient`、`CapacitorAppBridge`、`CapacitorCloudSyncBridge`、および `createDefaultNativeSqliteAdapter`（`CapacitorSqliteAdapter` ＋ `src/storage/schema.ts` の DDL 初期化）を注入する。
-- **Web ブラウザ / Dev 実行時**: `createInMemoryDb`（`sql.js`）および `localStorage` への Base64 バイナリバックアップ（`yommy_sqlite_db_backup`）によるハイブリッド永続化を提供し、`createDefaultMockHttpClient`、`MockAppBridge`、および `MockCloudSyncBridge` を使用する。
+- **Web ブラウザ / Dev 実行時**: `createInMemoryDb`（`sql.js`）および `localStorage` への Base64 バイナリバックアップ（`yommy_sqlite_db_backup`）によるハイブリッド永続化を提供し、`createDefaultMockHttpClient`、`MockAppBridge`、および `MockCloudSyncBridge` を使用する。既存 DB バイナリからの復元時にも `initializeDatabaseSchema` によるスキーママイグレーションを確実に実行する。
 - **UT（Vitest）/ Storybook / Playwright IT 実行時**: `MockHttpClient` ＋ `MockAppBridge` ＋ `MockCloudSyncBridge` ＋ `InMemoryDatabaseAdapter` を注入し、各テストの開始前に `resetTestDb()` を呼び出して 100% 決定論的な状態で検証する。
 - **Worktree 運用・環境変数非依存設計**: すべてのテスト（Vitest, Storybook VRT, Playwright IT）およびビルドは、`.env.local` の有無に関わらず 100% 決定論的に PASS する設計（`ServiceProvider` による DI モック分離と安全なフォールバック）を必須とし、テスト実行時に環境変数未定義によるスキップや挙動のブレを生じさせない。
 
@@ -640,10 +640,11 @@ Android Debug APK の継続的な検証と上書きインストール（`INSTALL
 - リポジトリ内 `android/debug.keystore` に開発・検証用共通デバッグキーストアを配置する。
 - `android/app/build.gradle` において `signingConfigs.debug` に上記キーストア（Alias: `androiddebugkey`、Password: `android`）を明示指定し、CI ランナー上でのランダムキーストア自動生成を防止する。
 
-### 5.2 `versionCode` / `versionName` の動的注入
+### 5.2 `versionCode` / `versionName` の動的注入と CI コンパイル検証
 
 - `android/app/build.gradle` の `defaultConfig` において、CI 環境変数（`BUILD_NUMBER`）および Gradle プロパティ（`versionCode` / `versionName`）から動的にバージョンを解決する。
-- GitHub Actions（`.github/workflows/build-android.yml`）では `BUILD_NUMBER: ${{ github.run_number }}` を注入し、ビルドごとに `versionCode` を単調増加させる。
+- GitHub Actions（`.github/workflows/build-android.yml`）では `BUILD_NUMBER: ${{ github.run_number }}` を注入し、ビルドごとに `versionCode` を単調増加させる。また、GitHub Secrets（`ANDROID_KEYSTORE_BASE64` 等）を Gradle ビルドステップへ注入する。
+- リモート CI（`.github/workflows/ci.yml`）の `quality-gate` において、`android-compile` ジョブによる `./gradlew compileDebugJavaWithJavac` を自動実行し、Java コンパイル安全性を保証する。
 - ローカルビルド時はフォールバック値（`versionCode 1`、`versionName "0.3.0"`）を採用し、開発作業の利便性を損なわない構成とする。
 
 ### 5.3 Google OAuth 用署名鍵の秘密管理と SHA-1 なりすまし防止
