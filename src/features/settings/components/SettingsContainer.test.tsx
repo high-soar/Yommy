@@ -176,16 +176,42 @@ describe("SettingsContainer", () => {
       });
 
       const select = screen.getByTestId("paging-mode-select");
-      expect(select).toHaveValue("auto");
+      // 初期値 auto は 2択化により paged（縦書き時）として選択表示される
+      expect(select).toHaveValue("paged");
+
+      await user.selectOptions(select, "scroll");
+      await waitFor(() => {
+        expect(select).toHaveValue("scroll");
+      });
 
       await user.selectOptions(select, "paged");
       await waitFor(() => {
         expect(select).toHaveValue("paged");
       });
+    });
 
-      await user.selectOptions(select, "scroll");
+    it("組み方向を横書きに切り替えたとき、ページ送りセレクターが無効化され注記が表示されること (AC-ST-13, v0.5 Issue #168, #173)", async () => {
+      const user = userEvent.setup();
+      render(<Default />);
+
       await waitFor(() => {
-        expect(select).toHaveValue("scroll");
+        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+      });
+
+      const toggleButton = screen.getByTestId("toggle-orientation");
+      const select = screen.getByTestId("paging-mode-select");
+      expect(select).toBeEnabled();
+      expect(screen.queryByTestId("paging-mode-note")).not.toBeInTheDocument();
+
+      // 横書きに切り替え
+      await user.click(toggleButton);
+
+      await waitFor(() => {
+        expect(select).toBeDisabled();
+        expect(screen.getByTestId("paging-mode-note")).toBeInTheDocument();
+        expect(screen.getByTestId("paging-mode-note")).toHaveTextContent(
+          "※横書き表示時は連続スクロール固定となります",
+        );
       });
     });
 

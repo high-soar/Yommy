@@ -14,6 +14,7 @@ const {
   WithError,
   CloudSyncConnected,
   PagingModeSelection,
+  HorizontalWithPagingModeDisabled,
 } = composeStories(stories);
 
 describe("SettingsPage", () => {
@@ -47,11 +48,12 @@ describe("SettingsPage", () => {
       expect(toggleButton).toHaveTextContent("横書き表示に切替");
       expect(toggleButton).toBeEnabled();
 
-      // ページ送りモードセレクター（初期値: auto） (AC-ST-13)
+      // ページ送りモードセレクター（初期値: auto の場合も 2 択化により paged が選択状態、enabled、注記は非表示） (AC-ST-13)
       const pagingModeSelect = screen.getByTestId("paging-mode-select");
       expect(pagingModeSelect).toBeInTheDocument();
-      expect(pagingModeSelect).toHaveValue("auto");
+      expect(pagingModeSelect).toHaveValue("paged");
       expect(pagingModeSelect).toBeEnabled();
+      expect(screen.queryByTestId("paging-mode-note")).not.toBeInTheDocument();
 
       // カラーテーマ選択（ライトが選択中）
       const lightThemeBtn = screen.getByTestId("theme-light");
@@ -177,6 +179,19 @@ describe("SettingsPage", () => {
       expect(pagingModeSelect).toBeInTheDocument();
       expect(pagingModeSelect).toHaveValue("paged");
     });
+
+    it("HorizontalWithPagingModeDisabled: 横書き時にページ送りセレクターが無効化され注記が表示されること (AC-ST-13)", () => {
+      render(<HorizontalWithPagingModeDisabled />);
+
+      const pagingModeSelect = screen.getByTestId("paging-mode-select");
+      expect(pagingModeSelect).toBeDisabled();
+
+      const note = screen.getByTestId("paging-mode-note");
+      expect(note).toBeInTheDocument();
+      expect(note).toHaveTextContent(
+        "※横書き表示時は連続スクロール固定となります",
+      );
+    });
   });
 
   describe("ユーザー操作・イベント発火検証", () => {
@@ -201,7 +216,7 @@ describe("SettingsPage", () => {
       expect(onToggleWritingMode).toHaveBeenCalledTimes(1);
     });
 
-    it("ページ送りモードセレクター変更時に onChangePagingMode が呼び出されること (AC-ST-13)", async () => {
+    it("ページ送りモードセレクターの選択肢が2択（paged/scroll）に整理され、選択時に onChangePagingMode が呼び出されること (AC-ST-13, v0.5 Issue #168, #173)", async () => {
       const user = userEvent.setup();
       const onChangePagingMode = vi.fn();
 
@@ -219,16 +234,50 @@ describe("SettingsPage", () => {
       );
 
       const select = screen.getByTestId("paging-mode-select");
-      await user.selectOptions(select, "paged");
-      expect(onChangePagingMode).toHaveBeenLastCalledWith("paged");
+      expect(select).toBeEnabled();
+      expect(screen.queryByTestId("paging-mode-note")).not.toBeInTheDocument();
+
+      // 選択肢が2択（paged: ページめくり（縦書き時）、scroll: 連続スクロール）であること
+      const options = select.querySelectorAll("option");
+      expect(options).toHaveLength(2);
+      expect(options[0]).toHaveValue("paged");
+      expect(options[0]).toHaveTextContent("ページめくり（縦書き時）");
+      expect(options[1]).toHaveValue("scroll");
+      expect(options[1]).toHaveTextContent("連続スクロール");
+
+      // auto が渡された場合も paged が選択状態であること
+      expect(select).toHaveValue("paged");
 
       await user.selectOptions(select, "scroll");
       expect(onChangePagingMode).toHaveBeenLastCalledWith("scroll");
 
-      await user.selectOptions(select, "auto");
-      expect(onChangePagingMode).toHaveBeenLastCalledWith("auto");
+      await user.selectOptions(select, "paged");
+      expect(onChangePagingMode).toHaveBeenLastCalledWith("paged");
 
-      expect(onChangePagingMode).toHaveBeenCalledTimes(3);
+      expect(onChangePagingMode).toHaveBeenCalledTimes(2);
+    });
+
+    it("横書き（horizontal-tb）時はページ送りセレクターが無効化され、注記メッセージが表示されること (AC-ST-13, v0.5 Issue #168, #173)", () => {
+      render(
+        <SettingsPage
+          writingMode="horizontal-tb"
+          theme="light"
+          pagingMode="paged"
+          onToggleWritingMode={vi.fn()}
+          onChangeTheme={vi.fn()}
+          onChangeFontSize={vi.fn()}
+          onChangeLineHeight={vi.fn()}
+        />,
+      );
+
+      const select = screen.getByTestId("paging-mode-select");
+      expect(select).toBeDisabled();
+
+      const note = screen.getByTestId("paging-mode-note");
+      expect(note).toBeInTheDocument();
+      expect(note).toHaveTextContent(
+        "※横書き表示時は連続スクロール固定となります",
+      );
     });
 
     it("各テーマボタン押下時に onChangeTheme が対応するテーマで呼び出されること (AC-ST-04)", async () => {

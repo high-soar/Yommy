@@ -145,3 +145,19 @@ export const PagingModeSelection: Story = {
     isLoading: false,
   },
 };
+
+/**
+ * 横書き時ページ送り無効化・注記表示（writingMode: horizontal-tb）
+ * セレクターが無効化され、注記「※横書き表示時は連続スクロール固定となります」が表示される
+ */
+export const HorizontalWithPagingModeDisabled: Story = {
+  name: "横書き・ページ送り無効化（スクロール固定注記）",
+  args: {
+    writingMode: "horizontal-tb",
+    theme: "light",
+    fontSizePx: 18,
+    lineHeight: 1.8,
+    pagingMode: "paged",
+    isLoading: false,
+  },
+};
