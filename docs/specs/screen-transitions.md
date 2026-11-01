@@ -20,9 +20,6 @@ tags:
   - paging
   - gestures
 related_specs:
-  - docs/specs/changes/archive/issue-122-reader-page-turning.md
-  - docs/specs/changes/archive/issue-120-cloud-sync-google-drive.md
-  - docs/specs/changes/archive/issue-124-settings-back-button-navigation.md
   - docs/specs/requirements.md
   - docs/specs/architecture.md
   - docs/specs/db-schema.md
@@ -55,6 +52,7 @@ related_tests:
   - test/it/scenarios/scn02-search-ranking-discovery.spec.ts
   - test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts
   - test/it/scenarios/scn04-prefetch-and-cache.spec.ts
+  - test/it/scenarios/scn05-cloud-sync.spec.ts
   - test/it/smoke.spec.ts
 ---
 

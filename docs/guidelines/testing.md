@@ -3,7 +3,7 @@ type: guideline
 title: テスト・実装規律の正本（SSOT）
 description: Yommyの3層テスト体系（Parser/Storage/Viewer）、TDDコミット規約、1対1 Story/UT、親子分離、C0/C1 100%、縦書きVRT、および原因D設計同期ルールの正本。
 status: Approved
-updated: "2026-10-31"
+updated: "2026-11-01"
 tags: [testing, tdd, vrt, storybook, vitest, playwright, coverage]
 related_specs:
   - docs/index.md
@@ -88,19 +88,21 @@ flowchart TB
   - `@capacitor-community/sqlite` 等のネイティブプラグインを UI やフックから直接呼び出さず、必ず Storage アダプター／リポジトリ層で抽象化する。
   - UT（Vitest）、Storybook、および Playwright IT（Webブラウザ実行）では、同一のインターフェースを満たすテスト用インメモリ DB（または SQLite アダプターのインメモリ実装）を使用する。
   - テスト間でデータが漏洩しないよう、`beforeEach` / `afterEach`（および IT の各テスト開始前）に必ず **`resetTestDb()`** を呼び出し、決定論的な初期シード状態にリセットする。
+  - **新規設定カラム・DB カラム追加時の全層伝播チェック（原因 `D` 再発防止）**: DDL（`schema.ts` ＋ `ServiceProvider` での既存 DB バイナリ復元時マイグレーション `initializeDatabaseSchema`）→ 型定義（`types.ts`）→ Repository → Hook / Container → Page → View → Storybook / UT / IT の全層でプロップス・コールバック・マイグレーションが途切れず伝播しているか確認すること。
 
 ### 2.3 Viewer & Bridge Layer（表示・ブラウザ連携・UIコンポーネント層）
 
 - **Capacitor Bridge の分離**:
   - CORS 回避用のネイティブ HTTP 通信（`CapacitorHttp`）、レートリミット・ダウンロードキュー制御、および内蔵 WebView からの DOM 抽出ブリッジは薄いインターフェースとして分離し、UT / Storybook / IT ではモックまたはフィクスチャ応答を注入可能にする。
+  - **Android ネイティブプラグイン実装・検証規律（原因 `D` / `L` 再発防止）**: Capacitor ネイティブプラグイン（Java）では `startActivityForResult` 等の非推奨/非互換シグネチャを避け `ActivityResultContracts.StartIntentSenderForResult` ＋ `saveCall`/`getSavedCall`/`freeSavedCall` を使用し、401 リトライ時は `clearToken` でローカルキャッシュを破棄してから再取得すること。また `.github/workflows/ci.yml` の `android-compile` ジョブおよび `scripts/android-build-config.test.ts` で検証すること。
 - **小説組版 UI 単体テスト & VRT**:
   - 縦書き（`writing-mode: vertical-rl`）/ 横書き切り替え、ルビ（`<ruby>`）・傍点表示、フォント切り替え（Noto CJK / IPAex / BIZ UD明朝・ゴシック / Klee）、カラーテーマ（白 / セピア / ダーク / 純黒）、しおり位置復元などの UI 状態を Storybook の Story として網羅する。
   - **スクロール・Overflow（直交フロー）検証の必須化**: スクロール・Overflow を伴う表示コンポーネント（特に親 `horizontal-tb` 内で `writing-mode: vertical-rl` となる直交フロー要素）では、`w-full max-w-full`（および親コンテナの `min-w-0`）等の幅制約を明示するとともに、画面外にはみ出す長文データを含めた Story（1280px / 375px 双方で Overflow するケース）を必須とし、VRT と実ブラウザ IT（負の `scrollLeft` 検証）の双方でスクロール可能性を保証すること。
   - **VRT 孤児スナップショット検知ガードの義務化**: Storybook のストーリー削除・置換時に古いスナップショット PNG が孤児アセットとして残存するのを防ぐため、`test/vrt/vrt.spec.ts` において `storybook-static/index.json` の対象ストーリー一覧と `test/vrt/snapshots/` 内 PNG のファイル一覧が 1 対 1 で完全一致すること（孤児スナップショット 0 件）を機械検証すること。
   - **非同期永続化におけるロールバック ＆ `role="alert"` エラー通知規律**: 設定画面等の非同期更新において、DB/ストレージ書き込み失敗時に直前の state へ状態をロールバックし、画面上部（ヘッダー直下等）に `role="alert"`（`data-testid="*-error-alert"`）でエラーメッセージを明示すること。
   - **ルーティング同一パスガード（no-op 制御）**: 下部タブバー等のナビゲーション操作において、既に表示中の同一パスへの遷移要求は重複して `history.pushState` を行わず no-op とし、OS バックキーの直前画面復帰（`TR-12` 等）の履歴破壊を防止すること。
-  - **タッチゾーン・ジェスチャーの幾何学的排他設計（R1-34 再発防止）**: 画面左右端タップ（ページ送り左右各 20% 等）と画面端タッチゾーン（最下部オーバーレイ展開用約 72px 等）が同一画面に共存する場合、物理的な領域干渉による誤動作を防ぐため、排他条件や中央 60%（`left-[20%] right-[20%]`）への制限など幾何学的排他設計を仕様書に明記し、UT/Storybook/IT で検証すること。
-  - **バックグラウンド非同期処理の直列化待機およびアンマウント保護（R1-29 再発防止）**: 読書中先読みやクラウド同期など外部通信を伴うバックグラウンド処理は、先行タスク完了を待機する直列化（Promise 直列待機）を導入し多重走行・レートリミット超過（503 IP BAN）を防止すること。またアンマウント後の DB 更新や State 更新を遮断するマウント状態ガード（`AbortSignal` 連動）を徹底すること。
+  - **タッチゾーン・ジェスチャーの幾何学的排他設計（R1-34 再発防止）**: 画面左右端タップ（ページ送り左右各 20% 等）と画面端タッチゾーン（最下部オーバーレイ展開用約 72px 等）が同一画面に共存する場合、物理的な領域干渉による誤動作を防ぐため、排他条件や中央 60%（`left-[20%] right-[20%]`）への制限など幾何学的排他設計を仕様書に明記し、境界座標タップの単体テストおよび Storybook/IT で検証すること。
+  - **バックグラウンド非同期処理の直列化待機・Abort ガード・参照安定性（R1-29 / R2-13 / R2-04 再発防止）**: 読書中先読み（`startPrefetch`）やクラウド同期など外部通信を伴うバックグラウンド処理は、先行タスク完了を待機する直列化（`activePrefetchPromiseRef` による Promise 直列待機）を導入し多重走行・レートリミット超過（503 IP BAN）を防止すること。また `AbortSignal` の下位関数（`fetchAndSaveChapterBody`）への伝播と HTTP 完了直後・DB 保存直前の `if (signal?.aborted) return` ガードおよびマウント状態ガードを徹底し、アンマウント後の DB 更新や State 更新を遮断すること。さらにエピソード遷移直後のルーター同期による重複初期化抑止（`lastGoToChapterIndexRef`）を徹底すること。
   - DevContainer と GitHub Actions で同一の日本語フォント環境を使用し、Storybook 全 Story に対して **1280px / 375px の VRT（視覚的回帰テスト）** を実行して組版崩れを機械的に検知する。
 
 ### 2.4 Worktree 運用・環境変数依存排除と DI モック分離規律

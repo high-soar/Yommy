@@ -30,6 +30,7 @@ related_tests:
   - src/features/settings/components/SettingsContainer.test.tsx
   - test/it/smoke.spec.ts
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
+  - test/it/scenarios/scn05-cloud-sync.spec.ts
 ---
 
 # 差分仕様書：Google Drive（appDataFolder）による本棚・しおり・既読状態のクラウド同期機能（Issue #120）

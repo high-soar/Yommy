@@ -3,7 +3,7 @@ type: spec-feature
 title: "小説リーダー画面仕様書（SCR-03: Novel Reader）"
 description: "小説本文の全画面（100dvh）縦書き・横書き組版表示、ページめくり（タップ/Kindle様式スワイプ送り）と連続スクロール切替、エピソード端シームレス遷移、最下部タッチによる下部オーバーレイ（ReaderBottomOverlay: 前後話ナビ＋下部タブ）、ルビ・傍点描画、4カラーテーマ・文字サイズ・行間設定の永続化、前後エピソード遷移、未キャッシュ話のオンデマンド取得、既読・しおり・進捗率の自動保存/復元、およびSCN-01統合シナリオの正本仕様。"
 status: Approved
-updated: "2026-10-31"
+updated: "2026-11-01"
 tags:
   - reader
   - scr-03
@@ -53,6 +53,7 @@ related_specs:
 related_tests:
   - src/App.test.tsx
   - src/features/reader/hooks/useReader.test.ts
+  - src/features/reader/hooks/useReaderGestures.test.ts
   - src/features/reader/components/ReaderChapterNav.test.tsx
   - src/features/reader/components/ReaderBottomOverlay.test.tsx
   - src/features/reader/components/ReaderView.test.tsx
@@ -64,6 +65,7 @@ related_tests:
   - test/it/scenarios/scn02-search-ranking-discovery.spec.ts
   - test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts
   - test/it/scenarios/scn04-prefetch-and-cache.spec.ts
+  - test/it/scenarios/scn05-cloud-sync.spec.ts
 ---
 
 # 小説リーダー画面仕様書（SCR-03）
@@ -247,7 +249,7 @@ src/features/reader/
   - ページ送り時は、横スライドアニメーション（150〜250ms、`transition: transform 200ms ease-out`）でなめらかに遷移する。
   - ドラッグ操作中は `slideOffsetPx` に応じてリアルタイムに表示が水平追従スライドする。
   - 画面隅に控えめなページインジケーター（`data-testid="reader-page-indicator"`、例: `3 / 12`）を表示する。組み方向に関わらず常に水平表記とするため `writing-mode: horizontal-tb` を固定適用し、縦書き時における画面外クリップ・テキスト途切れを防止する。
-  - 画面回転やウィンドウリサイズ発生時は、`window.addEventListener("resize", ...)` に連動して総ページ数（`totalPages`）の再計測（`onTotalPagesChange`）を自動実行し、レイアウト変更に即座に追従する。
+  - 画面回転やウィンドウリサイズ発生時は、`window.addEventListener("resize", ...)` に連動して総ページ数（`totalPages`）の再計測（`onTotalPagesChange`）を自動実行し、レイアウト変更に即座に追従する。また、`bodyHtml`・`chapterTitle`・`initialScrollProgress`・`writingMode`・`fontSizePx`・`lineHeight` の変化時にも総ページ数を再評価し、エピソード遷移直後のページ位置復元（末尾ページ復元等）を確実に発火させる（R2-04）。
   - 実効 `paged` モードで再開・ページ遷移した際は、スクロール位置（`scrollLeft` / `scrollTop`）を `0` にリセットし、`restoreScrollPosition` は実効 `!isPaged`（連続スクロールモード）のみに限定して実行することで、`scrollLeft` と `translateX` スライドによる二重変位バグを防止する。
 - **連続スクロール仕様（実効 `"scroll"` 時）**:
   - 縦書き時: CSS `writing-mode: vertical-rl`、`text-orientation: mixed`、水平スクロール（`overflow-x-auto overflow-y-hidden`）。
@@ -445,7 +447,7 @@ export interface UseReaderResult {
 5. **前後エピソード遷移（`goToChapter(targetChapterIndex, options?: GoToChapterOptions)`、`TR-05`）**:
    - `novel === null`、または `targetChapterIndex < 1` もしくは `targetChapterIndex > totalChapters`（範囲外）が指定された場合は何もせず `false` を返す。
    - 有効範囲内の場合は、遷移前の現在話（次話遷移時を含む）に対して `chapterRepository.markChapterRead(novel.id, chapterIndex, true)` を実行した上で、`targetChapterIndex` のエピソード読み込み（未キャッシュ時はオンデマンド本文取得・`saveChapterBody` 保存）、表示完了時の `markChapterRead(novel.id, targetChapterIndex, true)`、および新エピソードへのしおり更新を実行し、`true` を返す。
-   - **前話末尾復元（`startAt: "end"`）**: 前話遷移時など `options?.startAt === "end"` が指定された場合、新エピソードのしおり進捗率を `1.0`（`initialScrollProgress = 1.0, scrollProgress = 1.0`）として保存・初期化し、実効 `paged` 時は初回 `setTotalPages` 時に自動的に最終ページへ復元する（`AC-RD-18`）。デフォルト（`startAt === "start"`）は先頭 `0.0`。
+   - **前話末尾復元（`startAt: "end"`）とルーター同期時の重複初期化抑止（R1-07, R2-04）**: 前話遷移時など `options?.startAt === "end"` が指定された場合、新エピソードのしおり進捗率を `1.0`（`initialScrollProgress = 1.0, scrollProgress = 1.0`）として保存・初期化し、実効 `paged` 時は初回 `setTotalPages` 時に自動的に最終ページへ復元する（`AC-RD-18`）。デフォルト（`startAt === "start"`）は先頭 `0.0`。また、`goToChapter` 完了直後に親ルーターの `chapterIndex` プロパティが追従更新された際は、`lastGoToChapterIndexRef` により `loadInitialData` の二重実行を抑止し、復元済みのページ位置（`currentPage`）が `1` にリセットされるのを防止する。
 6. **手動作品取得・更新パイプライン（`fetchNovelFromUrl()`）**:
    - 単体検証・手動取得トリガー時、対象 URL を `const targetUrl = novel?.canonicalUrl ?? initialWorkUrl` として解決した上で、**HTTP 通信を行う前に** `parserRegistry.requireParser(targetUrl)` および `parser.normalizeWorkUrl(targetUrl)` を呼び出す（未対応サイトや不正 URL の場合は通信を行わずに直ちに `error` をセットして終了する）。
    - 対応サイトの場合は `httpClient.getHtml({ url: normalizedWorkUrl })` で目次 HTML を取得し、`parser.parseNovelIndex(...)` → `novelRepository.upsertNovelWithToc(...)` で作品および目次を DB 保存する。
@@ -455,9 +457,9 @@ export interface UseReaderResult {
    - 先読み対象: $N+1 \sim \min(N+5, \text{totalChapters})$。
    - 対象エピソードについて、SQLite 内のキャッシュが有効（`downloadedAt` から 7日以内）であれば通信をスキップする。
    - 未キャッシュまたは 7日経過エピソードが存在する場合、1話ごとに `PREFETCH_INTERVAL_MS`（1.5秒）のウェイトを空けて順次直列に取得・保存する（7日経過キャッシュは 3秒短タイムアウト、未キャッシュ話は 10秒標準タイムアウト）。
-   - **先読み直列化とアンマウント保護（R1-29）**:
+   - **先読み直列化とアンマウント・Abort 保護（R1-29, R2-13）**:
      - 先読みタスクの多重並行走行を防止するため、先行する先読みタスク（進行中の HTTP 通信含む）の完了を待機（直列化保証）してから新エピソードの先読み（初期 1.5秒ウェイト）を開始し、小説サイトへのリクエスト間隔が 1.5秒（`PREFETCH_INTERVAL_MS`）を下回る競合状態を防止する。
-     - 初期データ読み込み（`loadInitialData`）の通信完了直後にマウント状態（`isMounted`）を検証し、先読みタスクは `AbortSignal` 連動により、画面離脱・アンマウント後の DB 更新（しおり・既読保存）および同期通知（`syncEngine.notifyChanged`）を確実にスキップする。
+     - 初期データ読み込み（`loadInitialData`）の通信完了直後にマウント状態（`isMounted`）を検証し、先読みタスク（`startPrefetch`）では `AbortSignal` を `fetchAndSaveChapterBody` へ伝播させ、`httpClient.getHtml` 完了直後かつ `chapterRepository.saveChapterBody` 実行直前に `if (signal?.aborted) return null` ガードを行うことで、画面離脱・アンマウント後の DB 更新（本文・しおり・既読保存）および同期通知（`syncEngine.notifyChanged`）を確実にスキップする。
    - `AbortController` による制御:
      - ユーザーが `goToChapter` で別エピソードへ移動した際は、直前の先読み処理を直ちに中断（`abort()`）し、新エピソードを起点とする 5話先読みを再開始する。
      - リーダー画面離脱時（アンマウント、OS バックキー、タブ遷移）は直ちに処理を停止し、不要な通信を防止する。
@@ -526,6 +528,6 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
   7. 画面中央領域をタップして下端から `ReaderBottomOverlay`（`data-testid="reader-bottom-overlay"`）がスライドイン表示され、第1話では「前の話へ」（`reader-prev-chapter`）が `disabled` かつ「次の話へ」（`reader-next-chapter`）が有効であること、および下部タブバーが表示されていることを確認（`AC-RD-10`, `AC-RD-17`）。再度中央タップで非表示になることを確認。
   8. 画面左端領域（幅約 20%）をタップして次ページへめくり遷移し、ページインジケーターが更新されること、および最終ページまでめくってさらに次へドラッグ離上することで次話（第2話）へシームレス遷移（`TR-05`）することを確認（`AC-RD-17`, `AC-RD-18`）。
   9. ブラウザの戻る操作（OS バックキー相当）により現在の進捗率を保存して作品詳細（`SCR-02`）へ戻り、「続きから読む」（`TR-04`）で再開した際に保存された進捗率・ページ位置が復元されることを確認（`AC-RD-08`, `AC-RD-20`）。
-  10. 設定画面（`SCR-05`）で「連続スクロール」を選択してリーダーに戻り、連続スクロール表示へ切り替わること、および末尾到達後の 2 段階スクロールで次話へ遷移できることを確認（`AC-RD-15`, `AC-RD-19`）。
+  10. 設定画面（`SCR-05`）で「連続スクロール」を選択してリーダーに戻り、連続スクロール表示へ切り替わること、および下部オーバーレイの「次の話へ」ボタン（または末尾到達後の 2 段階スクロール）で次話へ遷移できることを確認（`AC-RD-15`, `AC-RD-19`）。
   11. 第2話でオーバーレイを表示し、「前の話へ」（`reader-prev-chapter`）をクリックして第1話へ戻る遷移（`TR-05`）を確認した後、再度第2話へ進む。
   12. オーバーレイを表示して下部タブ「本棚」をタップし、しおり進捗率が DB 保存（`flushBookmark`）された上で本棚画面（`/`）へ遷移（`TR-01b`）することを確認。本棚の作品カードに `しおり: 第2話` が表示され、「第2話から読む」（`novel-card-resume`）で第2話の位置が復元されること、および最後に `SCR-02` から作品を削除して本棚が空状態になることを確認（`TR-07`）。

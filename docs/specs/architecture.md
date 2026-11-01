@@ -59,6 +59,9 @@ related_tests:
   - src/bridges/app/capacitorAppBridge.test.ts
   - src/bridges/app/mockAppBridge.test.ts
   - src/bridges/app/index.test.ts
+  - src/bridges/cloud-sync/capacitorCloudSyncBridge.test.ts
+  - src/bridges/cloud-sync/mockCloudSyncBridge.test.ts
+  - src/features/cloud-sync/services/syncEngine.test.ts
   - src/storage/repositories/appSettingsRepository.test.ts
   - src/storage/repositories/novelRepository.test.ts
   - src/storage/repositories/settingsRepository.test.ts
@@ -96,7 +99,7 @@ flowchart TB
     end
 
     subgraph StorageLayer ["2. Storage Layer (src/storage/*)"]
-        Repos["Repositories<br>(NovelRepository, ChapterRepository, SettingsRepository, AppSettingsRepository, QueueRepository［v0.4〜］)"]
+        Repos["Repositories<br>(NovelRepository, ChapterRepository, SettingsRepository, AppSettingsRepository, QueueRepository［v0.5〜］)"]
         DbAdapter["DatabaseAdapter Interface"]
         SqliteImpl["CapacitorSqliteAdapter<br>(Android 実機用)"]
         MemImpl["InMemoryDatabaseAdapter<br>(UT / Storybook / Playwright IT 用・resetTestDb())"]
@@ -417,8 +420,17 @@ export interface NovelRepository {
   deleteNovel(novelId: string): Promise<void>;
   clearNewUpdate(novelId: string): Promise<void>;
   updateLastCheckedAt(novelId: string, checkedAt: string): Promise<void>;
+  updateSyncMetadata?(
+    novelId: string,
+    metadata: {
+      isFavorite: boolean;
+      lastReadAt: string | null;
+      updatedAt: string;
+    },
+  ): Promise<void>;
   getDeletedNovels?(): Promise<DeletedNovelRecord[]>;
   purgeDeletedNovels?(idList: string[]): Promise<void>;
+  purgeExpiredDeletedNovels?(retentionMs?: number): Promise<void>;
 }
 
 export interface AppSettingsRepository {
@@ -522,7 +534,7 @@ export interface RouterContextValue {
 - `navigate` は同一パスへの遷移呼び出し時（例: `/settings` での「設定」タブ再タップ、`/search` での「検索」タブ再タップ）は履歴追加（`pushState`）および `previousPath` の上書きを行わず no-op とする。
 - **設定画面復帰オリジン制御（`settingsOrigin`、Issue #124 / R1-22）**:
   - 設定画面（`SCR-05: /settings`）への遷移時、直前画面がリーダー（`SCR-03`）または作品詳細（`SCR-02`）の場合はそのパスを `settingsOrigin` として保持する。
-  - 設定画面ヘッダーの「戻る」ボタン（`settings-back-button`）または OS バックキー実行時、`settingsOrigin` が保持されていれば直前画面へ復帰し、`settingsOrigin` を `null` にリセットする。
+  - OS バックキー実行時、`settingsOrigin` が保持されていれば直前画面へ復帰し、`settingsOrigin` を `null` にリセットする。
   - 下部タブバー等で別の主画面（本棚・検索・ランキング）へ移動した際も `settingsOrigin` は `null` にリセットされる。
 - **OS バックキー（@capacitor/app の AppBridge 経由およびブラウザ戻る操作）の論理階層遷移制御**:
   - ブラウザ履歴順に依存せず、常に論理階層順（**各話View `SCR-03` → 目次 `SCR-02` → 直前の遷移元（本棚 `SCR-01`、検索 `SCR-06`、ランキング `SCR-07`）**、**設定 `SCR-05` → 直前画面（リーダー `SCR-03`、作品詳細 `SCR-02`、または本棚 `SCR-01`）**、**検索 `SCR-06` / ランキング `SCR-07` → 本棚 `SCR-01`**）で戻るよう制御する。
@@ -610,11 +622,11 @@ export const PREFETCH_COUNT = 5;
    - 3秒以内に取得成功した場合は新本文で DB および画面を更新する。
    - タイムアウト・オフライン・通信エラー等で失敗した場合は、**即座に既存の `bodyHtml` を使用してフォールバック表示** し（一括キャッシュ時は既存キャッシュを維持して次話へ進行）、エラー画面を表示せず読書を継続させる。
 
-### 3.7 クラウド同期（Google Drive appDataFolder）および同期エンジンアーキテクチャ（v0.4 新設）
+### 3.8 クラウド同期（Google Drive appDataFolder）および同期エンジンアーキテクチャ（v0.4 新設）
 
 複数端末間での本棚登録作品・しおり位置・既読状態の同期、および機種変更時の引き継ぎを実現するため、Google Drive のアプリ専用領域（`appDataFolder`）に単一 JSON（`yommy-sync-state.json`）を保存・同期するアーキテクチャを導入します（Issue #120）。
 
-#### 1. `CloudSyncBridge` インターフェース契約（`src/bridges/cloud-sync/types.ts`）
+#### 3.8.1 `CloudSyncBridge` インターフェース契約（`src/bridges/cloud-sync/types.ts`）
 
 ```ts
 export type CloudSyncAuthState =
@@ -637,19 +649,22 @@ export interface CloudSyncBridge {
 }
 ```
 
-#### 2. 同期エンジン（`SyncEngine`）の競合マージとゼロトラスト検証
+- **`CapacitorCloudSyncBridge` における 401 判定（R2-14）**:
+  - 作品 ID や URL に偶然 `"401"` が含まれる場合の誤判定を防ぐため、`isUnauthorizedError` では単語境界付き正規表現（`/\b401\s+Unauthorized\b/i`、`/\bHTTP\s+401\b/i`、`/\bstatus(?:\s*code)?\s*[:=]?\s*401\b/i`、`/\bUnauthorized\b/i`）で 401 認証エラーを厳格に検出する。
+
+#### 3.8.2 同期エンジン（`SyncEngine`）の競合マージとゼロトラスト検証
 
 - **ゼロトラスト検証**:
   - 受信した JSON に対し、通信前に厳格なランタイムスキーマ検証（`version === 1`、必須フィールド、数値範囲、プロトタイプ汚染防止）を実行する。
   - 作品 ID（`id`）が `${siteType}:${remoteWorkId}` と厳密に一致することを検証する。
   - `deletedNovels` のキーが空文字（`""`）や空白文字でないことを検証し、`novels` と `deletedNovels` の双方に同一キーが存在する場合は、作品の `updatedAt` と `deletedAt` を比較し、`updatedAt >= deletedAt` であれば再登録を優先して `deletedNovels` から除外、`deletedAt > updatedAt` であれば削除を優先して `novels` から該当作品を除去する（R1-28）。
   - 未登録作品の自動目次取得（`upsertNovelWithToc`）前に、`canonicalUrl` を既存の `parseNovelUrl`（`https://kakuyomu.jp/works/<id>` ホワイトリスト検証）にかけ、不正な URL や未知ドメインへのリクエスト（SSRF）を遮断する。さらに `canonicalUrl` から抽出した `siteType` / `workId` とリモート作品データの整合性を検証し、正規化 URL で通信を行う。
-  - 401 Unauthorized エラーの判定は、作品 URL や作品 ID に偶然 `401` が含まれている場合の誤爆を防ぐため、HTTP ステータスコード 401、または単語境界を考慮した正規表現（`/\b401\s+Unauthorized\b/i` 等）を用いて厳格に行う（R1-13）。
+  - 401 Unauthorized エラーの判定は、作品 URL や作品 ID に偶然 `401` が含まれている場合の誤爆を防ぐため、HTTP ステータスコード 401、または単語境界を考慮した正規表現（`/\b401\s+Unauthorized\b/i` 等）を用いて厳格に行う（R1-13, R2-14）。
 - **競合解決（マージ）ルール**:
   - 新規作品の自動目次補完: リモートにのみ存在する作品は `canonicalUrl` から目次を自動取得してローカル DB に登録し、リモートのしおり話数・既読状態、および最終読了日時（`lastReadAt`）・お気に入りフラグ（`isFavorite`）を正しく復元・反映する（`novelRepository.updateSyncMetadata`、R1-12）。
   - 作品単位のエラーハンドリング: リモート作品の目次取得・保存処理は作品単位で `try/catch` され、通信障害やパーサー不整合等で 1 作品の取り込みに失敗した場合でも警告ログを出力してスキップし、他の正常な作品の同期処理を継続する（R1-05）。
   - 作品削除の伝播（Tombstone）と再登録保護: `deletedNovels` の削除日時がローカル作品の登録/更新日時より新しければローカル DB からカスケード削除する。ローカルで削除された作品は、削除後に他端末で明示的に再追加された場合（リモートの `createdAt` がローカルの `deletedAt` より後である場合）にのみ復元を許可し、単なる `updatedAt` の更新による意図しない削除作品の復活を防止する（R1-11）。本棚へ作品が再登録された際は `deleted_novels` テーブルから該当作品 ID の Tombstone を即座に削除する（R1-28）。
-  - Push 前の作品和集合マージ: `pushCurrentState` 実行時、ローカルの `novels` のみでリモートを全上書きするのではなく、リモートに存在する `novels` と和集合をとってマージする。これにより、他端末で追加された作品が自端末の Push によって消失することを防止する（R1-10）。
+  - Push 前の作品和集合およびフィールド単位マージ: `pushCurrentState` 実行時（`buildMergedSyncNovels`）、ローカルの `novels` のみでリモートを全上書きするのではなく、リモートに存在する `novels` と和集合をとってマージする（R1-10）。さらにローカルとリモートの双方に存在する作品（かつ新しい `deletedAt` で削除されていない作品）については、リモート値をローカル値で単純上書きせず、フィールド単位のマージ（`readChapterIds` の和集合、`lastReadAt` 比較による `bookmarkChapterIndex` / `lastReadAt` の LWW、`updatedAt` 比較による `isFavorite` / `updatedAt` の LWW）を実施して他端末の最新進捗消失を防止する（R2-01）。
   - 30日経過 Tombstone の自動パージ: 削除日時から30日（`TOMBSTONE_RETENTION_MS` = 30日）以上経過した古い Tombstone はローカル DB（`purgeExpiredDeletedNovels`）およびリモートへの Push 対象から自動的にパージし、同期データ容量の肥大化を防止する（R1-28）。
   - しおり話数のマージ: 同一作品が両端末にある場合、`lastReadAt` が新しい方の `bookmarkChapterIndex` を採用する（話数変更時はスクロール率を `0.0` にリセット、同一話数の場合は端末ローカルのスクロール率を維持）。
   - 既読状態のマージ: 両端末の既読エピソード ID の和集合（Union）を採用する。
@@ -657,13 +672,16 @@ export interface CloudSyncBridge {
   - 未連携時のガード: `cloudSyncBridge.getAuthState()` が `connected` 状態でない場合、`pullAndMerge()` および `pushCurrentState()` は通信を行わず即座に安全にリターンする（R1-14）。
   - 自動 Pull: アプリ起動時、およびバックグラウンド復帰時（休止から5分以上経過）。未送信ローカル変更がある場合はマージ後に自動 Push。
   - 自動 Push: 本棚作品追加・削除、およびリーダー話数遷移・既読更新時に 2〜3秒（2500ms）デバウンス付き非同期実行。
-  - 多重並行実行防止（排他制御・Single-flight）: `SyncEngine` 内部に排他制御機構（`isSyncing` フラグおよび FIFO キュー排他制御）を導入し、`pullAndMerge`、`pushCurrentState`、`sync` が同時に重なって実行されないよう安全にガードする。`sync()` が実行中に重複して呼び出された場合、実行中の Promise を再利用して単一実行に合流（Single-flight）させる。`scheduleDebouncedPush()` では生成した Promise に内部で `.catch(() => {})` を登録し、未処理例外（`UnhandledPromiseRejection`）を防止する。
+  - 多重並行実行防止（排他制御・Single-flight）: `SyncEngine` 内部に排他制御機構（`isSyncing` フラグおよび FIFO キュー排他制御）を導入し、`pullAndMerge`、`pushCurrentState`、`sync` が同時に重なって実行されないよう安全にガードする。`sync()` が実行中に重複して呼び出された場合、実行中の Promise を再利用して単一実行に合流（Single-flight）させる。`scheduleDebouncedPush()` では生成した Promise に内部で `.catch(() => {})` を登録し、未処理例外（`UnhandledPromiseRejection`）を防止するとともに、`cancelDebouncedPush()` 実行時には保留中の Promise ハンドラーを漏れなく `resolve()` して呼び出し元のハングを防止する（R2-09）。
 
-#### 3. ネイティブ Google Identity Services と 5 層セキュリティ設計
+#### 3.8.3 ネイティブ Google Identity Services と 5 層セキュリティ設計
 
-1. **クライアント設定の非公開化**: クライアント ID 等はコードにハードコードせず、GitHub Secrets（`VITE_GOOGLE_CLIENT_ID`）および `.env.local` から注入する。
+1. **OAuth クライアント識別と環境変数構成（R2-18）**: Android ネイティブ実装（`CloudSyncPlugin.java`）では、Google Identity Services（`AuthorizationClient`）が Google Cloud Console に登録された APK パッケージ名（`com.yommy.app`）と署名証明書の SHA-1 フィンガープリントによって OAuth クライアントを自動識別する（`AuthorizationRequest` にクライアント ID 文字列は渡さない）。一方、`.env.local`（`VITE_GOOGLE_CLIENT_ID`）は Web / 開発環境向けの任意設定参照用であり、Web ブラウザおよび自動テスト環境では `MockCloudSyncBridge` に安全にフォールバックする。
 2. **非公開 Keystore 管理**: 公開 `android/debug.keystore` の SHA-1 は GCP に登録せず、GitHub Secrets で保護された非公開 Keystore の SHA-1 のみを登録して偽造 APK のなりすましを防ぐ。
-3. **ネイティブ `AuthorizationClient` 認証**: サードパーティプラグインに依存せず、社内 Capacitor プラグイン（`CloudSyncPlugin.java`）経由で Android 公式 `Identity.getAuthorizationClient` を呼び出し、`client_secret` 排除・WebView 内トークン保存ゼロ（OS 側で短寿命アクセストークンを都度取得）とする。アプリ再起動時は `SharedPreferences`（`yommy_cloud_sync`）の連携状態に基づきサイレント再認可（`authorize`）でトークンを復元し、401 失効時はサイレント自動リフレッシュおよびリトライを行う。またファイル初回作成時は `multipart/related`（`uploadType=multipart`）の 1 リクエストで作成し空ファイル残存を防止する。Activity 再生成時のコールバック消失防止（`saveCall`）およびプラグイン破棄時の ExecutorService 解放（`handleOnDestroy`）を徹底する。
+3. **ネイティブ `AuthorizationClient` 認証（R2-02, R2-03, R2-14）**: サードパーティプラグインに依存せず、社内 Capacitor プラグイン（`CloudSyncPlugin.java`）経由で Android 公式 `Identity.getAuthorizationClient` を呼び出し、`client_secret` 排除・WebView 内トークン保存ゼロ（OS 側で短寿命アクセストークンを都度取得）とする。
+   - **起動時の認証状態復元（`getAuthState`、R2-03）**: アプリ再起動時は `SharedPreferences`（`yommy_cloud_sync`）の連携状態に基づきサイレント再認可（`authorize`）でトークンを復元する。この際、`result.hasResolution()` が `true`（ユーザーが同意を取り消した等、対話的ログインが必須）の場合にのみ `SharedPreferences` をクリアして `unlinked` を返し、オフライン等の一時的な失敗時には `SharedPreferences` の連携設定を保持したまま `{ status: "error", message }` を返却する。
+   - **401 失効時のキャッシュ破棄と再取得（R2-02, R2-14）**: `pullFile` / `pushFile` / `findSyncFileId` において `"401 Unauthorized"` を検知した際は、まず `Identity.getAuthorizationClient(activity).clearToken(ClearTokenRequest)` で Google Play 開発者サービス内のキャッシュ済み無効トークンを破棄してから `refreshAccessToken()` によるサイレント再取得・リトライを実行する。
+   - **安全なファイル作成とライフサイクル管理**: ファイル初回作成時は `multipart/related`（`uploadType=multipart`）の 1 リクエストで作成し空ファイル残存を防止する。Activity 再生成時のコールバック消失防止（`saveCall` / `getSavedCall` / `freeSavedCall`）およびプラグイン破棄時の ExecutorService 解放（`handleOnDestroy`）を徹底する。
 4. **最小権限スコープ（`drive.appdata` 限定）と即時 Revoke**: スコープを `drive.appdata` に限定し、連携解除時は OS トークン破棄＋Google サーバー即時 Revoke を実行。遠隔での認可解除（`401 Unauthorized`）検知時も自動で未連携状態へ安全にフォールバックする。
 5. **SSRF / インジェクション防御**: スキーマ検証と `parseNovelUrl` ホワイトリスト検証を通過したデータのみを処理する。
 

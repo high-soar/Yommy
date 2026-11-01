@@ -3,7 +3,7 @@ type: spec-feature
 title: "検索画面仕様書（SCR-06: Novel Search）"
 description: "複数小説サイト（v0.3はカクヨム）のキーワード検索、並び順・ジャンル・連載状態フィルタ、作品カード一覧およびその場での本棚追加を提供する検索画面（SCR-06）の正本仕様。"
 status: Approved
-updated: "2026-10-31"
+updated: "2026-11-01"
 tags:
   - search
   - scr-06
@@ -50,7 +50,7 @@ related_tests:
   - `TR-01`（下部タブバーによる 4 画面「本棚 `/`」「検索 `/search`」「ランキング `/ranking`」「設定 `/settings`」相互切替）
   - `TR-12`（検索画面上での OS バックキー操作によるホーム「本棚 `SCR-01` `/`」への復帰）
   - `TR-14`（検索結果カード本体タップによる作品詳細・目次画面 `SCR-02` `/novels/:novelId` への遷移）
-- **対象外スコープ（Milestone `v0.4` 以降）**:
+- **対象外スコープ（Milestone `v0.5〜`）**:
   - 小説家になろう（`narou`）の検索実装（サイト選択ピルの切替対象追加）
   - 複数ジャンルの AND/OR チェックボックスによる複合モーダル検索
 

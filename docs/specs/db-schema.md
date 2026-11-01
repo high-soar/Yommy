@@ -293,7 +293,7 @@ INSERT OR IGNORE INTO app_settings (
 
 - **記録契機**: `novelRepository.deleteNovel(novelId)` 呼び出し時に、該当 ID と現在時刻（ミリ秒タイムスタンプ `Date.now()`）を本テーブルへ `INSERT OR REPLACE` します。
 - **再登録時の自動消去**: 同一作品が再度本棚に追加された場合（`upsertNovelWithToc`）、本テーブルから該当作品 ID のレコードを即座に削除（`DELETE FROM deleted_novels WHERE id = ?;`）し、過去の削除状態による誤削除・同期遮断を防止します（R1-28）。
-- **同期同期連携と定期パージ**: 次回 Push 時に、本テーブルのレコードをリモートの `yommy-sync-state.json` 内 `deletedNovels` マップへ結合します。Pull 時には、リモート `deletedNovels` の削除日時がローカル作品の登録/更新日時より新しい場合にローカル作品をカスケード削除し、本テーブルにも反映します。また、削除から30日以上経過したレコードは `purgeExpiredDeletedNovels` により自動パージされ、容量肥大化を防止します（R1-28）。
+- **クラウド同期連携と定期パージ**: 次回 Push 時に、本テーブルのレコードをリモートの `yommy-sync-state.json` 内 `deletedNovels` マップへ結合します。Pull 時には、リモート `deletedNovels` の削除日時がローカル作品の登録/更新日時より新しい場合にローカル作品をカスケード削除し、本テーブルにも反映します。また、削除から30日以上経過したレコードは `purgeExpiredDeletedNovels` により自動パージされ、容量肥大化を防止します（R1-28）。
 
 ```sql
 CREATE TABLE IF NOT EXISTS deleted_novels (
