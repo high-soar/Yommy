@@ -115,6 +115,9 @@ export function useCloudSync(): UseCloudSyncResult {
         ) {
           setLastSyncedAt(restoredLastSynced);
           setAuthState(bridgeState);
+          if (bridgeState.status === "error") {
+            setError(bridgeState.message);
+          }
         }
       } catch (err: unknown) {
         if (

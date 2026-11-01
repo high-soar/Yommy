@@ -100,7 +100,7 @@ export const AppContent: React.FC<AppContentProps> = ({
         return;
       }
 
-      // 他画面 (SCR-03 -> SCR-02, SCR-02 -> SCR-01, SCR-05 -> previousPath): 論理階層復帰
+      // 他画面 (SCR-03 -> SCR-02, SCR-02 -> novelOrigin/SCR-01, SCR-05 -> settingsOrigin/SCR-01): 論理階層復帰
       clearToastTimer();
       setShowExitToast(false);
       router.back();

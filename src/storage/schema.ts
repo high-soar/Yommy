@@ -169,7 +169,7 @@ export async function migrateDatabaseSchema(
     );
   }
 
-  // reader_settings テーブル（v0.4 新設: Issue #122）の paging_mode カラムマイグレーション
+  // reader_settings テーブルへの paging_mode カラム追加マイグレーション（v0.4: Issue #122）
   const readerSettingsColumns = await db.query<ColumnInfo>(
     "PRAGMA table_info(reader_settings);",
   );
