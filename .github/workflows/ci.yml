@@ -108,17 +108,57 @@ jobs:
             test-results/
             playwright-report/
 
+  android-compile:
+    name: Android Java Compilation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          build-root-directory: android
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Web Assets
+        run: npm run build
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: Compile Android Java
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew compileDebugJavaWithJavac
+
   quality-gate:
     name: Lint, Test & Quality Gates
-    needs: [lint-and-unit, vrt-and-e2e]
+    needs: [lint-and-unit, vrt-and-e2e, android-compile]
     runs-on: ubuntu-latest
     if: always()
 
     steps:
       - name: Verify all quality gates passed
         run: |
-          if [ "${{ needs.lint-and-unit.result }}" != "success" ] || [ "${{ needs.vrt-and-e2e.result }}" != "success" ]; then
-            echo "Quality Gate Failed: lint-and-unit=${{ needs.lint-and-unit.result }}, vrt-and-e2e=${{ needs.vrt-and-e2e.result }}"
+          if [ "${{ needs.lint-and-unit.result }}" != "success" ] || [ "${{ needs.vrt-and-e2e.result }}" != "success" ] || [ "${{ needs.android-compile.result }}" != "success" ]; then
+            echo "Quality Gate Failed: lint-and-unit=${{ needs.lint-and-unit.result }}, vrt-and-e2e=${{ needs.vrt-and-e2e.result }}, android-compile=${{ needs.android-compile.result }}"
             exit 1
           fi
           echo "All quality gate checks passed successfully."

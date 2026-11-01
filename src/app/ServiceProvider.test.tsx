@@ -16,6 +16,8 @@ import type { SQLiteDBConnection } from "@capacitor-community/sqlite";
 import { Capacitor } from "@capacitor/core";
 import { SQLiteConnection } from "@capacitor-community/sqlite";
 import { resetTestDb } from "../storage/adapter/inMemoryDb";
+import initSqlJs from "sql.js/dist/sql-wasm-inline.js";
+import { DDL_STATEMENTS } from "../storage/schema";
 import { CapacitorAppBridge, MockAppBridge } from "../bridges/app";
 import { MockCloudSyncBridge } from "../bridges/cloud-sync/mockCloudSyncBridge";
 import { CapacitorCloudSyncBridge } from "../bridges/cloud-sync/capacitorCloudSyncBridge";
@@ -706,6 +708,69 @@ describe("ServiceProvider", () => {
         status: "connected",
         email: "custom-sync@example.com",
       });
+    });
+
+    it("localStorage の既存 DB バイナリから復元時にもスキーママイグレーションが実行されること (R1-33)", async () => {
+      // 1. v0.3 相当の DB（deleted_novels テーブルが存在せず、reader_settings に paging_mode がない状態）を作成
+      const SQL = await initSqlJs();
+      const legacyDb = new SQL.Database();
+      legacyDb.exec(DDL_STATEMENTS);
+      legacyDb.exec("DROP TABLE deleted_novels;");
+      legacyDb.exec(`
+        CREATE TABLE reader_settings_temp AS SELECT id, writing_mode, theme, font_family, font_size_px, line_height, page_margin_px, enable_tap_paging, enable_volume_key_paging, updated_at FROM reader_settings;
+        DROP TABLE reader_settings;
+        CREATE TABLE reader_settings (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          writing_mode TEXT NOT NULL DEFAULT 'vertical-rl',
+          theme TEXT NOT NULL DEFAULT 'light',
+          font_family TEXT NOT NULL DEFAULT 'biz-ud-mincho',
+          font_size_px INTEGER NOT NULL DEFAULT 18,
+          line_height REAL NOT NULL DEFAULT 1.8,
+          page_margin_px INTEGER NOT NULL DEFAULT 20,
+          enable_tap_paging INTEGER NOT NULL DEFAULT 1,
+          enable_volume_key_paging INTEGER NOT NULL DEFAULT 0,
+          updated_at TEXT NOT NULL
+        );
+        INSERT INTO reader_settings SELECT * FROM reader_settings_temp;
+        DROP TABLE reader_settings_temp;
+      `);
+      const legacyBinary = legacyDb.export();
+      legacyDb.close();
+
+      // localStorage に保存
+      persistDatabaseBinary(legacyBinary);
+
+      let serviceValue: ServiceContextValue | null = null;
+      const TestConsumer: React.FC = () => {
+        serviceValue = useServices();
+        return <div data-testid="legacy-restored">OK</div>;
+      };
+
+      render(
+        <ServiceProvider>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        if (serviceValue && (serviceValue as ServiceContextValue).error) {
+          throw (serviceValue as ServiceContextValue).error;
+        }
+        expect(serviceValue?.isReady).toBe(true);
+      });
+
+      const db = serviceValue!.databaseAdapter;
+
+      // reader_settings に paging_mode カラムが追加されていること
+      const tableInfo = await db.query<{ name: string }>(
+        "PRAGMA table_info(reader_settings);",
+      );
+      const columnNames = tableInfo.map((col) => col.name);
+      expect(columnNames).toContain("paging_mode");
+
+      // deleted_novels テーブルが作成されていること
+      const deletedNovels = await db.query("SELECT * FROM deleted_novels;");
+      expect(deletedNovels).toEqual([]);
     });
   });
 });

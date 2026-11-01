@@ -226,6 +226,7 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
               }
             };
             databaseAdapter = await createInMemoryDb(storedBinary, onUpdate);
+            await initializeDatabaseSchema(databaseAdapter);
           }
         }
 

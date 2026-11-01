@@ -693,7 +693,7 @@ describe("useCloudSync", () => {
       expect(result.current.authState.status).toBe("unlinked");
     });
 
-    it("signIn 後の初回 syncEngine.sync で例外が発生しても、警告ログ出力の上で connected 状態を維持すること", async () => {
+    it("signIn 後の初回 syncEngine.sync で例外が発生した場合、error ステートにエラーメッセージが設定されること (R1-16)", async () => {
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       const bridge = createMockBridge();
       const appSettings = createMockAppSettings();
@@ -718,12 +718,64 @@ describe("useCloudSync", () => {
         await result.current.signIn();
       });
 
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Initial sync failed"),
-        expect.any(Error),
-      );
-      expect(result.current.authState.status).toBe("connected");
+      expect(result.current.error).toBe("初回 Pull 失敗");
       warnSpy.mockRestore();
+    });
+
+    it("signIn 後の初回 syncEngine.sync で非Error例外が発生した場合も文字列化されて error ステートに設定されること (R1-16)", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const bridge = createMockBridge();
+      const appSettings = createMockAppSettings();
+      const syncEngine = createMockSyncEngine();
+      vi.mocked(syncEngine.sync).mockRejectedValueOnce("同期の不明な例外");
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+          syncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.authState.status).toBe("unlinked");
+      });
+
+      await act(async () => {
+        await result.current.signIn();
+      });
+
+      expect(result.current.error).toBe("同期の不明な例外");
+      warnSpy.mockRestore();
+    });
+
+    it("React StrictMode（マウント→クリーンアップ→再マウント）において初期状態が正しく復元されること (R1-25(6))", async () => {
+      const bridge = createMockBridge({
+        status: "connected",
+        email: "user@example.com",
+      });
+      const appSettings = createMockAppSettings();
+      await appSettings.setCloudSyncLastSyncedAt?.(1730000000000);
+
+      const wrapper = createWrapper({
+        cloudSyncBridge: bridge,
+        appSettingsRepository: appSettings,
+      });
+
+      const { unmount } = renderHook(() => useCloudSync(), { wrapper });
+      unmount();
+
+      const { result: remountResult } = renderHook(() => useCloudSync(), {
+        wrapper,
+      });
+      await waitFor(() => {
+        expect(remountResult.current.authState.status).toBe("connected");
+        if (remountResult.current.authState.status === "connected") {
+          expect(remountResult.current.authState.email).toBe(
+            "user@example.com",
+          );
+        }
+      });
     });
 
     it("signIn 中に 401 エラーが発生し、その後の bridge.signOut も失敗した場合に例外が伝播せず未連携にフォールバックすること", async () => {

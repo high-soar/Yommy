@@ -102,6 +102,11 @@ export interface NovelRepository {
   updateLastCheckedAt(novelId: string, checkedAt: string): Promise<void>;
   getDeletedNovels?(): Promise<DeletedNovelRecord[]>;
   purgeDeletedNovels?(idList: string[]): Promise<void>;
+  updateSyncMetadata?(
+    novelId: string,
+    metadata: { isFavorite?: boolean; lastReadAt?: string | null },
+  ): Promise<void>;
+  purgeExpiredDeletedNovels?(cutoffTimeMs: number): Promise<void>;
 }
 
 export interface AppSettingsRepository {
