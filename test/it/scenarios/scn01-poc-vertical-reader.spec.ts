@@ -246,9 +246,12 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(readerView).toHaveAttribute("data-current-page", "1");
     await expect(readerView).toHaveClass(/overflow-hidden/);
 
-    const totalPagesStr =
-      (await readerView.getAttribute("data-total-pages")) || "2";
-    expect(Number(totalPagesStr)).toBeGreaterThanOrEqual(1);
+    await expect(readerView).toHaveAttribute(
+      "data-total-pages",
+      /^[2-9]\d*|^\d{2,}$/,
+    );
+    const totalPagesStr = (await readerView.getAttribute("data-total-pages"))!;
+    expect(Number(totalPagesStr)).toBeGreaterThanOrEqual(2);
 
     const pageIndicator = page.getByTestId("reader-page-indicator");
     await expect(pageIndicator).toBeVisible();
@@ -353,6 +356,53 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(page.getByTestId("reader-chapter-title")).toHaveText(
       "第1話 見知らぬ空",
     );
+    await expect(readerView).toHaveAttribute("data-current-page", "1");
+
+    // 第2話の先頭ページでの右から左（←）ドラッグ離上によるシームレス前話遷移および末尾ページ復元（R2-04, AC-RD-18, TR-05）
+    if (readerBox) {
+      const startX = readerBox.x + readerBox.width - 100;
+      const startY = readerBox.y + readerBox.height * 0.4;
+      const dragDistance = readerBox.width * 0.35;
+      await page.mouse.move(startX, startY);
+      await page.mouse.down();
+      await page.mouse.move(startX - dragDistance, startY, { steps: 10 });
+      await expect(boundaryHint).toBeVisible();
+      await expect(boundaryHint).toHaveText("指を離して前の話へ");
+
+      await page.mouse.up();
+    }
+
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1/,
+    );
+    await expect(boundaryHint).not.toBeVisible();
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "プロローグ：目覚め",
+    );
+    await expect(readerView).toHaveAttribute(
+      "data-current-page",
+      totalPagesStr,
+    );
+    await expect(pageIndicator).toHaveText(
+      `${totalPagesStr} / ${totalPagesStr}`,
+    );
+
+    // 再度最終ページでの左から右（→）ドラッグ離上で第2話へ遷移
+    if (readerBox) {
+      const startX = readerBox.x + 100;
+      const startY = readerBox.y + readerBox.height * 0.4;
+      const dragDistance = readerBox.width * 0.35;
+      await page.mouse.move(startX, startY);
+      await page.mouse.down();
+      await page.mouse.move(startX + dragDistance, startY, { steps: 10 });
+      await page.mouse.up();
+    }
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/2/,
+    );
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "第1話 見知らぬ空",
+    );
 
     // 下部オーバーレイの「前の話へ」ボタンで第1話へ戻る（TR-05）
     const touchZone = page.getByTestId("reader-bottom-touch-zone");
@@ -388,7 +438,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(page.getByTestId("reader-bottom-tab-ranking")).toBeVisible();
     await expect(page.getByTestId("reader-bottom-tab-settings")).toBeVisible();
 
-    // 「前の話へ」で第1話へ戻る
+    // 「前の話へ」ボタンで第1話へ戻り、末尾ページ（最終ページ）で開かれることを確認（R2-04, TR-05）
     await page.getByTestId("reader-prev-chapter").click();
     await expect(page).toHaveURL(
       /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1/,
@@ -396,6 +446,13 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(overlay).toHaveClass(/translate-y-full/);
     await expect(page.getByTestId("reader-chapter-title")).toHaveText(
       "プロローグ：目覚め",
+    );
+    await expect(readerView).toHaveAttribute(
+      "data-current-page",
+      totalPagesStr,
+    );
+    await expect(pageIndicator).toHaveText(
+      `${totalPagesStr} / ${totalPagesStr}`,
     );
 
     // 7. リーダー画面下部オーバーレイから設定画面（SCR-05）への遷移導線（TR-12）および戻り先保証（R1-03, R1-21）

@@ -27,6 +27,12 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     await page.goto("/");
     await page.evaluate(() => localStorage.clear());
     await page.reload();
+    await page.waitForFunction(() =>
+      Boolean(
+        (window as unknown as { __yommyServices?: { isReady?: boolean } })
+          .__yommyServices?.isReady,
+      ),
+    );
   });
 
   test("下部4タブ・検索・ランキング探索・その場追加・目次確認・リーダー読書・探索元復帰（TR-06, TR-07, TR-12）および本棚反映までの一連の動作が正常に機能する", async ({
