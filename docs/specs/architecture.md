@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Review (#158)"
+status: Approved
 updated: "2026-11-01"
 tags:
   - architecture
@@ -27,6 +27,7 @@ related_specs:
   - docs/specs/changes/archive/issue-122-reader-page-turning.md
   - docs/specs/changes/archive/issue-120-cloud-sync-google-drive.md
   - docs/specs/changes/archive/issue-124-settings-back-button-navigation.md
+  - docs/specs/changes/archive/issue-123-reader-bottom-overlay-ui-improvement.md
   - docs/specs/requirements.md
   - docs/specs/db-schema.md
   - docs/specs/screen-transitions.md
@@ -150,16 +151,26 @@ Yommy/
     │   │   ├── capacitorAppBridge.ts  # @capacitor/app 実装
     │   │   └── mockAppBridge.ts       # UT / Storybook / IT 用モック実装（triggerBackButton）
     │   ├── cloud-sync/                # 【CloudSyncBridge】Google Drive appDataFolder クラウド同期（Issue #120）
-    │   │   ├── types.ts               # CloudSyncBridge, SyncAuthState, SyncFileResult 定義
+    │   │   ├── types.ts               # CloudSyncBridge, CloudSyncAuthState 定義
     │   │   ├── capacitorCloudSyncBridge.ts # Android ネイティブ Capacitor プラグイン実装
     │   │   └── mockCloudSyncBridge.ts # UT / Storybook / IT 用インメモリ同期モック
     │   ├── http/
     │   │   ├── types.ts               # HttpClientBridge インターフェース定義
     │   │   ├── capacitorHttpClient.ts # CapacitorHttp 実装（CORS回避・User-Agent・タイムアウト制御）
     │   │   └── mockHttpClient.ts      # UT / Storybook / IT 用フィクスチャ応答クライアント
-    │   └── webview/
-    │       ├── types.ts               # WebViewDomBridge インターフェース定義（v0.4〜）
-    │       └── webviewDomBridge.ts    # 内蔵WebView DOMキャプチャ実装
+    │   └── webview/                   # 【WebViewDomBridge】内蔵WebView DOMキャプチャ（v0.5〜予定）
+    │       ├── types.ts
+    │       └── webviewDomBridge.ts
+    ├── features/                      # 【3. Viewer & UI Layer（画面・機能別モジュール）】
+    │   ├── bookshelf/                 # SCR-01: 本棚一覧（空状態での検索/ランキング誘導・更新チェック・ソート）
+    │   ├── novel-detail/              # SCR-02: 作品詳細・目次一覧・取得操作・一括キャッシュ
+    │   ├── reader/                    # SCR-03: 小説リーダー（全画面100dvh・最下部タッチオーバーレイ・ページめくり・ジェスチャー操作・ルビ・しおり保存）
+    │   ├── search/                    # SCR-06: 検索画面（カクヨム作品検索・カードから本棚追加・SCR-02遷移）
+    │   ├── ranking/                   # SCR-07: ランキング画面（期間/ジャンル別ランキング・カードから本棚追加・SCR-02遷移）
+    │   ├── settings/                  # SCR-05: 設定画面（組版・テーマ設定・サンプル文章プレビュー・クラウド同期連携）
+    │   └── cloud-sync/                # クラウド同期（Google Drive appDataFolder・SyncEngine）（Issue #120）
+    │       ├── types.ts               # YommySyncState, SyncNovelData 等の同期データ型定義
+    │       └── services/              # スキーマ検証・競合マージ・デバウンス同期エンジン
     ├── parsers/                       # 【1. Parser Layer（スクレイピング・DOM解析層）】
     │   ├── types.ts                   # NovelParser, ParsedNovelMetadata, ParsedChapterContent, ParsedSearchResult, ParsedRankingResult 等の型契約
     │   ├── parserRegistry.ts          # URL から対応サイト（kakuyomu / narou 等）を判定・ディスパッチ
@@ -168,7 +179,7 @@ Yommy/
     │   │   ├── KakuyomuParser.ts
     │   │   ├── KakuyomuParser.test.ts
     │   │   └── __fixtures__/
-    │   └── narou/                     # 小説家になろう用パーサーとローカル HTML フィクスチャ（v0.4〜）
+    │   └── narou/                     # 小説家になろう用パーサーとローカル HTML フィクスチャ（v0.5〜予定）
     │       ├── NarouParser.ts
     │       ├── NarouParser.test.ts
     │       └── __fixtures__/
@@ -185,23 +196,11 @@ Yommy/
     │       ├── chapterRepository.ts   # chapters テーブル操作（本文キャッシュ保存・削除・容量集計）
     │       ├── settingsRepository.ts  # reader_settings 操作
     │       ├── appSettingsRepository.ts # app_settings 操作（ソート順等永続化）
-    │       └── queueRepository.ts     # download_queue テーブル操作（v0.4〜）
-    ├── features/                      # 【3. Viewer & UI Layer（画面・機能別モジュール）】
-    │   ├── bookshelf/                 # SCR-01: 本棚一覧（空状態での検索/ランキング誘導）
-    │   ├── novel-detail/              # SCR-02: 作品詳細・目次一覧・取得操作
-    │   ├── reader/                    # SCR-03: 小説リーダー（全画面100dvh・最下部タッチオーバーレイ・ページめくり・ジェスチャー操作・ルビ・しおり保存）
-    │   ├── webview-import/            # SCR-04: 内蔵ブラウザ表示・DOMインポート（v0.4〜）
-    │   ├── settings/                  # SCR-05: 設定画面（組版・テーマ設定・サンプル文章プレビュー、v0.2〜）
-    │   ├── search/                    # SCR-06: 検索画面（カクヨム作品検索・カードから本棚追加・SCR-02遷移、v0.3〜）
-    │   ├── ranking/                   # SCR-07: ランキング画面（期間/ジャンル別ランキング・カードから本棚追加・SCR-02遷移、v0.3〜）
-    │   └── cloud-sync/                # クラウド同期（Google Drive appDataFolder・SyncEngine）（Issue #120）
-    │       ├── types.ts               # YommySyncState, SyncNovelData 等の同期データ型定義
-    │       └── services/              # スキーマ検証・競合マージ・デバウンス同期エンジン
+    │       └── queueRepository.ts     # download_queue テーブル操作（v0.5〜予定）
     └── shared/                        # 複数機能で共有する汎用 UI コンポーネント・ユーティリティ
         ├── constants/                 # キャッシュ・レートリミット等の共有定数（cache.ts）
         ├── utils/                     # キャッシュ判定等の共有ユーティリティ（cache.ts）
-        ├── ui/                        # BottomTabBar, Header, Button, Modal, Toast, Badge 等
-        └── lib/                       # URL正規化、バイトサイズ整形、日時フォーマット等
+        └── ui/                        # BottomTabBar 等共通コンポーネント（モバイル幅での改行防止縦並び flex-col sm:flex-row ＋ whitespace-nowrap 最適化）
 ├── docs/                              # 【ドキュメント正本（OKF）】
 └── test/                              # 【統合・結合テスト】Playwright 実ブラウザ IT シナリオ
 ```
@@ -501,6 +500,7 @@ export interface RouterContextValue {
   currentPath: string;
   previousPath?: string;
   novelOrigin: string | null;
+  settingsOrigin: string | null;
   route: AppRoute;
   navigate: (path: string) => void;
   navigateToBookshelf: () => void;
@@ -520,6 +520,10 @@ export interface RouterContextValue {
 - `novelId`（例: `"kakuyomu:16817330658027210412"`）を URL パスに含める際は `encodeURIComponent` でエンコードし、ルート解決（`matchRoute`）時に `decodeURIComponent` でデコードする。
 - `RouterProvider` は `initialPath?: string` プロパティを受け取り、Vitest 単体テストや Storybook において任意のルート状態を決定論的に再現できる。
 - `navigate` は同一パスへの遷移呼び出し時（例: `/settings` での「設定」タブ再タップ、`/search` での「検索」タブ再タップ）は履歴追加（`pushState`）および `previousPath` の上書きを行わず no-op とする。
+- **設定画面復帰オリジン制御（`settingsOrigin`、Issue #124 / R1-22）**:
+  - 設定画面（`SCR-05: /settings`）への遷移時、直前画面がリーダー（`SCR-03`）または作品詳細（`SCR-02`）の場合はそのパスを `settingsOrigin` として保持する。
+  - 設定画面ヘッダーの「戻る」ボタン（`settings-back-button`）または OS バックキー実行時、`settingsOrigin` が保持されていれば直前画面へ復帰し、`settingsOrigin` を `null` にリセットする。
+  - 下部タブバー等で別の主画面（本棚・検索・ランキング）へ移動した際も `settingsOrigin` は `null` にリセットされる。
 - **OS バックキー（@capacitor/app の AppBridge 経由およびブラウザ戻る操作）の論理階層遷移制御**:
   - ブラウザ履歴順に依存せず、常に論理階層順（**各話View `SCR-03` → 目次 `SCR-02` → 直前の遷移元（本棚 `SCR-01`、検索 `SCR-06`、ランキング `SCR-07`）**、**設定 `SCR-05` → 直前画面（リーダー `SCR-03`、作品詳細 `SCR-02`、または本棚 `SCR-01`）**、**検索 `SCR-06` / ランキング `SCR-07` → 本棚 `SCR-01`**）で戻るよう制御する。
   - 本棚の「続きから読む」から各話Viewへ直行した場合も、ルーターが履歴スタックに目次（`/novels/:novelId`）を介在させることで、バックキー 1 回で確実に目次画面へ戻る。
@@ -529,7 +533,51 @@ export interface RouterContextValue {
   - 設定画面（`SCR-05`）で OS バックキーを実行したとき、直前の画面（リーダー `SCR-03`、作品詳細 `SCR-02`）またはホームの本棚画面（`SCR-01`）へ復帰する。検索画面（`SCR-06`）、ランキング画面（`SCR-07`）ではホームの本棚画面（`/`）へ復帰する（`TR-12`）。
   - 本棚画面（`SCR-01: /`）でバックボタンが押された際は、2秒以内の連続2回押下で `AppBridge.exitApp()` を呼び出してアプリを終了し、1回目押下時は画面下部に「もう一度バックボタンを押すと終了します」の一時確認トースト（`role="status"`、2秒後に自動消去）を表示する（`TR-13`）。
 
-### 3.6 キャッシュ鮮度・先読み・一括キャッシュ制御ポリシー（v0.3 新設）
+### 3.6 クラウド同期データ構造契約（`src/features/cloud-sync/types.ts`、Issue #120 / R1-35）
+
+Google Drive（`appDataFolder`）上の同期ファイル `yommy-sync-state.json` および同期エンジン（`SyncEngine`）で共有されるデータ構造契約です。
+
+```ts
+import type { NovelSiteType } from "../../parsers/types";
+
+/**
+ * yommy-sync-state.json のルートデータ構造
+ */
+export interface YommySyncState {
+  /** スキーマバージョン（初期値: 1） */
+  version: 1;
+  /** 最終同期日時（ISO 8601 UTC 文字列） */
+  lastSyncedAt: string;
+  /** 作品基本情報・しおり・既読マップ（キー: novelId） */
+  novels: Record<string, SyncNovelData>;
+  /** 削除済み作品の Tombstone マップ（キー: novelId, 値: 削除日時 ISO 8601） */
+  deletedNovels: Record<string, string>;
+}
+
+/**
+ * 同期対象の個別作品データ構造
+ */
+export interface SyncNovelData {
+  id: string; // "{site_type}:{remote_work_id}"
+  siteType: NovelSiteType;
+  remoteWorkId: string;
+  canonicalUrl: string; // 作品トップURL
+  title: string;
+  author: string;
+  synopsis: string;
+  totalChapters: number;
+  isFavorite: number; // 0 | 1
+  hasNewUpdate: number; // 0 | 1
+  latestEpisodePublishedAt: string | null;
+  bookmarkChapterIndex: number | null; // しおり話数（1始まり）
+  lastReadAt: string | null; // 最終閲覧日時（ISO 8601）
+  readChapterIds: string[]; // 既読エピソードID（remote_chapter_id）の配列
+  createdAt: string; // 初回登録日時（ISO 8601）
+  updatedAt: string; // レコード更新日時（ISO 8601）
+}
+```
+
+### 3.7 キャッシュ鮮度・先読み・一括キャッシュ制御ポリシー（v0.3 新設）
 
 読書体験の快適化（待ち時間ゼロ）と外部小説サーバーへの負荷低減（503 IP BAN 防止）を両立するため、共通定数モジュール（`src/shared/constants/cache.ts`）に以下の定数を定義し、制御ポリシーを適用します。
 

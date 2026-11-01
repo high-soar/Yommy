@@ -42,6 +42,10 @@ docs/
 │           ├── issue-79-four-tabs-search-ranking.md # [Archived] 下部4タブ化・カクヨム検索・ランキング画面新設の差分仕様 (#79)
 │           ├── issue-80-bookshelf-update-check-and-sort.md # [Archived] 自動更新チェック（NEWバッジ表示・解除）と本棚5種ソート機能の差分仕様 (#80)
 │           ├── issue-81-prefetch-and-cache-rules.md # [Archived] 読書中5話先読み・一括キャッシュ・鮮度管理ルールの差分仕様 (#81)
+│           ├── issue-120-cloud-sync-google-drive.md # [Archived] Google Drive連携による本棚・しおり・既読同期の差分仕様 (#120)
+│           ├── issue-122-reader-page-turning.md # [Archived] リーダーページめくり表示（タップ/スワイプ送り）とスクロール切替の差分仕様 (#122)
+│           ├── issue-123-reader-bottom-overlay-ui-improvement.md # [Archived] リーダー下部オーバーレイUI改善の差分仕様 (#123)
+│           ├── issue-124-settings-back-button-navigation.md # [Archived] 設定画面からのOSバックキー直前画面復帰改善の差分仕様 (#124)
 │           └── .gitkeep
 └── quality/                           # 【柱3：品質分析・バグ記録・申し送り管理】
     ├── bug-and-handover-log.md        # バグ記録票（製品/支援分離、原因5分類 L/S/D/B/A）＆ 申し送り事項（HO-xx）追跡シート（作業中Milestone＋未解決HO）
@@ -54,7 +58,8 @@ docs/
         ├── phase3-poc.md              # Phase 3 PoC 品質分析・改善レポート
         ├── v0.1-mvp.md                # Milestone v0.1（カクヨム MVP）品質分析・改善レポート
         ├── v0.2-ui-ux.md              # Milestone v0.2（UI/UX 刷新 ＆ 開発基盤整備）品質分析・改善レポート
-        └── v0.3-search-prefetch.md    # Milestone v0.3（検索/ランキング・先読みキャッシュ・更新チェック ＆ 実機基盤改善）品質分析・改善レポート
+        ├── v0.3-search-prefetch.md    # Milestone v0.3（検索/ランキング・先読みキャッシュ・更新チェック ＆ 実機基盤改善）品質分析・改善レポート
+        └── v0.4-cloud-sync-reader-ux.md # Milestone v0.4（クラウド同期・ページめくり・リーダーUI改善）品質分析・改善レポート
 ```
 
 > [!NOTE]

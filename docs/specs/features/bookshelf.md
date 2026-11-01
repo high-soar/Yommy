@@ -2,7 +2,7 @@
 type: spec-feature
 title: "本棚画面仕様書（SCR-01: Bookshelf）"
 description: "登録済み小説カード一覧の表示、しおり位置からのワンタップ読書再開、および検索・ランキング画面への誘導を提供する本棚画面（SCR-01）の正本仕様。"
-status: "Review (#120)"
+status: Approved
 updated: "2026-10-31"
 tags:
   - bookshelf
@@ -259,7 +259,7 @@ export interface UseBookshelfResult {
 5. **「NEW（更新あり）」解除（`clearNovelUpdate`）**:
    - 作品カードタップ（`TR-02`）または「続きから読む」タップ（`TR-03`）時に、`novelRepository.clearNewUpdate(novelId)` を呼び出し、対象作品の `has_new_update = 0` に更新してバッジを消去する。
 6. **クラウド同期連携（自動 Pull / 自動 Push / Tombstone 記録: v0.4 Issue #120）**:
-   - アプリ起動時およびバックグラウンド復帰時（休止から5分以上経過時）に、`SyncEngine.pull()` がバックグラウンド実行され、リモートの新規作品・更新されたしおり話数が本棚一覧へ自動反映される。未登録作品は `upsertNovelWithToc` により目次が自動取得される。
+   - アプリ起動時およびバックグラウンド復帰時（休止から5分以上経過時）に、`SyncEngine.pullAndMerge()` がバックグラウンド実行され、リモートの新規作品・更新されたしおり話数が本棚一覧へ自動反映される。未登録作品は `upsertNovelWithToc` により目次が自動取得される。
    - 作品の追加（検索/ランキングからの登録）および作品の削除時に、`SyncEngine.notifyChanged()` が呼び出され、2〜3秒デバウンス付きで自動 Push される。
    - 作品削除時（`novelRepository.deleteNovel`）は、カスケード削除と同時に `deleted_novels` テーブルへ該当 ID と削除日時（ミリ秒タイムスタンプ `Date.now()`）を記録し、次回 Push 時にリモート Tombstone へ結合する。
 
