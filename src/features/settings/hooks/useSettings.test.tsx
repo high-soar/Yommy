@@ -27,10 +27,10 @@ function createMockServices(
   let settingsState: ReaderSettings = {
     writingMode: "vertical-rl",
     theme: "light",
-    fontFamily: "mincho",
+    fontFamily: "biz-ud-mincho",
     fontSizePx: 18,
     lineHeight: 1.8,
-    pageMarginPx: 16,
+    pageMarginPx: 20,
     enableTapPaging: true,
     enableVolumeKeyPaging: false,
     pagingMode: "auto",
@@ -110,8 +110,10 @@ describe("useSettings", () => {
 
       expect(result.current.writingMode).toBe("horizontal-tb");
       expect(result.current.theme).toBe("sepia");
+      expect(result.current.fontFamily).toBe("gothic");
       expect(result.current.fontSizePx).toBe(22);
       expect(result.current.lineHeight).toBe(2.0);
+      expect(result.current.pageMarginPx).toBe(16);
       expect(result.current.pagingMode).toBe("paged");
       expect(result.current.error).toBeNull();
     });
@@ -129,8 +131,10 @@ describe("useSettings", () => {
 
       expect(result.current.writingMode).toBe("vertical-rl");
       expect(result.current.theme).toBe("light");
+      expect(result.current.fontFamily).toBe("biz-ud-mincho");
       expect(result.current.fontSizePx).toBe(18);
       expect(result.current.lineHeight).toBe(1.8);
+      expect(result.current.pageMarginPx).toBe(20);
       expect(getReaderSettings).not.toHaveBeenCalled();
     });
 
@@ -153,8 +157,10 @@ describe("useSettings", () => {
 
       expect(result.current.writingMode).toBe("vertical-rl");
       expect(result.current.theme).toBe("light");
+      expect(result.current.fontFamily).toBe("biz-ud-mincho");
       expect(result.current.fontSizePx).toBe(18);
       expect(result.current.lineHeight).toBe(1.8);
+      expect(result.current.pageMarginPx).toBe(20);
       expect(result.current.error).toBeNull();
     });
   });
@@ -348,6 +354,163 @@ describe("useSettings", () => {
 
       expect(result.current.error).toBe("Paging mode save error");
       expect(result.current.pagingMode).toBe("auto");
+    });
+  });
+
+  describe("フォント種別変更 (changeFontFamily)", () => {
+    it("5種のフォント種別を選択でき、settingsRepository を更新すること (AC-ST-17)", async () => {
+      const updateReaderSettings = vi.fn().mockResolvedValue({});
+      const services = createMockServices({
+        settingsRepoOverrides: { updateReaderSettings },
+      });
+
+      const { result } = renderHook(() => useSettings(), {
+        wrapper: createWrapper(services),
+      });
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.fontFamily).toBe("biz-ud-mincho");
+
+      const families: ReaderSettings["fontFamily"][] = [
+        "mincho",
+        "biz-ud-gothic",
+        "gothic",
+        "klee",
+        "biz-ud-mincho",
+      ];
+
+      for (const fam of families) {
+        await act(async () => {
+          await result.current.changeFontFamily(fam);
+        });
+
+        expect(result.current.fontFamily).toBe(fam);
+        expect(updateReaderSettings).toHaveBeenCalledWith({
+          fontFamily: fam,
+        });
+      }
+    });
+
+    it("設定保存時に例外が発生した場合、エラーメッセージが設定され直前の fontFamily にロールバックされること (AC-ST-07, AC-ST-17)", async () => {
+      const updateReaderSettings = vi
+        .fn()
+        .mockRejectedValue(new Error("Font family save error"));
+      const services = createMockServices({
+        settingsRepoOverrides: { updateReaderSettings },
+      });
+
+      const { result } = renderHook(() => useSettings(), {
+        wrapper: createWrapper(services),
+      });
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.fontFamily).toBe("biz-ud-mincho");
+
+      await act(async () => {
+        await result.current.changeFontFamily("klee");
+      });
+
+      expect(result.current.error).toBe("Font family save error");
+      expect(result.current.fontFamily).toBe("biz-ud-mincho");
+    });
+  });
+
+  describe("画面余白変更 (changePageMargin)", () => {
+    it("正常範囲内の余白値を更新でき、settingsRepository を更新すること (AC-ST-18)", async () => {
+      const updateReaderSettings = vi.fn().mockResolvedValue({});
+      const services = createMockServices({
+        settingsRepoOverrides: { updateReaderSettings },
+      });
+
+      const { result } = renderHook(() => useSettings(), {
+        wrapper: createWrapper(services),
+      });
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.pageMarginPx).toBe(20);
+
+      await act(async () => {
+        await result.current.changePageMargin(24);
+      });
+
+      expect(result.current.pageMarginPx).toBe(24);
+      expect(updateReaderSettings).toHaveBeenCalledWith({
+        pageMarginPx: 24,
+      });
+
+      await act(async () => {
+        await result.current.changePageMargin(8);
+      });
+
+      expect(result.current.pageMarginPx).toBe(8);
+      expect(updateReaderSettings).toHaveBeenCalledWith({
+        pageMarginPx: 8,
+      });
+    });
+
+    it("8px 未満の値は 8px、48px 超過の値は 48px にクランプされ、4px刻みに丸められること (AC-ST-18)", async () => {
+      const updateReaderSettings = vi.fn().mockResolvedValue({});
+      const services = createMockServices({
+        settingsRepoOverrides: { updateReaderSettings },
+      });
+
+      const { result } = renderHook(() => useSettings(), {
+        wrapper: createWrapper(services),
+      });
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      // 下限クランプ
+      await act(async () => {
+        await result.current.changePageMargin(4);
+      });
+      expect(result.current.pageMarginPx).toBe(8);
+      expect(updateReaderSettings).toHaveBeenCalledWith({
+        pageMarginPx: 8,
+      });
+
+      // 上限クランプ
+      await act(async () => {
+        await result.current.changePageMargin(52);
+      });
+      expect(result.current.pageMarginPx).toBe(48);
+      expect(updateReaderSettings).toHaveBeenCalledWith({
+        pageMarginPx: 48,
+      });
+
+      // 4px 刻み丸め（21px -> 20px, 23px -> 24px）
+      await act(async () => {
+        await result.current.changePageMargin(21);
+      });
+      expect(result.current.pageMarginPx).toBe(20);
+
+      await act(async () => {
+        await result.current.changePageMargin(23);
+      });
+      expect(result.current.pageMarginPx).toBe(24);
+    });
+
+    it("設定保存時に例外が発生した場合、エラーメッセージが設定され直前の pageMarginPx にロールバックされること (AC-ST-07, AC-ST-18)", async () => {
+      const updateReaderSettings = vi
+        .fn()
+        .mockRejectedValue(new Error("Page margin save error"));
+      const services = createMockServices({
+        settingsRepoOverrides: { updateReaderSettings },
+      });
+
+      const { result } = renderHook(() => useSettings(), {
+        wrapper: createWrapper(services),
+      });
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.pageMarginPx).toBe(20);
+
+      await act(async () => {
+        await result.current.changePageMargin(28);
+      });
+
+      expect(result.current.error).toBe("Page margin save error");
+      expect(result.current.pageMarginPx).toBe(20);
     });
   });
 

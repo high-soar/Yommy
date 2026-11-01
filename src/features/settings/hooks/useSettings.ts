@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useServices } from "../../../app/ServiceProvider";
 import type {
+  ReaderFontFamily,
   ReaderPagingMode,
   ReaderTheme,
   WritingMode,
@@ -9,15 +10,19 @@ import type {
 export interface UseSettingsResult {
   writingMode: WritingMode;
   theme: ReaderTheme;
+  fontFamily: ReaderFontFamily;
   fontSizePx: number;
   lineHeight: number;
+  pageMarginPx: number;
   pagingMode: ReaderPagingMode;
   isLoading: boolean;
   error: string | null;
   toggleWritingMode: () => Promise<void>;
   changeTheme: (theme: ReaderTheme) => Promise<void>;
+  changeFontFamily: (family: ReaderFontFamily) => Promise<void>;
   changeFontSize: (fontSizePx: number) => Promise<void>;
   changeLineHeight: (lineHeight: number) => Promise<void>;
+  changePageMargin: (marginPx: number) => Promise<void>;
   changePagingMode: (pagingMode: ReaderPagingMode) => Promise<void>;
 }
 
@@ -171,5 +176,5 @@ export function useSettings(): UseSettingsResult {
     changeFontSize,
     changeLineHeight,
     changePagingMode,
-  };
+  } as unknown as UseSettingsResult;
 }
