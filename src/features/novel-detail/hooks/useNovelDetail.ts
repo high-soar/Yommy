@@ -17,6 +17,9 @@ export const DEFAULT_FETCH_ERROR_MESSAGE = "作品情報の取得に失敗しま
 export const DEFAULT_REFRESH_ERROR_MESSAGE = "目次の更新に失敗しました";
 /** 作品削除失敗時のデフォルトエラーメッセージ */
 export const DEFAULT_DELETE_ERROR_MESSAGE = "作品の削除に失敗しました";
+/** 本文キャッシュ削除失敗時のデフォルトエラーメッセージ */
+export const DEFAULT_CLEAR_CACHE_ERROR_MESSAGE =
+  "本文キャッシュの削除に失敗しました";
 
 /**
  * 例外オブジェクトからユーザー向けエラーメッセージを安全に抽出する。
@@ -449,6 +452,8 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     isAllCached,
     isDeleteDialogOpen,
     isDeleting,
+    isClearCacheDialogOpen: false,
+    isClearingCache: false,
     refreshMessage,
     error,
     refreshToc,
@@ -457,6 +462,9 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     openDeleteDialog,
     closeDeleteDialog,
     confirmDeleteNovel,
+    openClearCacheDialog: () => {},
+    closeClearCacheDialog: () => {},
+    confirmClearCache: async () => 0,
     reloadDetail,
   };
 }
