@@ -141,8 +141,12 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     // =========================================================================
     // ステップ3: 端末 B（DB リセット状態）での起動時自動 Pull、作品自動取得、第2話しおり復帰・既読同期確認
     // =========================================================================
-    // 1. 直前の DB 永続化（onUpdate -> backup）の完了を確実に待機してからバックアップを退避（R1-19 偽陽性防止）
-    await page.waitForTimeout(300);
+    // 1. 直前の DB 永続化（onUpdate -> backup）の完了を確実に待機してからバックアップを退避（R1-19, R2-08 偽陽性防止）
+    await expect
+      .poll(() =>
+        page.evaluate(() => localStorage.getItem("yommy_sqlite_db_backup")),
+      )
+      .not.toBeNull();
     const terminalABackup = await page.evaluate(() =>
       localStorage.getItem("yommy_sqlite_db_backup"),
     );
