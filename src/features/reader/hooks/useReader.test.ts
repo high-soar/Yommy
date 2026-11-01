@@ -432,6 +432,8 @@ describe("useReader", () => {
       expect(result.current.theme).toBe("dark");
       expect(result.current.fontSizePx).toBe(22);
       expect(result.current.lineHeight).toBe(2.0);
+      expect(result.current.fontFamily).toBe("biz-ud-mincho");
+      expect(result.current.pageMarginPx).toBe(20);
     });
 
     it("初回ロード時に settingsRepository から fontFamily と pageMarginPx が正常に復元されること (SYS-REQ-09)", async () => {

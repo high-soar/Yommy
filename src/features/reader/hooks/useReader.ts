@@ -98,7 +98,9 @@ export interface UseReaderResult {
   theme: ReaderTheme;
   fontSizePx: number;
   lineHeight: number;
+  /** 現在のフォント種別（既定値: 'biz-ud-mincho'、v0.5 Issue #169） */
   fontFamily: ReaderFontFamily;
+  /** 現在の画面余白 px（既定値: 20、v0.5 Issue #169） */
   pageMarginPx: number;
   initialScrollProgress: number;
   scrollProgress: number;
@@ -135,7 +137,7 @@ export interface UseReaderResult {
  * 1. エピソード読み込みと未キャッシュ話オンデマンド取得（TR-03, TR-04, TR-05）
  * 2. 既読フラグ（is_read = 1）の自動更新（表示完了時および次話遷移時）
  * 3. しおり（bookmark_chapter_index）とスクロール進捗率（bookmark_scroll_progress）の復元・自動保存
- * 4. 組版設定（組み方向・4テーマ・文字サイズ・行間）の読み込み・変更・永続化
+ * 4. 組版設定（組み方向・4テーマ・文字サイズ・行間・フォント種別・画面余白）の読み込み・変更・永続化
  * 5. 前後エピソード遷移（goToChapter）と境界制御
  * 6. 手動作品取得・更新パイプライン（fetchNovelFromUrl）
  * 7. 読書中5話自動先読みパイプライン（AC-RD-12: 1.5秒レートリミット・直列取得・AbortController制御）
