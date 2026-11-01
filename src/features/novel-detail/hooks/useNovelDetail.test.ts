@@ -984,6 +984,7 @@ describe("useNovelDetail", () => {
         );
         expect(result.current.isAllCached).toBe(true);
         expect(result.current.novel?.cachedChapters).toBe(2);
+        expect(result.current.novel?.totalByteSize).toBeGreaterThan(0);
         expect(result.current.chapters[0].downloadedAt).not.toBeNull();
         expect(result.current.chapters[1].downloadedAt).not.toBeNull();
 

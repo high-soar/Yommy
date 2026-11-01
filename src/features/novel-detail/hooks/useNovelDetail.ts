@@ -335,11 +335,16 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
 
         setNovel((prev) => {
           const isNewCache = target.downloadedAt === null;
+          const oldSize = target.byteSize ?? 0;
           return {
             ...prev!,
             cachedChapters: isNewCache
               ? prev!.cachedChapters + 1
               : prev!.cachedChapters,
+            totalByteSize: Math.max(
+              0,
+              (prev!.totalByteSize ?? 0) - oldSize + parsedContent.byteSize,
+            ),
             updatedAt: downloadedAt,
           };
         });
@@ -355,6 +360,10 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
       }
 
       if (!signal.aborted) {
+        const latestNovel = await novelRepository.getNovelById(novelId);
+        if (latestNovel) {
+          setNovel(latestNovel);
+        }
         setRefreshMessage("全話のキャッシュを取得しました");
       }
     } catch (err: unknown) {
@@ -377,6 +386,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     parserRegistry,
     httpClient,
     chapterRepository,
+    novelRepository,
     novelId,
   ]);
 

@@ -75,6 +75,9 @@ describe("ServiceProvider", () => {
     it("DB 更新時に localStorage へのエクスポート・バックアップが行われること", async () => {
       const TestConsumer: React.FC = () => {
         const services = useServices();
+        if (!services.isReady) {
+          return <span>準備中...</span>;
+        }
         return (
           <button
             onClick={async () => {
