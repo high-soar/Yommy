@@ -48,6 +48,7 @@ related_tests:
   - src/features/novel-detail/components/EpisodeListItem.test.tsx
   - src/features/novel-detail/components/EpisodeList.test.tsx
   - src/features/novel-detail/components/DeleteConfirmDialog.test.tsx
+  - src/features/novel-detail/components/ClearCacheConfirmDialog.test.tsx
   - src/features/novel-detail/components/NovelDetailPage.test.tsx
   - src/features/novel-detail/components/NovelDetailContainer.test.tsx
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
@@ -89,7 +90,7 @@ related_tests:
   - `TR-19`（作品詳細ヘッダーの「本文キャッシュ整理」アクションによる本文キャッシュ削除［既読のみ／全話］・容量即時再計算、`v0.5` Issue #170）
 - **対象外スコープ（後続 Issue / Milestone）**:
   - エピソード閲覧に伴うしおり位置（`bookmarkChapterIndex`, `bookmarkScrollProgress`）および既読フラグ（`isRead`）の自動更新ロジック本体（Issue #14 の `SCR-03` リーダー画面拡張で一括実装）
-  - 内蔵 WebView（`SCR-04`）での手動インポート連携（Milestone `v0.5〜`：`SYS-REQ-13, 14`, `TR-09`）
+  - 内蔵 WebView（`SCR-04`）での手動インポート連携（Milestone `v0.6〜`：`SYS-REQ-13, 14`, `TR-09`）
 
 ---
 
@@ -361,11 +362,11 @@ src/features/novel-detail/
 - **メイン領域の排他描画ルール**:
   1. `isLoading === true` の場合: ローディング表示要素 `data-testid="novel-detail-loading"` を描画し、ヘッダー・目次一覧・未存在表示は描画しない。
   2. `isLoading === false` かつ `novel === null` の場合: 未存在・エラー案内領域 `data-testid="novel-detail-not-found"`（`error ?? "指定された作品が見つかりません。"`）および「本棚へ戻る」ボタン `data-testid="back-to-bookshelf-button"` を描画する。
-  3. `isLoading === false` かつ `novel !== null` の場合: `NovelDetailHeader`（上部固定）、各話リスト内部スクロール領域（中央）、および `DeleteConfirmDialog` を描画する。
+  3. `isLoading === false` かつ `novel !== null` の場合: `NovelDetailHeader`（上部固定）、各話リスト内部スクロール領域（中央）、`DeleteConfirmDialog`、および `ClearCacheConfirmDialog` を描画する。
 
 ---
 
-### 3.6 `NovelDetailContainer`（作品詳細・目次画面 Container コンポーネント）
+### 3.7 `NovelDetailContainer`（作品詳細・目次画面 Container コンポーネント）
 
 `useNovelDetail(novelId)` フックとルーター遷移コールバック（または Props で注入された遷移コールバック）を接続し、`NovelDetailPage` を描画する Container コンポーネントです。
 

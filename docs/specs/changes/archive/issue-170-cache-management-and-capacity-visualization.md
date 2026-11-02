@@ -22,12 +22,16 @@ related_specs:
 related_tests:
   - src/storage/repositories/chapterRepository.test.ts
   - src/features/novel-detail/components/NovelDetailHeader.test.tsx
+  - src/features/novel-detail/components/ClearCacheConfirmDialog.test.tsx
   - src/features/novel-detail/components/NovelDetailPage.test.tsx
   - src/features/novel-detail/components/NovelDetailContainer.test.tsx
   - src/features/novel-detail/hooks/useNovelDetail.test.ts
+  - src/features/settings/components/StorageCacheSection.test.tsx
   - src/features/settings/components/SettingsPage.test.tsx
   - src/features/settings/components/SettingsContainer.test.tsx
+  - src/features/settings/hooks/useStorageCache.test.tsx
   - src/features/settings/hooks/useSettings.test.tsx
+  - src/shared/utils/formatByteSize.test.ts
   - test/it/scenarios/scn04-prefetch-and-cache.spec.ts
 ---
 

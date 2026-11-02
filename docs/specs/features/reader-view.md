@@ -33,7 +33,7 @@ tags:
   - font-family
   - page-margin
   - ho-23
-  - ho-24
+  - ho-25
 related_specs:
   - docs/specs/changes/archive/issue-169-font-and-margin-customization.md
   - docs/specs/changes/archive/issue-168-reader-pagination-and-touch-refinement.md
@@ -107,9 +107,9 @@ related_tests:
   - `TR-05`（下部オーバーレイの「前の話へ」「次の話へ」操作、エピソード境界でのシームレス遷移［ラバーバンドドラッグ離上 / 端2段階タップ / 本文先頭・末尾ボタン / 2段階スクロール］による同一作品の前後エピソード `chapterIndex ± 1` への遷移）
   - `TR-06`（OS バックキーまたは下部オーバーレイの4タブ遷移によりスクロール進捗率を保存して `SCR-02` `/novels/:novelId`、または各タブへ遷移）
 - **対象外スコープ（後続 Milestone）**:
-  - ハードウェア音量キー（`enableVolumeKeyPaging`）による1画面ジャンプ送り（Milestone `v0.5〜`：`SYS-REQ-11` 拡張、本Issueでは対象外）
+  - ハードウェア音量キー（`enableVolumeKeyPaging`）による1画面ジャンプ送り（Milestone `v0.6〜`：`SYS-REQ-11` 拡張、本Issueでは対象外）
   - 3D カール等の過剰な描画エフェクト（2D 横スライドアニメーションを採用）
-  - 取得失敗時の内蔵 WebView フォールバック遷移 `TR-10`（Milestone `v0.5〜`：`SYS-REQ-13`）
+  - 取得失敗時の内蔵 WebView フォールバック遷移 `TR-10`（Milestone `v0.6〜`：`SYS-REQ-13`）
 
 ---
 
@@ -238,6 +238,8 @@ src/features/reader/
 | `onScrollProgressChange` | `(progress: number) => void`   | 任意 | -                 | スクロールまたはページ変更時に算出された進捗率（`0.0 〜 1.0`）を通知するコールバック |
 | `onPrevChapter`          | `() => void`                   | 任意 | -                 | 連続スクロール時本文先頭「前の話へ」ボタン押下時コールバック（v0.5 Issue #168）      |
 | `onNextChapter`          | `() => void`                   | 任意 | -                 | 連続スクロール時本文末尾「次の話へ」ボタン押下時コールバック（v0.5 Issue #168）      |
+| `chapterIndex`           | `number`                       | 任意 | `1`               | 現在のエピソード番号（1始まり、v0.5 Issue #168）                                     |
+| `totalChapters`          | `number`                       | 任意 | `1`               | 作品の総エピソード数（v0.5 Issue #168）                                              |
 
 #### セマンティック属性と組版・スクロール仕様
 
@@ -266,7 +268,7 @@ src/features/reader/
     - スワイプドラッグ中は、指の水平移動に合わせてリアルタイム横追従（`translateX(slideOffsetPx)`）およびスナップバックアニメーションを適用する。
     - 画面隅に控えめなページインジケーター（`data-testid="reader-page-indicator"`、例: `3 / 12`）を表示する。組み方向に関わらず常に水平表記とするため `writing-mode: horizontal-tb` を固定適用し、縦書き時における画面外クリップ・テキスト途切れを防止する。
     - 総ページ数 `totalPages` は、`translateX` 変位に影響されないマルチカラム要素の `scrollHeight`（`Math.max(1, Math.round((scrollHeight + pageMarginPx * 2) / pageStride))`）から算出し、話数遷移直後・しおり復元時・2ページ目以降のリサイズ時にも総ページ数が縮小しないことを保証する。
-    - 画面回転やウィンドウリサイズ発生時は、`window.addEventListener("resize", ...)` に連動して総ページ数（`totalPages`）の再計測（`onTotalPagesChange`）を自動実行し、レイアウト変更に即座に追従する。また、`bodyHtml`・`chapterTitle`・`initialScrollProgress`・`writingMode`・`fontSizePx`・`lineHeight` の変化時にも総ページ数を再評価し、エピソード遷移直後のページ位置復元（末尾ページ復元等）を確実に発火させる（R2-04）。
+    - 画面回転やウィンドウリサイズ発生時は、`window.addEventListener("resize", ...)` に連動して総ページ数（`totalPages`）の再計測（`onTotalPagesChange`）を自動実行し、レイアウト変更に即座に追従する。また、`bodyHtml`・`chapterTitle`・`initialScrollProgress`・`writingMode`・`fontSizePx`・`lineHeight`・`fontFamily`・`pageMarginPx` の変化時やコンテナ寸法変化時にも総ページ数を再評価し、エピソード遷移直後のページ位置復元（末尾ページ復元等）を確実に発火させる（R2-04, R1-23）。
     - 実効 `paged` モードで再開・ページ遷移した際は、スクロール位置（`scrollLeft` / `scrollTop`）を `0` にリセットし、`restoreScrollPosition` は実効 `!isPaged`（連続スクロールモード）のみに限定して実行することで、`scrollLeft` と `translateX` スライドによる二重変位バグを防止する。
 - **連続スクロール仕様（実効 `"scroll"` 時）**:
   - 縦書き時: CSS `writing-mode: vertical-rl`、`text-orientation: mixed`、水平スクロール（`overflow-x-auto overflow-y-hidden`）。

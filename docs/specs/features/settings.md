@@ -49,11 +49,14 @@ related_tests:
   - src/app/router.test.tsx
   - src/features/settings/hooks/useSettings.test.tsx
   - src/features/settings/hooks/useCloudSync.test.ts
+  - src/features/settings/hooks/useStorageCache.test.tsx
   - src/features/settings/components/SampleTextPreview.test.tsx
   - src/features/settings/components/CloudSyncSection.test.tsx
+  - src/features/settings/components/StorageCacheSection.test.tsx
   - src/features/settings/components/SettingsPage.test.tsx
   - src/features/settings/components/SettingsContainer.test.tsx
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
+  - test/it/scenarios/scn04-prefetch-and-cache.spec.ts
   - test/it/scenarios/scn05-cloud-sync.spec.ts
 ---
 
@@ -82,7 +85,7 @@ related_tests:
   - `TR-12`（設定画面（`/settings`）で OS バックキーを実行したとき、直前の画面（リーダー `SCR-03`、作品詳細 `SCR-02`）またはホームの本棚画面（`SCR-01`）へ復帰すること）
   - `TR-20`（設定画面での本文キャッシュ一括整理アクションによる一括削除［既読のみ／全話］・全体容量即時再計算、`v0.5` Issue #170）
 - **対象外スコープ（後続 Milestone）**:
-  - ハードウェア音量キー送り（`enableVolumeKeyPaging`）のトグル設定（Milestone `v0.5〜`：`SYS-REQ-11` 拡張、本Issueでは対象外）
+  - ハードウェア音量キー送り（`enableVolumeKeyPaging`）のトグル設定（Milestone `v0.6〜`：`SYS-REQ-11` 拡張、本Issueでは対象外）
 
 ---
 
@@ -166,35 +169,42 @@ src/features/settings/
 
 ### 3.2 `SettingsPage`（設定画面 Presentational コンポーネント）
 
-画面上部ヘッダー、組版設定 7 項目（組み方向切替、ページ送りモード切替、4カラーテーマ選択、文字サイズステッパー、行間ステッパー、フォント種別選択、画面余白ステッパー）、および `SampleTextPreview`、クラウド同期セクションを統合する画面レイアウトコンポーネントです。
+画面上部ヘッダー、組版設定 7 項目（組み方向切替、ページ送りモード切替、4カラーテーマ選択、文字サイズステッパー、行間ステッパー、フォント種別選択、画面余白ステッパー）、および `SampleTextPreview`、クラウド同期セクション、ストレージ・キャッシュ管理セクション（v0.5 Issue #170）を統合する画面レイアウトコンポーネントです。
 
 #### プロパティ契約（`SettingsPageProps`）
 
-| プロパティ名            | 型                                   | 必須 | 既定値                   | 説明                                                                       |
-| :---------------------- | :----------------------------------- | :--- | :----------------------- | :------------------------------------------------------------------------- |
-| `writingMode`           | `WritingMode`                        | 必須 | -                        | 現在の組み方向                                                             |
-| `theme`                 | `ReaderTheme`                        | 必須 | -                        | 現在のカラーテーマ                                                         |
-| `fontSizePx`            | `number`                             | 任意 | `18`                     | 現在の文字サイズ (`12 〜 32` px)                                           |
-| `lineHeight`            | `number`                             | 任意 | `1.8`                    | 現在の行間倍率 (`1.4 〜 2.4`)                                              |
-| `fontFamily`            | `ReaderFontFamily`                   | 任意 | `'biz-ud-mincho'`        | 現在のフォント種別（v0.5 Issue #169）                                      |
-| `pageMarginPx`          | `number`                             | 任意 | `20`                     | 現在の画面余白 px (`8 〜 48` px、v0.5 Issue #169)                          |
-| `pagingMode`            | `ReaderPagingMode`                   | 任意 | `'auto'`                 | 現在のページ送りモード（`'auto'`, `'paged'`, `'scroll'`、v0.4 Issue #122） |
-| `isLoading`             | `boolean`                            | 任意 | `false`                  | 設定読み込み中フラグ                                                       |
-| `error`                 | `string \| null`                     | 任意 | `null`                   | 設定保存・読込エラーメッセージ                                             |
-| `cloudSyncAuthState`    | `CloudSyncAuthState`                 | 任意 | `{ status: 'unlinked' }` | Google アカウント認証状態（v0.4）                                          |
-| `cloudSyncLastSyncedAt` | `string \| null`                     | 任意 | `null`                   | 最終同期完了日時（ISO 8601、v0.4）                                         |
-| `isCloudSyncing`        | `boolean`                            | 任意 | `false`                  | クラウド同期処理中フラグ（v0.4）                                           |
-| `cloudSyncError`        | `string \| null`                     | 任意 | `null`                   | クラウド同期エラーメッセージ（v0.4）                                       |
-| `onToggleWritingMode`   | `() => void`                         | 必須 | -                        | 組み方向切替ボタン押下時のコールバック                                     |
-| `onChangePagingMode`    | `(mode: ReaderPagingMode) => void`   | 任意 | -                        | ページ送りモード変更時のコールバック（v0.4 Issue #122）                    |
-| `onChangeTheme`         | `(theme: ReaderTheme) => void`       | 必須 | -                        | テーマ選択ボタン押下時のコールバック                                       |
-| `onChangeFontSize`      | `(nextSizePx: number) => void`       | 必須 | -                        | 文字サイズ変更ボタン（`−` / `＋`）押下時のコールバック                     |
-| `onChangeLineHeight`    | `(nextHeight: number) => void`       | 必須 | -                        | 行間変更ボタン（`−` / `＋`）押下時のコールバック                           |
-| `onChangeFontFamily`    | `(family: ReaderFontFamily) => void` | 任意 | -                        | フォント種別選択時のコールバック（v0.5 Issue #169）                        |
-| `onChangePageMargin`    | `(marginPx: number) => void`         | 任意 | -                        | 画面余白変更ボタン（`−` / `＋`）押下時のコールバック（v0.5 Issue #169）    |
-| `onSignInGoogle`        | `() => Promise<void>`                | 任意 | -                        | Google 連携ボタン押下時のコールバック（v0.4）                              |
-| `onSignOutGoogle`       | `() => Promise<void>`                | 任意 | -                        | Google 連携解除ボタン押下時のコールバック（v0.4）                          |
-| `onSyncNow`             | `() => Promise<void>`                | 任意 | -                        | 今すぐ同期ボタン押下時のコールバック（v0.4）                               |
+| プロパティ名                    | 型                                                            | 必須 | 既定値                   | 説明                                                                       |
+| :------------------------------ | :------------------------------------------------------------ | :--- | :----------------------- | :------------------------------------------------------------------------- |
+| `writingMode`                   | `WritingMode`                                                 | 必須 | -                        | 現在の組み方向                                                             |
+| `theme`                         | `ReaderTheme`                                                 | 必須 | -                        | 現在のカラーテーマ                                                         |
+| `fontSizePx`                    | `number`                                                      | 任意 | `18`                     | 現在の文字サイズ (`12 〜 32` px)                                           |
+| `lineHeight`                    | `number`                                                      | 任意 | `1.8`                    | 現在の行間倍率 (`1.4 〜 2.4`)                                              |
+| `fontFamily`                    | `ReaderFontFamily`                                            | 任意 | `'biz-ud-mincho'`        | 現在のフォント種別（v0.5 Issue #169）                                      |
+| `pageMarginPx`                  | `number`                                                      | 任意 | `20`                     | 現在の画面余白 px (`8 〜 48` px、v0.5 Issue #169)                          |
+| `pagingMode`                    | `ReaderPagingMode`                                            | 任意 | `'auto'`                 | 現在のページ送りモード（`'auto'`, `'paged'`, `'scroll'`、v0.4 Issue #122） |
+| `isLoading`                     | `boolean`                                                     | 任意 | `false`                  | 設定読み込み中フラグ                                                       |
+| `error`                         | `string \| null`                                              | 任意 | `null`                   | 設定保存・読込エラーメッセージ                                             |
+| `cloudSyncAuthState`            | `CloudSyncAuthState`                                          | 任意 | `{ status: 'unlinked' }` | Google アカウント認証状態（v0.4）                                          |
+| `cloudSyncLastSyncedAt`         | `string \| null`                                              | 任意 | `null`                   | 最終同期完了日時（ISO 8601、v0.4）                                         |
+| `isCloudSyncing`                | `boolean`                                                     | 任意 | `false`                  | クラウド同期処理中フラグ（v0.4）                                           |
+| `cloudSyncError`                | `string \| null`                                              | 任意 | `null`                   | クラウド同期エラーメッセージ（v0.4）                                       |
+| `onToggleWritingMode`           | `() => void`                                                  | 必須 | -                        | 組み方向切替ボタン押下時のコールバック                                     |
+| `onChangePagingMode`            | `(mode: ReaderPagingMode) => void`                            | 任意 | -                        | ページ送りモード変更時のコールバック（v0.4 Issue #122）                    |
+| `onChangeTheme`                 | `(theme: ReaderTheme) => void`                                | 必須 | -                        | テーマ選択ボタン押下時のコールバック                                       |
+| `onChangeFontSize`              | `(nextSizePx: number) => void`                                | 必須 | -                        | 文字サイズ変更ボタン（`−` / `＋`）押下時のコールバック                     |
+| `onChangeLineHeight`            | `(nextHeight: number) => void`                                | 必須 | -                        | 行間変更ボタン（`−` / `＋`）押下時のコールバック                           |
+| `onChangeFontFamily`            | `(family: ReaderFontFamily) => void`                          | 任意 | -                        | フォント種別選択時のコールバック（v0.5 Issue #169）                        |
+| `onChangePageMargin`            | `(marginPx: number) => void`                                  | 任意 | -                        | 画面余白変更ボタン（`−` / `＋`）押下時のコールバック（v0.5 Issue #169）    |
+| `onSignInGoogle`                | `() => Promise<void>`                                         | 任意 | -                        | Google 連携ボタン押下時のコールバック（v0.4）                              |
+| `onSignOutGoogle`               | `() => Promise<void>`                                         | 任意 | -                        | Google 連携解除ボタン押下時のコールバック（v0.4）                          |
+| `onSyncNow`                     | `() => Promise<void>`                                         | 任意 | -                        | 今すぐ同期ボタン押下時のコールバック（v0.4）                               |
+| `storageCacheSummary`           | `StorageCacheSummary`                                         | 任意 | -                        | 全体ストレージキャッシュサマリー情報（v0.5 Issue #170）                    |
+| `isStorageCacheLoading`         | `boolean`                                                     | 任意 | `false`                  | ストレージキャッシュ集計読込中フラグ（v0.5 Issue #170）                    |
+| `isStorageCacheClearing`        | `boolean`                                                     | 任意 | `false`                  | ストレージキャッシュ一括削除中フラグ（v0.5 Issue #170）                    |
+| `storageCacheNotice`            | `string \| null`                                              | 任意 | `null`                   | ストレージキャッシュ削除完了通知メッセージ（v0.5 Issue #170）              |
+| `storageCacheError`             | `string \| null`                                              | 任意 | `null`                   | ストレージキャッシュ操作エラーメッセージ（v0.5 Issue #170）                |
+| `initialShowStorageCacheDialog` | `boolean`                                                     | 任意 | `false`                  | キャッシュ整理ダイアログ初期表示フラグ（Storybook/UT用）                   |
+| `onClearStorageCache`           | `(options: { onlyRead: boolean }) => void \| Promise<number>` | 任意 | -                        | ストレージキャッシュ一括削除確定時コールバック（v0.5 Issue #170）          |
 
 #### 表示項目・セマンティック属性・境界制御ルール
 
@@ -207,7 +217,7 @@ src/features/settings/
        - 現在が縦書き（`vertical-rl`）のときは `横書き表示に切替`、横書き（`horizontal-tb`）のときは `縦書き表示に切替` を表示。
      - **ページ送りモード切替 (`data-testid="paging-mode-select"`, v0.4 Issue #122, v0.5 Issue #168)**:
        - 選択肢: 「ページめくり（縦書き時）」（`paged` または `auto`）、「連続スクロール」（`scroll`）の 2 択に整理。
-       - 横書き（`writingMode === 'horizontal-tb'`）時は、セレクターを無効化（`disabled`）し、注記要素 `data-testid="paging-mode-note"`（「※横書き時は連続スクロール固定となります」）を表示する。
+       - 横書き（`writingMode === 'horizontal-tb'`）時は、セレクターを無効化（`disabled`）し、注記要素 `data-testid="paging-mode-note"`（「※横書き表示時は連続スクロール固定となります」）を表示する。
        - 選択変更時に `onChangePagingMode(mode)` を呼び出し、即座に State 更新および `reader_settings` へ非同期永続化（DB 既存値 `'auto'` / `'paged'` はともに「ページめくり（縦書き時）」として透過的に扱う）。
      - **カラーテーマ選択**: `data-testid="theme-{light|sepia|dark|black}"` ボタングループ
        - 各テーマボタン（ライト、セピア、ダーク、ブラック）。選択中のボタンには `aria-pressed="true"` を設定。
@@ -237,6 +247,9 @@ src/features/settings/
   3. **クラウド同期セクション (`data-testid="cloud-sync-section"`, v0.4)**:
      - セクション見出し「クラウド同期 (Google Drive)」
      - `CloudSyncSection` コンポーネントを配置。
+  4. **ストレージ・キャッシュ管理セクション (`data-testid="storage-cache-section"`, v0.5 Issue #170)**:
+     - セクション見出し「ストレージ・キャッシュ管理」
+     - `StorageCacheSection` コンポーネントを配置。
 
 ---
 
@@ -284,14 +297,16 @@ Google Drive（`appDataFolder`）とのアカウント連携・解除、手動�
 
 #### プロパティ契約（`StorageCacheSectionProps`）
 
-| プロパティ名   | 型                                                            | 必須 | 既定値  | 説明                                         |
-| :------------- | :------------------------------------------------------------ | :--- | :------ | :------------------------------------------- |
-| `summary`      | `StorageCacheSummary`                                         | 必須 | -       | 全作品合計キャッシュ情報（話数・バイト容量） |
-| `isLoading`    | `boolean`                                                     | 任意 | `false` | 集計データ取得中フラグ                       |
-| `isClearing`   | `boolean`                                                     | 任意 | `false` | キャッシュ一括削除実行中フラグ               |
-| `notice`       | `string \| null`                                              | 任意 | `null`  | 一括削除完了通知メッセージ                   |
-| `error`        | `string \| null`                                              | 任意 | `null`  | キャッシュ削除エラーメッセージ               |
-| `onClearCache` | `(options: { onlyRead: boolean }) => void \| Promise<number>` | 任意 | -       | 一括削除確定時のコールバック                 |
+| プロパティ名        | 型                                                            | 必須 | 既定値  | 説明                                         |
+| :------------------ | :------------------------------------------------------------ | :--- | :------ | :------------------------------------------- |
+| `summary`           | `StorageCacheSummary`                                         | 必須 | -       | 全作品合計キャッシュ情報（話数・バイト容量） |
+| `isLoading`         | `boolean`                                                     | 任意 | `false` | 集計データ取得中フラグ                       |
+| `isClearing`        | `boolean`                                                     | 任意 | `false` | キャッシュ一括削除実行中フラグ               |
+| `notice`            | `string \| null`                                              | 任意 | `null`  | 一括削除完了通知メッセージ                   |
+| `error`             | `string \| null`                                              | 任意 | `null`  | キャッシュ削除エラーメッセージ               |
+| `onClearCache`      | `(options: { onlyRead: boolean }) => void \| Promise<number>` | 任意 | -       | 一括削除確定時のコールバック                 |
+| `initialShowDialog` | `boolean`                                                     | 任意 | `false` | ダイアログ初期表示フラグ（Storybook/UT用）   |
+| `className`         | `string`                                                      | 任意 | `""`    | 外部スタイル指定クラス名                     |
 
 #### 表示項目・セマンティック属性
 

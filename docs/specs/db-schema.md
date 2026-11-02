@@ -25,6 +25,7 @@ tags:
     page-margin,
     ho-23,
     ho-24,
+    ho-25,
   ]
 related_specs:
   - docs/specs/changes/archive/issue-169-font-and-margin-customization.md
@@ -155,6 +156,7 @@ erDiagram
 
 - **`has_new_update`**: 目次更新（自動更新チェックまたは手動更新）時に話数増加・新規エピソード追加が検知された場合に `1`（NEWバッジ表示）が記録され、作品閲覧時（`SCR-02` または `SCR-03` 表示時）に `0` へ解除されます。
 - **`latest_episode_published_at`**: `upsertNovelWithToc` 実行時に `index.chapters` 内の各エピソードのうち有効な `publishedAt` の最大値（最新公開/更新日時）を算出し、ISO 8601 UTC 文字列（例: `2026-01-01T20:00:00.000Z`）に正規化して保持します（サイトごとのタイムゾーン表記揺れによる文字列ソート誤差を防止）。全エピソード未設定時は `NULL` となります。本カラムにより、ソート順「作品更新日順（`latest_published`）」において `chapters` テーブルとの結合なしで高速にソートクエリを実行可能です。
+- **`updated_at` とキャッシュ削除（`v0.5` Issue #170 / R1-01）**: 本文キャッシュの削除（作品詳細画面での `deleteCachedBodies` または設定画面での `deleteAllCachedBodies`）が行われた際、`novels.cached_chapters` および `novels.total_byte_size` は再集計値へ更新されますが、**`novels.updated_at` は意図的に更新されず既存値が保持されます**。キャッシュ削除はローカルストレージの空き容量確保操作であり作品メタデータ自体の更新ではないため、`updated_at` を進めてしまうと Google Drive 等のクラウド同期（`v0.4` Issue #120）における Last-Write-Wins 競合解決や論理削除 Tombstone 判定（`remoteDeletedAt > max(created, updated)`）が誤って妨害され、他端末で削除された作品がローカル端末で復活してしまう不整合を防ぐためです（R1-01）。
 
 ```sql
 CREATE TABLE IF NOT EXISTS novels (
@@ -188,7 +190,7 @@ CREATE INDEX IF NOT EXISTS idx_novels_title ON novels(title COLLATE NOCASE ASC);
 
 ### 3.2 `chapters` テーブル（各話目次・本文 HTML キャッシュ）
 
-目次取得時は `body_html = NULL`, `byte_size = 0` でレコードを作成し、本文ダウンロード完了時にサニタイズ済み HTML と `byte_size`, `downloaded_at` を保存します。各話の一意性は `(novel_id, remote_chapter_id)` で保証されるため、連載途中でエピソードが挿入・削除されて `chapter_index` がずれた場合でも、本文キャッシュが別話へ誤って引き継がれることなく安全に維持されます。キャッシュ削除時（作品詳細での整理または設定画面での一括整理：`v0.5` Issue #170）は、目次情報・既読フラグ（`is_read`）・しおり位置を完全に残したまま、対象話の `body_html = NULL`, `byte_size = 0`, `downloaded_at = NULL` に更新します（既読話のみ削除時: `body_html IS NOT NULL AND is_read = 1`、全話削除時: `body_html IS NOT NULL`）。更新後、親作品レコードの `novels.cached_chapters` および `novels.total_byte_size` を単一トランザクション内で即時再集計して更新します。
+目次取得時は `body_html = NULL`, `byte_size = 0` でレコードを作成し、本文ダウンロード完了時にサニタイズ済み HTML と `byte_size`, `downloaded_at` を保存します。各話の一意性は `(novel_id, remote_chapter_id)` で保証されるため、連載途中でエピソードが挿入・削除されて `chapter_index` がずれた場合でも、本文キャッシュが別話へ誤って引き継がれることなく安全に維持されます。キャッシュ削除時（作品詳細での整理または設定画面での一括整理：`v0.5` Issue #170）は、目次情報・既読フラグ（`is_read`）・しおり位置を完全に残したまま、対象話の `body_html = NULL`, `byte_size = 0`, `downloaded_at = NULL` に更新します（既読話のみ削除時: `body_html IS NOT NULL AND is_read = 1`、全話削除時: `body_html IS NOT NULL`）。更新後、親作品レコードの `novels.cached_chapters` および `novels.total_byte_size` を単一トランザクション内で即時再集計して更新します。この際、クラウド同期の整合性維持（LWW および Tombstone 誤判定防止）のため、`novels.updated_at` は更新せず従前の値を維持します（R1-01）。
 
 なお、`downloaded_at` はキャッシュ鮮度管理（TTL 7日間判定：`now - downloaded_at < 7 days` での通信スキップ、7日経過後の 3秒短タイムアウト再取得と既存キャッシュフォールバック）の判定基準日時として利用されます（`v0.3` Issue #81）。
 
