@@ -17,7 +17,7 @@ describe("SettingsContainer", () => {
   });
 
   describe("Storybook Stories 検証 (composeStories)", () => {
-    it("Default ストーリーで SettingsPage が初期設定値で描画されること (AC-ST-02, AC-ST-03, AC-ST-04, AC-ST-05)", async () => {
+    it("Default ストーリーで SettingsPage が初期設定値で描画されること (AC-ST-02, AC-ST-03, AC-ST-04, AC-ST-05, AC-ST-17, AC-ST-18)", async () => {
       render(<Default />);
 
       await waitFor(() => {

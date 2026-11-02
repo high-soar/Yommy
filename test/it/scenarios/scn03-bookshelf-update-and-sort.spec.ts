@@ -6,6 +6,11 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
     await page.goto("/");
     await page.evaluate(() => localStorage.clear());
     await page.reload();
+    await page.waitForFunction(
+      () =>
+        typeof window.__yommyServices !== "undefined" &&
+        window.__yommyServices.isReady === true,
+    );
   });
 
   test("本棚自動更新チェック・NEWバッジ表示と詳細/リーダー遷移時解除・手動一括更新・5種ソート切替/永続化が正常に機能する", async ({

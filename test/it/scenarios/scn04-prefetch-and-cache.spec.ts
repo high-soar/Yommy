@@ -296,7 +296,7 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
       client.setResponse?.(
         /^https:\/\/kakuyomu\.jp\/works\/\d+\/episodes\/\d+/,
         async (options) => {
-          await new Promise((resolve) => setTimeout(resolve, 3500));
+          await new Promise((resolve) => setTimeout(resolve, 5000));
           return { status: 200, url: options.url, headers: {}, html: "" };
         },
       );
@@ -309,7 +309,7 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
 
     // 4. 3秒の短タイムアウト後にエラー画面にならず、古いキャッシュ本文がフォールバック表示されることを確認 (AC-RD-13)
     const readerView = page.getByTestId("reader-view");
-    await expect(readerView).toBeVisible({ timeout: 10000 });
+    await expect(readerView).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId("reader-error")).not.toBeVisible();
     await expect(readerView).toContainText(
       "これは8日前の古いキャッシュ本文です。フォールバック表示されます。",
@@ -386,6 +386,11 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
         2,
         true,
       );
+      await services.novelRepository.updateBookmark(
+        "kakuyomu:16817330658027210412",
+        2,
+        0.5,
+      );
     });
     await page.reload();
     await page.waitForFunction(
@@ -397,6 +402,11 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
 
     const readBadges = page.getByTestId("episode-read-badge");
     await expect(readBadges).toHaveCount(2);
+
+    const resumeButton = page.getByTestId("detail-resume-button");
+    const bookmarkBadges = page.getByTestId("episode-bookmark-badge");
+    await expect(resumeButton).toBeVisible();
+    await expect(bookmarkBadges).toHaveCount(1);
 
     // 5. 「本文キャッシュ整理」ダイアログのキャンセル動作確認
     await clearCacheBtn.click();
@@ -429,6 +439,10 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     await expect(readBadges).toHaveCount(2);
     await expect(uncachedBadges).toHaveCount(2);
 
+    // キャッシュ削除後もしおり位置および「続きから読む」ボタンが保持されること (AC-ND-22)
+    await expect(resumeButton).toBeVisible();
+    await expect(bookmarkBadges).toHaveCount(1);
+
     const cachedBadges = page.getByTestId("episode-cached-badge");
     await expect(cachedBadges).toHaveCount(2);
 
@@ -448,6 +462,9 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     // 全話未取得に戻り、既読状態は保持され、削除ボタンが非活性となること
     await expect(readBadges).toHaveCount(2);
     await expect(uncachedBadges).toHaveCount(4);
+    // 全話キャッシュ削除後もしおり位置および「続きから読む」ボタンが保持されること (AC-ND-22)
+    await expect(resumeButton).toBeVisible();
+    await expect(bookmarkBadges).toHaveCount(1);
     await expect(clearCacheBtn).toBeDisabled();
     await expect(batchButton).toBeEnabled();
     await expect(batchButton).toHaveText("未取得話を一括キャッシュ");
@@ -530,10 +547,13 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     );
     await expect(openGlobalClearBtn).toBeDisabled();
 
-    // 13. 本棚から作品詳細画面へ戻り、全話未取得・容量0 B・既読保持が画面横断で整合していることを確認
+    // 13. 本棚から作品詳細画面へ戻り、全話未取得・容量0 B・既読およびしおり位置保持が画面横断で整合していることを確認 (AC-ST-16)
     const tabBookshelf = page.getByTestId("tab-bookshelf");
     await tabBookshelf.click();
     await expect(page).toHaveURL("/");
+    await expect(page.getByTestId("novel-card-bookmark")).toHaveText(
+      "しおり: 第2話",
+    );
 
     await novelCardSelect.click();
     await expect(novelDetailPage).toBeVisible();
@@ -541,5 +561,7 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     await expect(readBadges).toHaveCount(2);
     await expect(uncachedBadges).toHaveCount(4);
     await expect(clearCacheBtn).toBeDisabled();
+    await expect(page.getByTestId("detail-resume-button")).toBeVisible();
+    await expect(page.getByTestId("episode-bookmark-badge")).toHaveCount(1);
   });
 });

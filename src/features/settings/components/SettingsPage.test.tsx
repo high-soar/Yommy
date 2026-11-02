@@ -22,7 +22,7 @@ const {
 
 describe("SettingsPage", () => {
   describe("Storybook Stories 描画検証 (composeStories)", () => {
-    it("Default: 縦書き・ライトテーマ、既定ステッパー値、およびプレビューが正しく描画されること (AC-ST-01, AC-ST-02)", () => {
+    it("Default: 縦書き・ライトテーマ、既定ステッパー値、およびプレビューが正しく描画されること (AC-ST-01, AC-ST-02, AC-ST-17, AC-ST-18)", () => {
       render(<Default />);
 
       // 画面ルート
