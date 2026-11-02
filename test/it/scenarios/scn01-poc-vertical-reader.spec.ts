@@ -6,6 +6,11 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await page.goto("/");
     await page.evaluate(() => localStorage.clear());
     await page.reload();
+    await page.waitForFunction(
+      () =>
+        typeof window.__yommyServices !== "undefined" &&
+        window.__yommyServices.isReady === true,
+    );
   });
 
   test("全画面シェル・設定画面組版変更・作品登録からSCR-02目次確認・リーダー本文設定即時反映・前後話遷移・OSバックキー論理階層遷移・既読しおり復元・作品削除までの一連の動作が正常に機能する", async ({
@@ -148,6 +153,11 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       );
     });
     await page.reload();
+    await page.waitForFunction(
+      () =>
+        typeof window.__yommyServices !== "undefined" &&
+        window.__yommyServices.isReady === true,
+    );
 
     const novelCard = page.getByTestId("novel-card");
     await expect(novelCard).toBeVisible();
@@ -284,6 +294,9 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     );
     await expect(readerView).toHaveAttribute("data-current-page", "1");
     await expect(readerView).toHaveClass(/overflow-hidden/);
+    await expect(page.getByTestId("reader-page").locator("main")).toHaveClass(
+      /touch-none/,
+    );
 
     await expect(readerView).toHaveAttribute(
       "data-total-pages",
@@ -593,6 +606,9 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       "scroll",
     );
     await expect(readerView).toHaveClass(/overflow-x-auto/);
+    await expect(
+      page.getByTestId("reader-page").locator("main"),
+    ).not.toHaveClass(/touch-none/);
     // 連続スクロールモードではページインジケーター（reader-page-indicator）が非表示であること
     await expect(page.getByTestId("reader-page-indicator")).not.toBeAttached();
 
@@ -644,6 +660,49 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(scrollPrevButton).toBeVisible();
     await expect(scrollPrevButton).toBeEnabled();
     await scrollPrevButton.click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1/,
+    );
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "プロローグ：目覚め",
+    );
+
+    // 連続スクロールモードでの末尾到達後2段階操作（スワイプ/ホイール）による前後話遷移（AC-RD-19, TR-05）
+    // 末尾（progress = 1.0）へスクロール
+    await readerView.evaluate((el) => {
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (maxScroll > 0) {
+        el.scrollLeft = -maxScroll;
+        el.dispatchEvent(new Event("scroll"));
+      }
+    });
+    // 1回目の末尾操作でヒントトースト表示
+    await readerView.dispatchEvent("wheel", { deltaX: -50, deltaY: 0 });
+    const boundaryToast = page.getByTestId("reader-episode-boundary-hint");
+    await expect(boundaryToast).toBeVisible();
+    await expect(boundaryToast).toHaveText("もう一度スワイプで次の話へ");
+
+    // 2.5秒以内の2回目操作で次話（第2話）へ遷移
+    await readerView.dispatchEvent("wheel", { deltaX: -50, deltaY: 0 });
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/2/,
+    );
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "第1話 見知らぬ空",
+    );
+
+    // 第2話先頭（progress = 0.0）で前話への2段階操作を検証
+    await readerView.evaluate((el) => {
+      el.scrollLeft = 0;
+      el.dispatchEvent(new Event("scroll"));
+    });
+    // 1回目の先頭操作でヒントトースト表示
+    await readerView.dispatchEvent("wheel", { deltaX: 50, deltaY: 0 });
+    await expect(boundaryToast).toBeVisible();
+    await expect(boundaryToast).toHaveText("もう一度スワイプで前の話へ");
+
+    // 2.5秒以内の2回目操作で前話（第1話）へ戻る
+    await readerView.dispatchEvent("wheel", { deltaX: 50, deltaY: 0 });
     await expect(page).toHaveURL(
       /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1/,
     );
@@ -951,7 +1010,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     expect(exitInfo.exitAppCount).toBe(1);
   });
 
-  test("設定画面での全フォント種別（5種）選択・画面余白（8px〜48px境界値）操作とサンプルプレビューおよびリーダー画面（縦書き・横書き）への組版反映が正常に機能する", async ({
+  test("設定画面での全フォント種別（5種）選択・画面余白（8px〜48px境界値）操作とサンプルプレビューおよびリーダー画面（縦書き・横書き）への組版反映が正常に機能する (AC-ST-17, AC-ST-18, AC-RD-21, SYS-REQ-09)", async ({
     page,
   }) => {
     // 1. 設定画面（/settings）へ遷移
@@ -1020,6 +1079,11 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
 
     // 4. 設定の永続化確認（リロード後も維持されていること）
     await page.reload();
+    await page.waitForFunction(
+      () =>
+        typeof window.__yommyServices !== "undefined" &&
+        window.__yommyServices.isReady === true,
+    );
     await expect(fontFamilySelect).toHaveValue("biz-ud-gothic");
     await expect(pageMarginValue).toHaveText("32px");
     await expect(samplePreview).toHaveAttribute(
@@ -1029,11 +1093,6 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(samplePreview).toHaveAttribute("data-page-margin", "32");
 
     // 5. 作品データをシードしてリーダー画面（SCR-03）へ直接遷移
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady,
-    );
     await page.evaluate(async () => {
       const services = window.__yommyServices!;
       const sampleUrl = "https://kakuyomu.jp/works/16817330658027210412";

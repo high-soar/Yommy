@@ -8,6 +8,11 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     await page.goto("/");
     await page.evaluate(() => localStorage.clear());
     await page.reload();
+    await page.waitForFunction(
+      () =>
+        typeof window.__yommyServices !== "undefined" &&
+        window.__yommyServices.isReady === true,
+    );
   });
 
   test("設定画面でのGoogle連携・端末Aでの作品閲覧自動Push・端末Bでの自動Pull復元・削除Tombstone伝播・401失効検知安全フォールバックが一連として正常に機能する", async ({
@@ -70,6 +75,11 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
       );
     });
     await page.reload();
+    await page.waitForFunction(
+      () =>
+        typeof window.__yommyServices !== "undefined" &&
+        window.__yommyServices.isReady === true,
+    );
 
     // 3. 本棚に作品カードが表示されていることを確認
     const novelCard = page.getByTestId("novel-card");
