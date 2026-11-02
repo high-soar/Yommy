@@ -30,6 +30,7 @@ tags:
   - page-margin
   - ho-23
   - ho-24
+  - ho-25
 related_specs:
   - docs/specs/changes/archive/issue-169-font-and-margin-customization.md
   - docs/specs/changes/archive/issue-170-cache-management-and-capacity-visualization.md
@@ -73,10 +74,13 @@ related_tests:
   - src/bridges/cloud-sync/mockCloudSyncBridge.test.ts
   - src/features/cloud-sync/services/syncEngine.test.ts
   - src/storage/repositories/appSettingsRepository.test.ts
+  - src/storage/repositories/chapterRepository.test.ts
   - src/storage/repositories/novelRepository.test.ts
   - src/storage/repositories/settingsRepository.test.ts
   - src/shared/utils/cache.test.ts
+  - src/shared/utils/formatByteSize.test.ts
   - src/shared/constants/cache.test.ts
+  - src/shared/constants/typography.test.ts
   - scripts/generate-icons.test.ts
   - scripts/android-build-config.test.ts
 ---
@@ -109,7 +113,7 @@ flowchart TB
     end
 
     subgraph StorageLayer ["2. Storage Layer (src/storage/*)"]
-        Repos["Repositories<br>(NovelRepository, ChapterRepository, SettingsRepository, AppSettingsRepository, QueueRepository［v0.5〜］)"]
+        Repos["Repositories<br>(NovelRepository, ChapterRepository, SettingsRepository, AppSettingsRepository, QueueRepository［v0.6〜］)"]
         DbAdapter["DatabaseAdapter Interface"]
         SqliteImpl["CapacitorSqliteAdapter<br>(Android 実機用)"]
         MemImpl["InMemoryDatabaseAdapter<br>(UT / Storybook / Playwright IT 用・resetTestDb())"]
@@ -171,7 +175,7 @@ Yommy/
     │   │   ├── types.ts               # HttpClientBridge インターフェース定義
     │   │   ├── capacitorHttpClient.ts # CapacitorHttp 実装（CORS回避・User-Agent・タイムアウト制御）
     │   │   └── mockHttpClient.ts      # UT / Storybook / IT 用フィクスチャ応答クライアント
-    │   └── webview/                   # 【WebViewDomBridge】内蔵WebView DOMキャプチャ（v0.5〜予定）
+    │   └── webview/                   # 【WebViewDomBridge】内蔵WebView DOMキャプチャ（v0.6〜予定）
     │       ├── types.ts
     │       └── webviewDomBridge.ts
     ├── features/                      # 【3. Viewer & UI Layer（画面・機能別モジュール）】
@@ -192,7 +196,7 @@ Yommy/
     │   │   ├── KakuyomuParser.ts
     │   │   ├── KakuyomuParser.test.ts
     │   │   └── __fixtures__/
-    │   └── narou/                     # 小説家になろう用パーサーとローカル HTML フィクスチャ（v0.5〜予定）
+    │   └── narou/                     # 小説家になろう用パーサーとローカル HTML フィクスチャ（v0.6〜予定）
     │       ├── NarouParser.ts
     │       ├── NarouParser.test.ts
     │       └── __fixtures__/
@@ -209,10 +213,10 @@ Yommy/
     │       ├── chapterRepository.ts   # chapters テーブル操作（本文キャッシュ保存・削除・容量集計）
     │       ├── settingsRepository.ts  # reader_settings 操作
     │       ├── appSettingsRepository.ts # app_settings 操作（ソート順等永続化）
-    │       └── queueRepository.ts     # download_queue テーブル操作（v0.5〜予定）
+    │       └── queueRepository.ts     # download_queue テーブル操作（v0.6〜予定）
     └── shared/                        # 複数機能で共有する汎用 UI コンポーネント・ユーティリティ
-        ├── constants/                 # キャッシュ・レートリミット等の共有定数（cache.ts）
-        ├── utils/                     # キャッシュ判定等の共有ユーティリティ（cache.ts）
+        ├── constants/                 # キャッシュ・レートリミット・タイポグラフィ等の共有定数（cache.ts, typography.ts）
+        ├── utils/                     # キャッシュ判定・容量フォーマット等の共有ユーティリティ（cache.ts, formatByteSize.ts）
         └── ui/                        # BottomTabBar 等共通コンポーネント（モバイル幅での改行防止縦並び flex-col sm:flex-row ＋ whitespace-nowrap 最適化）
 ├── docs/                              # 【ドキュメント正本（OKF）】
 └── test/                              # 【統合・結合テスト】Playwright 実ブラウザ IT シナリオ
@@ -415,6 +419,50 @@ export interface DeletedNovelRecord {
   deletedAt: number;
 }
 
+export type WritingMode = "vertical-rl" | "horizontal-tb";
+export type ReaderTheme = "light" | "sepia" | "dark" | "black";
+
+export interface NovelRecord {
+  id: string;
+  siteType: "kakuyomu" | "narou";
+  remoteWorkId: string;
+  canonicalUrl: string;
+  title: string;
+  author: string;
+  synopsis: string;
+  totalChapters: number;
+  cachedChapters: number;
+  totalByteSize: number;
+  bookmarkChapterIndex: number | null;
+  bookmarkScrollProgress: number;
+  isFavorite: boolean;
+  hasNewUpdate?: boolean;
+  latestEpisodePublishedAt?: string | null;
+  lastCheckedAt: string | null;
+  lastReadAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type NovelSummary = Omit<NovelRecord, "synopsis">;
+
+export interface ChapterRecord {
+  id: string;
+  novelId: string;
+  chapterIndex: number;
+  remoteChapterId: string;
+  partTitle: string | null;
+  title: string;
+  url: string;
+  bodyHtml: string | null;
+  byteSize: number;
+  isRead: boolean;
+  publishedAt: string | null;
+  downloadedAt: string | null;
+}
+
+export type ChapterSummary = Omit<ChapterRecord, "bodyHtml">;
+
 export interface NovelRepository {
   listNovels(sortOrder?: BookshelfSortOrder): Promise<NovelSummary[]>;
   getNovelById(novelId: string): Promise<NovelRecord | null>;
@@ -469,8 +517,8 @@ export interface ChapterRepository {
     novelId: string,
     options?: { onlyRead?: boolean },
   ): Promise<number>;
-  deleteAllCachedBodies?(options?: { onlyRead?: boolean }): Promise<number>;
-  getStorageCacheSummary?(): Promise<{
+  deleteAllCachedBodies(options?: { onlyRead?: boolean }): Promise<number>;
+  getStorageCacheSummary(): Promise<{
     totalCachedChapters: number;
     totalByteSize: number;
   }>;
