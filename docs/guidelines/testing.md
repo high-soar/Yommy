@@ -132,7 +132,22 @@ Git Worktree を用いた並行開発やフォーク環境において、環境�
 
 - 結合テスト（`test/it/`）のシナリオ（`SCN-01`〜）は、今回追加した機能だけを孤立してテストするのではなく、**これまでに実装した全機能が現在のシステム仕様のもとで一貫して動作することを保証する統合スイート** として維持・進化させる。
 - 過去のテストシナリオを古い仕様のまま放置・スキップ（`.skip`）することは禁止し、常に `test/it/` 全件 100% PASS を維持する。
-- **結合テストにおけるページリロード後の確定的初期化待機（R1-31 再発防止）**: `page.reload()` 実行直後は、DOM 要素探索を開始する前に必ず `await page.waitForFunction(() => typeof window.__yommyServices !== "undefined" && window.__yommyServices.isReady)` を呼び出して DB およびサービスの初期化完了を決定論的に待機し、テストの Flakiness を根絶すること。
+- **結合テストにおけるページリロード後の確定的初期化待機（R1-31 / R1-24 再発防止）**: `page.reload()` 実行直後は、DOM 要素探索やアサーションを開始する前に**必ず直後**に `await page.waitForFunction(() => typeof window.__yommyServices !== "undefined" && window.__yommyServices.isReady === true)` を呼び出して DB およびサービスの初期化完了を決定論的に待機し、テストの Flakiness を根絶すること。DOM アサーション実行後に待機を置くような順序逆転は固く禁止する。
+
+### 3.4 キャッシュ管理・同期整合性・イベント分離のテスト規約（v0.5 Kaizen）
+
+1. **ローカルキャッシュ削除と同期タイムスタンプ不変性（R1-01）**:
+   - `chapterRepository.deleteCachedBodies` や `deleteAllCachedBodies` 等のローカルキャッシュ削除処理は、ローカルストレージの容量整理に過ぎず作品メタデータ更新ではない。
+   - `novels.updated_at` を更新してしまうと Google Drive 同期の LWW 競合調停および論理削除 Tombstone 伝播が破壊されるため、`updated_at` を更新してはならない。単体テストにおいて、キャッシュ削除実行後に `novels.updated_at` が変更されていないことを明示的にアサートすること。
+2. **ページめくりモードにおける native DOM `scroll` イベント隔離（R1-22）**:
+   - 実効 `paged` モードにおいて、スクロール位置リセット（`scrollLeft = 0; scrollTop = 0;`）や DOM フォーカス移動で発生する native DOM `scroll` イベントから `onScrollProgressChange` を発火させてはならない（しおり進捗が 0.0 で上書き巻き戻るバグを防止）。
+   - 単体テストにおいて、実効 `paged` モード時に `scroll` イベントが発生しても `onScrollProgressChange` が呼び出されないことを検証すること。
+3. **モバイル WebView における PointerEvent と TouchEvent の参照分離（R1-27）**:
+   - ネイティブスクロールが共存する連続スクロールモードでは、WebView の仕様により指移動開始直後に `pointercancel` が発火する。
+   - PointerEvent 用座標参照（`pointerStartRef`）と TouchEvent 用座標参照（`touchStartRef`）を別個の ref として分離管理し、`pointercancel` で Touch 座標を誤破棄しないこと。
+4. **非同期ダイアログのアクセシビリティと Unhandled Rejection 防止（R1-21）**:
+   - 削除中・処理中（`isClearing` / `isSubmitting`）は Escape キーや外周クリックによるダイアログ即時閉鎖を抑止（ガード）すること。
+   - ダイアログ内の非同期コールバック呼び出しは `try/finally` で囲み、コールバック例外時でも Unhandled Promise Rejection を防止しつつダイアログ閉鎖等の後始末を確実に実行すること。また、Hook 側には `isMountedRef` によるアンマウント保護を徹底すること。
 
 ---
 
