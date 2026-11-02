@@ -1252,6 +1252,57 @@ describe("useReaderGestures", () => {
       expect(result.current.boundaryHint).toBeNull();
     });
 
+    it("scroll モードで touchstart 後に WebView による pointercancel が発生しても touch 追跡が維持され次話遷移できること (R1-27)", () => {
+      const { result } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          pagingMode: "scroll",
+          writingMode: "vertical-rl",
+        }),
+      );
+
+      // 末尾到達
+      act(() => {
+        result.current.handleScrollProgressChange(1.0);
+      });
+
+      // 1回目のタッチ操作: touchstart → pointercancel → touchmove → touchend
+      act(() => {
+        result.current.handleTouchStart?.(
+          createTouchEvent("touchstart", [{ clientX: 200, clientY: 100 }]),
+        );
+        // Android WebView がスクロール判定で pointercancel を発火
+        result.current.handlePointerCancel();
+        result.current.handleTouchMove?.(
+          createTouchEvent("touchmove", [{ clientX: 150, clientY: 100 }]),
+        );
+        result.current.handleTouchEnd?.(
+          createTouchEvent("touchend", [{ clientX: 150, clientY: 100 }]),
+        );
+      });
+
+      // pointercancel で touchStartRef が消去されず、1回目の境界ヒントが表示されること
+      expect(defaultOptions.onNextChapter).not.toHaveBeenCalled();
+      expect(result.current.boundaryHint).toBe("もう一度スワイプで次の話へ");
+
+      // 2回目タッチ操作（2.5秒以内）: touchstart → pointercancel → touchmove
+      vi.advanceTimersByTime(500);
+      act(() => {
+        result.current.handleTouchStart?.(
+          createTouchEvent("touchstart", [{ clientX: 200, clientY: 100 }]),
+        );
+        result.current.handlePointerCancel();
+        result.current.handleTouchMove?.(
+          createTouchEvent("touchmove", [{ clientX: 150, clientY: 100 }]),
+        );
+        result.current.handleTouchEnd?.(
+          createTouchEvent("touchend", [{ clientX: 150, clientY: 100 }]),
+        );
+      });
+
+      expect(defaultOptions.onNextChapter).toHaveBeenCalledTimes(1);
+    });
+
     it("横書き連続スクロールモードでの2段階スワイプ（dy < -30 で次話、dy > 30 で前話）", () => {
       const onNextChapter = vi.fn();
       const onPrevChapter = vi.fn();

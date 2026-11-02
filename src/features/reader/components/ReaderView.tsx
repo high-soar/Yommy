@@ -253,15 +253,16 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     onTotalPagesChange,
   ]);
 
-  // スクロール操作時の進捗率（0.0 〜 1.0）算出
+  // スクロール操作時の進捗率（0.0 〜 1.0）算出（実効 paged 時はスクロール進捗を通知せず先頭巻き戻しを防止: R1-22）
   const handleScroll = useCallback(() => {
+    if (isPaged) return;
     const el = containerRef.current;
     if (!el) return;
     if (!onScrollProgressChange) return;
 
     const progress = calculateScrollProgress(el, writingMode);
     onScrollProgressChange(progress);
-  }, [writingMode, onScrollProgressChange]);
+  }, [isPaged, writingMode, onScrollProgressChange]);
 
   // マウント時および bodyHtml / writingMode / initialScrollProgress / pagingMode 変化時のスクロール位置復元
   useEffect(() => {

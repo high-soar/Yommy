@@ -103,6 +103,11 @@ export function useReaderGestures({
     initialBoundaryHint,
   );
 
+  // ポインターイベント用座標保持（R1-27: TouchEvent と分離し pointercancel による破棄を防止）
+  const pointerStartRef = useRef<{ x: number; y: number; time: number } | null>(
+    null,
+  );
+  // タッチイベント用座標保持（実機 WebView でのネイティブスクロール共存・境界スワイプ用）
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(
     null,
   );
@@ -213,7 +218,7 @@ export function useReaderGestures({
   // Pointer Down
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
-      touchStartRef.current = {
+      pointerStartRef.current = {
         x: e.clientX,
         y: e.clientY,
         time: Date.now(),
@@ -232,10 +237,10 @@ export function useReaderGestures({
   // Pointer Move
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
-      if (!touchStartRef.current) return;
+      if (!pointerStartRef.current) return;
 
-      const dx = e.clientX - touchStartRef.current.x;
-      const dy = e.clientY - touchStartRef.current.y;
+      const dx = e.clientX - pointerStartRef.current.x;
+      const dy = e.clientY - pointerStartRef.current.y;
 
       if (!isPaged) {
         // 連続スクロールモード時の2段階スワイプ判定
@@ -306,16 +311,16 @@ export function useReaderGestures({
   // Pointer Up
   const handlePointerUp = useCallback(
     (e: React.PointerEvent) => {
-      if (!touchStartRef.current) return;
+      if (!pointerStartRef.current) return;
 
-      const dx = e.clientX - touchStartRef.current.x;
-      const dy = e.clientY - touchStartRef.current.y;
-      const dt = Date.now() - touchStartRef.current.time;
+      const dx = e.clientX - pointerStartRef.current.x;
+      const dy = e.clientY - pointerStartRef.current.y;
+      const dt = Date.now() - pointerStartRef.current.time;
       const distance = Math.hypot(dx, dy);
       const velocity = dt > 0 ? Math.abs(dx) / dt : 0;
       const width = getContainerWidth();
 
-      touchStartRef.current = null;
+      pointerStartRef.current = null;
       hasTriggeredInGestureRef.current = false;
 
       if (!isPaged) {
@@ -483,9 +488,9 @@ export function useReaderGestures({
     ],
   );
 
-  // Pointer Cancel
+  // Pointer Cancel（R1-27: pointerStartRef のみをリセットし、touchStartRef の境界スワイプ追跡を維持）
   const handlePointerCancel = useCallback(() => {
-    touchStartRef.current = null;
+    pointerStartRef.current = null;
     isDraggingRef.current = false;
     hasTriggeredInGestureRef.current = false;
     if (isPaged) {

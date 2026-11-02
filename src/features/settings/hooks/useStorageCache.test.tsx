@@ -114,10 +114,16 @@ describe("useStorageCache", () => {
     });
   });
 
-  it("chapterRepository または getStorageCacheSummary が未定義の場合は安全にフォールバックすること", async () => {
+  it("getStorageCacheSummary が例外をスローした場合、前回のサマリーを維持し error を設定すること (R1-02)", async () => {
+    let shouldFail = false;
     const services = createMockServices({
       chapterRepoOverrides: {
-        getStorageCacheSummary: undefined,
+        getStorageCacheSummary: vi.fn(async () => {
+          if (shouldFail) {
+            throw new Error("DB 読み込みエラー");
+          }
+          return { totalCachedChapters: 5, totalByteSize: 5000 };
+        }),
       },
     });
 
@@ -132,11 +138,33 @@ describe("useStorageCache", () => {
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
     });
-
     expect(result.current.summary).toEqual({
-      totalCachedChapters: 0,
-      totalByteSize: 0,
+      totalCachedChapters: 5,
+      totalByteSize: 5000,
     });
+    expect(result.current.error).toBeNull();
+
+    // 再取得で失敗させる
+    shouldFail = true;
+    await act(async () => {
+      await expect(result.current.refreshSummary()).rejects.toThrow(
+        "DB 読み込みエラー",
+      );
+    });
+
+    // R1-02: 取得失敗時も前回のサマリーを維持（0 B にリセットしない）
+    expect(result.current.summary).toEqual({
+      totalCachedChapters: 5,
+      totalByteSize: 5000,
+    });
+    expect(result.current.error).toBe("DB 読み込みエラー");
+
+    // 再取得成功でエラーが消去されること (R1-02)
+    shouldFail = false;
+    await act(async () => {
+      await result.current.refreshSummary();
+    });
+    expect(result.current.error).toBeNull();
   });
 
   it("chapterRepository 自体が null の場合も安全にフォールバックすること", async () => {
@@ -313,10 +341,18 @@ describe("useStorageCache", () => {
     expect(result.current.isClearing).toBe(false);
   });
 
-  it("deleteAllCachedBodies が未定義の場合はエラーをセットして例外をスローすること", async () => {
+  it("clearCache 内で refreshSummary が失敗した場合、完了通知を設定せず error を設定すること (R1-02)", async () => {
+    let callCount = 0;
     const services = createMockServices({
       chapterRepoOverrides: {
-        deleteAllCachedBodies: undefined,
+        deleteAllCachedBodies: vi.fn(async () => 3),
+        getStorageCacheSummary: vi.fn(async () => {
+          callCount++;
+          if (callCount > 1) {
+            throw new Error("再集計エラー");
+          }
+          return { totalCachedChapters: 3, totalByteSize: 3000 };
+        }),
       },
     });
 
@@ -334,12 +370,54 @@ describe("useStorageCache", () => {
 
     await act(async () => {
       await expect(
-        result.current.clearCache({ onlyRead: true }),
-      ).rejects.toThrow("キャッシュ削除機能が利用できません");
+        result.current.clearCache({ onlyRead: false }),
+      ).rejects.toThrow("再集計エラー");
     });
 
-    expect(result.current.error).toBe("キャッシュ削除機能が利用できません");
+    // R1-02: 再取得失敗時は成功通知を設定せず、エラーを設定
+    expect(result.current.notice).toBeNull();
+    expect(result.current.error).toBe("再集計エラー");
     expect(result.current.isClearing).toBe(false);
+  });
+
+  it("アンマウント後に clearCache が完了しても state 更新を行わないこと (R1-21)", async () => {
+    let resolveDelete!: (count: number) => void;
+    const services = createMockServices({
+      chapterRepoOverrides: {
+        deleteAllCachedBodies: vi.fn(
+          () =>
+            new Promise<number>((resolve) => {
+              resolveDelete = resolve;
+            }),
+        ),
+      },
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ServiceContext.Provider value={services}>
+        {children}
+      </ServiceContext.Provider>
+    );
+
+    const { result, unmount } = renderHook(() => useStorageCache(), {
+      wrapper,
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    let clearPromise: Promise<number> | undefined;
+    act(() => {
+      clearPromise = result.current.clearCache({ onlyRead: false });
+    });
+
+    unmount();
+
+    await act(async () => {
+      resolveDelete(5);
+      await clearPromise;
+    });
   });
 
   it("chapterRepository 自体が null の状態で clearCache を呼び出した場合もエラーをスローすること", async () => {
@@ -461,5 +539,31 @@ describe("useStorageCache", () => {
     });
 
     expect(result.current.summary.totalCachedChapters).toBe(15);
+  });
+
+  it("アンマウント後に clearCache を呼び出した場合、早期リターンして 0 を返すこと", async () => {
+    const services = createMockServices();
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ServiceContext.Provider value={services}>
+        {children}
+      </ServiceContext.Provider>
+    );
+
+    const { result, unmount } = renderHook(() => useStorageCache(), {
+      wrapper,
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    unmount();
+
+    let deleted = -1;
+    await act(async () => {
+      deleted = await result.current.clearCache({ onlyRead: false });
+    });
+
+    expect(deleted).toBe(0);
   });
 });

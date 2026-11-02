@@ -135,6 +135,11 @@ function createMockChapterRepository(
       }
     },
     deleteCachedBodies: async () => 0,
+    deleteAllCachedBodies: async () => 0,
+    getStorageCacheSummary: async () => ({
+      totalCachedChapters: 0,
+      totalByteSize: 0,
+    }),
   };
 }
 
@@ -179,6 +184,8 @@ const loadingChapterRepo: ChapterRepository = {
   saveChapterBody: () => new Promise(() => {}),
   markChapterRead: () => new Promise(() => {}),
   deleteCachedBodies: () => new Promise(() => {}),
+  deleteAllCachedBodies: () => new Promise(() => {}),
+  getStorageCacheSummary: () => new Promise(() => {}),
 };
 
 const meta: Meta<typeof ReaderContainer> = {

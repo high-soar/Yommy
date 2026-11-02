@@ -164,6 +164,11 @@ function createMockChapterRepo(
     },
     markChapterRead: markChapterReadSpy,
     deleteCachedBodies: async () => 0,
+    deleteAllCachedBodies: async () => 0,
+    getStorageCacheSummary: async () => ({
+      totalCachedChapters: 0,
+      totalByteSize: 0,
+    }),
   };
   return { repo, markChapterReadSpy };
 }

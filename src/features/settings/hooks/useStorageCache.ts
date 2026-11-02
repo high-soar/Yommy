@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useServices } from "../../../app/ServiceProvider";
 
 /**
@@ -36,6 +36,14 @@ export interface UseStorageCacheResult {
  */
 export function useStorageCache(): UseStorageCacheResult {
   const { chapterRepository, isReady } = useServices();
+  const isMountedRef = useRef<boolean>(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const [summary, setSummary] = useState<StorageCacheSummary>({
     totalCachedChapters: 0,
@@ -46,25 +54,37 @@ export function useStorageCache(): UseStorageCacheResult {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const refreshSummary = useCallback(async () => {
+  const refreshSummary = useCallback(async (): Promise<void> => {
+    if (!isMountedRef.current) return;
     setIsLoading(true);
+    // R1-02: 再取得開始時に前回のエラーをクリア
+    setError(null);
     try {
-      const getSummary = chapterRepository?.getStorageCacheSummary;
-      if (typeof getSummary === "function") {
-        const result = await getSummary.call(chapterRepository);
+      if (!chapterRepository) {
+        if (isMountedRef.current) {
+          setSummary({ totalCachedChapters: 0, totalByteSize: 0 });
+        }
+        return;
+      }
+      // R1-08: 不要な typeof === "function" の防御分岐を整理
+      const result = await chapterRepository.getStorageCacheSummary();
+      if (isMountedRef.current) {
         setSummary(result);
-      } else {
-        setSummary({ totalCachedChapters: 0, totalByteSize: 0 });
       }
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "キャッシュ情報の取得に失敗しました",
-      );
-      setSummary({ totalCachedChapters: 0, totalByteSize: 0 });
+      if (isMountedRef.current) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "キャッシュ情報の取得に失敗しました",
+        );
+        // R1-02: 取得失敗時は前回の summary を維持し 0 B 誤表示を防止
+      }
+      throw err;
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [chapterRepository]);
 
@@ -72,32 +92,43 @@ export function useStorageCache(): UseStorageCacheResult {
     if (!isReady) {
       return;
     }
-    void refreshSummary();
+    void refreshSummary().catch(() => {
+      // 初期ロード時のエラーは setError 済みのため unhandled rejection を防ぐ
+    });
   }, [isReady, refreshSummary]);
 
   const clearCache = useCallback(
     async (options: { onlyRead: boolean }): Promise<number> => {
+      if (!isMountedRef.current) return 0;
       setIsClearing(true);
       setError(null);
       setNotice(null);
 
       let deletedCount = 0;
       try {
-        const deleteBodies = chapterRepository?.deleteAllCachedBodies;
-        if (typeof deleteBodies !== "function") {
+        if (!chapterRepository) {
           throw new Error("キャッシュ削除機能が利用できません");
         }
-
-        deletedCount = await deleteBodies.call(chapterRepository, options);
+        // R1-08: 不要な typeof === "function" の防御分岐を整理
+        deletedCount = await chapterRepository.deleteAllCachedBodies(options);
+        // R1-02: 再取得が成功した場合のみ完了通知を設定（失敗時は catch 側で error 設定・通知非表示）
         await refreshSummary();
-        setNotice(`本文キャッシュを一括削除しました（${deletedCount}話）`);
+        if (isMountedRef.current) {
+          setNotice(`本文キャッシュを一括削除しました（${deletedCount}話）`);
+        }
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "キャッシュの削除に失敗しました",
-        );
+        if (isMountedRef.current) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "キャッシュの削除に失敗しました",
+          );
+        }
         throw err;
       } finally {
-        setIsClearing(false);
+        if (isMountedRef.current) {
+          setIsClearing(false);
+        }
       }
       return deletedCount;
     },
