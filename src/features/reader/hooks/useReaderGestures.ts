@@ -269,9 +269,9 @@ export function useReaderGestures({
 
       if (!isDraggingRef.current) return;
 
-      // 境界判定（縦書きページめくり: 右ドラッグ dx > 0 で前話、左ドラッグ dx < 0 で次話）
-      const isNextBoundary = currentPage >= totalPages && dx > 0;
-      const isPrevBoundary = currentPage <= 1 && dx < 0;
+      // 境界判定（縦書きページめくり: 左ドラッグ dx < 0 で次話、右ドラッグ dx > 0 で前話）
+      const isNextBoundary = currentPage >= totalPages && dx < 0;
+      const isPrevBoundary = currentPage <= 1 && dx > 0;
 
       // ラバーバンド減衰（0.3倍）
       let effectiveOffset = dx;
@@ -414,8 +414,8 @@ export function useReaderGestures({
       }
 
       // 2. ドラッグ離上判定
-      const isNextBoundary = currentPage >= totalPages && dx > 0;
-      const isPrevBoundary = currentPage <= 1 && dx < 0;
+      const isNextBoundary = currentPage >= totalPages && dx < 0;
+      const isPrevBoundary = currentPage <= 1 && dx > 0;
 
       const triggerAnimationEnd = () => {
         setIsAnimating(true);
@@ -448,7 +448,7 @@ export function useReaderGestures({
       const isThresholdMet = Math.abs(dx) >= width * 0.3 || velocity > 0.5;
 
       if (isThresholdMet) {
-        const isNextPage = dx > 0;
+        const isNextPage = dx < 0; // 左スワイプで次ページ（左開き）
         if (isNextPage) {
           if (currentPage < totalPages) {
             onPageChange?.(currentPage + 1);

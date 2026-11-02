@@ -282,9 +282,10 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
 
     const readerContent = page.getByTestId("reader-content");
     await expect(readerContent).toBeVisible();
-    // 縦書きマルチカラム組版時の columnGap は pageMarginPx * 2 = 56px
+    // 縦書きページめくり組版時の padding は pageMarginPx = 28px
     const readerContentStyle = await readerContent.getAttribute("style");
-    expect(readerContentStyle).toContain("column-gap: 56px");
+    expect(readerContentStyle).toContain("padding: 28px");
+    expect(readerContentStyle).toContain("transform: translateX(0px)");
 
     // デフォルト縦書き時のページめくりモード初期有効化・行途切れなし（overflow-hidden）・ページインジケーター（1 / N）の検証（AC-RD-15, AC-RD-16）
     await expect(readerView).toHaveAttribute("data-paging-mode", "auto");
@@ -447,14 +448,14 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     );
 
     // 最終ページでのドラッグ離上によるシームレス次話遷移（第2話、AC-RD-18, TR-05）
-    // 画面幅の30%以上左から右（→）へドラッグしてヒントバッジが表示されることを確認
+    // 画面幅の30%以上右から左（←）へドラッグしてヒントバッジが表示されることを確認
     if (readerBox) {
-      const startX = readerBox.x + 100;
+      const startX = readerBox.x + readerBox.width - 100;
       const startY = readerBox.y + readerBox.height * 0.4;
       const dragDistance = readerBox.width * 0.35;
       await page.mouse.move(startX, startY);
       await page.mouse.down();
-      await page.mouse.move(startX + dragDistance, startY, { steps: 10 });
+      await page.mouse.move(startX - dragDistance, startY, { steps: 10 });
       await expect(boundaryHint).toBeVisible();
       await expect(boundaryHint).toHaveText("指を離して次の話へ");
 
@@ -471,14 +472,14 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     );
     await expect(readerView).toHaveAttribute("data-current-page", "1");
 
-    // 第2話の先頭ページでの右から左（←）ドラッグ離上によるシームレス前話遷移および末尾ページ復元（R2-04, AC-RD-18, TR-05）
+    // 第2話の先頭ページでの左から右（→）ドラッグ離上によるシームレス前話遷移および末尾ページ復元（R2-04, AC-RD-18, TR-05）
     if (readerBox) {
-      const startX = readerBox.x + readerBox.width - 100;
+      const startX = readerBox.x + 100;
       const startY = readerBox.y + readerBox.height * 0.4;
       const dragDistance = readerBox.width * 0.35;
       await page.mouse.move(startX, startY);
       await page.mouse.down();
-      await page.mouse.move(startX - dragDistance, startY, { steps: 10 });
+      await page.mouse.move(startX + dragDistance, startY, { steps: 10 });
       await expect(boundaryHint).toBeVisible();
       await expect(boundaryHint).toHaveText("指を離して前の話へ");
 
@@ -500,14 +501,14 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       `${totalPagesStr} / ${totalPagesStr}`,
     );
 
-    // 再度最終ページでの左から右（→）ドラッグ離上で第2話へ遷移
+    // 再度最終ページでの右から左（←）ドラッグ離上で第2話へ遷移
     if (readerBox) {
-      const startX = readerBox.x + 100;
+      const startX = readerBox.x + readerBox.width - 100;
       const startY = readerBox.y + readerBox.height * 0.4;
       const dragDistance = readerBox.width * 0.35;
       await page.mouse.move(startX, startY);
       await page.mouse.down();
-      await page.mouse.move(startX + dragDistance, startY, { steps: 10 });
+      await page.mouse.move(startX - dragDistance, startY, { steps: 10 });
       await page.mouse.up();
     }
     await expect(page).toHaveURL(
@@ -1125,9 +1126,10 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
 
     const readerContent = page.getByTestId("reader-content");
     await expect(readerContent).toBeVisible();
-    // 縦書きマルチカラムの段送り余白 columnGap = pageMarginPx * 2 = 64px
+    // 縦書きページめくり組版時の余白 padding = pageMarginPx = 32px
     const readerContentStyle = await readerContent.getAttribute("style");
-    expect(readerContentStyle).toContain("column-gap: 64px");
+    expect(readerContentStyle).toContain("padding: 32px");
+    expect(readerContentStyle).toContain("transform: translateX(0px)");
 
     // ページ送り（次ページへタップ）が正常に機能すること
     const readerBox = await readerView.boundingBox();
