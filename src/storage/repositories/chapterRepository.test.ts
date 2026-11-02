@@ -217,6 +217,7 @@ describe("SqlChapterRepository", () => {
     });
 
     it("options 未指定時は全キャッシュを削除し親作品の集計値が0になり既読フラグは維持されること", async () => {
+      const novelBefore = await novelRepo.getNovelById(novelId);
       const deletedCount = await chapterRepo.deleteCachedBodies(novelId);
       expect(deletedCount).toBe(3);
 
@@ -229,6 +230,19 @@ describe("SqlChapterRepository", () => {
       const novel = await novelRepo.getNovelById(novelId);
       expect(novel?.cachedChapters).toBe(0);
       expect(novel?.totalByteSize).toBe(0);
+      // R1-01: キャッシュ削除で novels.updated_at が更新されないこと（同期LWW保護）
+      expect(novel?.updatedAt).toBe(novelBefore?.updatedAt);
+    });
+
+    it("削除対象のキャッシュが存在しない場合は 0 を返し、updatedAt も変更されないこと (R1-01)", async () => {
+      await chapterRepo.deleteCachedBodies(novelId);
+      const novelBefore = await novelRepo.getNovelById(novelId);
+
+      const deletedCount = await chapterRepo.deleteCachedBodies(novelId);
+      expect(deletedCount).toBe(0);
+
+      const novelAfter = await novelRepo.getNovelById(novelId);
+      expect(novelAfter?.updatedAt).toBe(novelBefore?.updatedAt);
     });
 
     it("onlyRead: true の場合は既読エピソードのみキャッシュが削除され未読分は維持されること", async () => {
@@ -450,6 +464,9 @@ describe("SqlChapterRepository", () => {
     });
 
     it("options 未指定（または onlyRead: false）時は全作品の全本文キャッシュを削除し作品ステータスが0に再計算されること", async () => {
+      const novel1Before = await novelRepo.getNovelById(novelId);
+      const novel2Before = await novelRepo.getNovelById(secondNovelId);
+
       const deletedCount = await chapterRepo.deleteAllCachedBodies();
       expect(deletedCount).toBe(4);
 
@@ -488,6 +505,9 @@ describe("SqlChapterRepository", () => {
       expect(novel2?.totalByteSize).toBe(0);
       expect(novel2?.bookmarkChapterIndex).toBe(1);
       expect(novel2?.bookmarkScrollProgress).toBe(0.8);
+      // R1-01: キャッシュ一括削除で novels.updated_at が更新されないこと（同期LWW保護）
+      expect(novel1?.updatedAt).toBe(novel1Before?.updatedAt);
+      expect(novel2?.updatedAt).toBe(novel2Before?.updatedAt);
     });
 
     it("onlyRead: false を明示指定した場合も全キャッシュが削除されること", async () => {

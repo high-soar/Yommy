@@ -36,14 +36,14 @@ export const StorageCacheSection: React.FC<StorageCacheSectionProps> = ({
 }) => {
   const [showDialog, setShowDialog] = useState<boolean>(initialShowDialog);
 
-  // ダイアログ表示時の Escape キー制御（キーボードアクセシビリティ対応）
+  // ダイアログ表示時の Escape キー制御（キーボードアクセシビリティ対応: R1-21 削除中ガード）
   useEffect(() => {
     if (!showDialog) {
       return;
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !isClearing) {
         setShowDialog(false);
       }
     };
@@ -52,16 +52,26 @@ export const StorageCacheSection: React.FC<StorageCacheSectionProps> = ({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [showDialog]);
+  }, [showDialog, isClearing]);
 
   const handleConfirmClearRead = async () => {
-    setShowDialog(false);
-    await onClearCache?.({ onlyRead: true });
+    try {
+      await onClearCache?.({ onlyRead: true });
+    } catch {
+      // エラーは hook/props 側で error state に設定されるため Unhandled Rejection を防止
+    } finally {
+      setShowDialog(false);
+    }
   };
 
   const handleConfirmClearAll = async () => {
-    setShowDialog(false);
-    await onClearCache?.({ onlyRead: false });
+    try {
+      await onClearCache?.({ onlyRead: false });
+    } catch {
+      // 同上
+    } finally {
+      setShowDialog(false);
+    }
   };
 
   const handleCancelDialog = () => {
@@ -140,9 +150,17 @@ export const StorageCacheSection: React.FC<StorageCacheSectionProps> = ({
           aria-modal="true"
           aria-labelledby="global-clear-cache-dialog-title"
           data-testid="global-clear-cache-dialog"
+          onClick={() => {
+            if (!isClearing) {
+              setShowDialog(false);
+            }
+          }}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
         >
-          <div className="bg-white dark:bg-slate-800 rounded-xl max-w-sm w-full p-5 shadow-xl border border-slate-200 dark:border-slate-700 space-y-4">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-slate-800 rounded-xl max-w-sm w-full p-5 shadow-xl border border-slate-200 dark:border-slate-700 space-y-4"
+          >
             <h3
               id="global-clear-cache-dialog-title"
               className="text-base font-bold text-slate-900 dark:text-slate-100"

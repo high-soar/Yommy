@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
@@ -229,7 +229,101 @@ describe("StorageCacheSection", () => {
       ).not.toBeInTheDocument();
     });
 
-    it("ダイアログ表示中に isClearing が true のときはダイアログの各ボタンが disabled になること", () => {
+    it("ダイアログ表示中に isClearing が true のときは Escape キーを押してもダイアログが閉じないこと (R1-21)", async () => {
+      const user = userEvent.setup();
+
+      render(
+        <StorageCacheSection
+          summary={{ totalCachedChapters: 10, totalByteSize: 102400 }}
+          initialShowDialog={true}
+          isClearing={true}
+        />,
+      );
+
+      await user.keyboard("{Escape}");
+      expect(
+        screen.getByTestId("global-clear-cache-dialog"),
+      ).toBeInTheDocument();
+    });
+
+    it("ダイアログ外周（backdrop）クリックでダイアログが閉じ、isClearing 中は閉じないこと (R1-21)", async () => {
+      const user = userEvent.setup();
+
+      const { unmount } = render(
+        <StorageCacheSection
+          summary={{ totalCachedChapters: 10, totalByteSize: 102400 }}
+          initialShowDialog={true}
+          isClearing={false}
+        />,
+      );
+
+      // backdrop クリックで閉じる
+      await user.click(screen.getByTestId("global-clear-cache-dialog"));
+      expect(
+        screen.queryByTestId("global-clear-cache-dialog"),
+      ).not.toBeInTheDocument();
+
+      unmount();
+
+      // isClearing: true 時は backdrop クリックでも閉じない
+      render(
+        <StorageCacheSection
+          summary={{ totalCachedChapters: 10, totalByteSize: 102400 }}
+          initialShowDialog={true}
+          isClearing={true}
+        />,
+      );
+      await user.click(screen.getByTestId("global-clear-cache-dialog"));
+      expect(
+        screen.getByTestId("global-clear-cache-dialog"),
+      ).toBeInTheDocument();
+    });
+
+    it("onClearCache が例外を投げた場合でも Unhandled Rejection にならずダイアログが閉じること (R1-21)", async () => {
+      const user = userEvent.setup();
+      const onClearCache = vi.fn().mockRejectedValue(new Error("削除処理例外"));
+
+      render(
+        <StorageCacheSection
+          summary={{ totalCachedChapters: 10, totalByteSize: 102400 }}
+          initialShowDialog={true}
+          onClearCache={onClearCache}
+        />,
+      );
+
+      await user.click(
+        screen.getByTestId("confirm-global-clear-all-cache-button"),
+      );
+
+      expect(onClearCache).toHaveBeenCalledWith({ onlyRead: false });
+      expect(
+        screen.queryByTestId("global-clear-cache-dialog"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("既読削除時に onClearCache が例外を投げた場合でも Unhandled Rejection にならずダイアログが閉じること (R1-21)", async () => {
+      const user = userEvent.setup();
+      const onClearCache = vi.fn().mockRejectedValue(new Error("既読削除例外"));
+
+      render(
+        <StorageCacheSection
+          summary={{ totalCachedChapters: 10, totalByteSize: 102400 }}
+          initialShowDialog={true}
+          onClearCache={onClearCache}
+        />,
+      );
+
+      await user.click(
+        screen.getByTestId("confirm-global-clear-read-cache-button"),
+      );
+
+      expect(onClearCache).toHaveBeenCalledWith({ onlyRead: true });
+      expect(
+        screen.queryByTestId("global-clear-cache-dialog"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("ダイアログ表示中に isClearing が true のときはダイアログの各ボタンが disabled になり、キャンセルをクリックしても閉じないこと", () => {
       render(
         <StorageCacheSection
           summary={{ totalCachedChapters: 10, totalByteSize: 102400 }}
@@ -244,9 +338,13 @@ describe("StorageCacheSection", () => {
       expect(
         screen.getByTestId("confirm-global-clear-all-cache-button"),
       ).toBeDisabled();
+      const cancelBtn = screen.getByTestId("cancel-global-clear-cache-button");
+      expect(cancelBtn).toBeDisabled();
+
+      fireEvent.click(cancelBtn);
       expect(
-        screen.getByTestId("cancel-global-clear-cache-button"),
-      ).toBeDisabled();
+        screen.getByTestId("global-clear-cache-dialog"),
+      ).toBeInTheDocument();
     });
 
     it("onClearCache が未定義の場合でもボタン押下時にエラーにならずダイアログが閉じること", async () => {

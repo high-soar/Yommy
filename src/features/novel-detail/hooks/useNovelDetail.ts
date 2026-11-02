@@ -505,13 +505,18 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
           novelId,
           options,
         );
+        setIsClearCacheDialogOpen(false);
+        if (deletedCount === 0) {
+          // R1-09: 削除0件時は無駄なDB再クエリを行わず早期リターン
+          setRefreshMessage("削除対象の本文キャッシュはありませんでした");
+          return 0;
+        }
         const [updatedNovel, updatedChapters] = await Promise.all([
           novelRepository.getNovelById(novelId),
           chapterRepository.listChaptersByNovelId(novelId),
         ]);
         setNovel(updatedNovel);
         setChapters(updatedChapters);
-        setIsClearCacheDialogOpen(false);
         setRefreshMessage(`本文キャッシュを削除しました（${deletedCount}話）`);
       } catch (err: unknown) {
         setError(extractErrorMessage(err, DEFAULT_CLEAR_CACHE_ERROR_MESSAGE));

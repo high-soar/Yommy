@@ -1561,6 +1561,46 @@ describe("useNovelDetail", () => {
         expect(result.current.chapters[1].downloadedAt).toBeNull();
       });
 
+      it("confirmClearCache で削除対象が 0 件のときは DB 再クエリを行わず早期通知メッセージが設定されること (R1-09)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedSampleNovel(novelRepo, 2);
+
+        const { result } = renderHook(() => useNovelDetail(seeded.id), {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+          }),
+        });
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        act(() => {
+          result.current.openClearCacheDialog();
+        });
+
+        const getNovelSpy = vi.spyOn(novelRepo, "getNovelById");
+        const listChaptersSpy = vi.spyOn(chapterRepo, "listChaptersByNovelId");
+
+        let deletedCount = 0;
+        await act(async () => {
+          deletedCount = await result.current.confirmClearCache({
+            onlyRead: false,
+          });
+        });
+
+        expect(deletedCount).toBe(0);
+        expect(result.current.isClearCacheDialogOpen).toBe(false);
+        expect(result.current.refreshMessage).toBe(
+          "削除対象の本文キャッシュはありませんでした",
+        );
+        expect(getNovelSpy).not.toHaveBeenCalled();
+        expect(listChaptersSpy).not.toHaveBeenCalled();
+      });
+
       it("confirmClearCache 失敗時（deleteCachedBodies で例外）はダイアログを開いたまま error がセットされること", async () => {
         const db = await resetTestDb();
         const novelRepo = new SqlNovelRepository(db);
