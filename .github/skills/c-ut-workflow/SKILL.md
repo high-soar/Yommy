@@ -67,6 +67,13 @@ MK 作業はファイル編集数やテスト・VRT 実行ログが多く、メ�
     - フルスクリーン UI の複数タッチゾーン（左右端ページめくり領域と最下部オーバーレイ起動領域など）は幾何学的に排他配置（例: `left-[20%] right-[20%]`）とし、境界座標タップの単体テストを作成すること。
   - **React Hooks の非同期タスク直列化・Abort ガード・参照安定性（原因 `A`/`S` 再発防止）**:
     - エピソード遷移や連続操作で再スケジュールされる非同期処理（先読み `startPrefetch` 等）は、先行 Promise の完了待機（`activePrefetchPromiseRef`）による直列化、`AbortSignal` の下位関数（`fetchAndSaveChapterBody`）への伝播、および HTTP 完了直後・DB 保存直前の `if (signal?.aborted) return` / マウント状態ガードを徹底すること。
+  - **モーダルダイアログ・非同期処理時のアクセシビリティ・堅牢性規律（原因 `L` 再発防止）**:
+    - 削除・送信等の非同期処理中（`isClearing` / `isSubmitting`）は、Escape キーおよびダイアログ外周（backdrop）クリックによるダイアログ即時閉鎖を確実にガードすること。
+    - ダイアログ内の非同期コールバック（`onConfirm` 等）実行は `try/finally` で囲み、コールバックが例外を投げた場合でも Unhandled Promise Rejection を防止しつつダイアログ閉鎖などの後始末を確実に完遂すること。
+    - 非同期処理を扱うカスタム Hook では、`isMountedRef` によるアンマウント後の State 更新防止ガードを設けること。
+  - **モバイル WebView におけるジェスチャーイベントの Pointer / Touch 分離規律（原因 `L` 再発防止）**:
+    - ネイティブスクロールが共存するモード（実効 `scroll` モード等）では、WebView の仕様によりスクロール開始直後に `pointercancel` が発火する。
+    - PointerEvent 用の開始座標（`pointerStartRef`）と TouchEvent 用の開始座標（`touchStartRef`）を別個の ref として分離管理し、`pointercancel` 発生時に Touch 側の座標情報を誤消去しないこと（端部到達後 2 段階スワイプ等のジェスチャー不発を防止）。
   - `*.test.tsx` で `composeStories` による全 Story 実行＋内部ロジック補完テストを記述する。
 - **失敗確認とコミット**: `npx vitest run <対象テスト>` を実行し、未実装により期待通り失敗することを確認して `test(<scope>): ...（Red）` をコミットする。
 
