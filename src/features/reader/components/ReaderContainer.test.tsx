@@ -630,6 +630,7 @@ describe("ReaderContainer", () => {
 
       await waitFor(() => {
         expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
       });
 
       updateBookmarkSpy.mockClear();
@@ -663,6 +664,7 @@ describe("ReaderContainer", () => {
 
       await waitFor(() => {
         expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
       });
 
       updateBookmarkSpy.mockClear();
