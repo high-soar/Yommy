@@ -3,7 +3,7 @@ type: spec-delta
 title: "リーダー上下連動オーバーレイ＆ページシークバー（RTL）実装の設計"
 description: "Issue #202 に対する差分仕様、影響する全体正本、テスト計画、および実装Sub-issue分割計画。"
 issue: "#202"
-status: "Review (#202)"
+status: "Completed (Archived)"
 updated: "2026-11-03"
 tags:
   - delta
