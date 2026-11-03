@@ -61,6 +61,7 @@ const meta: Meta<typeof ReaderPage> = {
     lineHeight: 1.8,
     initialScrollProgress: 0,
     pagingMode: "auto" as ReaderPagingMode,
+    enableVolumeKeyPaging: false,
     currentPage: 1,
     totalPages: 1,
     isLoading: false,

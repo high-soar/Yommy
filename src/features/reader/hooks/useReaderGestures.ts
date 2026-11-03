@@ -1,6 +1,12 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { WritingMode, ReaderPagingMode } from "../../../storage/types";
+import type { VolumeKeyDirection } from "../../../bridges/volume-key/types";
 import { resolveEffectivePagingMode } from "./useReader";
+
+// 音量キーによる連続スクロール時の移動割合（ビューポート寸法の約85%）
+const VOLUME_KEY_SCROLL_RATIO = 0.85;
+// 音量キーによる境界2段階操作のリセット待機時間（ミリ秒）
+const VOLUME_KEY_BOUNDARY_TIMEOUT_MS = 2500;
 
 export interface UseReaderGesturesOptions {
   /** 組み方向（縦書き: vertical-rl, 横書き: horizontal-tb） */
@@ -66,6 +72,8 @@ export interface UseReaderGesturesResult {
   handleWheel: (e: React.WheelEvent) => void;
   /** 連続スクロール用進捗通知ハンドラー（2段階判定トラッキング） */
   handleScrollProgressChange: (progress: number) => void;
+  /** ハードウェア音量キー操作ハンドラー（AC-RD-26, AC-RD-27, Issue #203） */
+  handleVolumeKey: (direction: VolumeKeyDirection) => void;
 }
 
 /**
@@ -138,6 +146,12 @@ export function useReaderGestures({
   );
   const hasTriggeredInGestureRef = useRef(false);
 
+  // ハードウェア音量キー2段階操作用（AC-RD-27, Issue #203）
+  const pendingVolumeKeyBoundaryRef = useRef<"next" | "prev" | null>(null);
+  const volumeKeyBoundaryTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+
   const clearBoundaryTap = useCallback(() => {
     if (boundaryTapTimerRef.current) {
       clearTimeout(boundaryTapTimerRef.current);
@@ -153,6 +167,15 @@ export function useReaderGestures({
       scrollSwipeTimerRef.current = null;
     }
     pendingScrollSwipeRef.current = null;
+    setBoundaryHint(null);
+  }, []);
+
+  const clearVolumeKeyBoundary = useCallback(() => {
+    if (volumeKeyBoundaryTimerRef.current) {
+      clearTimeout(volumeKeyBoundaryTimerRef.current);
+      volumeKeyBoundaryTimerRef.current = null;
+    }
+    pendingVolumeKeyBoundaryRef.current = null;
     setBoundaryHint(null);
   }, []);
 
@@ -219,8 +242,9 @@ export function useReaderGestures({
       }
       clearBoundaryTap();
       clearScrollSwipe();
+      clearVolumeKeyBoundary();
     };
-  }, [clearBoundaryTap, clearScrollSwipe]);
+  }, [clearBoundaryTap, clearScrollSwipe, clearVolumeKeyBoundary]);
 
   // 連続スクロールモード用の端到達フラグ（2段階操作用）
   const reachedEndRef = useRef(false);
@@ -660,10 +684,13 @@ export function useReaderGestures({
             pendingScrollSwipeRef.current = null;
             setBoundaryHint(null);
           }
+          if (pendingVolumeKeyBoundaryRef.current !== null) {
+            clearVolumeKeyBoundary();
+          }
         }
       }
     },
-    [isPaged, onScrollProgressChange],
+    [isPaged, onScrollProgressChange, clearVolumeKeyBoundary],
   );
 
   // Main クリックハンドラー（タップによる直後の誤閉会を防止）
@@ -671,6 +698,181 @@ export function useReaderGestures({
     if (hasHandledTapRef.current) return;
     onCloseOverlay();
   }, [onCloseOverlay]);
+
+  const getScrollElement = useCallback((): HTMLElement | null => {
+    if (!containerRef?.current) return null;
+    const viewEl = containerRef.current.querySelector<HTMLElement>(
+      '[data-testid="reader-view"]',
+    );
+    return viewEl ?? containerRef.current;
+  }, [containerRef]);
+
+  // 音量キーによる境界2段階操作ハンドラー
+  const triggerVolumeKeyBoundary = useCallback(
+    (direction: "next" | "prev", onTrigger: () => void, hintText: string) => {
+      if (pendingVolumeKeyBoundaryRef.current === direction) {
+        clearVolumeKeyBoundary();
+        onTrigger();
+      } else {
+        clearVolumeKeyBoundary();
+        pendingVolumeKeyBoundaryRef.current = direction;
+        setBoundaryHint(hintText);
+        volumeKeyBoundaryTimerRef.current = setTimeout(() => {
+          clearVolumeKeyBoundary();
+        }, VOLUME_KEY_BOUNDARY_TIMEOUT_MS);
+      }
+    },
+    [clearVolumeKeyBoundary],
+  );
+
+  // 連続スクロールモードでの音量キースクロール実行ハンドラー
+  const scrollContinuously = useCallback(
+    (direction: VolumeKeyDirection, el: HTMLElement | null) => {
+      clearVolumeKeyBoundary();
+      if (!el) return;
+
+      const isForward = direction === "down";
+      if (isVertical) {
+        const delta = Math.round(
+          (el.clientWidth || getContainerWidth()) * VOLUME_KEY_SCROLL_RATIO,
+        );
+        const scrollDelta = isForward ? -delta : delta;
+        if (typeof el.scrollBy === "function") {
+          el.scrollBy({ left: scrollDelta, behavior: "smooth" });
+        } else {
+          el.scrollLeft += scrollDelta;
+        }
+      } else {
+        const delta = Math.round(
+          (el.clientHeight || window.innerHeight) * VOLUME_KEY_SCROLL_RATIO,
+        );
+        const scrollDelta = isForward ? delta : -delta;
+        if (typeof el.scrollBy === "function") {
+          el.scrollBy({ top: scrollDelta, behavior: "smooth" });
+        } else {
+          el.scrollTop += scrollDelta;
+        }
+      }
+    },
+    [clearVolumeKeyBoundary, getContainerWidth, isVertical],
+  );
+
+  // ハードウェア音量キー操作ハンドラー（AC-RD-26, AC-RD-27, Issue #203）
+  const handleVolumeKey = useCallback(
+    (direction: VolumeKeyDirection) => {
+      if (isPaged) {
+        // 縦書きページめくりモード
+        if (isAnimating || pendingTargetPageRef.current !== null) {
+          flushPendingAnimation();
+        }
+
+        const basePage =
+          pendingTargetPageRef.current ??
+          lastTargetPageRef.current ??
+          currentPage;
+        const width = getContainerWidth();
+
+        if (direction === "down") {
+          // 音量［ー］: 次ページ進行（水平スライドアニメーション）
+          if (basePage < totalPages) {
+            clearVolumeKeyBoundary();
+            clearBoundaryTap();
+            // startSlideAnimation 内で onCloseOverlay() が実行される
+            startSlideAnimation(basePage + 1, width);
+          } else {
+            onCloseOverlay();
+            // 最終ページ到達時: 2段階操作で次話遷移
+            if (chapterIndex < totalChapters) {
+              triggerVolumeKeyBoundary(
+                "next",
+                onNextChapter,
+                "もう一度操作で次の話へ",
+              );
+            } else {
+              clearVolumeKeyBoundary();
+            }
+          }
+        } else {
+          // 音量［＋］: 前ページ進行（水平スライドアニメーション）
+          if (basePage > 1) {
+            clearVolumeKeyBoundary();
+            clearBoundaryTap();
+            // startSlideAnimation 内で onCloseOverlay() が実行される
+            startSlideAnimation(basePage - 1, -width);
+          } else {
+            onCloseOverlay();
+            // 第1ページ到達時: 2段階操作で前話遷移
+            if (chapterIndex > 1) {
+              triggerVolumeKeyBoundary(
+                "prev",
+                onPrevChapter,
+                "もう一度操作で前の話へ",
+              );
+            } else {
+              clearVolumeKeyBoundary();
+            }
+          }
+        }
+      } else {
+        // 連続スクロールモード
+        onCloseOverlay();
+        const el = getScrollElement();
+
+        if (direction === "down") {
+          // 音量［ー］: 約85% 順方向スクロール
+          if (reachedEndRef.current) {
+            // スクロール末尾到達時: 2段階操作で次話遷移
+            if (chapterIndex < totalChapters) {
+              triggerVolumeKeyBoundary(
+                "next",
+                onNextChapter,
+                "もう一度操作で次の話へ",
+              );
+            } else {
+              clearVolumeKeyBoundary();
+            }
+          } else {
+            scrollContinuously(direction, el);
+          }
+        } else {
+          // 音量［＋］: 約85% 逆方向スクロール
+          if (reachedStartRef.current) {
+            // スクロール先頭到達時: 2段階操作で前話遷移
+            if (chapterIndex > 1) {
+              triggerVolumeKeyBoundary(
+                "prev",
+                onPrevChapter,
+                "もう一度操作で前の話へ",
+              );
+            } else {
+              clearVolumeKeyBoundary();
+            }
+          } else {
+            scrollContinuously(direction, el);
+          }
+        }
+      }
+    },
+    [
+      isPaged,
+      isAnimating,
+      flushPendingAnimation,
+      currentPage,
+      totalPages,
+      getContainerWidth,
+      clearVolumeKeyBoundary,
+      clearBoundaryTap,
+      startSlideAnimation,
+      onCloseOverlay,
+      chapterIndex,
+      totalChapters,
+      triggerVolumeKeyBoundary,
+      onNextChapter,
+      onPrevChapter,
+      getScrollElement,
+      scrollContinuously,
+    ],
+  );
 
   return {
     slideOffsetPx,
@@ -687,5 +889,6 @@ export function useReaderGestures({
     handleMainClick,
     handleWheel,
     handleScrollProgressChange,
+    handleVolumeKey,
   };
 }

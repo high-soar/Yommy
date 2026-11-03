@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useContext,
+} from "react";
 import type {
   NovelRecord,
   ChapterRecord,
@@ -8,6 +14,8 @@ import type {
   ReaderFontFamily,
 } from "../../../storage/types";
 import type { BottomTab } from "../../../shared/ui/BottomTabBar";
+import type { VolumeKeyBridge } from "../../../bridges/volume-key/types";
+import { ServiceContext } from "../../../app/ServiceProvider";
 import { ReaderView } from "./ReaderView";
 import { ReaderTopOverlay } from "./ReaderTopOverlay";
 import { ReaderBottomOverlay } from "./ReaderBottomOverlay";
@@ -39,6 +47,10 @@ export interface ReaderPageProps {
   initialScrollProgress: number;
   /** ページ送りモード（auto / paged / scroll、省略時: 'auto'） */
   pagingMode?: ReaderPagingMode;
+  /** ハードウェア音量キー送り有効フラグ（省略時: false、v0.6 Issue #203） */
+  enableVolumeKeyPaging?: boolean;
+  /** 音量キーブリッジ（省略時: ServiceContext より取得、v0.6 Issue #203） */
+  volumeKeyBridge?: VolumeKeyBridge;
   /** ページめくり表示時の現在ページ番号（省略時: 1） */
   currentPage?: number;
   /** ページめくり表示時の総ページ数（省略時: 1） */
@@ -97,6 +109,8 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
   pageMarginPx,
   initialScrollProgress,
   pagingMode = "auto",
+  enableVolumeKeyPaging = false,
+  volumeKeyBridge: propsVolumeKeyBridge,
   currentPage = 1,
   totalPages = 1,
   isLoading,
@@ -118,6 +132,10 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
   const isInitialOpen =
     initialOverlayOpen ??
     Boolean(error || (!isLoading && (!hasNovel || !hasBodyHtml)));
+
+  const serviceContext = useContext(ServiceContext);
+  const volumeKeyBridge =
+    propsVolumeKeyBridge ?? serviceContext?.volumeKeyBridge;
 
   const [isOpen, setIsOpen] = useState(isInitialOpen);
   const mainRef = useRef<HTMLElement | null>(null);
@@ -193,6 +211,7 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
     handleMainClick,
     handleWheel,
     handleScrollProgressChange,
+    handleVolumeKey,
   } = useReaderGestures({
     writingMode,
     pagingMode,
@@ -211,6 +230,28 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
     initialSlideOffsetPx,
     initialBoundaryHint,
   });
+
+  const handleVolumeKeyRef = useRef(handleVolumeKey);
+  useEffect(() => {
+    handleVolumeKeyRef.current = handleVolumeKey;
+  }, [handleVolumeKey]);
+
+  // ハードウェア音量キーイベント購読およびライフサイクル管理（AC-RD-26, AC-RD-27, Issue #203）
+  useEffect(() => {
+    if (!volumeKeyBridge || !enableVolumeKeyPaging) {
+      return;
+    }
+
+    void volumeKeyBridge.setVolumeKeyPagingEnabled(true);
+    const removeListener = volumeKeyBridge.addVolumeKeyListener((event) => {
+      handleVolumeKeyRef.current(event.direction);
+    });
+
+    return () => {
+      removeListener();
+      void volumeKeyBridge.setVolumeKeyPagingEnabled(false);
+    };
+  }, [enableVolumeKeyPaging, volumeKeyBridge]);
 
   // 最下部タッチゾーン: ポインター押下
   const handleTouchZonePointerDown = useCallback((e: React.PointerEvent) => {

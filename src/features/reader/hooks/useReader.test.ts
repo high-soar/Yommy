@@ -536,6 +536,99 @@ describe("useReader", () => {
       expect(result.current.error).toBeNull();
     });
 
+    it("初期状態において enableVolumeKeyPaging が false であること (AC-RD-26)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 2,
+        cachedCount: 2,
+      });
+
+      const { result } = renderHook(
+        () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+        {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.enableVolumeKeyPaging).toBe(false);
+    });
+
+    it("settingsRepository に保存された enableVolumeKeyPaging (true) が初回ロード時に復元されること (AC-RD-26)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const settingsRepo = new SqlSettingsRepository(db);
+      await settingsRepo.updateReaderSettings({ enableVolumeKeyPaging: true });
+
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 2,
+        cachedCount: 2,
+      });
+
+      const { result } = renderHook(
+        () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+        {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+            settingsRepository: settingsRepo,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.enableVolumeKeyPaging).toBe(true);
+    });
+
+    it("初回ロード時に settingsRepository.getReaderSettings が失敗した場合、enableVolumeKeyPaging のデフォルト値 (false) が維持されること", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 2,
+        cachedCount: 2,
+      });
+
+      const mockSettingsRepo: SettingsRepository = {
+        getReaderSettings: async () => {
+          throw new Error("設定取得失敗");
+        },
+        updateReaderSettings: async () => {
+          throw new Error("設定保存失敗");
+        },
+      };
+
+      const { result } = renderHook(
+        () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+        {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+            settingsRepository: mockSettingsRepo,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.enableVolumeKeyPaging).toBe(false);
+      expect(result.current.error).toBeNull();
+    });
+
     it("toggleWritingMode で vertical-rl と horizontal-tb が相互に切り替わり永続化されること (AC-RD-03)", async () => {
       const db = await resetTestDb();
       const settingsRepo = new SqlSettingsRepository(db);

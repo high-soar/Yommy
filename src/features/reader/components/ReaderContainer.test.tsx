@@ -1389,4 +1389,27 @@ describe("ReaderContainer", () => {
       );
     });
   });
+
+  describe("音量キーページ送り連携（enableVolumeKeyPaging / AC-RD-26, Issue #203）", () => {
+    it("useReader から受け取った enableVolumeKeyPaging が ReaderPage に正しく伝播されること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const settingsRepository = createMockSettingsRepo({
+        enableVolumeKeyPaging: true,
+      });
+
+      render(
+        <TestWrapper
+          chapterIndex={1}
+          settingsRepository={settingsRepository}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
+      });
+
+      const lastProps = pageSpy.mock.lastCall?.[0];
+      expect(lastProps?.enableVolumeKeyPaging).toBe(true);
+    });
+  });
 });
