@@ -16,6 +16,7 @@ import { HttpClientBridge } from "../../../bridges/http/types";
 import { ParserRegistry } from "../../../parsers/parserRegistry";
 import { MockAppBridge } from "../../../bridges/app";
 import { MockCloudSyncBridge } from "../../../bridges/cloud-sync/mockCloudSyncBridge";
+import { MockVolumeKeyBridge } from "../../../bridges/volume-key/mockVolumeKeyBridge";
 import { useStorageCache } from "./useStorageCache";
 
 function createMockServices(
@@ -47,6 +48,7 @@ function createMockServices(
     databaseAdapter: {} as DatabaseAdapter,
     appBridge: new MockAppBridge(),
     cloudSyncBridge: new MockCloudSyncBridge(),
+    volumeKeyBridge: new MockVolumeKeyBridge(),
     isReady: true,
     error: null,
     ...overrides,

@@ -815,6 +815,7 @@ describe("useNovelRanking", () => {
       appSettingsRepository: {} as never,
       appBridge: {} as never,
       cloudSyncBridge: {} as never,
+      volumeKeyBridge: {} as never,
       isReady: true,
       error: null,
     });

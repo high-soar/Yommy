@@ -29,6 +29,9 @@ import { SqlAppSettingsRepository } from "../storage/repositories/appSettingsRep
 import type { CloudSyncBridge } from "../bridges/cloud-sync/types";
 import { MockCloudSyncBridge } from "../bridges/cloud-sync/mockCloudSyncBridge";
 import { CapacitorCloudSyncBridge } from "../bridges/cloud-sync/capacitorCloudSyncBridge";
+import type { VolumeKeyBridge } from "../bridges/volume-key/types";
+import { MockVolumeKeyBridge } from "../bridges/volume-key/mockVolumeKeyBridge";
+import { CapacitorVolumeKeyBridge } from "../bridges/volume-key/capacitorVolumeKeyBridge";
 import { SyncEngine } from "../features/cloud-sync/services/syncEngine";
 import workIndexHtml from "../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 import episodeContentHtml from "../parsers/kakuyomu/__fixtures__/episode_content.html?raw";
@@ -50,6 +53,7 @@ export interface ServiceContextValue {
   appSettingsRepository: AppSettingsRepository;
   appBridge: AppBridge;
   cloudSyncBridge: CloudSyncBridge;
+  volumeKeyBridge: VolumeKeyBridge;
   syncEngine?: SyncEngine;
   isReady: boolean;
   error: Error | null;
@@ -253,6 +257,12 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
             ? new CapacitorCloudSyncBridge()
             : new MockCloudSyncBridge());
 
+        const volumeKeyBridge =
+          services?.volumeKeyBridge ??
+          (isNative
+            ? new CapacitorVolumeKeyBridge()
+            : new MockVolumeKeyBridge());
+
         const syncEngine =
           services?.syncEngine ??
           new SyncEngine({
@@ -274,6 +284,7 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           appSettingsRepository,
           appBridge,
           cloudSyncBridge,
+          volumeKeyBridge,
           syncEngine,
           isReady: true,
           error: null,
@@ -301,6 +312,8 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
             appBridge: services?.appBridge ?? new MockAppBridge(),
             cloudSyncBridge:
               services?.cloudSyncBridge ?? new MockCloudSyncBridge(),
+            volumeKeyBridge:
+              services?.volumeKeyBridge ?? new MockVolumeKeyBridge(),
             syncEngine: undefined,
             isReady: false,
             error,
@@ -346,6 +359,8 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           appBridge: services?.appBridge ?? new MockAppBridge(),
           cloudSyncBridge:
             services?.cloudSyncBridge ?? new MockCloudSyncBridge(),
+          volumeKeyBridge:
+            services?.volumeKeyBridge ?? new MockVolumeKeyBridge(),
           syncEngine: services?.syncEngine,
           isReady: false,
           error: null,

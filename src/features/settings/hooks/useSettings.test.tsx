@@ -17,6 +17,7 @@ import { HttpClientBridge } from "../../../bridges/http/types";
 import { ParserRegistry } from "../../../parsers/parserRegistry";
 import { MockAppBridge } from "../../../bridges/app";
 import { MockCloudSyncBridge } from "../../../bridges/cloud-sync/mockCloudSyncBridge";
+import { MockVolumeKeyBridge } from "../../../bridges/volume-key/mockVolumeKeyBridge";
 import { useSettings } from "./useSettings";
 
 function createMockServices(
@@ -57,6 +58,7 @@ function createMockServices(
       overrides?.appSettingsRepository ?? ({} as AppSettingsRepository),
     appBridge: overrides?.appBridge ?? new MockAppBridge(),
     cloudSyncBridge: overrides?.cloudSyncBridge ?? new MockCloudSyncBridge(),
+    volumeKeyBridge: overrides?.volumeKeyBridge ?? new MockVolumeKeyBridge(),
     isReady: overrides?.isReady ?? true,
     error: overrides?.error ?? null,
   };

@@ -21,6 +21,10 @@ import { DDL_STATEMENTS } from "../storage/schema";
 import { CapacitorAppBridge, MockAppBridge } from "../bridges/app";
 import { MockCloudSyncBridge } from "../bridges/cloud-sync/mockCloudSyncBridge";
 import { CapacitorCloudSyncBridge } from "../bridges/cloud-sync/capacitorCloudSyncBridge";
+import {
+  MockVolumeKeyBridge,
+  CapacitorVolumeKeyBridge,
+} from "../bridges/volume-key";
 
 const { Default, CustomMockServices } = composeStories(stories);
 
@@ -550,6 +554,9 @@ describe("ServiceProvider", () => {
       expect(
         (serviceValue as ServiceContextValue | null)?.cloudSyncBridge,
       ).toBeInstanceOf(CapacitorCloudSyncBridge);
+      expect(
+        (serviceValue as ServiceContextValue | null)?.volumeKeyBridge,
+      ).toBeInstanceOf(CapacitorVolumeKeyBridge);
 
       createConnectionSpy.mockRestore();
       isNativeSpy.mockRestore();
@@ -600,6 +607,53 @@ describe("ServiceProvider", () => {
       expect((serviceValue as ServiceContextValue | null)?.appBridge).toBe(
         customAppBridge,
       );
+    });
+
+    it("Web 環境（isNativePlatform === false）でデフォルトの MockVolumeKeyBridge が初期化されること", async () => {
+      let serviceValue: ServiceContextValue | null = null;
+      const TestConsumer: React.FC = () => {
+        serviceValue = useServices();
+        return <div>Web 実行テスト</div>;
+      };
+
+      render(
+        <ServiceProvider>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect((serviceValue as ServiceContextValue | null)?.isReady).toBe(
+          true,
+        );
+      });
+      expect(
+        (serviceValue as ServiceContextValue | null)?.volumeKeyBridge,
+      ).toBeInstanceOf(MockVolumeKeyBridge);
+    });
+
+    it("外部からカスタム volumeKeyBridge が提供された場合に優先して注入されること", async () => {
+      const customVolumeKeyBridge = new MockVolumeKeyBridge();
+      let serviceValue: ServiceContextValue | null = null;
+      const TestConsumer: React.FC = () => {
+        serviceValue = useServices();
+        return <div>DI 注入テスト</div>;
+      };
+
+      render(
+        <ServiceProvider services={{ volumeKeyBridge: customVolumeKeyBridge }}>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect((serviceValue as ServiceContextValue | null)?.isReady).toBe(
+          true,
+        );
+      });
+      expect(
+        (serviceValue as ServiceContextValue | null)?.volumeKeyBridge,
+      ).toBe(customVolumeKeyBridge);
     });
 
     it("初期化完了時に結合テスト用に window.__yommyServices が公開されること", async () => {

@@ -231,22 +231,32 @@ const TestWrapper: React.FC<TestWrapperProps> = ({
       ? `/novels/${containerProps.novelId}/chapters/${containerProps.chapterIndex}`
       : "/novels/kakuyomu:16817330658027210412/chapters/1");
 
-  const resolvedSettingsRepo = settingsRepository ?? createMockSettingsRepo();
+  const [defaultSettingsRepo] = React.useState(() => createMockSettingsRepo());
+  const resolvedSettingsRepo = settingsRepository ?? defaultSettingsRepo;
   const resolvedDbAdapter = databaseAdapter ?? mockDatabaseAdapter;
+
+  const services = React.useMemo(
+    () => ({
+      databaseAdapter: resolvedDbAdapter,
+      settingsRepository: resolvedSettingsRepo,
+      ...(novelRepository ? { novelRepository } : {}),
+      ...(chapterRepository ? { chapterRepository } : {}),
+      ...(httpClient ? { httpClient } : {}),
+      ...(parserRegistry ? { parserRegistry } : {}),
+    }),
+    [
+      resolvedDbAdapter,
+      resolvedSettingsRepo,
+      novelRepository,
+      chapterRepository,
+      httpClient,
+      parserRegistry,
+    ],
+  );
 
   return (
     <RouterProvider initialPath={resolvedPath}>
-      <TestObserver
-        containerProps={containerProps}
-        services={{
-          databaseAdapter: resolvedDbAdapter,
-          settingsRepository: resolvedSettingsRepo,
-          ...(novelRepository ? { novelRepository } : {}),
-          ...(chapterRepository ? { chapterRepository } : {}),
-          ...(httpClient ? { httpClient } : {}),
-          ...(parserRegistry ? { parserRegistry } : {}),
-        }}
-      />
+      <TestObserver containerProps={containerProps} services={services} />
     </RouterProvider>
   );
 };
@@ -1169,9 +1179,7 @@ describe("ReaderContainer", () => {
       );
 
       // onPageChange でページ移動
-      const updatedProps = pageSpy.mock.calls.find(
-        (call) => call[0]?.totalPages === 10,
-      )?.[0];
+      const updatedProps = pageSpy.mock.lastCall?.[0];
       expect(updatedProps?.onPageChange).toBeDefined();
 
       act(() => {
