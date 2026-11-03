@@ -6,6 +6,7 @@ status: "Approved"
 updated: "2026-11-03"
 tags: [quality, bug-log, handover, dre, kaizen]
 related_specs:
+  - docs/specs/changes/issue-203-volume-key-paging.md
   - docs/specs/changes/archive/issue-202-reader-top-overlay-and-seekbar.md
   - docs/specs/changes/archive/issue-201-reader-page-slide-animation.md
   - docs/specs/changes/archive/issue-169-font-and-margin-customization.md
@@ -89,12 +90,13 @@ related_tests: []
 > - Milestone `v0.3` で解決済みの申し送り（`HO-14`, `HO-16`〜`HO-21`）: [docs/quality/archive/v0.3-search-prefetch-log.md](archive/v0.3-search-prefetch-log.md)
 > - Milestone `v0.5` で解決済みの申し送り（`HO-15`, `HO-22`, `HO-23`, `HO-24`, `HO-25`）: [docs/quality/archive/v0.5-reader-customization-and-cache-log.md](archive/v0.5-reader-customization-and-cache-log.md)
 
-現在、未解決（`Open`）の申し送り事項は 2 件（`HO-26`, `HO-27`）です。次期 Milestone `v0.6` 作業中に発生した追加の申し送り事項は、本表へ `HO-28` より連番で登録します。
+現在、未解決（`Open`）の申し送り事項は 3 件（`HO-26`, `HO-27`, `HO-28`）です。次期 Milestone `v0.6` 作業中に発生した追加の申し送り事項は、本表へ `HO-29` より連番で登録します。
 
-|     ID      | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                                               | 解決先（対象 Issue / 成果物）          | 完了ゲート              | 状態 (`Open` / `Resolved`) |
-| :---------: | :---------------: | :--------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------- | :---------------------- | :------------------------: |
-| **`HO-26`** |    Issue #201     | リーダー縦書きページめくりにおける Android 実機での水平スライドアニメーションの滑らかさおよび高速連続タップ時の挙動検証                                          | Milestone `v0.6` 実機検証 / Issue #204 | Milestone `v0.6` 完了前 |           `Open`           |
-| **`HO-27`** |    Issue #202     | リーダー上下連動オーバーレイ（上部タイトル省略・目次導線、下部RTLページシークバー）における Android 実機でのスライダー操作感および長文タイトル表示崩れなしの検証 | Milestone `v0.6` 実機検証 / Issue #204 | Milestone `v0.6` 完了前 |           `Open`           |
+|     ID      | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                                                                           | 解決先（対象 Issue / 成果物）          | 完了ゲート              | 状態 (`Open` / `Resolved`) |
+| :---------: | :---------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------- | :---------------------- | :------------------------: |
+| **`HO-26`** |    Issue #201     | リーダー縦書きページめくりにおける Android 実機での水平スライドアニメーションの滑らかさおよび高速連続タップ時の挙動検証                                                                      | Milestone `v0.6` 実機検証 / Issue #204 | Milestone `v0.6` 完了前 |           `Open`           |
+| **`HO-27`** |    Issue #202     | リーダー上下連動オーバーレイ（上部タイトル省略・目次導線、下部RTLページシークバー）における Android 実機でのスライダー操作感および長文タイトル表示崩れなしの検証                             | Milestone `v0.6` 実機検証 / Issue #204 | Milestone `v0.6` 完了前 |           `Open`           |
+| **`HO-28`** |    Issue #203     | Android 実機におけるハードウェア音量キー（Volume Down/Up）インターセプト（リーダー画面かつ設定ON時のみ OS 音量バー抑止・Webイベント連携、リーダー離脱時や設定OFF時の標準音量復帰）の動作検証 | Milestone `v0.6` 実機検証 / Issue #204 | Milestone `v0.6` 完了前 |           `Open`           |
 
 ---
 

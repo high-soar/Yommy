@@ -1,8 +1,8 @@
 ---
 type: spec-feature
 title: "設定画面仕様書（SCR-05: Settings）"
-description: 小説リーダーの組版設定（縦書き/横書き、ページ送りモード、4カラーテーマ、文字サイズ、行間、フォント種別、画面余白）の一括カスタマイズ・永続化、ルビ・傍点を含むサンプル文章プレビュー、Google Drive クラウド同期連携、ストレージ・本文キャッシュ管理、および下部タブ・OSバックキー連携を提供する設定画面（SCR-05）の正本仕様。
-status: Approved
+description: 小説リーダーの組版設定（縦書き/横書き、ページ送りモード、4カラーテーマ、文字サイズ、行間、フォント種別、画面余白、ハードウェア音量キー送り）の一括カスタマイズ・永続化、ルビ・傍点を含むサンプル文章プレビュー、Google Drive クラウド同期連携、ストレージ・本文キャッシュ管理、および下部タブ・OSバックキー連携を提供する設定画面（SCR-05）の正本仕様。
+status: "Review (#203)"
 updated: "2026-11-03"
 tags:
   [
@@ -21,11 +21,16 @@ tags:
     pagination,
     font-family,
     page-margin,
+    volume-key,
+    hardware-key,
     ho-23,
     ho-24,
     ho-25,
+    ho-28,
   ]
 related_specs:
+  - docs/specs/changes/issue-203-volume-key-paging.md
+  - docs/specs/changes/archive/issue-202-reader-top-overlay-and-seekbar.md
   - docs/specs/changes/archive/issue-169-font-and-margin-customization.md
   - docs/specs/changes/archive/issue-170-cache-management-and-capacity-visualization.md
   - docs/specs/changes/archive/issue-168-reader-pagination-and-touch-refinement.md
@@ -76,7 +81,7 @@ related_tests:
   - `SYS-REQ-08`（縦書き `vertical-rl` / 横書き `horizontal-tb` 切り替え）
   - `SYS-REQ-09`（文字サイズ `12〜32px`、行間 `1.4〜2.4`、フォント種別5種、画面余白 `8〜48px` のカスタマイズと永続化、v0.5 Issue #169）
   - `SYS-REQ-10`（4カラーテーマ `light` / `sepia` / `dark` / `black` 切り替え）
-  - `SYS-REQ-11`（ページ送りモード［ページめくり（縦書き時）/ 連続スクロール］の選択と永続化、横書き時 disabled 化とスクロール固定注記表示、v0.4 Issue #122、v0.5 Issue #168）
+  - `SYS-REQ-11`（ページ送りモード［ページめくり（縦書き時）/ 連続スクロール］の選択と永続化、横書き時 disabled 化とスクロール固定注記表示、v0.4 Issue #122、v0.5 Issue #168、およびハードウェア音量キー送り［`enableVolumeKeyPaging`］のON/OFFトグル設定と永続化、v0.6 Issue #203）
   - `SYS-REQ-16`（全画面シェル・下部タブバー・論理階層遷移：下部タブ「設定」からの直接遷移、および OS バックキーによる直前画面［リーダー・作品詳細］またはホーム［本棚 `/`］への復帰）
   - `SYS-REQ-20`（下部4タブナビゲーションおよびOSバックキー論理階層遷移）
 - **関連画面遷移**:
@@ -84,8 +89,6 @@ related_tests:
   - `TR-01b`（下部タブバー「本棚」タップによる `SCR-05` から本棚画面 `SCR-01` `/` への直接遷移）
   - `TR-12`（設定画面（`/settings`）で OS バックキーを実行したとき、直前の画面（リーダー `SCR-03`、作品詳細 `SCR-02`）またはホームの本棚画面（`SCR-01`）へ復帰すること）
   - `TR-20`（設定画面での本文キャッシュ一括整理アクションによる一括削除［既読のみ／全話］・全体容量即時再計算、`v0.5` Issue #170）
-- **対象外スコープ（後続 Milestone）**:
-  - ハードウェア音量キー送り（`enableVolumeKeyPaging`）のトグル設定（Milestone `v0.6〜`：`SYS-REQ-11` 拡張、本Issueでは対象外）
 
 ---
 
@@ -169,7 +172,7 @@ src/features/settings/
 
 ### 3.2 `SettingsPage`（設定画面 Presentational コンポーネント）
 
-画面上部ヘッダー、組版設定 7 項目（組み方向切替、ページ送りモード切替、4カラーテーマ選択、文字サイズステッパー、行間ステッパー、フォント種別選択、画面余白ステッパー）、および `SampleTextPreview`、クラウド同期セクション、ストレージ・キャッシュ管理セクション（v0.5 Issue #170）を統合する画面レイアウトコンポーネントです。
+画面上部ヘッダー、組版設定 8 項目（組み方向切替、ページ送りモード切替、4カラーテーマ選択、文字サイズステッパー、行間ステッパー、フォント種別選択、画面余白ステッパー、音量キーでページ送りトグル）、および `SampleTextPreview`、クラウド同期セクション、ストレージ・キャッシュ管理セクション（v0.5 Issue #170）を統合する画面レイアウトコンポーネントです。
 
 #### プロパティ契約（`SettingsPageProps`）
 
@@ -181,6 +184,7 @@ src/features/settings/
 | `lineHeight`                    | `number`                                                      | 任意 | `1.8`                    | 現在の行間倍率 (`1.4 〜 2.4`)                                              |
 | `fontFamily`                    | `ReaderFontFamily`                                            | 任意 | `'biz-ud-mincho'`        | 現在のフォント種別（v0.5 Issue #169）                                      |
 | `pageMarginPx`                  | `number`                                                      | 任意 | `20`                     | 現在の画面余白 px (`8 〜 48` px、v0.5 Issue #169)                          |
+| `enableVolumeKeyPaging`         | `boolean`                                                     | 任意 | `false`                  | ハードウェア音量キー送り有効フラグ（v0.6 Issue #203）                      |
 | `pagingMode`                    | `ReaderPagingMode`                                            | 任意 | `'auto'`                 | 現在のページ送りモード（`'auto'`, `'paged'`, `'scroll'`、v0.4 Issue #122） |
 | `isLoading`                     | `boolean`                                                     | 任意 | `false`                  | 設定読み込み中フラグ                                                       |
 | `error`                         | `string \| null`                                              | 任意 | `null`                   | 設定保存・読込エラーメッセージ                                             |
@@ -195,6 +199,7 @@ src/features/settings/
 | `onChangeLineHeight`            | `(nextHeight: number) => void`                                | 必須 | -                        | 行間変更ボタン（`−` / `＋`）押下時のコールバック                           |
 | `onChangeFontFamily`            | `(family: ReaderFontFamily) => void`                          | 任意 | -                        | フォント種別選択時のコールバック（v0.5 Issue #169）                        |
 | `onChangePageMargin`            | `(marginPx: number) => void`                                  | 任意 | -                        | 画面余白変更ボタン（`−` / `＋`）押下時のコールバック（v0.5 Issue #169）    |
+| `onToggleVolumeKeyPaging`       | `() => void`                                                  | 任意 | -                        | 音量キー送りトグルボタン押下時のコールバック（v0.6 Issue #203）            |
 | `onSignInGoogle`                | `() => Promise<void>`                                         | 任意 | -                        | Google 連携ボタン押下時のコールバック（v0.4）                              |
 | `onSignOutGoogle`               | `() => Promise<void>`                                         | 任意 | -                        | Google 連携解除ボタン押下時のコールバック（v0.4）                          |
 | `onSyncNow`                     | `() => Promise<void>`                                         | 任意 | -                        | 今すぐ同期ボタン押下時のコールバック（v0.4）                               |
@@ -241,6 +246,10 @@ src/features/settings/
        - 縮小ボタン: `data-testid="page-margin-decrease"`（クリック時に `onChangePageMargin(Math.max(8, pageMarginPx - 4))` を呼び出す。`pageMarginPx <= 8` で `disabled`）。
        - 現在値表示: `data-testid="page-margin-value"`（`{pageMarginPx}px` を表示）。
        - 拡大ボタン: `data-testid="page-margin-increase"`（クリック時に `onChangePageMargin(Math.min(48, pageMarginPx + 4))` を呼び出す。`pageMarginPx >= 48` で `disabled`）。
+     - **音量キーでページ送りトグル (`data-testid="toggle-volume-key-paging"`, v0.6 Issue #203)**:
+       - トグルボタン（またはスイッチ）：`aria-pressed={enableVolumeKeyPaging}` を付与。初期値は `false`（OFF）。
+       - クリック時に `onToggleVolumeKeyPaging` を呼び出し、即座に State 更新および `reader_settings` へ非同期永続化（失敗時はロールバック＆エラー表示）。
+       - 注記・説明ラベルとして「音量［ー］で次へ、音量［＋］で前へ移動します」を表示。
   2. **プレビューセクション (`data-testid="preview-section"`)**:
      - セクション見出し「組版プレビュー」
      - `SampleTextPreview` コンポーネントを配置。
@@ -357,6 +366,7 @@ export interface UseSettingsResult {
   fontFamily: ReaderFontFamily; // 【新設: v0.5 Issue #169】
   pageMarginPx: number; // 【新設: v0.5 Issue #169】
   pagingMode: ReaderPagingMode; // 【新設: v0.4 Issue #122】
+  enableVolumeKeyPaging: boolean; // 【新設: v0.6 Issue #203】
   isLoading: boolean;
   error: string | null;
   toggleWritingMode: () => Promise<void>;
@@ -366,15 +376,16 @@ export interface UseSettingsResult {
   changeFontFamily: (family: ReaderFontFamily) => Promise<void>; // 【新設: v0.5 Issue #169】
   changePageMargin: (marginPx: number) => Promise<void>; // 【新設: v0.5 Issue #169】
   changePagingMode: (pagingMode: ReaderPagingMode) => Promise<void>; // 【新設: v0.4 Issue #122】
+  toggleVolumeKeyPaging: () => Promise<void>; // 【新設: v0.6 Issue #203】
 }
 ```
 
 ### 4.2 永続化パイプライン仕様
 
 1. **初期ロード**:
-   - `ServiceProvider` の `isReady` 完了後、`settingsRepository.getReaderSettings()` を呼び出し、保存済みの `writingMode` (既定値 `'vertical-rl'`), `theme` (既定値 `'light'`), `fontSizePx` (既定値 `18`), `lineHeight` (既定値 `1.8`), `fontFamily` (既定値 `'biz-ud-mincho'`), `pageMarginPx` (既定値 `20`), `pagingMode` (既定値 `'auto'`) を復元する。
+   - `ServiceProvider` の `isReady` 完了後、`settingsRepository.getReaderSettings()` を呼び出し、保存済みの `writingMode` (既定値 `'vertical-rl'`), `theme` (既定値 `'light'`), `fontSizePx` (既定値 `18`), `lineHeight` (既定値 `1.8`), `fontFamily` (既定値 `'biz-ud-mincho'`), `pageMarginPx` (既定値 `20`), `pagingMode` (既定値 `'auto'`), `enableVolumeKeyPaging` (既定値 `false`) を復元する。
 2. **変更の即時反映と非同期永続化**:
-   - `toggleWritingMode`, `changeTheme`, `changeFontSize`（`12〜32` にクランプ）, `changeLineHeight`（`1.4〜2.4` にクランプ・小数第1位丸め）, `changeFontFamily`（5種）, `changePageMargin`（`8〜48` にクランプ・4刻み）, `changePagingMode`（`'auto' | 'paged' | 'scroll'`）実行時は、即座に React State を更新（楽観的更新）すると同時に `settingsRepository.updateReaderSettings(patch)` を呼び出して SQLite / ローカル永続化層へ書き込む。
+   - `toggleWritingMode`, `changeTheme`, `changeFontSize`（`12〜32` にクランプ）, `changeLineHeight`（`1.4〜2.4` にクランプ・小数第1位丸め）, `changeFontFamily`（5種）, `changePageMargin`（`8〜48` にクランプ・4刻み）, `changePagingMode`（`'auto' | 'paged' | 'scroll'`）, `toggleVolumeKeyPaging`（真偽値反転）実行時は、即座に React State を更新（楽観的更新）すると同時に `settingsRepository.updateReaderSettings(patch)` を呼び出して SQLite / ローカル永続化層へ書き込む。
    - 万一 `updateReaderSettings` が失敗（reject）した場合、直前の設定値に State をロールバックし、`error` を設定して画面上（`SettingsPage` ヘッダー直下）に `role="alert"`（`data-testid="settings-error-alert"`）でエラーメッセージを表示する。
    - 正常に更新された設定はリーダー画面（`SCR-03`）の `useReader` でも共有され、リーダーを開いた際に同じ設定が自動適用される。
 
@@ -454,7 +465,7 @@ export interface UseStorageCacheResult {
 | **`AC-ST-04`** | 4カラーテーマ切替と永続化                                   | `theme-{light\|sepia\|dark\|black}` ボタンでテーマを切り替えられ、選択中ボタンに `aria-pressed="true"` が設定され、プレビュー枠にテーマが反映されるとともに `reader_settings` へ永続化されること（外枠は標準UIテーマを維持）。                                                                                                                                                                                                                                                                                                                                                                                                              | `SYS-REQ-10`                   |
 | **`AC-ST-05`** | 文字サイズ・行間ステッパー境界制御                          | 文字サイズ（`12〜32px`、`±2px` 刻み）および行間（`1.4〜2.4`、`±0.2` 刻み）の `−` / `＋` ボタンで値が変更でき、上限・下限で各ボタンが `disabled` となり、プレビュー枠および `reader_settings` へ即時反映されること。                                                                                                                                                                                                                                                                                                                                                                                                                         | `SYS-REQ-09`                   |
 | **`AC-ST-06`** | OS バックキーによる直前画面（リーダー・作品詳細・本棚）復帰 | 設定画面（`/settings`）で OS バックキー（`AppBridge` またはブラウザ戻る操作）を実行したとき、直前の画面がリーダー画面（`SCR-03`）または作品詳細画面（`SCR-02`）であればその直前画面へ復帰し、下部タブからの直接遷移時または履歴なしの場合はホームである本棚画面（`SCR-01`: `/`）へ正しく復帰すること。                                                                                                                                                                                                                                                                                                                                      | `SYS-REQ-16, 20` / `TR-12`     |
-| **`AC-ST-07`** | 設定保存失敗時のロールバックとエラー通知                    | 設定変更（組み方向・ページ送りモード・テーマ・文字サイズ・行間・フォント種別・画面余白）の永続化処理が失敗した場合、直前の値へ状態が自動ロールバックされ、画面上部ヘッダー直下に `role="alert"`（`data-testid="settings-error-alert"`）でエラーメッセージが表示されること。                                                                                                                                                                                                                                                                                                                                                                 | `SYS-REQ-08, 09, 10, 11`       |
+| **`AC-ST-07`** | 設定保存失敗時のロールバックとエラー通知                    | 設定変更（組み方向・ページ送りモード・テーマ・文字サイズ・行間・フォント種別・画面余白・音量キー送り）の永続化処理が失敗した場合、直前の値へ状態が自動ロールバックされ、画面上部ヘッダー直下に `role="alert"`（`data-testid="settings-error-alert"`）でエラーメッセージが表示されること。                                                                                                                                                                                                                                                                                                                                                   | `SYS-REQ-08, 09, 10, 11`       |
 | **`AC-ST-08`** | Google アカウント連携と状態表示                             | 設定画面のクラウド同期セクションで「Google アカウントと連携」を押下したとき、Google 認可フローが起動し、成功時に連携中表示（メールアドレス表示）および初回の自動同期（Pull → マージ → Push）が行われること。初回同期失敗時はエラーが通知されること（R1-16）。                                                                                                                                                                                                                                                                                                                                                                               | `SYS-REQ-06` / `TR-01`         |
 | **`AC-ST-09`** | 「今すぐ同期」による手動即時同期                            | 連携中状態で「今すぐ同期」ボタンを押下したとき、即座に Pull → マージ → Push が実行され、処理中はボタンが disabled となり、成功時に最終同期日時が更新されること。                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `SYS-REQ-06`                   |
 | **`AC-ST-10`** | 連携解除確認と Revoke・ローカル保持                         | 「連携解除」ボタン押下時に確認ダイアログが表示され、確定時に Google サーバーへの Revoke および OS トークン破棄が実行され、未連携状態に戻ること（端末内の登録作品・しおりデータは消去されず安全に保持されること）。                                                                                                                                                                                                                                                                                                                                                                                                                          | `SYS-REQ-06`                   |
@@ -466,3 +477,4 @@ export interface UseStorageCacheResult {
 | **`AC-ST-16`** | 一括キャッシュ削除の即時反映と安全性                        | 一括削除完了後、全登録作品の対象話本文キャッシュが削除され、作品登録・目次・既読状態・しおりは保持された状態で、合計キャッシュ話数・合計容量表示が即時再計算されて更新され、完了通知（`data-testid="storage-cache-notice"`）が表示されること。                                                                                                                                                                                                                                                                                                                                                                                              | `SYS-REQ-05` / `TR-20`         |
 | **`AC-ST-17`** | フォント種別切替と永続化（v0.5 Issue #169）                 | フォント種別セレクター（`font-family-select`）で 5 種（UD明朝 / 明朝体 / UDゴシック / ゴシック体 / 教科書体 Klee）から選択でき、プレビュー枠のフォントスタックおよび `reader_settings` へ即時反映・永続化され、リロード後およびリーダー画面（`SCR-03`）でも設定が維持・反映されること。                                                                                                                                                                                                                                                                                                                                                     | `SYS-REQ-09`                   |
 | **`AC-ST-18`** | 画面余白ステッパー境界制御と永続化（v0.5 Issue #169）       | 画面余白（`8〜48px`、`±4px` 刻み、初期値 `20px`）の `−` / `＋` ボタン（`page-margin-decrease` / `page-margin-increase`）で値が変更でき、上限（`48px`）・下限（`8px`）で各ボタンが `disabled` となり、プレビュー枠のパディングおよび `reader_settings` へ即時反映・永続化され、リロード後およびリーダー画面（`SCR-03`）でも設定が維持・反映されること。                                                                                                                                                                                                                                                                                      | `SYS-REQ-09`                   |
+| **`AC-ST-19`** | 音量キー送りトグル設定と永続化（v0.6 Issue #203）           | 設定画面（`SCR-05`）の「表示・組版設定」セクションに「音量キーでページ送り」ON/OFF トグル（`data-testid="toggle-volume-key-paging"`, `aria-pressed={enableVolumeKeyPaging}`、初期値 `false`）が表示され、タップで ON/OFF 切替でき、`reader_settings` へ永続化されること。保存失敗時は直前の値へロールバックされ、エラー警告（`settings-error-alert`）が表示されること。                                                                                                                                                                                                                                                                     | `SYS-REQ-11` / `SCR-05`        |
