@@ -66,6 +66,7 @@ function calculateSwipeTrackStyle(
     height: "100%",
     display: "flex",
     flexDirection: "row",
+    writingMode: "horizontal-tb",
     transition: slideOffsetPx !== 0 ? "none" : "left 200ms ease-out",
   };
 }
@@ -385,11 +386,15 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           <div
             aria-hidden="true"
             className="h-full overflow-hidden relative flex-shrink-0"
-            style={{ width: `${pageWidth}px` }}
+            style={{
+              width: `${pageWidth}px`,
+              padding: `${pageMarginPx}px`,
+              boxSizing: "border-box",
+            }}
           >
             {currentPage < totalPages && (
               <div
-                className="h-full w-full m-auto"
+                className="h-full w-full writing-vertical-rl"
                 style={getPagedSlotContentStyle(
                   currentPage + 1,
                   pageHeight,
@@ -406,12 +411,16 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           {/* 中央スロット: 現在ページ (currentPage) */}
           <div
             className="h-full overflow-hidden relative flex-shrink-0"
-            style={{ width: `${pageWidth}px` }}
+            style={{
+              width: `${pageWidth}px`,
+              padding: `${pageMarginPx}px`,
+              boxSizing: "border-box",
+            }}
           >
             <div
               ref={contentRef}
               data-testid="reader-content"
-              className="h-full w-full m-auto"
+              className="h-full w-full writing-vertical-rl"
               style={getPagedSlotContentStyle(
                 currentPage,
                 pageHeight,
@@ -428,11 +437,15 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           <div
             aria-hidden="true"
             className="h-full overflow-hidden relative flex-shrink-0"
-            style={{ width: `${pageWidth}px` }}
+            style={{
+              width: `${pageWidth}px`,
+              padding: `${pageMarginPx}px`,
+              boxSizing: "border-box",
+            }}
           >
             {currentPage > 1 && (
               <div
-                className="h-full w-full m-auto"
+                className="h-full w-full writing-vertical-rl"
                 style={getPagedSlotContentStyle(
                   currentPage - 1,
                   pageHeight,
