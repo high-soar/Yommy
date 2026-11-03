@@ -116,6 +116,15 @@ export function useReaderGestures({
   const animationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 水平スライドアニメーション・連打即時確定用（AC-RD-17, Issue #201）
+  const pendingTargetPageRef = useRef<number | null>(null);
+  const lastTargetPageRef = useRef<number | null>(null);
+
+  // props の currentPage が更新されたら直前の連打確定キャッシュをクリア
+  useEffect(() => {
+    lastTargetPageRef.current = null;
+  }, [currentPage]);
+
   // 端ページ2段階タップ用（AC-RD-18）
   const pendingBoundaryTapRef = useRef<"next" | "prev" | null>(null);
   const boundaryTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -147,14 +156,66 @@ export function useReaderGestures({
     setBoundaryHint(null);
   }, []);
 
+  // 保留中スライドアニメーションの即時確定処理（高速連打・連続操作時: AC-RD-17c）
+  const flushPendingAnimation = useCallback(() => {
+    if (animationTimerRef.current) {
+      clearTimeout(animationTimerRef.current);
+      animationTimerRef.current = null;
+    }
+    if (pendingTargetPageRef.current !== null) {
+      const committedPage = pendingTargetPageRef.current;
+      pendingTargetPageRef.current = null;
+      lastTargetPageRef.current = committedPage;
+      onPageChange?.(committedPage);
+    }
+    setIsAnimating(false);
+    setSlideOffsetPx(0);
+  }, [onPageChange]);
+
+  // 目標ページへのスライドアニメーション開始ヘルパー（AC-RD-17a, 17b）
+  const startSlideAnimation = useCallback(
+    (targetPage: number, targetOffset: number) => {
+      pendingTargetPageRef.current = targetPage;
+      setIsAnimating(true);
+      setSlideOffsetPx(targetOffset);
+      onCloseOverlay();
+
+      animationTimerRef.current = setTimeout(() => {
+        pendingTargetPageRef.current = null;
+        lastTargetPageRef.current = null;
+        setIsAnimating(false);
+        setSlideOffsetPx(0);
+        animationTimerRef.current = null;
+        onPageChange?.(targetPage);
+      }, 200);
+    },
+    [onCloseOverlay, onPageChange],
+  );
+
+  // スナップバックアニメーション開始ヘルパー
+  const startSnapbackAnimation = useCallback(() => {
+    pendingTargetPageRef.current = null;
+    setIsAnimating(true);
+    setSlideOffsetPx(0);
+
+    animationTimerRef.current = setTimeout(() => {
+      setIsAnimating(false);
+      animationTimerRef.current = null;
+    }, 200);
+  }, []);
+
   // アンマウント時にタイマーを確実にクリーンアップ (R1-25(7))
   useEffect(() => {
     return () => {
       if (animationTimerRef.current) {
         clearTimeout(animationTimerRef.current);
+        animationTimerRef.current = null;
       }
+      pendingTargetPageRef.current = null;
+      lastTargetPageRef.current = null;
       if (tapTimerRef.current) {
         clearTimeout(tapTimerRef.current);
+        tapTimerRef.current = null;
       }
       clearBoundaryTap();
       clearScrollSwipe();
@@ -218,6 +279,11 @@ export function useReaderGestures({
   // Pointer Down
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
+      // 進行中のスライドアニメーションがあれば即時確定（高速連打・連続操作対応: AC-RD-17c）
+      if (isPaged && (isAnimating || pendingTargetPageRef.current !== null)) {
+        flushPendingAnimation();
+      }
+
       pointerStartRef.current = {
         x: e.clientX,
         y: e.clientY,
@@ -231,7 +297,7 @@ export function useReaderGestures({
         wasAtStartOnDownRef.current = reachedStartRef.current;
       }
     },
-    [isPaged],
+    [isPaged, isAnimating, flushPendingAnimation],
   );
 
   // Pointer Move
@@ -270,8 +336,12 @@ export function useReaderGestures({
       if (!isDraggingRef.current) return;
 
       // 境界判定（紙の本に即した右綴じ: 左から右ドラッグ dx > 0 で次話、右から左ドラッグ dx < 0 で前話）
-      const isNextBoundary = currentPage >= totalPages && dx > 0;
-      const isPrevBoundary = currentPage <= 1 && dx < 0;
+      const basePage =
+        pendingTargetPageRef.current ??
+        lastTargetPageRef.current ??
+        currentPage;
+      const isNextBoundary = basePage >= totalPages && dx > 0;
+      const isPrevBoundary = basePage <= 1 && dx < 0;
 
       // ラバーバンド減衰（0.3倍）
       let effectiveOffset = dx;
@@ -355,12 +425,16 @@ export function useReaderGestures({
           : e.clientX;
         const ratio = relativeX / width;
 
+        const basePage =
+          pendingTargetPageRef.current ??
+          lastTargetPageRef.current ??
+          currentPage;
+
         if (ratio < 0.2) {
           // 左端（幅約20%）: 縦書き時は次ページ（左開き）
-          if (currentPage < totalPages) {
+          if (basePage < totalPages) {
             clearBoundaryTap();
-            onPageChange?.(currentPage + 1);
-            onCloseOverlay();
+            startSlideAnimation(basePage + 1, width);
           } else {
             // 最終ページ到達時の次話遷移判定（2段階タップ: AC-RD-18）
             if (chapterIndex < totalChapters) {
@@ -382,10 +456,9 @@ export function useReaderGestures({
           }
         } else if (ratio > 0.8) {
           // 右端（幅約20%）: 縦書き時は前ページ
-          if (currentPage > 1) {
+          if (basePage > 1) {
             clearBoundaryTap();
-            onPageChange?.(currentPage - 1);
-            onCloseOverlay();
+            startSlideAnimation(basePage - 1, -width);
           } else {
             // 第1ページ到達時の前話遷移判定（2段階タップ: AC-RD-18）
             if (chapterIndex > 1) {
@@ -414,19 +487,13 @@ export function useReaderGestures({
       }
 
       // 2. ドラッグ離上判定（右綴じ書籍: dx > 0 で次話・次ページ、dx < 0 で前話・前ページ）
-      const isNextBoundary = currentPage >= totalPages && dx > 0;
-      const isPrevBoundary = currentPage <= 1 && dx < 0;
+      const basePage =
+        pendingTargetPageRef.current ??
+        lastTargetPageRef.current ??
+        currentPage;
 
-      const triggerAnimationEnd = () => {
-        setIsAnimating(true);
-        if (animationTimerRef.current) {
-          clearTimeout(animationTimerRef.current);
-        }
-        animationTimerRef.current = setTimeout(() => {
-          setIsAnimating(false);
-          animationTimerRef.current = null;
-        }, 200);
-      };
+      const isNextBoundary = basePage >= totalPages && dx > 0;
+      const isPrevBoundary = basePage <= 1 && dx < 0;
 
       // エピソード境界
       if (isNextBoundary || isPrevBoundary) {
@@ -450,24 +517,19 @@ export function useReaderGestures({
       if (isThresholdMet) {
         const isNextPage = dx > 0; // 紙の本と同じように左から右スワイプで次ページへ（右綴じ）
         if (isNextPage) {
-          if (currentPage < totalPages) {
-            onPageChange?.(currentPage + 1);
-            onCloseOverlay();
-            triggerAnimationEnd();
+          if (basePage < totalPages) {
+            startSlideAnimation(basePage + 1, width);
           }
         } else {
-          if (currentPage > 1) {
-            onPageChange?.(currentPage - 1);
-            onCloseOverlay();
-            triggerAnimationEnd();
+          if (basePage > 1) {
+            startSlideAnimation(basePage - 1, -width);
           }
         }
       } else {
         // スナップバック
-        triggerAnimationEnd();
+        startSnapbackAnimation();
       }
 
-      setSlideOffsetPx(0);
       setBoundaryHint(null);
     },
     [
@@ -481,10 +543,11 @@ export function useReaderGestures({
       getContainerWidth,
       onCloseOverlay,
       onToggleOverlay,
-      onPageChange,
+      clearBoundaryTap,
+      startSlideAnimation,
+      startSnapbackAnimation,
       onNextChapter,
       onPrevChapter,
-      clearBoundaryTap,
     ],
   );
 

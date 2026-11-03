@@ -688,47 +688,65 @@ describe("ReaderPage", () => {
     }
 
     it("画面左端タップ（幅約 20%: x < 60px）で縦書き次ページへめくり遷移すること（AC-RD-17）", () => {
-      const onPageChange = vi.fn();
-      render(
-        <ReaderPage
-          {...createDefaultProps({
-            pagingMode: "paged",
-            currentPage: 2,
-            totalPages: 5,
-            onPageChange,
-          })}
-        />,
-      );
+      vi.useFakeTimers();
+      try {
+        const onPageChange = vi.fn();
+        render(
+          <ReaderPage
+            {...createDefaultProps({
+              pagingMode: "paged",
+              currentPage: 2,
+              totalPages: 5,
+              onPageChange,
+            })}
+          />,
+        );
 
-      const main = screen.getByRole("main");
-      setupContainerDimensions(main, 300);
+        const main = screen.getByRole("main");
+        setupContainerDimensions(main, 300);
 
-      firePointer(main, "pointerdown", { clientX: 30, clientY: 100 });
-      firePointer(main, "pointerup", { clientX: 32, clientY: 101 });
+        firePointer(main, "pointerdown", { clientX: 30, clientY: 100 });
+        firePointer(main, "pointerup", { clientX: 32, clientY: 101 });
 
-      expect(onPageChange).toHaveBeenCalledWith(3);
+        act(() => {
+          vi.advanceTimersByTime(200);
+        });
+
+        expect(onPageChange).toHaveBeenCalledWith(3);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("画面右端タップ（幅約 20%: x > 240px）で縦書き前ページへめくり遷移すること（AC-RD-17）", () => {
-      const onPageChange = vi.fn();
-      render(
-        <ReaderPage
-          {...createDefaultProps({
-            pagingMode: "paged",
-            currentPage: 2,
-            totalPages: 5,
-            onPageChange,
-          })}
-        />,
-      );
+      vi.useFakeTimers();
+      try {
+        const onPageChange = vi.fn();
+        render(
+          <ReaderPage
+            {...createDefaultProps({
+              pagingMode: "paged",
+              currentPage: 2,
+              totalPages: 5,
+              onPageChange,
+            })}
+          />,
+        );
 
-      const main = screen.getByRole("main");
-      setupContainerDimensions(main, 300);
+        const main = screen.getByRole("main");
+        setupContainerDimensions(main, 300);
 
-      firePointer(main, "pointerdown", { clientX: 270, clientY: 100 });
-      firePointer(main, "pointerup", { clientX: 271, clientY: 100 });
+        firePointer(main, "pointerdown", { clientX: 270, clientY: 100 });
+        firePointer(main, "pointerup", { clientX: 271, clientY: 100 });
 
-      expect(onPageChange).toHaveBeenCalledWith(1);
+        act(() => {
+          vi.advanceTimersByTime(200);
+        });
+
+        expect(onPageChange).toHaveBeenCalledWith(1);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("画面中央タップ（幅約 60%: 60px <= x <= 240px）で下部オーバーレイ開閉がトグルすること（AC-RD-17）", () => {
@@ -761,26 +779,35 @@ describe("ReaderPage", () => {
     });
 
     it("水平ドラッグ移動量 30% 以上の指離しで次ページ遷移が確定すること（AC-RD-17）", () => {
-      const onPageChange = vi.fn();
-      render(
-        <ReaderPage
-          {...createDefaultProps({
-            pagingMode: "paged",
-            currentPage: 2,
-            totalPages: 5,
-            onPageChange,
-          })}
-        />,
-      );
+      vi.useFakeTimers();
+      try {
+        const onPageChange = vi.fn();
+        render(
+          <ReaderPage
+            {...createDefaultProps({
+              pagingMode: "paged",
+              currentPage: 2,
+              totalPages: 5,
+              onPageChange,
+            })}
+          />,
+        );
 
-      const main = screen.getByRole("main");
-      setupContainerDimensions(main, 300);
+        const main = screen.getByRole("main");
+        setupContainerDimensions(main, 300);
 
-      firePointer(main, "pointerdown", { clientX: 200, clientY: 100 });
-      firePointer(main, "pointermove", { clientX: 300, clientY: 100 }); // dx = +100 >= 90px (30%)
-      firePointer(main, "pointerup", { clientX: 300, clientY: 100 });
+        firePointer(main, "pointerdown", { clientX: 200, clientY: 100 });
+        firePointer(main, "pointermove", { clientX: 300, clientY: 100 }); // dx = +100 >= 90px (30%)
+        firePointer(main, "pointerup", { clientX: 300, clientY: 100 });
 
-      expect(onPageChange).toHaveBeenCalledWith(3);
+        act(() => {
+          vi.advanceTimersByTime(200);
+        });
+
+        expect(onPageChange).toHaveBeenCalledWith(3);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("水平ドラッグ移動量 30% 未満の指離しでスナップバックしページ遷移しないこと（AC-RD-17）", () => {

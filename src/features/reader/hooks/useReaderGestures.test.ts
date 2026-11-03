@@ -169,9 +169,19 @@ describe("useReaderGestures", () => {
         );
       });
 
+      // 離上直後は +pageWidth へ滑り切りアニメーション中、onPageChange は未呼び出し
+      expect(result.current.isAnimating).toBe(true);
+      expect(result.current.slideOffsetPx).toBe(300);
+      expect(defaultOptions.onPageChange).not.toHaveBeenCalled();
+
+      // 200ms 後に onPageChange が確定し、リセットされること
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
       expect(defaultOptions.onPageChange).toHaveBeenCalledWith(3);
       expect(defaultOptions.onCloseOverlay).toHaveBeenCalled();
       expect(result.current.slideOffsetPx).toBe(0);
+      expect(result.current.isAnimating).toBe(false);
     });
 
     it("規定値（30% = 90px）以上のドラッグで前ページへの確定遷移が発生すること", () => {
@@ -195,9 +205,19 @@ describe("useReaderGestures", () => {
         );
       });
 
+      // 離上直後は -pageWidth へ滑り切りアニメーション中、onPageChange は未呼び出し
+      expect(result.current.isAnimating).toBe(true);
+      expect(result.current.slideOffsetPx).toBe(-300);
+      expect(defaultOptions.onPageChange).not.toHaveBeenCalled();
+
+      // 200ms 後に onPageChange が確定し、リセットされること
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
       expect(defaultOptions.onPageChange).toHaveBeenCalledWith(1);
       expect(defaultOptions.onCloseOverlay).toHaveBeenCalled();
       expect(result.current.slideOffsetPx).toBe(0);
+      expect(result.current.isAnimating).toBe(false);
     });
 
     it("フリック速度（velocity > 0.5 px/ms）による高速フリックで移動距離30%未満でも確定遷移すること", () => {
@@ -223,8 +243,18 @@ describe("useReaderGestures", () => {
         );
       });
 
+      // 離上直後は +pageWidth へ滑り切りアニメーション中、onPageChange は未呼び出し
+      expect(result.current.isAnimating).toBe(true);
+      expect(result.current.slideOffsetPx).toBe(300);
+      expect(defaultOptions.onPageChange).not.toHaveBeenCalled();
+
+      // 200ms 後に onPageChange が確定し、リセットされること
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
       expect(defaultOptions.onPageChange).toHaveBeenCalledWith(3);
       expect(result.current.slideOffsetPx).toBe(0);
+      expect(result.current.isAnimating).toBe(false);
     });
 
     it("30% 未満かつ低速フリック時はスナップバックしてページ遷移しないこと", () => {
@@ -473,8 +503,19 @@ describe("useReaderGestures", () => {
         );
       });
 
-      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(3);
+      // タップ直後は +pageWidth へスライドアニメーション中、onPageChange は未呼び出し
+      expect(result.current.isAnimating).toBe(true);
+      expect(result.current.slideOffsetPx).toBe(300);
+      expect(defaultOptions.onPageChange).not.toHaveBeenCalled();
       expect(defaultOptions.onToggleOverlay).not.toHaveBeenCalled();
+
+      // 200ms 後に onPageChange が呼ばれ、リセットされること
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(3);
+      expect(result.current.slideOffsetPx).toBe(0);
+      expect(result.current.isAnimating).toBe(false);
     });
 
     it("画面右端タップ（幅約 20%: x > 240px）で縦書き前のページへめくること", () => {
@@ -494,8 +535,19 @@ describe("useReaderGestures", () => {
         );
       });
 
-      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(1);
+      // タップ直後は -pageWidth へスライドアニメーション中、onPageChange は未呼び出し
+      expect(result.current.isAnimating).toBe(true);
+      expect(result.current.slideOffsetPx).toBe(-300);
+      expect(defaultOptions.onPageChange).not.toHaveBeenCalled();
       expect(defaultOptions.onToggleOverlay).not.toHaveBeenCalled();
+
+      // 200ms 後に onPageChange が呼ばれ、リセットされること
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(1);
+      expect(result.current.slideOffsetPx).toBe(0);
+      expect(result.current.isAnimating).toBe(false);
     });
 
     it("画面中央タップ（幅約 60%: 60px <= x <= 240px）でオーバーレイ開閉をトグルすること", () => {
@@ -544,7 +596,7 @@ describe("useReaderGestures", () => {
       expect(defaultOptions.onCloseOverlay).toHaveBeenCalled();
     });
 
-    it("100ms以内の連続タップ時に既存の tapTimer がクリアされること", () => {
+    it("100ms以内の連続タップ時に既存の tapTimer がクリアされ、アニメーション中の2回目タップで1回目が即時確定すること", () => {
       const { result } = renderHook(() => useReaderGestures(defaultOptions));
 
       // 1回目のタップ
@@ -560,21 +612,41 @@ describe("useReaderGestures", () => {
         );
       });
 
-      // 30ms後（100ms以内）に2回目のタップ
+      // 1回目タップ直後: slideOffsetPx=300, isAnimating=true, onPageChange はまだ呼ばれていない
+      expect(result.current.isAnimating).toBe(true);
+      expect(result.current.slideOffsetPx).toBe(300);
+      expect(defaultOptions.onPageChange).not.toHaveBeenCalled();
+
+      // 30ms後（100ms以内）に2回目のタップ開始（pointerdown）
+      // アニメーション中のため1回目の保留遷移（page: 3）が即時確定される！
       vi.advanceTimersByTime(30);
       act(() => {
         result.current.handlePointerDown(
           createPointerEvent("pointerdown", { clientX: 30, clientY: 100 }),
         );
       });
+      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(3);
+      expect(defaultOptions.onPageChange).toHaveBeenCalledTimes(1);
+
+      // 2回目のタップ離上（pointerup）
       vi.advanceTimersByTime(20);
       act(() => {
         result.current.handlePointerUp(
           createPointerEvent("pointerup", { clientX: 30, clientY: 100 }),
         );
       });
+      // 2回目のタップ直後: 確定済みページ3から次ページ4へのアニメーション開始
+      expect(result.current.isAnimating).toBe(true);
+      expect(result.current.slideOffsetPx).toBe(300);
 
+      // 200ms 後に 2回目の onPageChange(4) が確定
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(4);
       expect(defaultOptions.onPageChange).toHaveBeenCalledTimes(2);
+      expect(result.current.slideOffsetPx).toBe(0);
+      expect(result.current.isAnimating).toBe(false);
     });
 
     describe("端ページでの2段階タップによる前後話移動と案内ヒント表示 (AC-RD-18, v0.5 Issue #168, #175)", () => {
@@ -2171,6 +2243,502 @@ describe("useReaderGestures", () => {
       });
 
       expect(clearTimeoutSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe("水平スライドアニメーションおよび高速連打即時確定 (AC-RD-17, Issue #201)", () => {
+    it("左端タップ時: 直後に +pageWidth へスライドアニメーション開始し、200ms 後に onPageChange が確定してリセットされること (AC-RD-17a)", () => {
+      const { result } = renderHook(() => useReaderGestures(defaultOptions));
+
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 30, clientY: 100 }),
+        );
+      });
+      vi.advanceTimersByTime(50);
+      act(() => {
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 30, clientY: 100 }),
+        );
+      });
+
+      // 直後: isAnimating=true, slideOffsetPx=300, onPageChange 未実行
+      expect(result.current.isAnimating).toBe(true);
+      expect(result.current.slideOffsetPx).toBe(300);
+      expect(defaultOptions.onPageChange).not.toHaveBeenCalled();
+
+      // 100ms 経過: まだアニメーション中
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      expect(result.current.isAnimating).toBe(true);
+      expect(result.current.slideOffsetPx).toBe(300);
+      expect(defaultOptions.onPageChange).not.toHaveBeenCalled();
+
+      // 200ms 到達: 確定 ＆ リセット
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(3);
+      expect(result.current.isAnimating).toBe(false);
+      expect(result.current.slideOffsetPx).toBe(0);
+    });
+
+    it("右端タップ時: 直後に -pageWidth へスライドアニメーション開始し、200ms 後に onPageChange が確定してリセットされること (AC-RD-17a)", () => {
+      const { result } = renderHook(() => useReaderGestures(defaultOptions));
+
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 270, clientY: 100 }),
+        );
+      });
+      vi.advanceTimersByTime(50);
+      act(() => {
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 270, clientY: 100 }),
+        );
+      });
+
+      // 直後: isAnimating=true, slideOffsetPx=-300, onPageChange 未実行
+      expect(result.current.isAnimating).toBe(true);
+      expect(result.current.slideOffsetPx).toBe(-300);
+      expect(defaultOptions.onPageChange).not.toHaveBeenCalled();
+
+      // 200ms 到達: 確定 ＆ リセット
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(1);
+      expect(result.current.isAnimating).toBe(false);
+      expect(result.current.slideOffsetPx).toBe(0);
+    });
+
+    it("スワイプ確定離上時: 直後に目標幅（次: +width, 前: -width）へ滑り切りアニメーションし、200ms 後に onPageChange が確定すること (AC-RD-17b)", () => {
+      const { result } = renderHook(() => useReaderGestures(defaultOptions));
+
+      // 次ページ方向スワイプ（dx = +100px）
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 200, clientY: 100 }),
+        );
+      });
+      expect(result.current.slideOffsetPx).toBe(100);
+
+      act(() => {
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 200, clientY: 100 }),
+        );
+      });
+      // 離上直後は +width (300) へ滑り切り
+      expect(result.current.isAnimating).toBe(true);
+      expect(result.current.slideOffsetPx).toBe(300);
+      expect(defaultOptions.onPageChange).not.toHaveBeenCalled();
+
+      // 200ms 経過で確定
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(3);
+      expect(result.current.isAnimating).toBe(false);
+      expect(result.current.slideOffsetPx).toBe(0);
+    });
+
+    it("スナップバック時: 離上直後に slideOffsetPx=0, isAnimating=true となり、200ms 後に isAnimating=false となること", () => {
+      const { result } = renderHook(() => useReaderGestures(defaultOptions));
+
+      // 30% 未満の移動（dx = +40px）
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 140, clientY: 100 }),
+        );
+      });
+      expect(result.current.slideOffsetPx).toBe(40);
+
+      act(() => {
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 140, clientY: 100 }),
+        );
+      });
+      // スナップバック直後
+      expect(result.current.slideOffsetPx).toBe(0);
+      expect(result.current.isAnimating).toBe(true);
+      expect(defaultOptions.onPageChange).not.toHaveBeenCalled();
+
+      // 200ms 経過
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(result.current.isAnimating).toBe(false);
+      expect(defaultOptions.onPageChange).not.toHaveBeenCalled();
+    });
+
+    it("高速連続タップ時: アニメーション中に次のタップが来た場合、保留中の遷移が即時確定されて次のページへ連続遷移すること (AC-RD-17c)", () => {
+      const { result } = renderHook(() => useReaderGestures(defaultOptions));
+
+      // 1回目の左端タップ（2 -> 3 へのアニメーション開始）
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 30, clientY: 100 }),
+        );
+      });
+      vi.advanceTimersByTime(50);
+      act(() => {
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 30, clientY: 100 }),
+        );
+      });
+      expect(result.current.isAnimating).toBe(true);
+      expect(result.current.slideOffsetPx).toBe(300);
+      expect(defaultOptions.onPageChange).not.toHaveBeenCalled();
+
+      // 100ms 後（アニメーション完了前）に 2回目の左端タップ開始（pointerdown）
+      vi.advanceTimersByTime(50);
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 30, clientY: 100 }),
+        );
+      });
+      // 2回目の pointerdown 時点で 1回目の保留遷移（3）が即時確定される！
+      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(3);
+      expect(defaultOptions.onPageChange).toHaveBeenCalledTimes(1);
+
+      // 2回目のタップ離上（pointerup）: 新ベースページ 3 から 4 へのアニメーション開始
+      vi.advanceTimersByTime(40);
+      act(() => {
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 30, clientY: 100 }),
+        );
+      });
+      expect(result.current.isAnimating).toBe(true);
+      expect(result.current.slideOffsetPx).toBe(300);
+
+      // 200ms 後に 2回目の遷移（4）が確定
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(4);
+      expect(defaultOptions.onPageChange).toHaveBeenCalledTimes(2);
+      expect(result.current.isAnimating).toBe(false);
+      expect(result.current.slideOffsetPx).toBe(0);
+    });
+
+    it("スライドアニメーション中に逆方向タップが来た場合: 保留中が即時確定され、新ベースから逆方向のアニメーションが開始されること", () => {
+      const { result } = renderHook(() => useReaderGestures(defaultOptions));
+
+      // 1回目の左端タップ（2 -> 3 へのアニメーション開始）
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 30, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 30, clientY: 100 }),
+        );
+      });
+      expect(result.current.isAnimating).toBe(true);
+      expect(result.current.slideOffsetPx).toBe(300);
+
+      // アニメーション中に右端タップ（前ページ）
+      vi.advanceTimersByTime(50);
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 270, clientY: 100 }),
+        );
+      });
+      // 1回目の 3 が即時確定
+      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(3);
+
+      act(() => {
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 270, clientY: 100 }),
+        );
+      });
+      // 3 から前ページ 2 へ戻るアニメーション（slideOffsetPx = -300）開始
+      expect(result.current.isAnimating).toBe(true);
+      expect(result.current.slideOffsetPx).toBe(-300);
+
+      // 200ms 後に 2 が確定
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(2);
+      expect(defaultOptions.onPageChange).toHaveBeenCalledTimes(2);
+    });
+
+    it("スライドアニメーション中にドラッグが開始された場合: 保留中が即時確定され、ドラッグにリアルタイム追従すること", () => {
+      const { result } = renderHook(() => useReaderGestures(defaultOptions));
+
+      // 左端タップ（2 -> 3 アニメーション開始）
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 30, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 30, clientY: 100 }),
+        );
+      });
+
+      // アニメーション中に pointerdown
+      vi.advanceTimersByTime(50);
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+      });
+      // 保留中の 3 が即時確定
+      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(3);
+      expect(result.current.isAnimating).toBe(false);
+      expect(result.current.slideOffsetPx).toBe(0);
+
+      // ドラッグ追従（dx = +50px）
+      act(() => {
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 150, clientY: 100 }),
+        );
+      });
+      expect(result.current.slideOffsetPx).toBe(50);
+    });
+
+    it("スワイプ離上アニメーション中に連打タップが発生した場合: 保留遷移が即時確定されること", () => {
+      const { result } = renderHook(() => useReaderGestures(defaultOptions));
+
+      // スワイプ離上（dx = +100px -> 3 へのアニメーション開始）
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 200, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 200, clientY: 100 }),
+        );
+      });
+      expect(result.current.isAnimating).toBe(true);
+      expect(result.current.slideOffsetPx).toBe(300);
+
+      // アニメーション中に左端タップ
+      vi.advanceTimersByTime(50);
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 30, clientY: 100 }),
+        );
+      });
+      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(3);
+
+      act(() => {
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 30, clientY: 100 }),
+        );
+      });
+      // 3 から 4 へのアニメーション
+      expect(result.current.isAnimating).toBe(true);
+      expect(result.current.slideOffsetPx).toBe(300);
+
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(4);
+    });
+
+    it("スナップバックアニメーション中に操作が発生した場合: pending なしのため余分な onPageChange を呼ばずに次操作が開始されること", () => {
+      const { result } = renderHook(() => useReaderGestures(defaultOptions));
+
+      // スナップバック（dx = 40px で離上）
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+        );
+        result.current.handlePointerMove(
+          createPointerEvent("pointermove", { clientX: 140, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 140, clientY: 100 }),
+        );
+      });
+      expect(result.current.isAnimating).toBe(true);
+      expect(defaultOptions.onPageChange).not.toHaveBeenCalled();
+
+      // スナップバックアニメーション中に左端タップ
+      vi.advanceTimersByTime(50);
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 30, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 30, clientY: 100 }),
+        );
+      });
+      // スナップバック中だったため確定対象はなく、新タップ（2 -> 3）が開始される
+      expect(defaultOptions.onPageChange).not.toHaveBeenCalled();
+      expect(result.current.isAnimating).toBe(true);
+      expect(result.current.slideOffsetPx).toBe(300);
+
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(3);
+    });
+
+    it("端ページ到達時の連続タップ: 最終ページへのスライドアニメーション中に再度次へタップした際、最終ページが即時確定され端2段階ヒントへ移行すること", () => {
+      const { result } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          currentPage: 3,
+          totalPages: 4,
+          chapterIndex: 1,
+          totalChapters: 3,
+        }),
+      );
+
+      // 3 から 4 への左端タップ
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 30, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 30, clientY: 100 }),
+        );
+      });
+      expect(result.current.isAnimating).toBe(true);
+
+      // アニメーション中に再度左端タップ
+      vi.advanceTimersByTime(50);
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 30, clientY: 100 }),
+        );
+      });
+      // 4 が即時確定
+      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(4);
+
+      act(() => {
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 30, clientY: 100 }),
+        );
+      });
+      // 4 は totalPages に達しているため、次ページスライドではなく 2段階タップの案内ヒントが表示される
+      expect(result.current.boundaryHint).toBe("もう一度タップで次の話へ");
+    });
+
+    it("第1ページ到達時の連続タップ: 第1ページへのスライドアニメーション中に再度前へタップした際、第1ページが即時確定され端2段階ヒントへ移行すること", () => {
+      const { result } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          currentPage: 2,
+          totalPages: 4,
+          chapterIndex: 2,
+          totalChapters: 3,
+        }),
+      );
+
+      // 2 から 1 への右端タップ
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 270, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 270, clientY: 100 }),
+        );
+      });
+      expect(result.current.isAnimating).toBe(true);
+
+      // アニメーション中に再度右端タップ
+      vi.advanceTimersByTime(50);
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 270, clientY: 100 }),
+        );
+      });
+      // 1 が即時確定
+      expect(defaultOptions.onPageChange).toHaveBeenCalledWith(1);
+
+      act(() => {
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 270, clientY: 100 }),
+        );
+      });
+      // 1 は 第1ページのため、前ページスライドではなく 2段階タップの案内ヒントが表示される
+      expect(result.current.boundaryHint).toBe("もう一度タップで前の話へ");
+    });
+
+    it("アニメーション進行中にアンマウントされた場合、タイマーが破棄されて未確定コールバックが発火しないこと", () => {
+      const { result, unmount } = renderHook(() =>
+        useReaderGestures(defaultOptions),
+      );
+
+      // 左端タップでアニメーション開始
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 30, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 30, clientY: 100 }),
+        );
+      });
+      expect(result.current.isAnimating).toBe(true);
+
+      // アンマウント
+      unmount();
+
+      // タイマー時間を進める
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+
+      // アンマウント後は onPageChange が呼ばれないこと
+      expect(defaultOptions.onPageChange).not.toHaveBeenCalled();
+    });
+
+    it("props の currentPage が更新された場合、連打基準ページが適切に同期されること", () => {
+      let currentPg = 2;
+      const { result, rerender } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          currentPage: currentPg,
+          onPageChange: (p) => {
+            currentPg = p;
+          },
+        }),
+      );
+
+      // 1回目のタップ
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 30, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 30, clientY: 100 }),
+        );
+      });
+
+      // 200ms 経過で確定
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(currentPg).toBe(3);
+
+      // 親コンポーネントが currentPage を 3 に更新して rerender
+      rerender();
+
+      // さらにタップして 4 へ進める
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 30, clientY: 100 }),
+        );
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 30, clientY: 100 }),
+        );
+      });
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(currentPg).toBe(4);
     });
   });
 });
