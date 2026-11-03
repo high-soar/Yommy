@@ -86,7 +86,7 @@ related_tests: []
 > - Milestone `v0.3` で解決済みの申し送り（`HO-14`, `HO-16`〜`HO-21`）: [docs/quality/archive/v0.3-search-prefetch-log.md](archive/v0.3-search-prefetch-log.md)
 > - Milestone `v0.5` で解決済みの申し送り（`HO-15`, `HO-22`, `HO-23`, `HO-24`, `HO-25`）: [docs/quality/archive/v0.5-reader-customization-and-cache-log.md](archive/v0.5-reader-customization-and-cache-log.md)
 
-現在、未解決（`Open`）の申し送り事項はありません。次期 Milestone `v0.6` 作業中に発生した申し送り事項は、本表へ `HO-26` より連番で登録します。
+現在、未解決（`Open`）の申し送り事項は 1 件（`HO-26`）です。次期 Milestone `v0.6` 作業中に発生した追加の申し送り事項は、本表へ `HO-27` より連番で登録します。
 
 |     ID      | 起票元 Issue / PR | 申し送り事項の内容                                                                                                      | 解決先（対象 Issue / 成果物）          | 完了ゲート              | 状態 (`Open` / `Resolved`) |
 | :---------: | :---------------: | :---------------------------------------------------------------------------------------------------------------------- | :------------------------------------- | :---------------------- | :------------------------: |
