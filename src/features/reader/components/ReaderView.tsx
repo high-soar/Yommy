@@ -56,7 +56,7 @@ function clampProgress(value: number): number {
 export function calculateSwipeTrackStyle(
   pageWidth: number,
   slideOffsetPx: number,
-  _isAnimating: boolean = false,
+  isAnimating: boolean = false,
 ): React.CSSProperties {
   const left = -pageWidth + slideOffsetPx;
   return {
@@ -68,7 +68,7 @@ export function calculateSwipeTrackStyle(
     display: "flex",
     flexDirection: "row",
     writingMode: "horizontal-tb",
-    transition: slideOffsetPx !== 0 ? "none" : "left 200ms ease-out",
+    transition: isAnimating ? "left 200ms ease-out" : "none",
   };
 }
 
@@ -381,7 +381,11 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       {isPaged ? (
         <div
           data-testid="reader-swipe-track"
-          style={calculateSwipeTrackStyle(pageWidth, slideOffsetPx)}
+          style={calculateSwipeTrackStyle(
+            pageWidth,
+            slideOffsetPx,
+            isAnimating,
+          )}
         >
           {/* 左スロット: 次ページ (currentPage + 1) */}
           <div
