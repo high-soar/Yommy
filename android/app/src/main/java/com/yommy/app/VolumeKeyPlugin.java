@@ -12,7 +12,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 @CapacitorPlugin(name = "VolumeKey")
 public class VolumeKeyPlugin extends Plugin {
     private static volatile boolean volumeKeyPagingEnabled = false;
-    private static VolumeKeyPlugin instance;
+    private static volatile VolumeKeyPlugin instance;
 
     @Override
     public void load() {

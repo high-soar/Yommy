@@ -85,8 +85,10 @@ describe("MockVolumeKeyBridge", () => {
       const listener1 = vi.fn();
       const listener2 = vi.fn();
 
+      expect(bridge.getListenerCount()).toBe(0);
       bridge.addVolumeKeyListener(listener1);
       bridge.addVolumeKeyListener(listener2);
+      expect(bridge.getListenerCount()).toBe(2);
 
       bridge.triggerVolumeKey("up");
       expect(listener1).toHaveBeenCalledWith({ direction: "up" });

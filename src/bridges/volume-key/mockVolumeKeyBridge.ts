@@ -32,6 +32,13 @@ export class MockVolumeKeyBridge implements VolumeKeyBridge {
   }
 
   /**
+   * 登録されているリスナーの総数を取得する（テスト検証用）。
+   */
+  getListenerCount(): number {
+    return this.listeners.size;
+  }
+
+  /**
    * 音量キーインターセプトの有効状態を取得する。
    */
   isVolumeKeyPagingEnabled(): boolean {
