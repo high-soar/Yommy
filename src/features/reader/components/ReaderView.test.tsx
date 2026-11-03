@@ -683,9 +683,10 @@ describe("ReaderView", () => {
       expect(content.style.width).toBe("360px");
       expect(content.style.height).toBe("560px");
 
-      // 水平スワイプラックによる配置（中央スロット: left: -400px）
+      // 水平スワイプラックによる配置（writingMode: "horizontal-tb", 中央スロット: left: -400px）
       expect(swipeTrack).toHaveStyle({
         left: "-400px",
+        writingMode: "horizontal-tb",
         transition: "left 200ms ease-out",
       });
 
