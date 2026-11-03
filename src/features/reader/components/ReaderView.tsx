@@ -52,6 +52,10 @@ function clampProgress(value: number): number {
 /**
  * 水平スワイプラックのインラインスタイルを生成する純粋関数
  * （右綴じ書籍に即した水平配置: [次ページ(左), 現在ページ(中央), 前ページ(右)]）
+ *
+ * @param pageWidth 1ページあたりの表示幅 (px)
+ * @param slideOffsetPx スワイプドラッグ中またはアニメーション中の水平変位量 (px)
+ * @param isAnimating ページ遷移スライドアニメーション中フラグ（true: "left 200ms ease-out", false: "none"）
  */
 export function calculateSwipeTrackStyle(
   pageWidth: number,
@@ -59,6 +63,8 @@ export function calculateSwipeTrackStyle(
   isAnimating: boolean = false,
 ): React.CSSProperties {
   const left = -pageWidth + slideOffsetPx;
+  const transition = isAnimating ? "left 200ms ease-out" : "none";
+
   return {
     position: "absolute",
     top: 0,
@@ -68,7 +74,7 @@ export function calculateSwipeTrackStyle(
     display: "flex",
     flexDirection: "row",
     writingMode: "horizontal-tb",
-    transition: isAnimating ? "left 200ms ease-out" : "none",
+    transition,
   };
 }
 
