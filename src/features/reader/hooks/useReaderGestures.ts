@@ -175,22 +175,18 @@ export function useReaderGestures({
   // 目標ページへのスライドアニメーション開始ヘルパー（AC-RD-17a, 17b）
   const startSlideAnimation = useCallback(
     (targetPage: number, targetOffset: number) => {
-      if (animationTimerRef.current) {
-        clearTimeout(animationTimerRef.current);
-      }
       pendingTargetPageRef.current = targetPage;
       setIsAnimating(true);
       setSlideOffsetPx(targetOffset);
       onCloseOverlay();
 
       animationTimerRef.current = setTimeout(() => {
-        const resolvedPage = pendingTargetPageRef.current ?? targetPage;
         pendingTargetPageRef.current = null;
         lastTargetPageRef.current = null;
         setIsAnimating(false);
         setSlideOffsetPx(0);
         animationTimerRef.current = null;
-        onPageChange?.(resolvedPage);
+        onPageChange?.(targetPage);
       }, 200);
     },
     [onCloseOverlay, onPageChange],
@@ -198,9 +194,6 @@ export function useReaderGestures({
 
   // スナップバックアニメーション開始ヘルパー
   const startSnapbackAnimation = useCallback(() => {
-    if (animationTimerRef.current) {
-      clearTimeout(animationTimerRef.current);
-    }
     pendingTargetPageRef.current = null;
     setIsAnimating(true);
     setSlideOffsetPx(0);
