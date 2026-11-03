@@ -77,7 +77,7 @@ related_tests: []
 設計時や PR 作業中に「現在の PR スコープ外だが、後続の Sub-issue や IT、実機確認で必ず検証・対応すべき事項」が発生した場合は、以下に `HO-xx` として登録し、解決ゲート（親 Issue クローズ前、または Milestone 完了前）までに確実に消化します。
 
 > [!NOTE]
-> **解決済み申し送り事項（`HO-01`〜`HO-14`, `HO-15`〜`HO-25`）のアーカイブ**:
+> **解決済み申し送り事項（`HO-01`〜`HO-14`, `HO-15`, `HO-22`〜`HO-25`）のアーカイブ**:
 >
 > - Phase 3 で解決済みの申し送り（`HO-01`〜`HO-03`）: [docs/quality/archive/phase3-poc-log.md](archive/phase3-poc-log.md)
 > - Milestone `v0.1` で解決済みの申し送り（`HO-04`〜`HO-09`）: [docs/quality/archive/v0.1-mvp-log.md](archive/v0.1-mvp-log.md)
