@@ -41,7 +41,7 @@ Always read [docs/index.md](docs/index.md) and follow [docs/guidelines/workflow.
    - **Phase 3 (PoC / Walking Skeleton) & Phase 4+ (Iterative Feature Development)**: Follow the strict **Issue + PR + Independent AI Review (`pr-reviewer`) + Task Completion Gate (7 conditions)** workflow.
 2. **Issue-Driven Micro-Waterfall (No Premature Coding)**:
    - Never jump straight into production code for a feature request.
-   - Progress sequentially per feature: **① Open Questions Clarification → ② Design Update PR (create Delta Spec `docs/specs/changes/issue-XX-*.md` + update Canonical App Specs in `docs/specs/` in `Review` state + Sub-issue breakdown, merged by human to become `Approved`) → ③ MK PRs (TDD Red-Green-Refactor, 1-to-1 Story/UT, VRT) → ④ IT PR (Playwright `SCN-xx` system-wide regression, Handover resolution, and archiving the Delta Spec to `docs/specs/changes/archive/`)**.
+   - Progress sequentially per feature: **① Open Questions Clarification → ② Design Update PR (create Delta Spec `docs/specs/changes/issue-XX-*.md` + update Canonical App Specs in `docs/specs/` in `Review` state + Sub-issue breakdown, merged by human to become `Approved`) → ③ MK PRs (TDD Red-Green-Refactor, 1-to-1 Story/UT, VRT, auto-merged by Orchestrator AI upon passing Gates 1–6 unless an escalation condition applies) → ④ IT PR (Playwright `SCN-xx` system-wide regression, Handover resolution, archiving the Delta Spec to `docs/specs/changes/archive/`, and merged by human to close the parent Issue)**.
    - Follow the [iterative GitHub task-management skill](.github/skills/iterative-github-task-management/SKILL.md).
 3. **3-Layer Testing & Implementation Discipline**:
    - Follow [docs/guidelines/testing.md](docs/guidelines/testing.md) and the [C・UT workflow skill](.github/skills/c-ut-workflow/SKILL.md).
@@ -73,11 +73,13 @@ In Phase 3 and beyond, **never report a task or PR as complete merely upon creat
 
 1. **Static Checks & Automated Tests PASS**: `npm run typecheck`, `npm run lint`, `npm run format:check`, and required tests (`npm run test:unit`, `npm run test:coverage` with 100% C0/C1/Functions) PASS.
 2. **VRT Parity PASS**: If UI/Storybook stories changed, VRT snapshots (1280px / 375px) are updated (`npm run test:vrt:update`) and verified (`npm run test:vrt`) PASS.
-3. **PR Created with Issue Link**: PR includes the defect/handover mini-tables and `Closes #N` (`Refs #N` only for intermediate split PRs). **AI agents must never close issues directly or approve/merge PRs.**
+3. **PR Created with Issue Link**: PR includes the defect/handover mini-tables and `Closes #N` (`Refs #N` only for intermediate split PRs). **AI agents must never close issues directly (`gh issue close`) or self-approve PRs (`gh pr review --approve`).**
 4. **GitHub Actions PASS**: Required remote CI workflow (`quality-gate` covering static checks, UT, VRT, IT, and Build) PASS.
 5. **Independent AI Review**: Conducted by the [PR reviewer agent](.github/agents/pr-reviewer.agent.md) adhering to [docs/guidelines/review-comment-format.md](docs/guidelines/review-comment-format.md).
 6. **Review Thread Convergence**: All actionable review findings are fixed (including `docs/specs/` sync for cause `D`), re-verified, and resolved on the PR.
-7. **Human Approval & Merge Awaited**: Report gate completion and wait for the human to review and merge.
+7. **Merge Execution (Human Approval Gate vs. AI Autonomous Merge)**:
+   - **Human Approval & Merge Required**: Step 2 Design Update PRs (`Refs #ParentIssue`), Step 4 Final IT / Parent Issue Closing PRs (`Closes #ParentIssue`), Milestone Step 3 Final Approval PRs (`Closes #MilestoneIssue`), and any PR matching the escalation conditions in [docs/guidelines/workflow.md §4.1](docs/guidelines/workflow.md#41-ai-自律マージの停止人間エスカレーション条件) (external spec/schema changes, new dependencies/permissions/domains, governance/CI changes, or unresolved review threads).
+   - **AI Autonomous Merge Permitted**: Intermediate Step 3 MK Sub-issue PRs (`Closes #Sub-issue`) and Milestone Step 2 Kaizen PRs (`Closes #Sub-issue`) that pass Gates 1–6 with zero escalation conditions may be merged autonomously by the Orchestrator AI (`gh pr merge --squash --delete-branch`) to proceed immediately to the next step.
 
 ---
 

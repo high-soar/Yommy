@@ -51,7 +51,7 @@ Phase 3 以降の PR 作業では、[.github/pull_request_template.md](../../pul
    UI コンポーネント（`*.tsx` / `*.stories.tsx`）の変更時は、`npm run test:vrt:update` および `npm run test:vrt`（1280px / 375px）を実行し PASS を確認する。
 3. **PR 作成と Issue リンク設定**:
    - 個別 Issue / Sub-issue を完了する PR には **`Closes #N`** を記載する（1つの Issue を複数 PR に分割する途中段階の PR のみ `Refs #N` を使用する）。
-   - **厳守事項**: AI は `gh issue close` 等で Issue を直接クローズしたり、`gh pr review --approve` / `gh pr merge` で PR を承認・マージしてはならない。人間が PR をマージすることで Issue が同期クローズされる。
+   - **厳守事項**: AI は `gh issue close` 等で Issue を直接クローズしたり、`gh pr review --approve` で PR を自己承認してはならない。必ず PR マージによって Issue（または Sub-issue）が同期クローズされる仕組みを厳守する。
 4. **GitHub Actions の PASS 確認**:
    push 後、リモート上の必須ワークフロー（CI / VRT / IT）がすべて PASS することを確認する。失敗した場合は原因を特定して修正 push する。
 5. **独立 AI レビュー（`pr-reviewer`）の実施**:
@@ -60,8 +60,15 @@ Phase 3 以降の PR 作業では、[.github/pull_request_template.md](../../pul
    - 指摘事項（`[P0]`〜`[P3]`）がある場合、修正コミット（および [docs/quality/bug-and-handover-log.md](../../../docs/quality/bug-and-handover-log.md) と PR 本文のバグ記録表への追記）を行う。
    - **原因が `D`（設計・仕様不備）の場合は、必ず同一 PR 内で `docs/specs/` の設計書も同時修正する**。
    - 各コメントスレッドに修正コミット SHA と検証結果を返信し、`pr-reviewer` による再確認を経て全スレッドを Resolve する。
-7. **人間への完了報告とマージ待機**:
-   上記 1〜6 がすべて完了したことを人間に報告し、人間の最終確認・マージを待つ。
+7. **PR 種別に応じたマージ実行（👤 人間マージ待機 または 🤖 AI 自律マージ）**:
+   上記 1〜6 がすべて完了した時点で、[docs/guidelines/workflow.md §4](../../../docs/guidelines/workflow.md#4-task-completion-gate7つの完了条件) の区分に従い以下のように完了処理を行う：
+   - **👤 人間マージ待機とする PR**:
+     - **Step 2（設計更新 PR / `Refs #親Issue`）**、**Step 4（最終 IT PR・親 Issue 完了 PR / `Closes #親Issue`）**、**Milestone Step 3（最終承認・アーカイブ PR / `Closes #MilestoneIssue`）**
+     - または [docs/guidelines/workflow.md §4.1](../../../docs/guidelines/workflow.md#41-ai-自律マージの停止人間エスカレーション条件) のエスカレーション条件（外部仕様 `AC-xx` / `TR-xx` / DB スキーマ変更を伴う原因 `D`、新規依存パッケージ / Android 権限 / 外部通信先追加、ガバナンス・CI 定義自体の変更、3ラウンド以上のレビュー未収束、小規模要望での親 Issue クローズ統合 PR）に該当する場合。
+     - **アクション**: Gate 1〜6 の完了（およびエスカレーション理由がある場合はその内容）を人間に報告し、人間の最終確認・マージを待つ。
+   - **🤖 AI（Orchestrator）が自律マージする PR**:
+     - **Step 3（MK Sub-issue PR / `Closes #Sub-issue`）** および **Milestone Step 2（指摘是正・品質分析 Kaizen PR / `Closes #Sub-issue`）** であり、上記エスカレーション条件のいずれにも該当しない場合。
+     - **アクション**: メインエージェント（Orchestrator）が `gh pr merge <PR番号> --squash --delete-branch` を実行して PR をマージし、`git switch main && git pull --ff-only origin main` で最新化した上で、人間のマージ待ちを挟まずに直ちに次の Sub-issue（または次ステップ）へ進む。
 
 ---
 

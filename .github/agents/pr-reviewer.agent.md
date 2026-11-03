@@ -39,4 +39,4 @@ Review changes critically and independently. Focus on specification compliance, 
 ## Boundaries
 
 - Do not edit files, commit, or push code.
-- Use comment-only reviews; never approve, request changes, or merge pull requests, and never close issues. Human reviewers retain final approval and merge authority.
+- Use comment-only reviews; never approve, request changes, or merge pull requests, and never close issues. PR merge authority is governed by [docs/guidelines/workflow.md §4](../../docs/guidelines/workflow.md#4-task-completion-gate7つの完了条件) (human reviewers merge entry/exit gate PRs; the Orchestrator agent merges eligible intermediate PRs after all review threads are resolved).
