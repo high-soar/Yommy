@@ -41,7 +41,7 @@ function toErrorMessage(error: unknown): string {
 }
 
 /**
- * リーダー設定の読み出し・更新・永続化を行うカスタムフック（SCR-05 / AC-ST-03〜05, AC-ST-07, AC-ST-13, AC-ST-17, AC-ST-18）
+ * リーダー設定の読み出し・更新・永続化を行うカスタムフック（SCR-05 / AC-ST-03〜05, AC-ST-07, AC-ST-13, AC-ST-17〜19）
  */
 export function useSettings(): UseSettingsResult {
   const { settingsRepository, isReady } = useServices();

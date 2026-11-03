@@ -10,9 +10,9 @@ export interface SettingsContainerProps {
 }
 
 /**
- * 設定画面（SCR-05）の Container コンポーネント（AC-ST-03, AC-ST-04, AC-ST-05, AC-ST-08〜13）
+ * 設定画面（SCR-05）の Container コンポーネント（AC-ST-03〜05, AC-ST-08〜13, AC-ST-17〜19）
  *
- * useSettings および useCloudSync フックを呼び出し、SettingsPage に組版設定（組み方向・ページ送り・テーマ・文字サイズ・行間）
+ * useSettings および useCloudSync フックを呼び出し、SettingsPage に組版設定（組み方向・ページ送り・テーマ・文字サイズ・行間・フォント種別・画面余白・音量キー送り）
  * および Google Drive クラウド同期状態・操作コールバックを注入する。
  *
  * @see docs/specs/features/settings.md §3.4

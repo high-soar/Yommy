@@ -103,6 +103,8 @@ describe("SettingsPage", () => {
       // 音量キーでページ送りトグル（初期値: false / aria-pressed="false"） (AC-ST-19)
       const volumeKeyToggle = screen.getByTestId("toggle-volume-key-paging");
       expect(volumeKeyToggle).toBeInTheDocument();
+      expect(volumeKeyToggle).toHaveAttribute("role", "switch");
+      expect(volumeKeyToggle).toHaveAttribute("aria-checked", "false");
       expect(volumeKeyToggle).toHaveAttribute("aria-pressed", "false");
       expect(volumeKeyToggle).toHaveAttribute(
         "aria-label",
@@ -234,6 +236,8 @@ describe("SettingsPage", () => {
 
       const toggleBtn = screen.getByTestId("toggle-volume-key-paging");
       expect(toggleBtn).toBeInTheDocument();
+      expect(toggleBtn).toHaveAttribute("role", "switch");
+      expect(toggleBtn).toHaveAttribute("aria-checked", "true");
       expect(toggleBtn).toHaveAttribute("aria-pressed", "true");
       expect(toggleBtn).toBeEnabled();
     });
@@ -833,6 +837,8 @@ describe("SettingsPage", () => {
       );
 
       const toggleBtn = screen.getByTestId("toggle-volume-key-paging");
+      expect(toggleBtn).toHaveAttribute("role", "switch");
+      expect(toggleBtn).toHaveAttribute("aria-checked", "false");
       expect(toggleBtn).toHaveAttribute("aria-pressed", "false");
 
       await user.click(toggleBtn);
@@ -853,6 +859,8 @@ describe("SettingsPage", () => {
       );
 
       const toggleBtn = screen.getByTestId("toggle-volume-key-paging");
+      expect(toggleBtn).toHaveAttribute("role", "switch");
+      expect(toggleBtn).toHaveAttribute("aria-checked", "true");
       expect(toggleBtn).toHaveAttribute("aria-pressed", "true");
     });
 

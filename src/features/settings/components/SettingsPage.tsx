@@ -154,9 +154,15 @@ const THEME_OPTIONS: readonly ThemeOption[] = [
 const STEPPER_BUTTON_BASE =
   "w-9 h-9 flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-xs";
 
+const TOGGLE_SWITCH_BASE =
+  "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
+
+const TOGGLE_SWITCH_THUMB_BASE =
+  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out";
+
 /**
- * 設定画面（SCR-05）の Presentational コンポーネント（AC-ST-03, AC-ST-04, AC-ST-05, AC-ST-13）
- * ヘッダー、組版設定項目（組み方向・ページ送り・テーマ・文字サイズ・行間）、および組版プレビューを配置する
+ * 設定画面（SCR-05）の Presentational コンポーネント（AC-ST-03〜05, AC-ST-13, AC-ST-17〜19）
+ * ヘッダー、組版設定項目（組み方向・ページ送り・テーマ・フォント種別・文字サイズ・行間・画面余白・音量キー送り）、および組版プレビューを配置する
  */
 export const SettingsPage: React.FC<SettingsPageProps> = ({
   writingMode,
@@ -531,12 +537,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             </div>
             <button
               type="button"
+              role="switch"
               data-testid="toggle-volume-key-paging"
               aria-label="音量キーでページ送り"
+              aria-checked={enableVolumeKeyPaging}
               aria-pressed={enableVolumeKeyPaging}
               disabled={isLoading}
               onClick={onToggleVolumeKeyPaging}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`${TOGGLE_SWITCH_BASE} ${
                 enableVolumeKeyPaging
                   ? "bg-blue-600"
                   : "bg-slate-300 dark:bg-slate-700"
@@ -544,7 +552,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             >
               <span
                 aria-hidden="true"
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                className={`${TOGGLE_SWITCH_THUMB_BASE} ${
                   enableVolumeKeyPaging ? "translate-x-5" : "translate-x-0"
                 }`}
               />
