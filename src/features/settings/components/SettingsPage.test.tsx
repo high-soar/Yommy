@@ -18,6 +18,7 @@ const {
   FontSelectionKlee,
   WithStorageCache,
   WithStorageCacheDialogOpen,
+  VolumeKeyPagingEnabled,
 } = composeStories(stories);
 
 describe("SettingsPage", () => {
@@ -98,6 +99,19 @@ describe("SettingsPage", () => {
       expect(screen.getByTestId("page-margin-value")).toHaveTextContent("20px");
       expect(screen.getByTestId("page-margin-decrease")).toBeEnabled();
       expect(screen.getByTestId("page-margin-increase")).toBeEnabled();
+
+      // 音量キーでページ送りトグル（初期値: false / aria-pressed="false"） (AC-ST-19)
+      const volumeKeyToggle = screen.getByTestId("toggle-volume-key-paging");
+      expect(volumeKeyToggle).toBeInTheDocument();
+      expect(volumeKeyToggle).toHaveAttribute("aria-pressed", "false");
+      expect(volumeKeyToggle).toHaveAttribute(
+        "aria-label",
+        "音量キーでページ送り",
+      );
+      expect(volumeKeyToggle).toBeEnabled();
+      expect(
+        screen.getByText("音量［ー］で次へ、音量［＋］で前へ移動します"),
+      ).toBeInTheDocument();
 
       // プレビューセクション
       const previewSection = screen.getByTestId("preview-section");
@@ -210,6 +224,18 @@ describe("SettingsPage", () => {
 
       // ページ送りモードセレクター
       expect(screen.getByTestId("paging-mode-select")).toBeDisabled();
+
+      // 音量キーでページ送りトグル (AC-ST-19)
+      expect(screen.getByTestId("toggle-volume-key-paging")).toBeDisabled();
+    });
+
+    it("VolumeKeyPagingEnabled: 音量キー送りが有効時（true）に aria-pressed=true で描画されること (AC-ST-19)", () => {
+      render(<VolumeKeyPagingEnabled />);
+
+      const toggleBtn = screen.getByTestId("toggle-volume-key-paging");
+      expect(toggleBtn).toBeInTheDocument();
+      expect(toggleBtn).toHaveAttribute("aria-pressed", "true");
+      expect(toggleBtn).toBeEnabled();
     });
 
     it("FontSelectionKlee: 教科書体 Klee が選択状態として反映されること (AC-ST-17)", () => {
@@ -785,6 +811,66 @@ describe("SettingsPage", () => {
       expect(
         screen.getByTestId("open-global-clear-cache-dialog-button"),
       ).toBeDisabled();
+    });
+  });
+
+  describe("音量キーでページ送りトグル (AC-ST-19)", () => {
+    it("クリック時に onToggleVolumeKeyPaging が呼び出されること", async () => {
+      const user = userEvent.setup();
+      const onToggleVolumeKeyPaging = vi.fn();
+
+      render(
+        <SettingsPage
+          writingMode="vertical-rl"
+          theme="light"
+          enableVolumeKeyPaging={false}
+          onToggleWritingMode={vi.fn()}
+          onChangeTheme={vi.fn()}
+          onChangeFontSize={vi.fn()}
+          onChangeLineHeight={vi.fn()}
+          onToggleVolumeKeyPaging={onToggleVolumeKeyPaging}
+        />,
+      );
+
+      const toggleBtn = screen.getByTestId("toggle-volume-key-paging");
+      expect(toggleBtn).toHaveAttribute("aria-pressed", "false");
+
+      await user.click(toggleBtn);
+      expect(onToggleVolumeKeyPaging).toHaveBeenCalledTimes(1);
+    });
+
+    it("enableVolumeKeyPaging=true のとき aria-pressed が true になること", () => {
+      render(
+        <SettingsPage
+          writingMode="vertical-rl"
+          theme="light"
+          enableVolumeKeyPaging={true}
+          onToggleWritingMode={vi.fn()}
+          onChangeTheme={vi.fn()}
+          onChangeFontSize={vi.fn()}
+          onChangeLineHeight={vi.fn()}
+        />,
+      );
+
+      const toggleBtn = screen.getByTestId("toggle-volume-key-paging");
+      expect(toggleBtn).toHaveAttribute("aria-pressed", "true");
+    });
+
+    it("isLoading=true のときトグルボタンが無効化されること", () => {
+      render(
+        <SettingsPage
+          writingMode="vertical-rl"
+          theme="light"
+          isLoading={true}
+          enableVolumeKeyPaging={false}
+          onToggleWritingMode={vi.fn()}
+          onChangeTheme={vi.fn()}
+          onChangeFontSize={vi.fn()}
+          onChangeLineHeight={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByTestId("toggle-volume-key-paging")).toBeDisabled();
     });
   });
 });

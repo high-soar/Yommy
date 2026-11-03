@@ -33,6 +33,8 @@ export interface SettingsPageProps {
   fontFamily?: ReaderFontFamily;
   /** 現在の画面余白 px（省略時: 20、v0.5 Issue #169） */
   pageMarginPx?: number;
+  /** ハードウェア音量キー送り有効フラグ（省略時: false、v0.6 Issue #203） */
+  enableVolumeKeyPaging?: boolean;
   /** 現在のページ送りモード（省略時: "auto"、v0.4 Issue #122） */
   pagingMode?: ReaderPagingMode;
   /** 設定読み込み中フラグ（省略時: false） */
@@ -51,6 +53,8 @@ export interface SettingsPageProps {
   onChangePageMargin?: (marginPx: number) => void;
   /** ページ送りモード変更時のコールバック（v0.4 Issue #122） */
   onChangePagingMode?: (mode: ReaderPagingMode) => void;
+  /** 音量キー送りトグルボタン押下時のコールバック（v0.6 Issue #203） */
+  onToggleVolumeKeyPaging?: () => void;
   /** Google アカウント認証状態（v0.4） */
   cloudSyncAuthState?: CloudSyncAuthState;
   /** 最終同期完了日時（ISO 8601、v0.4） */

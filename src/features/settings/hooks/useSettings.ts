@@ -20,6 +20,7 @@ export interface UseSettingsResult {
   lineHeight: number;
   pageMarginPx: number;
   pagingMode: ReaderPagingMode;
+  enableVolumeKeyPaging: boolean;
   isLoading: boolean;
   error: string | null;
   toggleWritingMode: () => Promise<void>;
@@ -29,6 +30,7 @@ export interface UseSettingsResult {
   changeLineHeight: (lineHeight: number) => Promise<void>;
   changePageMargin: (marginPx: number) => Promise<void>;
   changePagingMode: (pagingMode: ReaderPagingMode) => Promise<void>;
+  toggleVolumeKeyPaging: () => Promise<void>;
 }
 
 function toErrorMessage(error: unknown): string {
@@ -222,6 +224,7 @@ export function useSettings(): UseSettingsResult {
     lineHeight,
     pageMarginPx,
     pagingMode,
+    enableVolumeKeyPaging: false,
     isLoading,
     error,
     toggleWritingMode,
@@ -231,5 +234,6 @@ export function useSettings(): UseSettingsResult {
     changeLineHeight,
     changePageMargin,
     changePagingMode,
+    toggleVolumeKeyPaging: async () => {},
   };
 }

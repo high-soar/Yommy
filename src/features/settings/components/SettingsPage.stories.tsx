@@ -12,6 +12,7 @@ const meta: Meta<typeof SettingsPage> = {
     fontSizePx: 18,
     lineHeight: 1.8,
     pageMarginPx: 20,
+    enableVolumeKeyPaging: false,
     pagingMode: "auto",
     isLoading: false,
     onToggleWritingMode: fn(),
@@ -21,6 +22,7 @@ const meta: Meta<typeof SettingsPage> = {
     onChangeFontFamily: fn(),
     onChangePageMargin: fn(),
     onChangePagingMode: fn(),
+    onToggleVolumeKeyPaging: fn(),
   },
 };
 
@@ -221,5 +223,20 @@ export const WithStorageCacheDialogOpen: Story = {
       totalByteSize: 1572864,
     },
     initialShowStorageCacheDialog: true,
+  },
+};
+
+/**
+ * 音量キーでページ送り有効時表示（enableVolumeKeyPaging: true、v0.6 Issue #203）
+ */
+export const VolumeKeyPagingEnabled: Story = {
+  name: "音量キー送り有効（ON）",
+  args: {
+    writingMode: "vertical-rl",
+    theme: "light",
+    fontSizePx: 18,
+    lineHeight: 1.8,
+    enableVolumeKeyPaging: true,
+    isLoading: false,
   },
 };
