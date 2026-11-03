@@ -53,9 +53,10 @@ function clampProgress(value: number): number {
  * 水平スワイプラックのインラインスタイルを生成する純粋関数
  * （右綴じ書籍に即した水平配置: [次ページ(左), 現在ページ(中央), 前ページ(右)]）
  */
-function calculateSwipeTrackStyle(
+export function calculateSwipeTrackStyle(
   pageWidth: number,
   slideOffsetPx: number,
+  _isAnimating: boolean = false,
 ): React.CSSProperties {
   const left = -pageWidth + slideOffsetPx;
   return {

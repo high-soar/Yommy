@@ -141,6 +141,22 @@ export const VerticalPaged: Story = {
 };
 
 /**
+ * 縦書きページ送りスライドアニメーション中表示
+ */
+export const VerticalPagedAnimating: Story = {
+  name: "縦書き・スライドアニメーション中",
+  args: {
+    writingMode: "vertical-rl",
+    pagingMode: "paged",
+    currentPage: 2,
+    totalPages: 5,
+    slideOffsetPx: 100,
+    isAnimating: true,
+    bodyHtml: longBodyHtml,
+  },
+};
+
+/**
  * 横書き・ページめくり設定（横書き時は実効スクロール固定）
  */
 export const HorizontalPaged: Story = {

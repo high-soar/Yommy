@@ -749,6 +749,49 @@ describe("ReaderPage", () => {
       }
     });
 
+    it("縦書きページ送りタップ時に isAnimating が ReaderView に伝達されスワイプラックの transition が制御されること（AC-RD-17）", () => {
+      vi.useFakeTimers();
+      try {
+        render(
+          <ReaderPage
+            {...createDefaultProps({
+              pagingMode: "paged",
+              currentPage: 2,
+              totalPages: 5,
+            })}
+          />,
+        );
+
+        const main = screen.getByRole("main");
+        setupContainerDimensions(main, 300);
+
+        const swipeTrack = screen.getByTestId("reader-swipe-track");
+        expect(swipeTrack).toHaveStyle({
+          transition: "none",
+        });
+
+        // 画面左端タップ（次ページ送り開始）
+        firePointer(main, "pointerdown", { clientX: 30, clientY: 100 });
+        firePointer(main, "pointerup", { clientX: 32, clientY: 101 });
+
+        // アニメーション実行中: isAnimating=true が ReaderView に伝達され transition が有効化
+        expect(swipeTrack).toHaveStyle({
+          transition: "left 200ms ease-out",
+        });
+
+        // 200ms 経過後: アニメーション完了により isAnimating=false にリセット
+        act(() => {
+          vi.advanceTimersByTime(200);
+        });
+
+        expect(swipeTrack).toHaveStyle({
+          transition: "none",
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("画面中央タップ（幅約 60%: 60px <= x <= 240px）で下部オーバーレイ開閉がトグルすること（AC-RD-17）", () => {
       render(
         <ReaderPage

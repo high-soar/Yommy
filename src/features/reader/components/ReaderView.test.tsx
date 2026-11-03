@@ -3,7 +3,7 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./ReaderView.stories";
-import { ReaderView } from "./ReaderView";
+import { ReaderView, calculateSwipeTrackStyle } from "./ReaderView";
 import { FONT_FAMILY_STACKS } from "../../../shared/constants/typography";
 import type { ReaderFontFamily } from "../../../storage/types";
 
@@ -17,6 +17,7 @@ const {
   WithInitialScrollProgress,
   VerticalLongContent,
   VerticalPaged,
+  VerticalPagedAnimating,
   HorizontalPaged,
   PageIndicator,
   ScrollWithChapterButtons,
@@ -170,6 +171,14 @@ describe("ReaderView", () => {
       expect(container).toHaveClass("overflow-hidden");
       const indicator = screen.getByTestId("reader-page-indicator");
       expect(indicator).toHaveTextContent("1 / 5");
+    });
+
+    it("VerticalPagedAnimating ストーリーで縦書きページ送りスライドアニメーション中（isAnimating: true, slideOffsetPx: 100）のスタイルが適用されていること", () => {
+      render(<VerticalPagedAnimating />);
+      const swipeTrack = screen.getByTestId("reader-swipe-track");
+      expect(swipeTrack).toHaveStyle({
+        transition: "left 200ms ease-out",
+      });
     });
 
     it("HorizontalPaged ストーリーで横書き・paged 設定時でも実効スクロールモード固定となること (v0.5 Issue #168, #173)", () => {
@@ -684,13 +693,14 @@ describe("ReaderView", () => {
       expect(content.style.height).toBe("560px");
 
       // 水平スワイプラックによる配置（writingMode: "horizontal-tb", 中央スロット: left: -400px）
+      // 非アニメーション時（isAnimating 省略時既定値: false）は transition が none
       expect(swipeTrack).toHaveStyle({
         left: "-400px",
         writingMode: "horizontal-tb",
-        transition: "left 200ms ease-out",
+        transition: "none",
       });
 
-      // スワイプドラッグ中（slideOffsetPx !== 0）は left が更新され transition が none
+      // スワイプドラッグ中（slideOffsetPx !== 0, isAnimating: false）は left が更新され transition が none
       // 左から右へのドラッグ（slideOffsetPx = +50）: -400 + 50 = -350px
       rerender(
         <ReaderView
@@ -705,6 +715,23 @@ describe("ReaderView", () => {
       expect(swipeTrack).toHaveStyle({
         left: "-350px",
         transition: "none",
+      });
+
+      // スライドアニメーション中（isAnimating: true）は transition が left 200ms ease-out となること
+      rerender(
+        <ReaderView
+          bodyHtml="<p>縦書き本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="paged"
+          currentPage={2}
+          totalPages={4}
+          slideOffsetPx={100}
+          isAnimating={true}
+        />,
+      );
+      expect(swipeTrack).toHaveStyle({
+        left: "-300px",
+        transition: "left 200ms ease-out",
       });
     });
 
@@ -1621,6 +1648,35 @@ describe("ReaderView", () => {
         />,
       );
       expect(onTotalPagesChange).toHaveBeenCalledWith(2);
+    });
+  });
+
+  describe("calculateSwipeTrackStyle (純粋関数)", () => {
+    it("isAnimating=true のとき transition が 'left 200ms ease-out' となること", () => {
+      const style = calculateSwipeTrackStyle(400, 100, true);
+      expect(style).toEqual({
+        position: "absolute",
+        top: 0,
+        left: "-300px",
+        width: "1200px",
+        height: "100%",
+        display: "flex",
+        flexDirection: "row",
+        writingMode: "horizontal-tb",
+        transition: "left 200ms ease-out",
+      });
+    });
+
+    it("isAnimating=false のとき transition が 'none' となること", () => {
+      const style = calculateSwipeTrackStyle(400, 0, false);
+      expect(style.transition).toBe("none");
+      expect(style.left).toBe("-400px");
+    });
+
+    it("isAnimating 省略時（既定値: false）に transition が 'none' となること", () => {
+      const style = calculateSwipeTrackStyle(400, 50);
+      expect(style.transition).toBe("none");
+      expect(style.left).toBe("-350px");
     });
   });
 });

@@ -49,6 +49,7 @@ export default tseslint.config(
             "safeDecodeURIComponent",
             "resolveInitialPath",
             "getActiveTab",
+            "calculateSwipeTrackStyle",
           ],
         },
       ],
