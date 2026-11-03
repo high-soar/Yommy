@@ -39,18 +39,19 @@ description: "Use when breaking down a Feature Request Issue into an iterative m
 3. 設計更新 PR（`Refs #親Issue番号`）を作成し、Task Completion Gate を経て人間がマージした時点で、差分仕様および更新された App 全体正本は **`Approved`（局所的再承認）** となる。
 4. 合意された Sub-issue を `gh issue create` で起票し、親 Issue のチェックリストにリンクする。
 
-### Step 3: MK Sub-issue の直列委託と PR 統合
+### Step 3: MK Sub-issue の直列委託と AI 自律マージによる連続進行
 
 1. 各 MK Sub-issue について、汎用サブエージェント（`self`）に [c-ut-workflow スキル](../c-ut-workflow/SKILL.md) を指定して **直列（逐次）委託** する。
-2. サブエージェント完了後、メインエージェントが PR（`Closes #Sub-issue番号`）を作成し、[git-workflow スキル](../git-workflow/SKILL.md) に従い **Task Completion Gate（7条件）** を完遂して人間のマージを待つ。
-3. 実装中に原因分類 `D`（設計不備）が見つかった場合は、同一 PR 内で **差分仕様（`docs/specs/changes/issue-XX-*.md`）と App 全体正本の両方を同時修正（局所的再承認）** し、[docs/quality/bug-and-handover-log.md](../../../docs/quality/bug-and-handover-log.md) にコード修正と設計同期の双方のコミットを記録する。
+2. サブエージェント完了後、メインエージェントが PR（`Closes #Sub-issue番号`）を作成し、[git-workflow スキル](../git-workflow/SKILL.md) に従い **Task Completion Gate（条件 1〜6）** を完遂する。
+3. 実装中に原因分類 `D`（設計不備）が見つかった場合は、同一 PR 内で **差分仕様（`docs/specs/changes/issue-XX-*.md`）と App 全体正本の両方を同時修正** し、[docs/quality/bug-and-handover-log.md](../../../docs/quality/bug-and-handover-log.md) にコード修正と設計同期の双方のコミットを記録する。
+4. [docs/guidelines/workflow.md §4.1](../../../docs/guidelines/workflow.md#41-ai-自律マージの停止人間エスカレーション条件) の人間エスカレーション条件（外部仕様 `AC-xx` / `TR-xx` / DB スキーマ変更を伴う原因 `D`、新規依存パッケージ / 権限 / ドメイン追加、小規模要望で `Closes #親Issue` を兼ねる場合等）に該当しないことを確認した上で、**メインエージェントが `gh pr merge --squash --delete-branch` で MK Sub-issue PR を自律マージ** し、`main` を更新して直ちに次の MK Sub-issue（または Step 4）へ連続進行する（エスカレーション条件に該当する場合のみ人間の確認・マージを待つ）。
 
-### Step 4: IT（全体回帰テスト）・申し送り精算・差分仕様アーカイブ・親 Issue 完了
+### Step 4: IT（全体回帰テスト）・申し送り精算・差分仕様アーカイブ・親 Issue 完了（人間マージ）
 
 1. Playwright 実ブラウザ結合テスト（`test/it/` の `SCN-01`〜）を最新仕様に合わせて進化・追加し、過去機能を含め全シナリオ 100% PASS を確認する。
 2. 親 Issue に関連する申し送り事項（`HO-xx`）がすべて解決（`Resolved`）されていることを確認する。
 3. 最後の Sub-issue PR（または IT PR）において、完了した差分仕様ファイルの状態を `Completed (Archived)` に更新し、**`git mv docs/specs/changes/issue-XX-<slug>.md docs/specs/changes/archive/issue-XX-<slug>.md` でアーカイブディレクトリへ移動** する。
-4. PR に `Closes #親Issue番号` を設定し、人間のレビュー・マージによって親 Issue を同期クローズする（**AI が `gh issue close` 等で直接 Issue を閉じることは厳禁**）。
+4. PR に `Closes #親Issue番号`（および該当する場合は `Closes #IT-Sub-issue番号`）を設定し、Task Completion Gate 条件 1〜6 を完遂した上で人間に報告し、**人間のレビュー・マージ（出口ゲート）によって親 Issue を同期クローズする**（**AI が `gh issue close` 等で直接 Issue を閉じたり、`Closes #親Issue番号` を含む最終 PR を自己マージすることは厳禁**）。
 
 ---
 
@@ -70,7 +71,7 @@ AI が Sub-issue を起票する際は以下の形式を使用します。
 - [ ] `docs/guidelines/testing.md` に準拠した TDD（Red → Green → Refactor コミット）で実装されていること
 - [ ] 全対象ファイルの単体テストおよび C0/C1/Functions 100% カバレッジを達成していること（UI 変更時は 1対1 Story/UT・親子分離・VRT 1280px/375px PASS）
 - [ ] 検出された不備や申し送り事項が `docs/quality/bug-and-handover-log.md` に記録されていること（原因 `D` は設計書同時修正）
-- [ ] CI / VRT / IT が PASS し、`pr-reviewer` による独立レビューと全スレッド Resolve を経て、人間マージ（`Closes #本Issue番号`）で完了すること
+- [ ] CI / VRT / IT が PASS し、`pr-reviewer` による独立レビューと全スレッド Resolve を経て、PR マージ（`Closes #本Issue番号`：中間 MK PR は AI 自律マージ、最終 IT PR は人間マージ）で完了すること
 ```
 
 ---
@@ -79,9 +80,9 @@ AI が Sub-issue を起票する際は以下の形式を使用します。
 
 ミニリリース Milestone（`v0.1`, `v0.2` 等、または Phase 3 PoC 完了節目）の完了承認 Issue では、[docs/guidelines/workflow.md](../../../docs/guidelines/workflow.md#5-ミニリリース-milestone-と品質改善kaizenループ) および [phase-final-review スキル](../phase-final-review/SKILL.md) に従い以下の 3 段階で進行します。
 
-1. **Step 1（全体横断レビュー）**: Milestone 内の全要望 Issue 完了後、`phase-final-review` スキルで横断レビューを実施し、Milestone 承認 Issue に Round 1 結果をコメント投稿する（PR は作らない）。
-2. **Step 2（指摘是正・品質分析レポート・Kaizen PR）**: Sub-issue を起票し、横断レビュー指摘の是正、`docs/quality/bug-and-handover-log.md` の集計、`docs/quality/reports/` への品質分析レポート（バグ密度・DRE・原因傾向）作成、および再発防止の `SKILL.md` / `docs/guidelines/` 改善を含む PR（`Closes #Sub-issue`）を作成・マージする。
-3. **Step 3（Milestone 承認・一括 Approved 更新 ＆ 品質記録アーカイブ）**:
-   - Round 2 指摘収束と人間の承認後、`docs/specs/` 配下の正本仕様書のフロントマター `status` を一括で `Approved` に揃える。
+1. **Step 1（全体横断レビュー）【👤 人間が各モデルでキック】**: Milestone 内の全要望 Issue 完了後、人間が各モデルのセッションで `phase-final-review` スキルによる横断レビューを起動し、Milestone 承認 Issue に Round 1 結果をコメント投稿する（PR は作らない）。全モデルのコメントが出揃った後、人間が Step 2 開始を指示する。
+2. **Step 2（指摘是正・品質分析レポート・Kaizen PR）【🤖 AI 自律マージ】**: Sub-issue を起票し、横断レビュー指摘（`R1-xx`）の是正、`docs/quality/bug-and-handover-log.md` の集計、`docs/quality/reports/` への品質分析レポート（バグ密度・DRE・原因傾向）作成、および再発防止の `SKILL.md` / `docs/guidelines/testing.md` 改善を含む PR（`Closes #Sub-issue`、複数分割可）を作成する。Gate 1〜6 完遂後、**メインエージェントが自律マージ** し、人間のマージ待ちを挟まずに直ちに Round 2 収束確認コメント投稿および Step 3 へ進む。
+3. **Step 3（Milestone 承認・一括 Approved 更新 ＆ 品質記録アーカイブ）【👤 人間承認・マージ】**:
+   - Step 2 の自律マージと Round 2 指摘収束（0件）確認後、`docs/specs/` 配下の正本仕様書のフロントマター `status` を一括で `Approved` に揃える。
    - 同一 PR 内で、当該 Milestone で完了したバグ記録および解決済み（`Resolved`）申し送り事項を `docs/quality/archive/<milestone>-log.md`（OKF `type: quality-log`, `status: Completed (Archived)`）へ移動し、`docs/quality/bug-and-handover-log.md` を「次期マイルストーンのバグ記録」「未解決（`Open`）申し送り事項」のみが残るクリーンな状態に整理する。
-   - PR（`Closes #Milestone承認Issue`）を作成・検証し、人間のマージをもって Milestone を完了する。
+   - PR（`Closes #Milestone承認Issue`）を作成して Gate 1〜6 を完遂し、**人間の最終確認・マージをもって Milestone を完了** する。

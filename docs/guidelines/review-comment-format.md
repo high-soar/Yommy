@@ -3,7 +3,7 @@ type: guideline
 title: レビューコメント記述仕様（SSOT）
 description: PRレビューおよびMilestone横断レビューにおける重要度（P0〜P3）、4要素フォーマット、および指摘ID採番規則の正本。
 status: Approved
-updated: "2026-10-25"
+updated: "2026-11-03"
 tags: [review, pr-reviewer, phase-final-reviewer, severity]
 related_specs:
   - docs/index.md
@@ -80,7 +80,7 @@ PR のインラインレビューコメント、PR レベルの個別指摘、�
 
 - **実装者（Author / Worker）**: 各指摘スレッドに対し、修正コミット（SHA）と検証結果（原因 `D` の場合は設計書同期修正コミットを含む）、または対応しない妥当な理由を返信します。
 - **レビュアー（`pr-reviewer`）**: 最新コミットとテスト結果を確認し、修正が確認できたスレッドのみを解決（Resolve conversation）します。未検証のままスレッドを閉じてはなりません。
-- **権限境界**: AI レビュアーはコメント投稿・返信・確認済みスレッドの Resolve のみを行い、PR の Approve や Merge は行いません（最終承認・マージは人間が行います）。
+- **権限境界**: AI レビュアー（`pr-reviewer`）はコメント投稿・返信・確認済みスレッドの Resolve のみを行い、PR の Approve や Merge は行いません（PR のマージは [docs/guidelines/workflow.md §4](workflow.md#4-task-completion-gate7つの完了条件) の区分に従い、入口・出口ゲート PR は人間が、条件を満たした中間 MK Sub-issue PR および Milestone Step 2 Kaizen PR はメインエージェント［Orchestrator］が行います）。
 
 ---
 

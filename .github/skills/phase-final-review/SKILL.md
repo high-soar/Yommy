@@ -66,17 +66,18 @@ description: "Use when orchestrating a cross-deliverable review at the end of a 
 
 ---
 
-## 3. 指摘是正・品質分析レポート作成（Kaizen PR：Step 2）への連携
+## 3. 指摘是正・品質分析レポート作成（Kaizen PR：Step 2）から Step 3 への連続進行
 
-Round 1 横断レビュー完了後、以下の手順で Step 2（Sub-issue による是正＆品質分析・スキル改善 PR）を進めます。
+全モデルの Round 1 横断レビューが完了し、人間から Step 2 開始指示を受けた後、以下の手順で Step 2（Sub-issue による是正＆品質分析・スキル改善 PR の作成・AI 自律マージ）から Step 3（Milestone 最終承認 PR 作成）までを連続して進めます。
 
-1. **是正とバグ記録の最終集約**:
-   - Round 1 で検出された指摘（`R1-xx`）をすべて修正し、[docs/quality/bug-and-handover-log.md](../../../docs/quality/bug-and-handover-log.md) に記録する（原因 `D` は `docs/specs/` も同時修正）。
+1. **是正とバグ記録の最終集約（Step 2）**:
+   - Round 1 で検出された指摘（`R1-xx`）をすべて修正し、[docs/quality/bug-and-handover-log.md](../../../docs/quality/bug-and-handover-log.md) に記録する（原因 `D` は `docs/specs/` も同時修正。規模に応じて複数の Sub-issue PR に分割可）。
 2. **品質分析・Kaizen レポートの作成（`docs/quality/reports/<milestone>.md`）**:
    - 当該 Milestone（または Phase 3）における製品コード不備件数、支援成果物不備件数、テストケースあたり/KLoC あたりバグ密度、単体テスト段階の欠陥除去率（$\text{DRE} = \frac{\text{MK/UT/PRレビュー検出製品不備}}{\text{全検出製品不備}} \times 100\%$）、および原因分類（`L`/`S`/`D`/`B`/`A`）の傾向を分析する。
-   - 多発した原因や IT/横断レビューまで流出した不備について、再発防止策として **`docs/guidelines/` や `.github/skills/*/SKILL.md` のチェック項目・規約を直接アップデート（Kaizen）** し、同一 PR に含める。
-3. **Round 2 収束確認・正本 Approved 化 ＆ バグ記録アーカイブ（Step 3）**:
-   - Kaizen PR がマージされた後、追跡 Issue 上で全指摘の解消（Round 2 指摘なし）をコメント報告する。
-   - 人間の承認を受け、`docs/specs/` 配下の正本仕様書フロントマター `status` を一括で `Approved` に揃える承認 PR（`Closes #Milestone承認Issue`）を作成する。
+   - 多発した原因や IT/横断レビューまで流出した不備について、再発防止策として **`docs/guidelines/testing.md` や `.github/skills/*/SKILL.md` のチェック項目・規約を直接アップデート（Kaizen）** し、同一 PR に含める。
+   - Step 2 の PR（`Closes #Sub-issue`）で Task Completion Gate 条件 1〜6 を完遂した後、[docs/guidelines/workflow.md §4](../../../docs/guidelines/workflow.md#4-task-completion-gate7つの完了条件) に従い **メインエージェントが `gh pr merge --squash --delete-branch` で自律マージ** する。
+3. **Round 2 収束確認・正本 Approved 化 ＆ バグ記録アーカイブ（Step 3：人間最終承認ゲート）**:
+   - Kaizen PR の自律マージ完了後、人間のマージ待ちを挟まずに直ちに追跡 Issue 上で全指摘の解消（Round 2 指摘なし）をコメント報告する。
+   - 続けて、`docs/specs/` 配下の正本仕様書フロントマター `status` を一括で `Approved` に揃える最終承認 PR（`Closes #Milestone承認Issue`）を作成する。
    - 同一 PR 内で、当該 Milestone で検出されたバグ記録（No. xx〜yy）および解決済み（`Resolved`）の申し送り事項（`HO-xx`）を `docs/quality/archive/<milestone>-log.md`（OKF `type: quality-log`, `status: Completed (Archived)`）へ切り出し、`docs/quality/bug-and-handover-log.md` には未解決（`Open`）の申し送りと次期マイルストーン用の記録枠のみを残す。
-   - 人間による本 PR のマージをもって Milestone を完了とする。
+   - Step 3 PR で Gate 1〜6 を完遂した上で人間に報告し、**人間による本 PR のマージをもって Milestone を完了** とする。
