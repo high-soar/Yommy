@@ -340,7 +340,10 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     }
     await expect(overlay).toHaveClass(/translate-y-full/);
 
-    // Kindle様式: 画面左端タップ（幅約20% / 縦書き次ページ）によるページめくり・インジケーター更新（AC-RD-17）
+    // Kindle様式: 画面左端タップ（幅約20% / 縦書き次ページ）による水平スライドアニメーション・ページめくり・インジケーター更新（AC-RD-17, AC-RD-17a）
+    const swipeTrack = page.getByTestId("reader-swipe-track");
+    await expect(swipeTrack).toBeVisible();
+
     if (readerBox) {
       await page.mouse.click(
         readerBox.x + readerBox.width * 0.1,
@@ -349,8 +352,10 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     }
     await expect(readerView).toHaveAttribute("data-current-page", "2");
     await expect(pageIndicator).toHaveText(`2 / ${totalPagesStr}`);
+    // アニメーション完了時はトランジションなし（none）で中央スロットにリセットされること（AC-RD-17a）
+    await expect(swipeTrack).toHaveCSS("transition-property", "none");
 
-    // Kindle様式: 画面右端タップ（幅約20% / 縦書き前ページ）によるページめくり・インジケーター更新（AC-RD-17）
+    // Kindle様式: 画面右端タップ（幅約20% / 縦書き前ページ）による水平スライドアニメーション・ページめくり・インジケーター更新（AC-RD-17, AC-RD-17a）
     if (readerBox) {
       await page.mouse.click(
         readerBox.x + readerBox.width * 0.9,
@@ -359,6 +364,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     }
     await expect(readerView).toHaveAttribute("data-current-page", "1");
     await expect(pageIndicator).toHaveText(`1 / ${totalPagesStr}`);
+    await expect(swipeTrack).toHaveCSS("transition-property", "none");
 
     // 再度左端タップで最終ページ（第2ページ）へ移動
     if (readerBox) {
@@ -369,6 +375,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     }
     await expect(readerView).toHaveAttribute("data-current-page", "2");
     await expect(pageIndicator).toHaveText(`2 / ${totalPagesStr}`);
+    await expect(swipeTrack).toHaveCSS("transition-property", "none");
 
     // paged モードにおけるページ位置復元の検証（R1-18, AC-RD-19, AC-RD-20）
     // 第2ページ表示中に作品詳細へ戻り、再開した際に第2ページが復元されることを確認

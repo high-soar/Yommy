@@ -38,7 +38,7 @@ tags:
   - ho-25
   - ho-26
 related_specs:
-  - docs/specs/changes/issue-201-reader-page-slide-animation.md
+  - docs/specs/changes/archive/issue-201-reader-page-slide-animation.md
   - docs/specs/changes/archive/issue-169-font-and-margin-customization.md
   - docs/specs/changes/archive/issue-168-reader-pagination-and-touch-refinement.md
   - docs/specs/changes/archive/issue-122-reader-page-turning.md
