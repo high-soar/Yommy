@@ -2,8 +2,8 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Review (#203)"
-updated: "2026-11-03"
+status: "Approved"
+updated: "2026-11-04"
 tags:
   - architecture
   - parser
@@ -35,7 +35,7 @@ tags:
   - ho-25
   - ho-28
 related_specs:
-  - docs/specs/changes/issue-203-volume-key-paging.md
+  - docs/specs/changes/archive/issue-203-volume-key-paging.md
   - docs/specs/changes/archive/issue-202-reader-top-overlay-and-seekbar.md
   - docs/specs/changes/archive/issue-169-font-and-margin-customization.md
   - docs/specs/changes/archive/issue-170-cache-management-and-capacity-visualization.md
@@ -75,6 +75,8 @@ related_tests:
   - src/bridges/app/capacitorAppBridge.test.ts
   - src/bridges/app/mockAppBridge.test.ts
   - src/bridges/app/index.test.ts
+  - src/bridges/volume-key/mockVolumeKeyBridge.test.ts
+  - src/bridges/volume-key/capacitorVolumeKeyBridge.test.ts
   - src/bridges/cloud-sync/capacitorCloudSyncBridge.test.ts
   - src/bridges/cloud-sync/mockCloudSyncBridge.test.ts
   - src/features/cloud-sync/services/syncEngine.test.ts

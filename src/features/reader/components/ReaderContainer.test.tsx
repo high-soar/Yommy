@@ -1406,10 +1406,13 @@ describe("ReaderContainer", () => {
 
       await waitFor(() => {
         expect(screen.getByTestId("reader-page")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            enableVolumeKeyPaging: true,
+          }),
+          undefined,
+        );
       });
-
-      const lastProps = pageSpy.mock.lastCall?.[0];
-      expect(lastProps?.enableVolumeKeyPaging).toBe(true);
     });
   });
 });

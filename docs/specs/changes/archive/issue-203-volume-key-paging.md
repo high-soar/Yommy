@@ -3,8 +3,8 @@ type: spec-delta
 title: "ハードウェア音量キーによるページ送り・スクロール送り対応と設定画面ON/OFFトグルの実装設計"
 description: "Issue #203 に対する差分仕様、影響する全体正本、テスト計画、および実装Sub-issue分割計画。"
 issue: "#203"
-status: "Review (#203)"
-updated: "2026-11-03"
+status: "Completed (Archived)"
+updated: "2026-11-04"
 tags:
   - delta
   - volume-key
@@ -27,6 +27,7 @@ related_tests:
   - src/features/settings/hooks/useSettings.test.tsx
   - src/features/reader/components/ReaderPage.test.tsx
   - src/features/reader/components/ReaderContainer.test.tsx
+  - test/it/scenarios/scn06-volume-key-paging.spec.ts
   - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
 ---
 

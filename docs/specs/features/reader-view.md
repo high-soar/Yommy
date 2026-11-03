@@ -2,8 +2,8 @@
 type: spec-feature
 title: "小説リーダー画面仕様書（SCR-03: Novel Reader）"
 description: "小説本文の全画面（100dvh）縦書き・横書き組版表示、ページめくり（タップ/Kindle様式スワイプ送り）と連続スクロール切替、ハードウェア音量キー操作連携、エピソード端シームレス遷移、上下連動オーバーレイ（ReaderTopOverlay: 作品名・サブタイトル1行固定省略・目次導線 / ReaderBottomOverlay: RTLページシークバー・前後話ナビ・下部タブ）、ルビ・傍点描画、4カラーテーマ・文字サイズ・行間設定の永続化、前後エピソード遷移、未キャッシュ話のオンデマンド取得、既読・しおり・進捗率の自動保存/復元、およびSCN-01統合シナリオの正本仕様。"
-status: "Review (#203)"
-updated: "2026-11-03"
+status: "Approved"
+updated: "2026-11-04"
 tags:
   - reader
   - scr-03
@@ -45,7 +45,7 @@ tags:
   - ho-27
   - ho-28
 related_specs:
-  - docs/specs/changes/issue-203-volume-key-paging.md
+  - docs/specs/changes/archive/issue-203-volume-key-paging.md
   - docs/specs/changes/archive/issue-202-reader-top-overlay-and-seekbar.md
   - docs/specs/changes/archive/issue-201-reader-page-slide-animation.md
   - docs/specs/changes/archive/issue-169-font-and-margin-customization.md
@@ -88,6 +88,7 @@ related_tests:
   - test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts
   - test/it/scenarios/scn04-prefetch-and-cache.spec.ts
   - test/it/scenarios/scn05-cloud-sync.spec.ts
+  - test/it/scenarios/scn06-volume-key-paging.spec.ts
 ---
 
 # 小説リーダー画面仕様書（SCR-03）
