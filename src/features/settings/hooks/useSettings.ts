@@ -56,6 +56,8 @@ export function useSettings(): UseSettingsResult {
     DEFAULT_PAGE_MARGIN_PX,
   );
   const [pagingMode, setPagingMode] = useState<ReaderPagingMode>("auto");
+  const [enableVolumeKeyPaging, setEnableVolumeKeyPaging] =
+    useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,6 +86,9 @@ export function useSettings(): UseSettingsResult {
           }
           if (settings.pagingMode) {
             setPagingMode(settings.pagingMode);
+          }
+          if (typeof settings.enableVolumeKeyPaging === "boolean") {
+            setEnableVolumeKeyPaging(settings.enableVolumeKeyPaging);
           }
         }
       } catch {
@@ -216,6 +221,21 @@ export function useSettings(): UseSettingsResult {
     [pagingMode, settingsRepository],
   );
 
+  const toggleVolumeKeyPaging = useCallback(async (): Promise<void> => {
+    const prev = enableVolumeKeyPaging;
+    const next = !prev;
+    setEnableVolumeKeyPaging(next);
+    try {
+      await settingsRepository.updateReaderSettings({
+        enableVolumeKeyPaging: next,
+      });
+      setError(null);
+    } catch (err: unknown) {
+      setEnableVolumeKeyPaging(prev);
+      setError(toErrorMessage(err));
+    }
+  }, [enableVolumeKeyPaging, settingsRepository]);
+
   return {
     writingMode,
     theme,
@@ -224,7 +244,7 @@ export function useSettings(): UseSettingsResult {
     lineHeight,
     pageMarginPx,
     pagingMode,
-    enableVolumeKeyPaging: false,
+    enableVolumeKeyPaging,
     isLoading,
     error,
     toggleWritingMode,
@@ -234,6 +254,6 @@ export function useSettings(): UseSettingsResult {
     changeLineHeight,
     changePageMargin,
     changePagingMode,
-    toggleVolumeKeyPaging: async () => {},
+    toggleVolumeKeyPaging,
   };
 }

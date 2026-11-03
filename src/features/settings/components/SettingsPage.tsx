@@ -165,6 +165,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   lineHeight = 1.8,
   fontFamily = DEFAULT_FONT_FAMILY,
   pageMarginPx = DEFAULT_PAGE_MARGIN_PX,
+  enableVolumeKeyPaging = false,
   pagingMode = "auto",
   isLoading = false,
   error = null,
@@ -179,6 +180,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onChangeFontFamily,
   onChangePageMargin,
   onChangePagingMode,
+  onToggleVolumeKeyPaging,
   onSignInGoogle,
   onSignOutGoogle,
   onSyncNow,
@@ -235,6 +237,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       data-font-family={fontFamily}
       data-page-margin={pageMarginPx}
       data-paging-mode={pagingMode}
+      data-enable-volume-key-paging={enableVolumeKeyPaging ? "true" : "false"}
       data-cloud-sync-status={cloudSyncAuthState.status}
       data-is-loading={isLoading ? "true" : undefined}
       className={rootClasses}
@@ -515,6 +518,37 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 ＋
               </button>
             </div>
+          </div>
+
+          <div className="flex items-center justify-between py-3 border-b border-slate-200 dark:border-slate-800">
+            <div>
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                音量キーでページ送り
+              </span>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                音量［ー］で次へ、音量［＋］で前へ移動します
+              </p>
+            </div>
+            <button
+              type="button"
+              data-testid="toggle-volume-key-paging"
+              aria-label="音量キーでページ送り"
+              aria-pressed={enableVolumeKeyPaging}
+              disabled={isLoading}
+              onClick={onToggleVolumeKeyPaging}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                enableVolumeKeyPaging
+                  ? "bg-blue-600"
+                  : "bg-slate-300 dark:bg-slate-700"
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                  enableVolumeKeyPaging ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
           </div>
         </section>
 

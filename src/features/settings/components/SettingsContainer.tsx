@@ -28,6 +28,7 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
     fontFamily,
     pageMarginPx,
     pagingMode,
+    enableVolumeKeyPaging,
     isLoading,
     error,
     toggleWritingMode,
@@ -37,6 +38,7 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
     changeFontFamily,
     changePageMargin,
     changePagingMode,
+    toggleVolumeKeyPaging,
   } = useSettings();
 
   const {
@@ -67,6 +69,7 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
       fontFamily={fontFamily}
       pageMarginPx={pageMarginPx}
       pagingMode={pagingMode}
+      enableVolumeKeyPaging={enableVolumeKeyPaging}
       isLoading={isLoading}
       error={error}
       cloudSyncAuthState={cloudSyncAuthState}
@@ -85,6 +88,7 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
       onChangeFontFamily={changeFontFamily}
       onChangePageMargin={changePageMargin}
       onChangePagingMode={changePagingMode}
+      onToggleVolumeKeyPaging={toggleVolumeKeyPaging}
       onSignInGoogle={onSignInGoogle}
       onSignOutGoogle={onSignOutGoogle}
       onSyncNow={onSyncNow}
