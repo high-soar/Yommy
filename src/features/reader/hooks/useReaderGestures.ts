@@ -141,6 +141,12 @@ export function useReaderGestures({
   );
   const hasTriggeredInGestureRef = useRef(false);
 
+  // ハードウェア音量キー2段階操作用（AC-RD-27, Issue #203）
+  const pendingVolumeKeyBoundaryRef = useRef<"next" | "prev" | null>(null);
+  const volumeKeyBoundaryTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+
   const clearBoundaryTap = useCallback(() => {
     if (boundaryTapTimerRef.current) {
       clearTimeout(boundaryTapTimerRef.current);
@@ -156,6 +162,15 @@ export function useReaderGestures({
       scrollSwipeTimerRef.current = null;
     }
     pendingScrollSwipeRef.current = null;
+    setBoundaryHint(null);
+  }, []);
+
+  const clearVolumeKeyBoundary = useCallback(() => {
+    if (volumeKeyBoundaryTimerRef.current) {
+      clearTimeout(volumeKeyBoundaryTimerRef.current);
+      volumeKeyBoundaryTimerRef.current = null;
+    }
+    pendingVolumeKeyBoundaryRef.current = null;
     setBoundaryHint(null);
   }, []);
 
@@ -222,8 +237,9 @@ export function useReaderGestures({
       }
       clearBoundaryTap();
       clearScrollSwipe();
+      clearVolumeKeyBoundary();
     };
-  }, [clearBoundaryTap, clearScrollSwipe]);
+  }, [clearBoundaryTap, clearScrollSwipe, clearVolumeKeyBoundary]);
 
   // 連続スクロールモード用の端到達フラグ（2段階操作用）
   const reachedEndRef = useRef(false);
@@ -663,10 +679,13 @@ export function useReaderGestures({
             pendingScrollSwipeRef.current = null;
             setBoundaryHint(null);
           }
+          if (pendingVolumeKeyBoundaryRef.current !== null) {
+            clearVolumeKeyBoundary();
+          }
         }
       }
     },
-    [isPaged, onScrollProgressChange],
+    [isPaged, onScrollProgressChange, clearVolumeKeyBoundary],
   );
 
   // Main クリックハンドラー（タップによる直後の誤閉会を防止）
@@ -674,6 +693,226 @@ export function useReaderGestures({
     if (hasHandledTapRef.current) return;
     onCloseOverlay();
   }, [onCloseOverlay]);
+
+  const getScrollElement = useCallback((): HTMLElement | null => {
+    if (!containerRef?.current) return null;
+    const viewEl = containerRef.current.querySelector<HTMLElement>(
+      '[data-testid="reader-view"]',
+    );
+    return viewEl ?? containerRef.current;
+  }, [containerRef]);
+
+  const isAtScrollEnd = useCallback(
+    (el: HTMLElement | null): boolean => {
+      if (reachedEndRef.current) return true;
+      if (!el) return false;
+      if (isVertical) {
+        const maxScroll = el.scrollWidth - el.clientWidth;
+        return maxScroll > 0 && Math.abs(el.scrollLeft) >= maxScroll - 2;
+      }
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      return maxScroll > 0 && el.scrollTop >= maxScroll - 2;
+    },
+    [isVertical],
+  );
+
+  const isAtScrollStart = useCallback(
+    (el: HTMLElement | null): boolean => {
+      if (reachedStartRef.current) return true;
+      if (!el) return false;
+      if (isVertical) {
+        const maxScroll = el.scrollWidth - el.clientWidth;
+        return maxScroll > 0 && Math.abs(el.scrollLeft) <= 2;
+      }
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      return maxScroll > 0 && el.scrollTop <= 2;
+    },
+    [isVertical],
+  );
+
+  // ハードウェア音量キー操作ハンドラー（AC-RD-26, AC-RD-27, Issue #203）
+  const handleVolumeKey = useCallback(
+    (direction: VolumeKeyDirection) => {
+      if (isPaged) {
+        // 縦書きページめくりモード
+        if (isAnimating || pendingTargetPageRef.current !== null) {
+          flushPendingAnimation();
+        }
+
+        const basePage =
+          pendingTargetPageRef.current ??
+          lastTargetPageRef.current ??
+          currentPage;
+        const width = getContainerWidth();
+
+        if (direction === "down") {
+          // 音量［ー］: 次ページ進行（水平スライドアニメーション）
+          if (basePage < totalPages) {
+            clearVolumeKeyBoundary();
+            clearBoundaryTap();
+            // startSlideAnimation 内で onCloseOverlay() が実行される
+            startSlideAnimation(basePage + 1, width);
+          } else {
+            onCloseOverlay();
+            // 最終ページ到達時: 2段階操作で次話遷移
+            if (chapterIndex < totalChapters) {
+              if (pendingVolumeKeyBoundaryRef.current === "next") {
+                clearVolumeKeyBoundary();
+                onNextChapter();
+              } else {
+                clearVolumeKeyBoundary();
+                pendingVolumeKeyBoundaryRef.current = "next";
+                setBoundaryHint("もう一度操作で次の話へ");
+                volumeKeyBoundaryTimerRef.current = setTimeout(() => {
+                  clearVolumeKeyBoundary();
+                }, 2500);
+              }
+            } else {
+              clearVolumeKeyBoundary();
+            }
+          }
+        } else {
+          // 音量［＋］: 前ページ進行（水平スライドアニメーション）
+          if (basePage > 1) {
+            clearVolumeKeyBoundary();
+            clearBoundaryTap();
+            // startSlideAnimation 内で onCloseOverlay() が実行される
+            startSlideAnimation(basePage - 1, -width);
+          } else {
+            onCloseOverlay();
+            // 第1ページ到達時: 2段階操作で前話遷移
+            if (chapterIndex > 1) {
+              if (pendingVolumeKeyBoundaryRef.current === "prev") {
+                clearVolumeKeyBoundary();
+                onPrevChapter();
+              } else {
+                clearVolumeKeyBoundary();
+                pendingVolumeKeyBoundaryRef.current = "prev";
+                setBoundaryHint("もう一度操作で前の話へ");
+                volumeKeyBoundaryTimerRef.current = setTimeout(() => {
+                  clearVolumeKeyBoundary();
+                }, 2500);
+              }
+            } else {
+              clearVolumeKeyBoundary();
+            }
+          }
+        }
+      } else {
+        // 連続スクロールモード
+        onCloseOverlay();
+        const el = getScrollElement();
+
+        if (direction === "down") {
+          // 音量［ー］: 約85% 順方向スクロール
+          if (isAtScrollEnd(el)) {
+            // スクロール末尾到達時: 2段階操作で次話遷移
+            if (chapterIndex < totalChapters) {
+              if (pendingVolumeKeyBoundaryRef.current === "next") {
+                clearVolumeKeyBoundary();
+                onNextChapter();
+              } else {
+                clearVolumeKeyBoundary();
+                pendingVolumeKeyBoundaryRef.current = "next";
+                setBoundaryHint("もう一度操作で次の話へ");
+                volumeKeyBoundaryTimerRef.current = setTimeout(() => {
+                  clearVolumeKeyBoundary();
+                }, 2500);
+              }
+            } else {
+              clearVolumeKeyBoundary();
+            }
+          } else {
+            clearVolumeKeyBoundary();
+            if (el) {
+              if (isVertical) {
+                const delta = Math.round(
+                  (el.clientWidth || getContainerWidth()) * 0.85,
+                );
+                if (typeof el.scrollBy === "function") {
+                  el.scrollBy({ left: -delta, behavior: "smooth" });
+                } else {
+                  el.scrollLeft -= delta;
+                }
+              } else {
+                const delta = Math.round(
+                  (el.clientHeight || window.innerHeight) * 0.85,
+                );
+                if (typeof el.scrollBy === "function") {
+                  el.scrollBy({ top: delta, behavior: "smooth" });
+                } else {
+                  el.scrollTop += delta;
+                }
+              }
+            }
+          }
+        } else {
+          // 音量［＋］: 約85% 逆方向スクロール
+          if (isAtScrollStart(el)) {
+            // スクロール先頭到達時: 2段階操作で前話遷移
+            if (chapterIndex > 1) {
+              if (pendingVolumeKeyBoundaryRef.current === "prev") {
+                clearVolumeKeyBoundary();
+                onPrevChapter();
+              } else {
+                clearVolumeKeyBoundary();
+                pendingVolumeKeyBoundaryRef.current = "prev";
+                setBoundaryHint("もう一度操作で前の話へ");
+                volumeKeyBoundaryTimerRef.current = setTimeout(() => {
+                  clearVolumeKeyBoundary();
+                }, 2500);
+              }
+            } else {
+              clearVolumeKeyBoundary();
+            }
+          } else {
+            clearVolumeKeyBoundary();
+            if (el) {
+              if (isVertical) {
+                const delta = Math.round(
+                  (el.clientWidth || getContainerWidth()) * 0.85,
+                );
+                if (typeof el.scrollBy === "function") {
+                  el.scrollBy({ left: delta, behavior: "smooth" });
+                } else {
+                  el.scrollLeft += delta;
+                }
+              } else {
+                const delta = Math.round(
+                  (el.clientHeight || window.innerHeight) * 0.85,
+                );
+                if (typeof el.scrollBy === "function") {
+                  el.scrollBy({ top: -delta, behavior: "smooth" });
+                } else {
+                  el.scrollTop -= delta;
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    [
+      isPaged,
+      isAnimating,
+      flushPendingAnimation,
+      currentPage,
+      totalPages,
+      getContainerWidth,
+      clearVolumeKeyBoundary,
+      clearBoundaryTap,
+      startSlideAnimation,
+      onCloseOverlay,
+      chapterIndex,
+      totalChapters,
+      onNextChapter,
+      onPrevChapter,
+      getScrollElement,
+      isAtScrollEnd,
+      isAtScrollStart,
+      isVertical,
+    ],
+  );
 
   return {
     slideOffsetPx,
@@ -690,6 +929,6 @@ export function useReaderGestures({
     handleMainClick,
     handleWheel,
     handleScrollProgressChange,
-    handleVolumeKey: () => {},
+    handleVolumeKey,
   };
 }

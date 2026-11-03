@@ -63,6 +63,7 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
     pageMarginPx,
     initialScrollProgress,
     pagingMode,
+    enableVolumeKeyPaging,
     currentPage,
     totalPages,
     isLoading,
@@ -174,6 +175,7 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
       pageMarginPx={pageMarginPx}
       initialScrollProgress={initialScrollProgress}
       pagingMode={pagingMode}
+      enableVolumeKeyPaging={enableVolumeKeyPaging}
       currentPage={currentPage}
       totalPages={totalPages}
       isLoading={isLoading}

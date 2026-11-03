@@ -179,6 +179,8 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     DEFAULT_PAGE_MARGIN_PX,
   );
   const [pagingMode, setPagingMode] = useState<ReaderPagingMode>("auto");
+  const [enableVolumeKeyPaging, setEnableVolumeKeyPaging] =
+    useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPagesState] = useState<number>(1);
   const [initialScrollProgress, setInitialScrollProgress] = useState<number>(0);
@@ -474,6 +476,9 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             }
             if (settings.pagingMode) {
               setPagingMode(settings.pagingMode);
+            }
+            if (typeof settings.enableVolumeKeyPaging === "boolean") {
+              setEnableVolumeKeyPaging(settings.enableVolumeKeyPaging);
             }
           }
         } catch {
@@ -1012,7 +1017,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     scrollProgress,
     pagingMode,
     effectivePagingMode,
-    enableVolumeKeyPaging: false,
+    enableVolumeKeyPaging,
     currentPage,
     totalPages,
     isLoading,
