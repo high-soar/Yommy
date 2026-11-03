@@ -71,6 +71,7 @@ const meta: Meta<typeof ReaderPage> = {
     onTotalPagesChange: fn(),
     onScrollProgressChange: fn(),
     onSelectTab: fn(),
+    onBackToToc: fn(),
   },
 };
 
@@ -85,11 +86,35 @@ export const Default: Story = {
 };
 
 /**
- * 下部オーバーレイ展開時
+ * 上下オーバーレイ展開時
  */
 export const OverlayOpen: Story = {
-  name: "下部オーバーレイ展開時",
+  name: "上下オーバーレイ展開時",
   args: {
+    initialOverlayOpen: true,
+  },
+};
+
+const longNovel: NovelRecord = {
+  ...sampleNovel,
+  title:
+    "とても長くて画面幅に収まらない異世界転生した勇者が魔王を倒した後に始めるスローライフなセカンドライフ物語〜第1巻〜",
+};
+
+const longChapterTitle: ChapterRecord = {
+  ...sampleChapter,
+  title:
+    "第1話 見知らぬ空と見知らぬ大地と二つの太陽が輝く広大な平原で目覚めた少年の戸惑いと決意",
+};
+
+/**
+ * 長文タイトルでの上下オーバーレイ展開状態（1行固定省略保護）
+ */
+export const OverlayOpenLongTitle: Story = {
+  name: "長文タイトルでの上下オーバーレイ展開状態",
+  args: {
+    novel: longNovel,
+    chapter: longChapterTitle,
     initialOverlayOpen: true,
   },
 };
@@ -161,6 +186,23 @@ const longBodyHtml = Array.from({ length: 18 }, (_, i) => {
 export const Paged: Story = {
   name: "ページめくりモード（2ページ目 / 全5ページ）",
   args: {
+    pagingMode: "paged" as ReaderPagingMode,
+    currentPage: 2,
+    totalPages: 5,
+    chapter: {
+      ...sampleChapter,
+      bodyHtml: longBodyHtml,
+    },
+  },
+};
+
+/**
+ * 上下連動オーバーレイ展開時（縦書きページめくり・シークバー表示）
+ */
+export const OverlayOpenPaged: Story = {
+  name: "上下連動オーバーレイ展開時（縦書きページめくり・シークバー表示）",
+  args: {
+    initialOverlayOpen: true,
     pagingMode: "paged" as ReaderPagingMode,
     currentPage: 2,
     totalPages: 5,

@@ -9,6 +9,7 @@ import type {
 } from "../../../storage/types";
 import type { BottomTab } from "../../../shared/ui/BottomTabBar";
 import { ReaderView } from "./ReaderView";
+import { ReaderTopOverlay } from "./ReaderTopOverlay";
 import { ReaderBottomOverlay } from "./ReaderBottomOverlay";
 import { useReaderGestures } from "../hooks/useReaderGestures";
 import { resolveEffectivePagingMode } from "../hooks/useReader";
@@ -60,6 +61,8 @@ export interface ReaderPageProps {
   onScrollProgressChange: (progress: number) => void;
   /** 下部タブ押下時のコールバック */
   onSelectTab?: (tab: BottomTab) => void;
+  /** 上部オーバーレイ「← 目次」ボタン押下時のコールバック（TR-06、v0.6 Issue #202） */
+  onBackToToc?: () => void;
   /** 下部オーバーレイの初期展開フラグ（省略時はエラー/空状態時に true） */
   initialOverlayOpen?: boolean;
   /** 初期スライド変位量（px、Storybook/VRT/テスト用） */
@@ -78,8 +81,8 @@ const pageBgStyles: Record<ReaderTheme, string> = {
 /**
  * 小説リーダー画面全体のレイアウト統合コンポーネント（Presentational）
  *
- * 全画面本文（ReaderView）と最下部タッチ連動の下部オーバーレイ（ReaderBottomOverlay）、
- * および状態別表示（ローディング・エラー・空状態）を統合する。
+ * 全画面本文（ReaderView）と上下連動オーバーレイ（上部 ReaderTopOverlay、下部 ReaderBottomOverlay）、
+ * 最下部タッチゾーン、Kindle様式のジェスチャー操作、および状態別表示（ローディング・エラー・空状態）を統合する。
  */
 export const ReaderPage: React.FC<ReaderPageProps> = ({
   novel,
@@ -105,6 +108,7 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
   onTotalPagesChange,
   onScrollProgressChange,
   onSelectTab,
+  onBackToToc,
   initialOverlayOpen,
   initialSlideOffsetPx,
   initialBoundaryHint,
@@ -163,6 +167,15 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
       onScrollProgressChange(progress);
     },
     [onScrollProgressChange],
+  );
+
+  // シークバー操作時（オーバーレイを開いたまま維持してページ変更、AC-RD-25, §3.6）
+  const handleSeekbarPageChange = useCallback(
+    (targetPage: number) => {
+      setIsOpen(true);
+      onPageChange?.(targetPage);
+    },
+    [onPageChange],
   );
 
   const {
@@ -332,6 +345,14 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
         )}
       </main>
 
+      {/* 上部オーバーレイ（作品名・サブタイトル1行省略・目次導線、AC-RD-22〜24） */}
+      <ReaderTopOverlay
+        isOpen={isOpen}
+        novelTitle={novel?.title ?? ""}
+        chapterTitle={chapter?.title ?? ""}
+        onBackToToc={onBackToToc ?? (() => {})}
+      />
+
       {/* エピソード境界案内ヒントバッジ */}
       {boundaryHint && (
         <div
@@ -356,15 +377,19 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
         tabIndex={0}
       />
 
-      {/* 下部オーバーレイ（前後話ナビ＋下部タブ） */}
+      {/* 下部オーバーレイ（シークバー＋前後話ナビ＋下部タブ、AC-RD-22, 25） */}
       <ReaderBottomOverlay
         isOpen={isOpen}
         chapterIndex={chapterIndex}
         totalChapters={totalChapters}
         isLoading={isLoading}
         activeTab={activeTab}
+        effectivePagingMode={effectivePagingMode}
+        currentPage={currentPage}
+        totalPages={totalPages}
         onPrevChapter={handlePrevChapter}
         onNextChapter={handleNextChapter}
+        onPageChange={handleSeekbarPageChange}
         onSelectTab={onSelectTab}
       />
     </div>

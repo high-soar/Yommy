@@ -1224,4 +1224,161 @@ describe("ReaderContainer", () => {
       });
     });
   });
+
+  describe("上部オーバーレイ「← 目次」押下による目次復帰連携 (AC-RD-24, TR-06, v0.6 Issue #202)", () => {
+    it("ReaderPage に onBackToToc ハンドラーが渡されていること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
+      const { repo: chapterRepository } = createMockChapterRepo();
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+      });
+
+      const lastProps = pageSpy.mock.lastCall?.[0];
+      expect(lastProps?.onBackToToc).toBeDefined();
+      expect(typeof lastProps?.onBackToToc).toBe("function");
+    });
+
+    it("カスタム onBackToToc が渡された場合、「← 目次」押下で flushBookmark 実行後にカスタムコールバックが呼ばれること", async () => {
+      const onBackToToc = vi.fn();
+      const { repo: novelRepository, updateBookmarkSpy } =
+        createMockNovelRepo(sampleNovel);
+      const { repo: chapterRepository } = createMockChapterRepo();
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+          onBackToToc={onBackToToc}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+      });
+
+      // オーバーレイ展開
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
+
+      // 上部オーバーレイの「← 目次」ボタンを押下
+      const backBtn = screen.getByTestId("reader-top-back-to-toc");
+      fireEvent.click(backBtn);
+
+      await waitFor(() => {
+        expect(updateBookmarkSpy).toHaveBeenCalled();
+        expect(onBackToToc).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it("onBackToToc 省略時、「← 目次」押下で flushBookmark 実行後にルーターの navigateToNovelDetail が呼ばれること", async () => {
+      const { repo: novelRepository, updateBookmarkSpy } =
+        createMockNovelRepo(sampleNovel);
+      const { repo: chapterRepository } = createMockChapterRepo();
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+      });
+
+      // オーバーレイ展開
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
+      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
+
+      // 「← 目次」ボタンを押下
+      const backBtn = screen.getByTestId("reader-top-back-to-toc");
+      fireEvent.click(backBtn);
+
+      await waitFor(() => {
+        expect(updateBookmarkSpy).toHaveBeenCalled();
+        expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+          `/novels/${encodeURIComponent(sampleNovel.id)}`,
+        );
+      });
+    });
+
+    it("novelId 省略時、novel レコードの id から navigateToNovelDetail が呼ばれること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
+      const { repo: chapterRepository } = createMockChapterRepo();
+
+      render(
+        <TestWrapper
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+      });
+
+      const lastProps = pageSpy.mock.lastCall?.[0];
+      expect(lastProps?.onBackToToc).toBeDefined();
+
+      // onBackToToc を直接発火
+      await act(async () => {
+        lastProps?.onBackToToc?.();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+          `/novels/${encodeURIComponent(sampleNovel.id)}`,
+        );
+      });
+    });
+
+    it("novelId も novel も存在しない場合、クラッシュせず安全に終了すること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const { repo: novelRepository } = createMockNovelRepo(null);
+      const { repo: chapterRepository } = createMockChapterRepo([]);
+
+      render(
+        <TestWrapper
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
+      });
+
+      const lastProps = pageSpy.mock.lastCall?.[0];
+      expect(lastProps?.onBackToToc).toBeDefined();
+
+      await act(async () => {
+        lastProps?.onBackToToc?.();
+      });
+
+      // パスが変わっていないこと（未遷移）
+      expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+        "/novels/kakuyomu:16817330658027210412/chapters/1",
+      );
+    });
+  });
 });
