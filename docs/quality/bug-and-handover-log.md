@@ -2,10 +2,11 @@
 type: quality-log
 title: 品質記録・バグ記録票 ＆ 申し送り管理シート（Bug & Handover Log）
 description: 製品コードと支援成果物を分離したバグ記録（原因5分類 L/S/D/B/A）および後続タスクへの申し送り事項（HO-xx）を追跡する正本シート。
-status: Approved
+status: "Review (#201)"
 updated: "2026-11-03"
 tags: [quality, bug-log, handover, dre, kaizen]
 related_specs:
+  - docs/specs/changes/issue-201-reader-page-slide-animation.md
   - docs/specs/changes/archive/issue-169-font-and-margin-customization.md
   - docs/specs/changes/archive/issue-170-cache-management-and-capacity-visualization.md
   - docs/specs/changes/archive/issue-168-reader-pagination-and-touch-refinement.md
@@ -87,9 +88,9 @@ related_tests: []
 
 現在、未解決（`Open`）の申し送り事項はありません。次期 Milestone `v0.6` 作業中に発生した申し送り事項は、本表へ `HO-26` より連番で登録します。
 
-| ID  | 起票元 Issue / PR | 申し送り事項の内容 | 解決先（対象 Issue / 成果物） | 完了ゲート | 状態 (`Open` / `Resolved`) |
-| :-: | :---------------: | :----------------- | :---------------------------- | :--------- | :------------------------: |
-|     |                   |                    |                               |            |                            |
+|     ID      | 起票元 Issue / PR | 申し送り事項の内容                                                                                                      | 解決先（対象 Issue / 成果物）          | 完了ゲート              | 状態 (`Open` / `Resolved`) |
+| :---------: | :---------------: | :---------------------------------------------------------------------------------------------------------------------- | :------------------------------------- | :---------------------- | :------------------------: |
+| **`HO-26`** |    Issue #201     | リーダー縦書きページめくりにおける Android 実機での水平スライドアニメーションの滑らかさおよび高速連続タップ時の挙動検証 | Milestone `v0.6` 実機検証 / Issue #204 | Milestone `v0.6` 完了前 |           `Open`           |
 
 ---
 
