@@ -848,9 +848,11 @@ export interface VolumeKeyBridge {
    - `setVolumeKeyPagingEnabled`: Web 側からの有効/無効状態を保持。
    - `onVolumeKeyDown(direction)`: `notifyListeners("volumeKeyEvent", { direction })` により Web 側リスナーへ非同期通知。
 2. **`MainActivity`（`dispatchKeyEvent` インターセプト）**:
-   - `dispatchKeyEvent(KeyEvent event)` をオーバーライドし、`ACTION_DOWN` かつ `KEYCODE_VOLUME_DOWN` または `KEYCODE_VOLUME_UP` の押下を検知。
-   - `VolumeKeyPlugin.isVolumeKeyPagingEnabled()` が `true` の場合、イベントを消費（`return true;`）して **OS のシステム音量バー表示および音量変更を抑止** し、プラグインへ通知。
-   - `false` の場合は `super.dispatchKeyEvent(event)` を呼び出し、OS 標準の音量調整として透過的に動作させる。
+   - `dispatchKeyEvent(KeyEvent event)` をオーバーライドし、`KEYCODE_VOLUME_DOWN` または `KEYCODE_VOLUME_UP` を捕捉。
+   - `VolumeKeyPlugin.isVolumeKeyPagingEnabled()` が `true` の場合：
+     - `event.getAction() == KeyEvent.ACTION_DOWN`: 初回押下（`event.getRepeatCount() == 0`）時のみ `VolumeKeyPlugin.onVolumeKeyDown(direction)` を呼び出し、長押しによる意図しない高速連打や境界誤遷移を防止する。初回・リピート時ともに `return true;` で消費して **OS のシステム音量バー表示および音量変更を抑止** する。
+     - `event.getAction() == KeyEvent.ACTION_UP`: キー離上時の OS 音量 HUD 漏れや端末ビープ音発生を防ぐため、同様に `return true;` でイベントを消費する。
+   - `VolumeKeyPlugin.isVolumeKeyPagingEnabled()` が `false`（または音量キー以外）の場合は `super.dispatchKeyEvent(event)` を呼び出し、OS 標準の音量調整として透過的に動作させる。
 3. **ブラウザ／テスト用モック（`MockVolumeKeyBridge`）**:
    - `triggerVolumeKey(direction)` メソッドを提供し、UT や Playwright IT で決定論的に音量キーイベントを発火可能にする。
    - Web 実行時の利便性としてキーボードイベント（`VolumeDown` / `VolumeUp`、フォールバック `ArrowDown` / `ArrowUp`）との連動もサポート。

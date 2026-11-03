@@ -18,6 +18,7 @@ tags:
   - ho-28
 related_specs:
   - docs/specs/requirements.md
+  - docs/specs/screen-transitions.md
   - docs/specs/architecture.md
   - docs/specs/features/settings.md
   - docs/specs/features/reader-view.md
@@ -101,8 +102,10 @@ related_tests:
 2. **Android ネイティブ層実装（`VolumeKeyPlugin.java` & `MainActivity.java`）**:
    - `VolumeKeyPlugin`: Capacitor プラグイン（`@CapacitorPlugin(name = "VolumeKey")`）として登録し、`setVolumeKeyPagingEnabled` メソッドおよび `volumeKeyEvent` のイベント通知（`notifyListeners`）を提供する。
    - `MainActivity`: `dispatchKeyEvent(KeyEvent event)` をオーバーライドし、以下の制御を行う：
-     - `event.getAction() == KeyEvent.ACTION_DOWN` かつ `keyCode` が `KEYCODE_VOLUME_DOWN` または `KEYCODE_VOLUME_UP` の場合：
-       - `VolumeKeyPlugin.isVolumeKeyPagingEnabled()` が `true` の場合、イベントを捕捉して `VolumeKeyPlugin.onVolumeKeyDown(direction)` を呼び出し、**`return true;` で OS のシステム音量バー表示および音量変更を抑止**する。
+     - `keyCode` が `KEYCODE_VOLUME_DOWN` または `KEYCODE_VOLUME_UP` の場合：
+       - `VolumeKeyPlugin.isVolumeKeyPagingEnabled()` が `true` の場合：
+         - `event.getAction() == KeyEvent.ACTION_DOWN`: 長押しによる多重ページ送りや境界誤遷移を防止するため初回押下（`event.getRepeatCount() == 0`）時のみ `VolumeKeyPlugin.onVolumeKeyDown(direction)` を呼び出し、初回・リピート時ともに `return true;` で **OS のシステム音量バー表示および音量変更を抑止**する。
+         - `event.getAction() == KeyEvent.ACTION_UP`: キー離上時の OS 音量 HUD 漏れや端末ビープ音発生を防ぐため、同様に `return true;` でイベントを消費する。
        - `false` の場合は `super.dispatchKeyEvent(event)` を呼び出し、Android 標準の音量調整として動作させる。
    - リーダー画面以外（本棚・検索・ランキング・設定・作品詳細）を表示中、または設定が OFF のときは一切インターセプトせず、OS の標準音量操作を妨げない。
 
@@ -158,6 +161,7 @@ related_tests:
 | `docs/specs/requirements.md`           | App 全体正本 | `SYS-REQ-11`（リーダー組版・操作体験）へハードウェア音量キー（音量［ー］次へ／音量［＋］前へ、設定画面トグル初期値OFF、エピソード端2段階遷移、オーバーレイ自動非表示）の要件を反映し、フロントマター `status: Review (#203)` へ更新。 |
 | `docs/specs/features/settings.md`      | App 全体正本 | 設定画面（`SCR-05`）の「表示・組版設定」セクションに「音量キーでページ送り」トグル UI（`AC-ST-19`）を追加し、フック契約（`useSettings`）を更新。フロントマター `status: Review (#203)` へ更新。                                       |
 | `docs/specs/features/reader-view.md`   | App 全体正本 | リーダー画面（`SCR-03`）に音量キーページ送り・スクロール送り仕様（`AC-RD-26`）およびエピソード端2段階遷移・オーバーレイ連動（`AC-RD-27`）を追加。フロントマター `status: Review (#203)` へ更新。                                      |
+| `docs/specs/screen-transitions.md`     | App 全体正本 | 画面間遷移 `TR-05` に音量キー操作による前後エピソード遷移トリガーの記述を追加。フロントマター `status: Review (#203)` へ更新。                                                                                                        |
 | `docs/specs/architecture.md`           | App 全体正本 | ブリッジ層に `VolumeKeyBridge`（`src/bridges/volume-key/`）および `ServiceProvider` の DI 構成、Android ネイティブプラグイン構成を追加。フロントマター `status: Review (#203)` へ更新。                                               |
 | `docs/quality/bug-and-handover-log.md` | 品質正本     | 申し送り事項 **`HO-28`**（Android 実機における音量キーインターセプト・OS音量バー抑止・通常音量復帰の検証）を登録。                                                                                                                    |
 
@@ -195,7 +199,7 @@ related_tests:
 
 ### 5.3 システム結合テスト（IT: Playwright）
 
-- `test/it/scenarios/scn07-volume-key-paging.spec.ts`（新規シナリオ）:
+- `test/it/scenarios/scn06-volume-key-paging.spec.ts`（新規シナリオ `SCN-06`）:
   1. 設定画面（`SCR-05`）へ遷移し、「音量キーでページ送り」トグルを ON に切り替えて永続化を確認。
   2. リーダー画面（`SCR-03`）で作品エピソードを開く。
   3. 音量［ー］操作（モックイベント）で次ページへ進むことを確認。
@@ -212,7 +216,7 @@ related_tests:
 | **Sub-issue ①**<br>(#223) | `MK1` | **設定画面（SCR-05）の「音量キーでページ送り」ON/OFF トグル UI および永続化の実装**（#223）<br>・`useSettings.ts`: `enableVolumeKeyPaging`, `toggleVolumeKeyPaging` 追加、永続化・ロールバック<br>・`SettingsPage.tsx`: 「表示・組版設定」に `toggle-volume-key-paging` トグル追加<br>・`SettingsPage.stories.tsx`: ON/OFF ストーリー追加<br>・単体テスト（C0/C1/Functions 100%）および Storybook VRT（1280px / 375px）更新                           | 約 200 行 | Gate 1〜6 PASS<br>AI 自律マージ                 |
 | **Sub-issue ②**<br>(#224) | `MK2` | **Android ネイティブ層（VolumeKeyPlugin / MainActivity）および VolumeKeyBridge の実装**（#224）<br>・`src/bridges/volume-key/`: `types.ts`, `mockVolumeKeyBridge.ts`, `capacitorVolumeKeyBridge.ts`<br>・`android/`: `VolumeKeyPlugin.java`, `MainActivity.java`（音量キー捕捉・OS音量バー抑止）<br>・`src/app/ServiceProvider.tsx`: `volumeKeyBridge` DI 注入<br>・単体テスト（C0/C1/Functions 100%）                                                | 約 250 行 | Gate 1〜6 PASS<br>AI 自律マージ                 |
 | **Sub-issue ③**<br>(#225) | `MK3` | **リーダー画面（SCR-03）における音量キーページ送り・スクロール送り・境界2段階遷移連携の実装**（#225）<br>・リーダー画面での `volumeKeyBridge` 有効化・リスナー購読・ライフサイクル制御<br>・音量［ー］/［＋］によるページめくり（スライド移動）およびスクロール移動<br>・エピソード境界 2 段階遷移（案内ヒント・2.5秒タイマー）およびオーバーレイ自動非表示<br>・`ReaderPage.test.tsx` / `ReaderContainer.test.tsx` 単体テスト（100%）および VRT 検証 | 約 300 行 | Gate 1〜6 PASS<br>AI 自律マージ                 |
-| **Sub-issue ④**<br>(#226) | `IT`  | **Playwright システム結合テスト（SCN-07 音量キー操作）および仕様書アーカイブ**（#226）<br>・新規 Playwright IT シナリオ（`scn07-volume-key-paging.spec.ts`）の実装と全回帰 PASS 検証<br>・申し送り事項 `HO-28` の登録確認<br>・差分仕様 `docs/specs/changes/issue-203-volume-key-paging.md` のアーカイブ移動                                                                                                                                          | 約 250 行 | Gate 1〜6 PASS<br>人間マージ（親Issueクローズ） |
+| **Sub-issue ④**<br>(#226) | `IT`  | **Playwright システム結合テスト（SCN-06 音量キー操作）および仕様書アーカイブ**（#226）<br>・新規 Playwright IT シナリオ（`scn06-volume-key-paging.spec.ts`）の実装と全回帰 PASS 検証<br>・申し送り事項 `HO-28` の登録確認<br>・差分仕様 `docs/specs/changes/issue-203-volume-key-paging.md` のアーカイブ移動                                                                                                                                          | 約 250 行 | Gate 1〜6 PASS<br>人間マージ（親Issueクローズ） |
 
 ---
 

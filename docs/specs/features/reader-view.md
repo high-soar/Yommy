@@ -373,6 +373,7 @@ src/features/reader/
 | `pageMarginPx`           | `number`                       | 任意 | 現在の画面余白 px（省略時: `20`、v0.5 Issue #169）                             |
 | `initialScrollProgress`  | `number`                       | 必須 | 初期復元する進捗率（`0.0 〜 1.0`）                                             |
 | `pagingMode`             | `ReaderPagingMode`             | 任意 | ページ送りモード（省略時: `'auto'`、v0.4 Issue #122）                          |
+| `enableVolumeKeyPaging`  | `boolean`                      | 任意 | ハードウェア音量キー送り有効フラグ（省略時: `false`、v0.6 Issue #203）         |
 | `currentPage`            | `number`                       | 任意 | ページめくり表示時の現在ページ番号（省略時: `1`）                              |
 | `totalPages`             | `number`                       | 任意 | ページめくり表示時の総ページ数（省略時: `1`）                                  |
 | `isLoading`              | `boolean`                      | 必須 | 読み込み・通信中フラグ                                                         |
@@ -503,6 +504,7 @@ export interface UseReaderResult {
   scrollProgress: number;
   pagingMode: ReaderPagingMode; // 【新設: v0.4 Issue #122】
   effectivePagingMode: "paged" | "scroll"; // 【新設: v0.4 Issue #122】
+  enableVolumeKeyPaging: boolean; // 【新設: v0.6 Issue #203】
   currentPage: number; // 【新設: v0.4 Issue #122】
   totalPages: number; // 【新設: v0.4 Issue #122】
   isLoading: boolean;
@@ -531,7 +533,7 @@ export interface UseReaderResult {
 ### 4.2 パイプライン仕様
 
 1. **設定の初期読み出しと変更永続化**:
-   - マウント時に `settingsRepository.getReaderSettings()` を呼び出し、保存済みの `writingMode`, `theme`, `fontSizePx`（初期値 `18`）, `lineHeight`（初期値 `1.8`）, `fontFamily`（初期値 `'biz-ud-mincho'`）, `pageMarginPx`（初期値 `20`）, `pagingMode`（初期値 `'auto'`）を復元する。
+   - マウント時に `settingsRepository.getReaderSettings()` を呼び出し、保存済みの `writingMode`, `theme`, `fontSizePx`（初期値 `18`）, `lineHeight`（初期値 `1.8`）, `fontFamily`（初期値 `'biz-ud-mincho'`）, `pageMarginPx`（初期値 `20`）, `pagingMode`（初期値 `'auto'`）, `enableVolumeKeyPaging`（初期値 `false`、v0.6 Issue #203）を復元する。
    - `toggleWritingMode`, `changeTheme`, `changeFontSize`（`12〜32` にクランプ）, `changeLineHeight`（`1.4〜2.4` にクランプ・小数第1位丸め）, `changePagingMode`（`'auto' | 'paged' | 'scroll'`）実行時は、即座に State を更新するとともに `settingsRepository.updateReaderSettings(patch)` で非同期保存する。
    - 実効モード `effectivePagingMode` は、純粋関数 `resolveEffectivePagingMode(pagingMode, writingMode)` に基づき、`writingMode === 'horizontal-tb'` の場合は常に `'scroll'`、`writingMode === 'vertical-rl'` の場合は `pagingMode === 'scroll' ? 'scroll' : 'paged'` として動的に算出する（v0.5 Issue #168: 横書き時は連続スクロール固定）。
 2. **エピソード読み込みとキャッシュ鮮度・オンデマンド取得（`TR-03`, `TR-04`, `TR-05`）**:
