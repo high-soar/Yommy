@@ -3,6 +3,11 @@ import type { WritingMode, ReaderPagingMode } from "../../../storage/types";
 import type { VolumeKeyDirection } from "../../../bridges/volume-key/types";
 import { resolveEffectivePagingMode } from "./useReader";
 
+// 音量キーによる連続スクロール時の移動割合（ビューポート寸法の約85%）
+const VOLUME_KEY_SCROLL_RATIO = 0.85;
+// 音量キーによる境界2段階操作のリセット待機時間（ミリ秒）
+const VOLUME_KEY_BOUNDARY_TIMEOUT_MS = 2500;
+
 export interface UseReaderGesturesOptions {
   /** 組み方向（縦書き: vertical-rl, 横書き: horizontal-tb） */
   writingMode: WritingMode;
@@ -730,6 +735,56 @@ export function useReaderGestures({
     [isVertical],
   );
 
+  // 音量キーによる境界2段階操作ハンドラー
+  const triggerVolumeKeyBoundary = useCallback(
+    (direction: "next" | "prev", onTrigger: () => void, hintText: string) => {
+      if (pendingVolumeKeyBoundaryRef.current === direction) {
+        clearVolumeKeyBoundary();
+        onTrigger();
+      } else {
+        clearVolumeKeyBoundary();
+        pendingVolumeKeyBoundaryRef.current = direction;
+        setBoundaryHint(hintText);
+        volumeKeyBoundaryTimerRef.current = setTimeout(() => {
+          clearVolumeKeyBoundary();
+        }, VOLUME_KEY_BOUNDARY_TIMEOUT_MS);
+      }
+    },
+    [clearVolumeKeyBoundary],
+  );
+
+  // 連続スクロールモードでの音量キースクロール実行ハンドラー
+  const scrollContinuously = useCallback(
+    (direction: VolumeKeyDirection, el: HTMLElement | null) => {
+      clearVolumeKeyBoundary();
+      if (!el) return;
+
+      const isForward = direction === "down";
+      if (isVertical) {
+        const delta = Math.round(
+          (el.clientWidth || getContainerWidth()) * VOLUME_KEY_SCROLL_RATIO,
+        );
+        const scrollDelta = isForward ? -delta : delta;
+        if (typeof el.scrollBy === "function") {
+          el.scrollBy({ left: scrollDelta, behavior: "smooth" });
+        } else {
+          el.scrollLeft += scrollDelta;
+        }
+      } else {
+        const delta = Math.round(
+          (el.clientHeight || window.innerHeight) * VOLUME_KEY_SCROLL_RATIO,
+        );
+        const scrollDelta = isForward ? delta : -delta;
+        if (typeof el.scrollBy === "function") {
+          el.scrollBy({ top: scrollDelta, behavior: "smooth" });
+        } else {
+          el.scrollTop += scrollDelta;
+        }
+      }
+    },
+    [clearVolumeKeyBoundary, getContainerWidth, isVertical],
+  );
+
   // ハードウェア音量キー操作ハンドラー（AC-RD-26, AC-RD-27, Issue #203）
   const handleVolumeKey = useCallback(
     (direction: VolumeKeyDirection) => {
@@ -756,17 +811,11 @@ export function useReaderGestures({
             onCloseOverlay();
             // 最終ページ到達時: 2段階操作で次話遷移
             if (chapterIndex < totalChapters) {
-              if (pendingVolumeKeyBoundaryRef.current === "next") {
-                clearVolumeKeyBoundary();
-                onNextChapter();
-              } else {
-                clearVolumeKeyBoundary();
-                pendingVolumeKeyBoundaryRef.current = "next";
-                setBoundaryHint("もう一度操作で次の話へ");
-                volumeKeyBoundaryTimerRef.current = setTimeout(() => {
-                  clearVolumeKeyBoundary();
-                }, 2500);
-              }
+              triggerVolumeKeyBoundary(
+                "next",
+                onNextChapter,
+                "もう一度操作で次の話へ",
+              );
             } else {
               clearVolumeKeyBoundary();
             }
@@ -782,17 +831,11 @@ export function useReaderGestures({
             onCloseOverlay();
             // 第1ページ到達時: 2段階操作で前話遷移
             if (chapterIndex > 1) {
-              if (pendingVolumeKeyBoundaryRef.current === "prev") {
-                clearVolumeKeyBoundary();
-                onPrevChapter();
-              } else {
-                clearVolumeKeyBoundary();
-                pendingVolumeKeyBoundaryRef.current = "prev";
-                setBoundaryHint("もう一度操作で前の話へ");
-                volumeKeyBoundaryTimerRef.current = setTimeout(() => {
-                  clearVolumeKeyBoundary();
-                }, 2500);
-              }
+              triggerVolumeKeyBoundary(
+                "prev",
+                onPrevChapter,
+                "もう一度操作で前の話へ",
+              );
             } else {
               clearVolumeKeyBoundary();
             }
@@ -808,86 +851,32 @@ export function useReaderGestures({
           if (isAtScrollEnd(el)) {
             // スクロール末尾到達時: 2段階操作で次話遷移
             if (chapterIndex < totalChapters) {
-              if (pendingVolumeKeyBoundaryRef.current === "next") {
-                clearVolumeKeyBoundary();
-                onNextChapter();
-              } else {
-                clearVolumeKeyBoundary();
-                pendingVolumeKeyBoundaryRef.current = "next";
-                setBoundaryHint("もう一度操作で次の話へ");
-                volumeKeyBoundaryTimerRef.current = setTimeout(() => {
-                  clearVolumeKeyBoundary();
-                }, 2500);
-              }
+              triggerVolumeKeyBoundary(
+                "next",
+                onNextChapter,
+                "もう一度操作で次の話へ",
+              );
             } else {
               clearVolumeKeyBoundary();
             }
           } else {
-            clearVolumeKeyBoundary();
-            if (el) {
-              if (isVertical) {
-                const delta = Math.round(
-                  (el.clientWidth || getContainerWidth()) * 0.85,
-                );
-                if (typeof el.scrollBy === "function") {
-                  el.scrollBy({ left: -delta, behavior: "smooth" });
-                } else {
-                  el.scrollLeft -= delta;
-                }
-              } else {
-                const delta = Math.round(
-                  (el.clientHeight || window.innerHeight) * 0.85,
-                );
-                if (typeof el.scrollBy === "function") {
-                  el.scrollBy({ top: delta, behavior: "smooth" });
-                } else {
-                  el.scrollTop += delta;
-                }
-              }
-            }
+            scrollContinuously(direction, el);
           }
         } else {
           // 音量［＋］: 約85% 逆方向スクロール
           if (isAtScrollStart(el)) {
             // スクロール先頭到達時: 2段階操作で前話遷移
             if (chapterIndex > 1) {
-              if (pendingVolumeKeyBoundaryRef.current === "prev") {
-                clearVolumeKeyBoundary();
-                onPrevChapter();
-              } else {
-                clearVolumeKeyBoundary();
-                pendingVolumeKeyBoundaryRef.current = "prev";
-                setBoundaryHint("もう一度操作で前の話へ");
-                volumeKeyBoundaryTimerRef.current = setTimeout(() => {
-                  clearVolumeKeyBoundary();
-                }, 2500);
-              }
+              triggerVolumeKeyBoundary(
+                "prev",
+                onPrevChapter,
+                "もう一度操作で前の話へ",
+              );
             } else {
               clearVolumeKeyBoundary();
             }
           } else {
-            clearVolumeKeyBoundary();
-            if (el) {
-              if (isVertical) {
-                const delta = Math.round(
-                  (el.clientWidth || getContainerWidth()) * 0.85,
-                );
-                if (typeof el.scrollBy === "function") {
-                  el.scrollBy({ left: delta, behavior: "smooth" });
-                } else {
-                  el.scrollLeft += delta;
-                }
-              } else {
-                const delta = Math.round(
-                  (el.clientHeight || window.innerHeight) * 0.85,
-                );
-                if (typeof el.scrollBy === "function") {
-                  el.scrollBy({ top: -delta, behavior: "smooth" });
-                } else {
-                  el.scrollTop -= delta;
-                }
-              }
-            }
+            scrollContinuously(direction, el);
           }
         }
       }
@@ -905,12 +894,13 @@ export function useReaderGestures({
       onCloseOverlay,
       chapterIndex,
       totalChapters,
+      triggerVolumeKeyBoundary,
       onNextChapter,
       onPrevChapter,
       getScrollElement,
       isAtScrollEnd,
       isAtScrollStart,
-      isVertical,
+      scrollContinuously,
     ],
   );
 
