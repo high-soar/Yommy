@@ -3042,11 +3042,12 @@ describe("useReaderGestures", () => {
       });
 
       it("scrollBy が未定義の場合、scrollLeft / scrollTop が直接加減算されること", () => {
+        // 縦書き: scrollLeft
         mockContainer.scrollBy =
           undefined as unknown as typeof mockContainer.scrollBy;
         mockContainer.scrollLeft = 0;
 
-        const { result } = renderHook(() =>
+        const { result: vertResult } = renderHook(() =>
           useReaderGestures({
             ...defaultOptions,
             writingMode: "vertical-rl",
@@ -3056,14 +3057,159 @@ describe("useReaderGestures", () => {
         );
 
         act(() => {
-          result.current.handleVolumeKey("down");
+          vertResult.current.handleVolumeKey("down");
         });
         expect(mockContainer.scrollLeft).toBe(-255);
 
         act(() => {
-          result.current.handleVolumeKey("up");
+          vertResult.current.handleVolumeKey("up");
         });
         expect(mockContainer.scrollLeft).toBe(0);
+
+        // 横書き: scrollTop
+        Object.defineProperty(mockContainer, "clientHeight", {
+          value: 500,
+          configurable: true,
+        });
+        mockContainer.scrollTop = 0;
+        const { result: horizResult } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            writingMode: "horizontal-tb",
+            pagingMode: "scroll",
+            containerRef: { current: mockContainer },
+          }),
+        );
+
+        act(() => {
+          horizResult.current.handleVolumeKey("down");
+        });
+        expect(mockContainer.scrollTop).toBe(425);
+
+        act(() => {
+          horizResult.current.handleVolumeKey("up");
+        });
+        expect(mockContainer.scrollTop).toBe(0);
+      });
+
+      it("containerRef が null または寸法が 0 の場合でも安全にフォールバックすること", () => {
+        // containerRef.current が null
+        const { result: nullResult } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            containerRef: { current: null },
+            pagingMode: "scroll",
+            writingMode: "vertical-rl",
+          }),
+        );
+
+        act(() => {
+          nullResult.current.handleVolumeKey("down");
+        });
+        expect(nullResult.current.boundaryHint).toBeNull();
+
+        // clientWidth = 0 で getContainerWidth フォールバック
+        const zeroContainer = document.createElement("div");
+        Object.defineProperty(zeroContainer, "clientWidth", {
+          value: 0,
+          configurable: true,
+        });
+        zeroContainer.scrollLeft = 0;
+        const { result: zeroVertResult } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            containerRef: { current: zeroContainer },
+            pagingMode: "scroll",
+            writingMode: "vertical-rl",
+          }),
+        );
+
+        act(() => {
+          zeroVertResult.current.handleVolumeKey("down");
+        });
+        expect(zeroContainer.scrollLeft).toBe(-870);
+
+        // clientHeight = 0 で window.innerHeight フォールバック
+        Object.defineProperty(zeroContainer, "clientHeight", {
+          value: 0,
+          configurable: true,
+        });
+        zeroContainer.scrollTop = 0;
+        const { result: zeroHorizResult } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            containerRef: { current: zeroContainer },
+            pagingMode: "scroll",
+            writingMode: "horizontal-tb",
+          }),
+        );
+
+        act(() => {
+          zeroHorizResult.current.handleVolumeKey("down");
+        });
+        expect(zeroContainer.scrollTop).toBe(653);
+      });
+
+      it("横書き連続スクロールでスクロール途中の場合、音量［＋］で上方向スクロールされ前話遷移しないこと", () => {
+        const onPrevChapter = vi.fn();
+        const midScrollContainer = document.createElement("div");
+        Object.defineProperty(midScrollContainer, "clientHeight", {
+          value: 500,
+          configurable: true,
+        });
+        Object.defineProperty(midScrollContainer, "scrollHeight", {
+          value: 2000,
+          configurable: true,
+        });
+        midScrollContainer.scrollTop = 500;
+
+        const { result } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            containerRef: { current: midScrollContainer },
+            pagingMode: "scroll",
+            writingMode: "horizontal-tb",
+            chapterIndex: 2,
+            totalChapters: 5,
+            onPrevChapter,
+          }),
+        );
+
+        act(() => {
+          result.current.handleVolumeKey("up");
+        });
+        expect(onPrevChapter).not.toHaveBeenCalled();
+        expect(midScrollContainer.scrollTop).toBe(75);
+      });
+
+      it("スクロール途中に位置が移動した場合、保留中の音量キー境界状態がクリアされること", () => {
+        const { result } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            pagingMode: "scroll",
+            chapterIndex: 2,
+            totalChapters: 5,
+          }),
+        );
+
+        // 末尾到達で1回目の音量キー操作
+        act(() => {
+          result.current.handleScrollProgressChange(1.0);
+          result.current.handleVolumeKey("down");
+        });
+        expect(result.current.boundaryHint).toBe("もう一度操作で次の話へ");
+
+        // スクロール位置が中央（0.5）に動く
+        act(() => {
+          result.current.handleScrollProgressChange(0.5);
+        });
+
+        // 再度末尾へ行って音量キー操作しても、1回目のヒントからやり直しになること
+        act(() => {
+          result.current.handleScrollProgressChange(1.0);
+          result.current.handleVolumeKey("down");
+        });
+        expect(result.current.boundaryHint).toBe("もう一度操作で次の話へ");
       });
 
       it("スクロール末尾到達時、音量［ー］の1回目で「もう一度操作で次の話へ」が表示され、2.5秒以内の再操作で次話遷移すること (AC-RD-27)", () => {
