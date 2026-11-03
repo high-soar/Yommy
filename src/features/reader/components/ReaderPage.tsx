@@ -81,8 +81,8 @@ const pageBgStyles: Record<ReaderTheme, string> = {
 /**
  * 小説リーダー画面全体のレイアウト統合コンポーネント（Presentational）
  *
- * 全画面本文（ReaderView）と最下部タッチ連動の下部オーバーレイ（ReaderBottomOverlay）、
- * および状態別表示（ローディング・エラー・空状態）を統合する。
+ * 全画面本文（ReaderView）と上下連動オーバーレイ（上部 ReaderTopOverlay、下部 ReaderBottomOverlay）、
+ * 最下部タッチゾーン、Kindle様式のジェスチャー操作、および状態別表示（ローディング・エラー・空状態）を統合する。
  */
 export const ReaderPage: React.FC<ReaderPageProps> = ({
   novel,
