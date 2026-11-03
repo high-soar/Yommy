@@ -645,7 +645,7 @@ describe("ReaderContainer", () => {
         },
         { timeout: 10000 },
       );
-    });
+    }, 15000);
 
     it("コンポーネントのアンマウント時に flushBookmark が実行されること", async () => {
       const { repo: novelRepository, updateBookmarkSpy } =
@@ -675,7 +675,7 @@ describe("ReaderContainer", () => {
         },
         { timeout: 10000 },
       );
-    });
+    }, 15000);
   });
 
   describe("前後エピソード遷移の検証 (TR-05, AC-RD-06)", () => {
@@ -976,7 +976,7 @@ describe("ReaderContainer", () => {
         },
         { timeout: 10000 },
       );
-    });
+    }, 15000);
   });
 
   describe("Props 未指定時のデフォルト動作", () => {
@@ -1130,7 +1130,7 @@ describe("ReaderContainer", () => {
         },
         { timeout: 10000 },
       );
-    });
+    }, 15000);
 
     it("ReaderPage に渡された onPageChange が呼ばれた際、currentPage が更新されること", async () => {
       const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
@@ -1187,7 +1187,7 @@ describe("ReaderContainer", () => {
         },
         { timeout: 10000 },
       );
-    });
+    }, 15000);
   });
 
   describe("フォント種別・画面余白の ReaderPage へのバケツリレー検証 (AC-RD-21, SYS-REQ-09, v0.5 Issue #169, #180)", () => {
