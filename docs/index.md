@@ -30,6 +30,7 @@ docs/
 │   ├── parsers/                       # [App全体正本] 小説サイト別の現在スクレイピング・DOM解析仕様書
 │   │   └── kakuyomu.md                # カクヨム パーサー・スクレイピング仕様書（kakuyomu.jp）
 │   └── changes/                       # [差分仕様 (Delta Specs)] 要望（親Issue）ごとの設計差分・テスト計画・Sub-issue分割
+│       ├── issue-201-reader-page-slide-animation.md # リーダーのページ送り水平スライドアニメーション実装の差分仕様 (#201)
 │       └── archive/                   # 完了済みの差分仕様アーカイブ（親Issueクローズ時に git mv で移動）
 │           ├── issue-169-font-and-margin-customization.md # [Archived] フォント種別と画面余白のカスタマイズUIおよびリーダー組版反映の差分仕様 (#169)
 │           ├── issue-170-cache-management-and-capacity-visualization.md # [Archived] キャッシュデータ容量可視化と既読/本文キャッシュ削除機能の差分仕様 (#170)
