@@ -60,6 +60,8 @@ export interface ReaderPageProps {
   onScrollProgressChange: (progress: number) => void;
   /** 下部タブ押下時のコールバック */
   onSelectTab?: (tab: BottomTab) => void;
+  /** 上部オーバーレイ「← 目次」ボタン押下時のコールバック（TR-06、v0.6 Issue #202） */
+  onBackToToc?: () => void;
   /** 下部オーバーレイの初期展開フラグ（省略時はエラー/空状態時に true） */
   initialOverlayOpen?: boolean;
   /** 初期スライド変位量（px、Storybook/VRT/テスト用） */

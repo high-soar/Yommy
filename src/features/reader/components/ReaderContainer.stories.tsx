@@ -313,6 +313,7 @@ export const WithCustomCallbacks: Story = {
     onBackToBookshelf: fn(),
     onNavigateSettings: fn(),
     onNavigateChapter: fn(),
+    onBackToToc: fn(),
   },
   render: (args) => (
     <ServiceProvider

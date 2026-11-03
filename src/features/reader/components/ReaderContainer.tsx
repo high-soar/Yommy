@@ -23,6 +23,8 @@ export interface ReaderContainerProps {
   onNavigateSettings?: () => void;
   /** 前後話遷移タップ時のコールバック（省略時はルーターの navigateToReader を使用） */
   onNavigateChapter?: (novelId: string, chapterIndex: number) => void;
+  /** 「← 目次」タップ時のコールバック（省略時は flushBookmark 実行後にルーターの navigateToNovelDetail を使用、TR-06） */
+  onBackToToc?: () => void;
 }
 
 /**
