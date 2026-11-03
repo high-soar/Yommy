@@ -159,13 +159,13 @@ describe("useReaderGestures", () => {
 
       act(() => {
         result.current.handlePointerMove(
-          createPointerEvent("pointermove", { clientX: 100, clientY: 100 }), // dx = -100 (Math.abs >= 90px)
+          createPointerEvent("pointermove", { clientX: 300, clientY: 100 }), // dx = +100 (Math.abs >= 90px)
         );
       });
 
       act(() => {
         result.current.handlePointerUp(
-          createPointerEvent("pointerup", { clientX: 100, clientY: 100 }),
+          createPointerEvent("pointerup", { clientX: 300, clientY: 100 }),
         );
       });
 
@@ -179,19 +179,19 @@ describe("useReaderGestures", () => {
 
       act(() => {
         result.current.handlePointerDown(
-          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+          createPointerEvent("pointerdown", { clientX: 200, clientY: 100 }),
         );
       });
 
       act(() => {
         result.current.handlePointerMove(
-          createPointerEvent("pointermove", { clientX: 200, clientY: 100 }), // dx = +100 >= 90px
+          createPointerEvent("pointermove", { clientX: 100, clientY: 100 }), // dx = -100 (Math.abs >= 90px)
         );
       });
 
       act(() => {
         result.current.handlePointerUp(
-          createPointerEvent("pointerup", { clientX: 200, clientY: 100 }),
+          createPointerEvent("pointerup", { clientX: 100, clientY: 100 }),
         );
       });
 
@@ -209,17 +209,17 @@ describe("useReaderGestures", () => {
         );
       });
 
-      // 50ms 後に dx = -40px（velocity = 40 / 50 = 0.8 > 0.5）
+      // 50ms 後に dx = +40px（velocity = 40 / 50 = 0.8 > 0.5）
       vi.advanceTimersByTime(50);
       act(() => {
         result.current.handlePointerMove(
-          createPointerEvent("pointermove", { clientX: 160, clientY: 100 }),
+          createPointerEvent("pointermove", { clientX: 240, clientY: 100 }),
         );
       });
 
       act(() => {
         result.current.handlePointerUp(
-          createPointerEvent("pointerup", { clientX: 160, clientY: 100 }),
+          createPointerEvent("pointerup", { clientX: 240, clientY: 100 }),
         );
       });
 
@@ -294,28 +294,28 @@ describe("useReaderGestures", () => {
         );
       });
 
-      // dx = -50px: 減衰係数 0.3 が適用され slideOffsetPx = -15
+      // dx = +50px: 減衰係数 0.3 が適用され slideOffsetPx = 15
       act(() => {
         result.current.handlePointerMove(
-          createPointerEvent("pointermove", { clientX: 150, clientY: 100 }),
+          createPointerEvent("pointermove", { clientX: 250, clientY: 100 }),
         );
       });
-      expect(result.current.slideOffsetPx).toBe(-15);
+      expect(result.current.slideOffsetPx).toBe(15);
       expect(result.current.boundaryHint).toBeNull();
 
-      // dx = -100px (Math.abs >= 30% = 90px): 案内バッジ「指を離して次の話へ」が表示
+      // dx = +100px (Math.abs >= 30% = 90px): 案内バッジ「指を離して次の話へ」が表示
       act(() => {
         result.current.handlePointerMove(
-          createPointerEvent("pointermove", { clientX: 100, clientY: 100 }),
+          createPointerEvent("pointermove", { clientX: 300, clientY: 100 }),
         );
       });
-      expect(result.current.slideOffsetPx).toBe(-30);
+      expect(result.current.slideOffsetPx).toBe(30);
       expect(result.current.boundaryHint).toBe("指を離して次の話へ");
 
       // 30% 以上引き伸ばした状態で指を離す -> onNextChapter が発火
       act(() => {
         result.current.handlePointerUp(
-          createPointerEvent("pointerup", { clientX: 100, clientY: 100 }),
+          createPointerEvent("pointerup", { clientX: 300, clientY: 100 }),
         );
       });
       expect(defaultOptions.onNextChapter).toHaveBeenCalled();
@@ -339,13 +339,13 @@ describe("useReaderGestures", () => {
           createPointerEvent("pointerdown", { clientX: 200, clientY: 100 }),
         );
         result.current.handlePointerMove(
-          createPointerEvent("pointermove", { clientX: 150, clientY: 100 }), // dx = -50 < 90px
+          createPointerEvent("pointermove", { clientX: 250, clientY: 100 }), // dx = +50 < 90px
         );
       });
 
       act(() => {
         result.current.handlePointerUp(
-          createPointerEvent("pointerup", { clientX: 150, clientY: 100 }),
+          createPointerEvent("pointerup", { clientX: 250, clientY: 100 }),
         );
       });
 
@@ -369,7 +369,7 @@ describe("useReaderGestures", () => {
           createPointerEvent("pointerdown", { clientX: 200, clientY: 100 }),
         );
         result.current.handlePointerMove(
-          createPointerEvent("pointermove", { clientX: 80, clientY: 100 }), // dx = -120 >= 90px
+          createPointerEvent("pointermove", { clientX: 320, clientY: 100 }), // dx = +120 >= 90px
         );
       });
 
@@ -377,7 +377,7 @@ describe("useReaderGestures", () => {
 
       act(() => {
         result.current.handlePointerUp(
-          createPointerEvent("pointerup", { clientX: 80, clientY: 100 }),
+          createPointerEvent("pointerup", { clientX: 320, clientY: 100 }),
         );
       });
 
@@ -398,23 +398,23 @@ describe("useReaderGestures", () => {
 
       act(() => {
         result.current.handlePointerDown(
-          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+          createPointerEvent("pointerdown", { clientX: 200, clientY: 100 }),
         );
       });
 
-      // dx = +100px: 減衰係数 0.3 が適用され slideOffsetPx = 30、ヒント表示
+      // dx = -100px: 減衰係数 0.3 が適用され slideOffsetPx = -30、ヒント表示
       act(() => {
         result.current.handlePointerMove(
-          createPointerEvent("pointermove", { clientX: 200, clientY: 100 }),
+          createPointerEvent("pointermove", { clientX: 100, clientY: 100 }),
         );
       });
-      expect(result.current.slideOffsetPx).toBe(30);
+      expect(result.current.slideOffsetPx).toBe(-30);
       expect(result.current.boundaryHint).toBe("指を離して前の話へ");
 
       // 離上で onPrevChapter 発火
       act(() => {
         result.current.handlePointerUp(
-          createPointerEvent("pointerup", { clientX: 200, clientY: 100 }),
+          createPointerEvent("pointerup", { clientX: 100, clientY: 100 }),
         );
       });
       expect(defaultOptions.onPrevChapter).toHaveBeenCalled();
@@ -435,10 +435,10 @@ describe("useReaderGestures", () => {
 
       act(() => {
         result.current.handlePointerDown(
-          createPointerEvent("pointerdown", { clientX: 100, clientY: 100 }),
+          createPointerEvent("pointerdown", { clientX: 200, clientY: 100 }),
         );
         result.current.handlePointerMove(
-          createPointerEvent("pointermove", { clientX: 220, clientY: 100 }), // dx = +120
+          createPointerEvent("pointermove", { clientX: 80, clientY: 100 }), // dx = -120
         );
       });
 
@@ -446,7 +446,7 @@ describe("useReaderGestures", () => {
 
       act(() => {
         result.current.handlePointerUp(
-          createPointerEvent("pointerup", { clientX: 220, clientY: 100 }),
+          createPointerEvent("pointerup", { clientX: 80, clientY: 100 }),
         );
       });
 

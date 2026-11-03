@@ -646,7 +646,7 @@ describe("ReaderView", () => {
   });
 
   describe("1ページ組版および横スライドアニメーション（実効 paged 時）の検証", () => {
-    it("縦書き（vertical-rl）時、translateX((currentPage - 1) * pageWidth) に基づく transform および余白スタイルが設定されること (AC-RD-15, AC-RD-16, v0.5 Issue #168, #174, #171 R1-28)", () => {
+    it("縦書き（vertical-rl）時、マルチカラム組版および水平スワイプラックに基づく配置スタイルが設定されること (AC-RD-15, AC-RD-16, v0.5 Issue #168, #174, #171 R1-28, R1-29)", () => {
       const { rerender } = render(
         <ReaderView
           bodyHtml="<p>縦書き本文</p>"
@@ -673,20 +673,24 @@ describe("ReaderView", () => {
         />,
       );
 
+      const swipeTrack = screen.getByTestId("reader-swipe-track");
       const content = screen.getByTestId("reader-content");
-      // 余白およびレイアウトスタイル (AC-RD-16)
-      expect(content.style.height).toBe("100%");
-      expect(content.style.padding).toBe("20px");
-      expect(content.style.boxSizing).toBe("border-box");
+      // マルチカラムおよびレイアウトスタイル (AC-RD-16)
+      expect(content.style.columns).toBe("1");
+      expect(content.style.columnGap).toBe("40px");
+      expect(content.style.columnFill).toBe("auto");
+      // 400 - 20*2 = 360px, 600 - 20*2 = 560px
+      expect(content.style.width).toBe("360px");
+      expect(content.style.height).toBe("560px");
 
-      // translateX によるページ位置確定 (AC-RD-16): (2 - 1) * 400 = 400px
-      expect(content).toHaveStyle({
-        transform: "translateX(400px)",
-        transition: "transform 200ms ease-out",
+      // 水平スワイプラックによる配置（中央スロット: left: -400px）
+      expect(swipeTrack).toHaveStyle({
+        left: "-400px",
+        transition: "left 200ms ease-out",
       });
 
-      // スワイプドラッグ中（slideOffsetPx !== 0）は translateX が更新され transition が none
-      // 左ドラッグ（slideOffsetPx = -50）: 400 - (-50) = 450px
+      // スワイプドラッグ中（slideOffsetPx !== 0）は left が更新され transition が none
+      // 左から右へのドラッグ（slideOffsetPx = +50）: -400 + 50 = -350px
       rerender(
         <ReaderView
           bodyHtml="<p>縦書き本文</p>"
@@ -694,11 +698,11 @@ describe("ReaderView", () => {
           pagingMode="paged"
           currentPage={2}
           totalPages={4}
-          slideOffsetPx={-50}
+          slideOffsetPx={50}
         />,
       );
-      expect(content).toHaveStyle({
-        transform: "translateX(450px)",
+      expect(swipeTrack).toHaveStyle({
+        left: "-350px",
         transition: "none",
       });
     });
@@ -722,7 +726,7 @@ describe("ReaderView", () => {
       expect(content.style.columns).toBe("");
     });
 
-    it("pageWidth が取得できない（clientWidth = 0）場合は translateX(0px) となること", () => {
+    it("pageWidth が取得できない（clientWidth = 0）場合は left: 0px となること", () => {
       render(
         <ReaderView
           bodyHtml="<p>本文</p>"
@@ -733,13 +737,13 @@ describe("ReaderView", () => {
         />,
       );
 
-      const content = screen.getByTestId("reader-content");
-      expect(content).toHaveStyle({
-        transform: "translateX(0px)",
+      const swipeTrack = screen.getByTestId("reader-swipe-track");
+      expect(swipeTrack).toHaveStyle({
+        left: "0px",
       });
     });
 
-    it("ウィンドウリサイズ時にコンテナ幅が再追従され translateX が更新されること", () => {
+    it("ウィンドウリサイズ時にコンテナ幅が再追従され left が更新されること", () => {
       render(
         <ReaderView
           bodyHtml="<p>本文</p>"
@@ -754,10 +758,10 @@ describe("ReaderView", () => {
       mockElementDimensions(container, { clientWidth: 500, clientHeight: 700 });
       fireEvent(window, new Event("resize"));
 
-      const content = screen.getByTestId("reader-content");
-      // (2 - 1) * 500 = 500px
-      expect(content).toHaveStyle({
-        transform: "translateX(500px)",
+      const swipeTrack = screen.getByTestId("reader-swipe-track");
+      // -500px
+      expect(swipeTrack).toHaveStyle({
+        left: "-500px",
       });
     });
 
@@ -836,7 +840,7 @@ describe("ReaderView", () => {
   });
 
   describe("DOM 寸法計測と総ページ数算出（onTotalPagesChange）の検証", () => {
-    it("実効 paged 時、マウント時およびプロパティ変化時に scrollWidth と clientWidth から総ページ数が算出され通知されること (AC-RD-17, v0.5 Issue #168, #174, #171 R1-28)", () => {
+    it("実効 paged 時、マウント時およびプロパティ変化時に scrollHeight と clientHeight から総ページ数が算出され通知されること (AC-RD-17, v0.5 Issue #168, #174, #171 R1-28, R1-29)", () => {
       const onTotalPagesChange = vi.fn();
       const { rerender } = render(
         <ReaderView
@@ -854,7 +858,7 @@ describe("ReaderView", () => {
         clientWidth: 400,
       });
       mockElementDimensions(content, {
-        scrollWidth: 800, // 2ページ分: 400 * 2 = 800
+        scrollHeight: 1160, // 2ページ分: Math.round((1160 + 40) / 600) = 2
       });
 
       // bodyHtml 変化による再計測
@@ -866,12 +870,12 @@ describe("ReaderView", () => {
           onTotalPagesChange={onTotalPagesChange}
         />,
       );
-      // Math.ceil(800 / 400) = 2
+      // Math.round((1160 + 40) / 600) = 2
       expect(onTotalPagesChange).toHaveBeenCalledWith(2);
 
-      // 3ページ分の場合: 400 * 3 = 1200
+      // 3ページ分の場合: Math.round((1760 + 40) / 600) = 3
       mockElementDimensions(content, {
-        scrollWidth: 1200,
+        scrollHeight: 1760,
       });
       rerender(
         <ReaderView
@@ -899,6 +903,7 @@ describe("ReaderView", () => {
       const container = screen.getByTestId("reader-view");
       mockElementDimensions(container, {
         scrollWidth: 1000,
+        clientHeight: 600,
         clientWidth: 0,
       });
 
@@ -1053,7 +1058,7 @@ describe("ReaderView", () => {
         clientWidth: 400,
       });
       mockElementDimensions(content, {
-        scrollWidth: 800, // 400 * 2 = 800 => Math.ceil(800 / 400) = 2
+        scrollHeight: 960, // 2ページ分: Math.round((960 + 40) / 500) = 2
       });
       onTotalPagesChange.mockClear();
 
@@ -1071,7 +1076,7 @@ describe("ReaderView", () => {
       expect(onTotalPagesChange).toHaveBeenCalledWith(2);
     });
 
-    it("微小な余白や行の端数があっても ceil により確実にページ数が導出されること (AC-RD-17)", () => {
+    it("微小な余白や行の端数があっても round により確実にページ数が導出されること (AC-RD-17)", () => {
       const onTotalPagesChange = vi.fn();
       const { rerender } = render(
         <ReaderView
@@ -1089,9 +1094,9 @@ describe("ReaderView", () => {
         clientWidth: 400,
       });
 
-      // +10px の端数 (410px) -> ceil(410 / 400) = 2
+      // +100px の端数 (1100px) -> round((1100 + 40) / 600) = 2
       mockElementDimensions(content, {
-        scrollWidth: 410,
+        scrollHeight: 1100,
       });
       rerender(
         <ReaderView
@@ -1103,9 +1108,9 @@ describe("ReaderView", () => {
       );
       expect(onTotalPagesChange).toHaveBeenCalledWith(2);
 
-      // 800px (ちょうど2ページ) -> ceil(800 / 400) = 2
+      // 1160px (ちょうど2ページ) -> round((1160 + 40) / 600) = 2
       mockElementDimensions(content, {
-        scrollWidth: 800,
+        scrollHeight: 1160,
       });
       rerender(
         <ReaderView
@@ -1118,7 +1123,7 @@ describe("ReaderView", () => {
       expect(onTotalPagesChange).toHaveBeenCalledWith(2);
     });
 
-    it("実効 paged モード時、100%高さ・boxSizing・余白・水平変位スタイルが付与されること", () => {
+    it("実効 paged モード時、マルチカラム組版および translateY スタイルが付与されること", () => {
       render(
         <ReaderView
           bodyHtml="<p>本文</p>"
@@ -1130,10 +1135,153 @@ describe("ReaderView", () => {
       );
 
       const content = screen.getByTestId("reader-content");
-      expect(content.style.height).toBe("100%");
-      expect(content.style.boxSizing).toBe("border-box");
-      expect(content.style.padding).toBe("20px");
-      expect(content.style.transform).toBe("translateX(0px)");
+      expect(content.style.columns).toBe("1");
+      expect(content.style.columnGap).toBe("40px");
+      expect(content.style.columnFill).toBe("auto");
+      expect(content.style.transform).toBe("translateY(0px)");
+    });
+
+    it("document.fonts.ready 完了時に総ページ数が再計測されること", async () => {
+      let resolveFontsReady: () => void = () => {};
+      const fontsPromise = new Promise<void>((resolve) => {
+        resolveFontsReady = resolve;
+      });
+      const originalFonts = document.fonts;
+      Object.defineProperty(document, "fonts", {
+        value: { ready: fontsPromise },
+        configurable: true,
+      });
+
+      try {
+        const onTotalPagesChange = vi.fn();
+        render(
+          <ReaderView
+            bodyHtml="<p>本文</p>"
+            writingMode="vertical-rl"
+            pagingMode="paged"
+            onTotalPagesChange={onTotalPagesChange}
+          />,
+        );
+
+        const container = screen.getByTestId("reader-view");
+        const content = screen.getByTestId("reader-content");
+        mockElementDimensions(container, {
+          clientHeight: 600,
+          clientWidth: 400,
+        });
+        mockElementDimensions(content, {
+          scrollHeight: 1160,
+        });
+
+        resolveFontsReady();
+        await fontsPromise;
+        await Promise.resolve();
+
+        expect(onTotalPagesChange).toHaveBeenCalledWith(2);
+      } finally {
+        Object.defineProperty(document, "fonts", {
+          value: originalFonts,
+          configurable: true,
+        });
+      }
+    });
+
+    it("document.fonts.ready 完了前にアンマウントされた場合、再計測が中断されること", async () => {
+      let resolveFontsReady: () => void = () => {};
+      const fontsPromise = new Promise<void>((resolve) => {
+        resolveFontsReady = resolve;
+      });
+      const originalFonts = document.fonts;
+      Object.defineProperty(document, "fonts", {
+        value: { ready: fontsPromise },
+        configurable: true,
+      });
+
+      try {
+        const onTotalPagesChange = vi.fn();
+        const { unmount } = render(
+          <ReaderView
+            bodyHtml="<p>本文</p>"
+            writingMode="vertical-rl"
+            pagingMode="paged"
+            onTotalPagesChange={onTotalPagesChange}
+          />,
+        );
+
+        unmount();
+        onTotalPagesChange.mockClear();
+
+        resolveFontsReady();
+        await fontsPromise;
+        await Promise.resolve();
+
+        expect(onTotalPagesChange).not.toHaveBeenCalled();
+      } finally {
+        Object.defineProperty(document, "fonts", {
+          value: originalFonts,
+          configurable: true,
+        });
+      }
+    });
+
+    it("requestAnimationFrame およびタイマー発火時に総ページ数が再計測されること", () => {
+      vi.useFakeTimers();
+      try {
+        const onTotalPagesChange = vi.fn();
+        render(
+          <ReaderView
+            bodyHtml="<p>本文</p>"
+            writingMode="vertical-rl"
+            pagingMode="paged"
+            onTotalPagesChange={onTotalPagesChange}
+          />,
+        );
+
+        const container = screen.getByTestId("reader-view");
+        const content = screen.getByTestId("reader-content");
+        mockElementDimensions(container, {
+          clientHeight: 600,
+          clientWidth: 400,
+        });
+        mockElementDimensions(content, {
+          scrollHeight: 1160,
+        });
+
+        // requestAnimationFrame コールバックを実行
+        vi.advanceTimersByTime(20);
+        expect(onTotalPagesChange).toHaveBeenCalledWith(2);
+
+        onTotalPagesChange.mockClear();
+        // 100ms タイマーコールバックを実行
+        vi.advanceTimersByTime(120);
+        expect(onTotalPagesChange).toHaveBeenCalledWith(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("コンポーネントがアンマウントされた後に非同期再計測が呼ばれても安全に無視されること", () => {
+      vi.useFakeTimers();
+      try {
+        const onTotalPagesChange = vi.fn();
+        const { unmount } = render(
+          <ReaderView
+            bodyHtml="<p>本文</p>"
+            writingMode="vertical-rl"
+            pagingMode="paged"
+            onTotalPagesChange={onTotalPagesChange}
+          />,
+        );
+
+        unmount();
+        onTotalPagesChange.mockClear();
+
+        // アンマウント後にタイマーを発火
+        vi.advanceTimersByTime(200);
+        expect(onTotalPagesChange).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
@@ -1390,7 +1538,7 @@ describe("ReaderView", () => {
       expect(container.style.padding).toBe("20px");
     });
 
-    it("縦書きページめくり時（実効 paged）、pageMarginPx に応じて padding が動的に算出されること", () => {
+    it("縦書きページめくり時（実効 paged）、pageMarginPx に応じて columnGap が動的に算出されること", () => {
       const { rerender } = render(
         <ReaderView
           bodyHtml="<p>縦書き本文</p>"
@@ -1401,7 +1549,8 @@ describe("ReaderView", () => {
       );
 
       const content = screen.getByTestId("reader-content");
-      expect(content.style.padding).toBe("16px");
+      // columnGap = 16 * 2 = 32px
+      expect(content.style.columnGap).toBe("32px");
 
       rerender(
         <ReaderView
@@ -1411,10 +1560,11 @@ describe("ReaderView", () => {
           pageMarginPx={32}
         />,
       );
-      expect(content.style.padding).toBe("32px");
+      // columnGap = 32 * 2 = 64px
+      expect(content.style.columnGap).toBe("64px");
     });
 
-    it("pageMarginPx または fontFamily の変化により onTotalPagesChange が再発火し scrollWidth に基づく総ページ数が算出されること", () => {
+    it("pageMarginPx または fontFamily の変化により onTotalPagesChange が再発火し scrollHeight に基づく総ページ数が算出されること", () => {
       const onTotalPagesChange = vi.fn();
       const { rerender } = render(
         <ReaderView
@@ -1433,14 +1583,17 @@ describe("ReaderView", () => {
         clientHeight: 600,
         clientWidth: 400,
       });
-      // Math.ceil(800 / 400) = 2
+      // Math.round((1160 + 40) / 600) = 2
       mockElementDimensions(content, {
-        scrollWidth: 800,
+        scrollHeight: 1160,
       });
 
       onTotalPagesChange.mockClear();
 
-      // pageMarginPx を 40 に変更: 再評価が発火すること
+      // pageMarginPx を 40 に変更: 再評価が発火すること (scrollHeight 1120 + 80 = 1200 / 600 = 2)
+      mockElementDimensions(content, {
+        scrollHeight: 1120,
+      });
       rerender(
         <ReaderView
           bodyHtml="<p>本文</p>"

@@ -50,30 +50,72 @@ function clampProgress(value: number): number {
 }
 
 /**
- * ページ確定変位（translateX）およびスワイプ追従変位（translateX）を算出する純粋関数
- * （右綴じ書籍に即した左側次ページへの水平スライド変位: AC-RD-16）
+ * 水平スワイプラックのインラインスタイルを生成する純粋関数
+ * （右綴じ書籍に即した水平配置: [次ページ(左), 現在ページ(中央), 前ページ(右)]）
  */
-function calculatePageTransforms(
-  currentPage: number,
+function calculateSwipeTrackStyle(
   pageWidth: number,
   slideOffsetPx: number,
-): { transform: string; transition: string } {
-  const baseTranslateX = pageWidth > 0 ? (currentPage - 1) * pageWidth : 0;
-  const translateX = baseTranslateX - slideOffsetPx;
-  const transform = `translateX(${translateX}px)`;
-  const transition = slideOffsetPx !== 0 ? "none" : "transform 200ms ease-out";
-  return { transform, transition };
+): React.CSSProperties {
+  const left = -pageWidth + slideOffsetPx;
+  return {
+    position: "absolute",
+    top: 0,
+    left: `${left}px`,
+    width: `${pageWidth * 3}px`,
+    height: "100%",
+    display: "flex",
+    flexDirection: "row",
+    transition: slideOffsetPx !== 0 ? "none" : "left 200ms ease-out",
+  };
 }
 
 /**
- * 本文要素の scrollWidth とコンテナ幅から総ページ数を算出する純粋関数 (AC-RD-16)
+ * 縦書き 1ページ CSS マルチカラム組版およびページスロットのインラインスタイルを生成する純粋関数
+ * （※ページめくりは縦書き専用、各ページは CSS マルチカラムで文字切れを防止しつつ内部 translateY で静的表示: AC-RD-16）
+ */
+function getPagedSlotContentStyle(
+  slotPage: number,
+  pageHeight: number,
+  containerWidth?: number,
+  containerHeight?: number,
+  pageMarginPx: number = DEFAULT_PAGE_MARGIN_PX,
+): React.CSSProperties {
+  const width =
+    containerWidth !== undefined && containerWidth > 0
+      ? `${Math.max(1, containerWidth - pageMarginPx * 2)}px`
+      : undefined;
+  const height =
+    containerHeight !== undefined && containerHeight > 0
+      ? `${Math.max(1, containerHeight - pageMarginPx * 2)}px`
+      : undefined;
+  const translateY = pageHeight > 0 ? -(slotPage - 1) * pageHeight : 0;
+
+  return {
+    columns: 1,
+    columnGap: `${pageMarginPx * 2}px`,
+    columnFill: "auto",
+    ...(width ? { width } : {}),
+    ...(height ? { height } : {}),
+    transform: `translateY(${translateY}px)`,
+    transition: "none",
+  };
+}
+
+/**
+ * マルチカラム要素の scrollHeight とコンテナ高さから総ページ数を算出する純粋関数 (AC-RD-16)
+ * （gap = pageMarginPx * 2, pageStride = pageHeight）
  */
 function calculateMeasuredTotalPages(
-  scrollWidth: number,
-  pageWidth: number,
+  scrollHeight: number,
+  pageHeight: number,
+  pageMarginPx: number = DEFAULT_PAGE_MARGIN_PX,
 ): number {
-  if (pageWidth <= 0) return 1;
-  return Math.max(1, Math.ceil(scrollWidth / pageWidth));
+  if (pageHeight <= 0) return 1;
+  return Math.max(
+    1,
+    Math.round((scrollHeight + pageMarginPx * 2) / pageHeight),
+  );
 }
 
 /**
@@ -107,34 +149,6 @@ function restoreScrollPosition(
     const maxScroll = el.scrollWidth - el.clientWidth;
     el.scrollLeft = maxScroll > 0 ? -clampedProgress * maxScroll : 0;
   }
-}
-
-/**
- * 縦書き 1ページ組版および水平スライドアニメーションのインラインスタイルを生成する純粋関数
- * （※ページめくりは縦書き専用、右綴じ書籍に即した左側次ページへの水平変位: AC-RD-16）
- */
-function getPagedContentStyle(
-  isPaged: boolean,
-  currentPage: number = 1,
-  pageWidth: number = 0,
-  slideOffsetPx: number = 0,
-  pageMarginPx: number = DEFAULT_PAGE_MARGIN_PX,
-): React.CSSProperties | undefined {
-  if (!isPaged) return undefined;
-
-  const { transform, transition } = calculatePageTransforms(
-    currentPage,
-    pageWidth,
-    slideOffsetPx,
-  );
-
-  return {
-    height: "100%",
-    padding: `${pageMarginPx}px`,
-    boxSizing: "border-box",
-    transform,
-    transition,
-  };
 }
 
 /**
@@ -176,20 +190,25 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
   // コンテナ寸法の動的追従（リサイズおよび初期計測）
   const [containerWidth, setContainerWidth] = useState<number>(0);
+  const [containerHeight, setContainerHeight] = useState<number>(0);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     setContainerWidth(el.clientWidth);
+    setContainerHeight(el.clientHeight);
 
     const handleResize = () => {
       if (containerRef.current) {
         const w = containerRef.current.clientWidth;
+        const h = containerRef.current.clientHeight;
         setContainerWidth(w);
+        setContainerHeight(h);
         if (isPaged && contentRef.current) {
           const measuredPages = calculateMeasuredTotalPages(
-            contentRef.current.scrollWidth,
-            w,
+            contentRef.current.scrollHeight,
+            h,
+            pageMarginPx,
           );
           onTotalPagesChange?.(measuredPages);
         }
@@ -197,21 +216,52 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [isPaged, onTotalPagesChange]);
+  }, [isPaged, onTotalPagesChange, pageMarginPx]);
 
-  // DOM 寸法計測（総ページ数算出）: マウント時および chapterTitle, bodyHtml, initialScrollProgress, writingMode, fontSizePx, lineHeight, fontFamily, pageMarginPx, pagingMode, containerWidth 変更時
+  // DOM 寸法計測（総ページ数算出）: マウント時および chapterTitle, bodyHtml, initialScrollProgress, writingMode, fontSizePx, lineHeight, fontFamily, pageMarginPx, pagingMode, containerHeight 変更時
   useEffect(() => {
     if (!isPaged) return;
     const container = containerRef.current;
     const content = contentRef.current;
     if (!container || !content) return;
 
-    const currentWidth = container.clientWidth || containerWidth;
-    const measuredPages = calculateMeasuredTotalPages(
-      content.scrollWidth,
-      currentWidth,
-    );
-    onTotalPagesChange?.(measuredPages);
+    let isDisposed = false;
+
+    const measure = () => {
+      if (isDisposed) return;
+      const currentHeight = container.clientHeight || containerHeight;
+      const measuredPages = calculateMeasuredTotalPages(
+        content.scrollHeight,
+        currentHeight,
+        pageMarginPx,
+      );
+      onTotalPagesChange?.(measuredPages);
+    };
+
+    // 即時計測
+    measure();
+
+    // 次フレームでの再計測（フォントロード・CSSマルチカラムレイアウト完了追従）
+    const rafId = requestAnimationFrame(() => {
+      measure();
+    });
+
+    // タイマー（非同期フォントロード完了待機）
+    const timerId = setTimeout(() => {
+      measure();
+    }, 100);
+
+    if (typeof document !== "undefined" && document.fonts) {
+      void document.fonts.ready.then(() => {
+        measure();
+      });
+    }
+
+    return () => {
+      isDisposed = true;
+      cancelAnimationFrame(rafId);
+      clearTimeout(timerId);
+    };
   }, [
     isPaged,
     chapterTitle,
@@ -223,7 +273,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     fontFamily,
     pageMarginPx,
     pagingMode,
-    containerWidth,
+    containerHeight,
     onTotalPagesChange,
   ]);
 
@@ -252,11 +302,48 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     }
   }, [initialScrollProgress, bodyHtml, writingMode, pagingMode, isPaged]);
 
-  // pageWidth の解決
+  // pageWidth, pageHeight の解決
   const pageWidth = containerRef.current?.clientWidth ?? containerWidth;
+  const pageHeight = containerRef.current?.clientHeight ?? containerHeight;
 
   // 将来のジェスチャー遷移連携・アニメーション中制御のために参照
   void isAnimating;
+
+  // 小説本文・ヘッダー描画用ヘルパー
+  const renderNovelContent = (active: boolean = true) => (
+    <>
+      {(title || chapterTitle) && (
+        <header
+          className={`mb-6 pb-4 border-b ${
+            isVertical ? "border-l border-b-0 pl-4 mr-6" : "border-b pb-4 mb-6"
+          } opacity-80`}
+        >
+          {title && (
+            <h2
+              {...(active ? { "data-testid": "reader-title" } : {})}
+              className="text-xs font-semibold tracking-wider uppercase mb-1"
+            >
+              {title}
+            </h2>
+          )}
+          {chapterTitle && (
+            <h1
+              {...(active ? { "data-testid": "reader-chapter-title" } : {})}
+              className="text-lg md:text-xl font-bold tracking-tight"
+            >
+              {chapterTitle}
+            </h1>
+          )}
+        </header>
+      )}
+
+      <div
+        {...(active ? { "data-testid": "reader-body" } : {})}
+        className="novel-content"
+        dangerouslySetInnerHTML={{ __html: bodyHtml }}
+      />
+    </>
+  );
 
   return (
     <div
@@ -289,19 +376,82 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         ...(!isPaged ? { padding: `${pageMarginPx}px` } : {}),
       }}
     >
-      <div
-        ref={contentRef}
-        data-testid="reader-content"
-        className={`h-full w-full ${isPaged ? "m-auto" : ""}`}
-        style={getPagedContentStyle(
-          isPaged,
-          currentPage,
-          pageWidth,
-          slideOffsetPx,
-          pageMarginPx,
-        )}
-      >
-        {!isPaged && (
+      {isPaged ? (
+        <div
+          data-testid="reader-swipe-track"
+          style={calculateSwipeTrackStyle(pageWidth, slideOffsetPx)}
+        >
+          {/* 左スロット: 次ページ (currentPage + 1) */}
+          <div
+            aria-hidden="true"
+            className="h-full overflow-hidden relative flex-shrink-0"
+            style={{ width: `${pageWidth}px` }}
+          >
+            {currentPage < totalPages && (
+              <div
+                className="h-full w-full m-auto"
+                style={getPagedSlotContentStyle(
+                  currentPage + 1,
+                  pageHeight,
+                  pageWidth,
+                  pageHeight,
+                  pageMarginPx,
+                )}
+              >
+                {renderNovelContent(false)}
+              </div>
+            )}
+          </div>
+
+          {/* 中央スロット: 現在ページ (currentPage) */}
+          <div
+            className="h-full overflow-hidden relative flex-shrink-0"
+            style={{ width: `${pageWidth}px` }}
+          >
+            <div
+              ref={contentRef}
+              data-testid="reader-content"
+              className="h-full w-full m-auto"
+              style={getPagedSlotContentStyle(
+                currentPage,
+                pageHeight,
+                pageWidth,
+                pageHeight,
+                pageMarginPx,
+              )}
+            >
+              {renderNovelContent(true)}
+            </div>
+          </div>
+
+          {/* 右スロット: 前ページ (currentPage - 1) */}
+          <div
+            aria-hidden="true"
+            className="h-full overflow-hidden relative flex-shrink-0"
+            style={{ width: `${pageWidth}px` }}
+          >
+            {currentPage > 1 && (
+              <div
+                className="h-full w-full m-auto"
+                style={getPagedSlotContentStyle(
+                  currentPage - 1,
+                  pageHeight,
+                  pageWidth,
+                  pageHeight,
+                  pageMarginPx,
+                )}
+              >
+                {renderNovelContent(false)}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div
+          ref={contentRef}
+          data-testid="reader-content"
+          className="h-full w-full"
+        >
           <div
             className={`flex ${
               isVertical
@@ -325,42 +475,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               前の話へ
             </button>
           </div>
-        )}
 
-        {(title || chapterTitle) && (
-          <header
-            className={`mb-6 pb-4 border-b ${
-              isVertical
-                ? "border-l border-b-0 pl-4 mr-6"
-                : "border-b pb-4 mb-6"
-            } opacity-80`}
-          >
-            {title && (
-              <h2
-                data-testid="reader-title"
-                className="text-xs font-semibold tracking-wider uppercase mb-1"
-              >
-                {title}
-              </h2>
-            )}
-            {chapterTitle && (
-              <h1
-                data-testid="reader-chapter-title"
-                className="text-lg md:text-xl font-bold tracking-tight"
-              >
-                {chapterTitle}
-              </h1>
-            )}
-          </header>
-        )}
+          {renderNovelContent()}
 
-        <div
-          data-testid="reader-body"
-          className="novel-content"
-          dangerouslySetInnerHTML={{ __html: bodyHtml }}
-        />
-
-        {!isPaged && (
           <div
             className={`flex ${
               isVertical
@@ -388,8 +505,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               次の話へ
             </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {isPaged && (
         <div

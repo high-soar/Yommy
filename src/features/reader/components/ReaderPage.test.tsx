@@ -777,8 +777,8 @@ describe("ReaderPage", () => {
       setupContainerDimensions(main, 300);
 
       firePointer(main, "pointerdown", { clientX: 200, clientY: 100 });
-      firePointer(main, "pointermove", { clientX: 100, clientY: 100 }); // dx = -100 <= -90px (30%)
-      firePointer(main, "pointerup", { clientX: 100, clientY: 100 });
+      firePointer(main, "pointermove", { clientX: 300, clientY: 100 }); // dx = +100 >= 90px (30%)
+      firePointer(main, "pointerup", { clientX: 300, clientY: 100 });
 
       expect(onPageChange).toHaveBeenCalledWith(3);
     });
@@ -800,8 +800,8 @@ describe("ReaderPage", () => {
       setupContainerDimensions(main, 300);
 
       firePointer(main, "pointerdown", { clientX: 200, clientY: 100 });
-      firePointer(main, "pointermove", { clientX: 150, clientY: 100 }); // dx = -50 (Math.abs < 90px)
-      firePointer(main, "pointerup", { clientX: 150, clientY: 100 });
+      firePointer(main, "pointermove", { clientX: 250, clientY: 100 }); // dx = +50 (Math.abs < 90px)
+      firePointer(main, "pointerup", { clientX: 250, clientY: 100 });
 
       expect(onPageChange).not.toHaveBeenCalled();
     });
@@ -825,13 +825,13 @@ describe("ReaderPage", () => {
       setupContainerDimensions(main, 300);
 
       firePointer(main, "pointerdown", { clientX: 200, clientY: 100 });
-      firePointer(main, "pointermove", { clientX: 100, clientY: 100 }); // dx = -100 (Math.abs >= 90px)
+      firePointer(main, "pointermove", { clientX: 300, clientY: 100 }); // dx = +100 (Math.abs >= 90px)
 
       const hint = screen.getByTestId("reader-episode-boundary-hint");
       expect(hint).toBeInTheDocument();
       expect(hint).toHaveTextContent("指を離して次の話へ");
 
-      firePointer(main, "pointerup", { clientX: 100, clientY: 100 });
+      firePointer(main, "pointerup", { clientX: 300, clientY: 100 });
       expect(onNextChapter).toHaveBeenCalled();
     });
 
@@ -853,14 +853,14 @@ describe("ReaderPage", () => {
       const main = screen.getByRole("main");
       setupContainerDimensions(main, 300);
 
-      firePointer(main, "pointerdown", { clientX: 100, clientY: 100 });
-      firePointer(main, "pointermove", { clientX: 200, clientY: 100 }); // dx = +100 >= 90px
+      firePointer(main, "pointerdown", { clientX: 200, clientY: 100 });
+      firePointer(main, "pointermove", { clientX: 100, clientY: 100 }); // dx = -100 (Math.abs >= 90px)
 
       const hint = screen.getByTestId("reader-episode-boundary-hint");
       expect(hint).toBeInTheDocument();
       expect(hint).toHaveTextContent("指を離して前の話へ");
 
-      firePointer(main, "pointerup", { clientX: 200, clientY: 100 });
+      firePointer(main, "pointerup", { clientX: 100, clientY: 100 });
       expect(onPrevChapter).toHaveBeenCalled();
     });
 
