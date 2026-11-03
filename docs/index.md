@@ -57,13 +57,15 @@ docs/
     │   ├── v0.1-mvp-log.md            # Milestone v0.1 MVP バグ記録（No. 32〜70）＆ 申し送りアーカイブ
     │   ├── v0.2-ui-ux-log.md          # Milestone v0.2 UI/UX バグ記録（No. 71〜99）＆ 申し送りアーカイブ
     │   ├── v0.3-search-prefetch-log.md # Milestone v0.3 検索/先読み バグ記録（No. 100〜132）＆ 申し送りアーカイブ
-    │   └── v0.4-cloud-sync-reader-ux-log.md # Milestone v0.4 クラウド同期/リーダーUX バグ記録（No. 133〜168）＆ 申し送りアーカイブ
+    │   ├── v0.4-cloud-sync-reader-ux-log.md # Milestone v0.4 クラウド同期/リーダーUX バグ記録（No. 133〜168）＆ 申し送りアーカイブ
+    │   └── v0.5-reader-customization-and-cache-log.md # Milestone v0.5 縦書きリーダー組版/設定/キャッシュ バグ記録（No. 169〜180）＆ 申し送りアーカイブ
     └── reports/                       # ミニリリース Milestone ごとの品質分析・改善（Kaizen）レポート格納先
         ├── phase3-poc.md              # Phase 3 PoC 品質分析・改善レポート
         ├── v0.1-mvp.md                # Milestone v0.1（カクヨム MVP）品質分析・改善レポート
         ├── v0.2-ui-ux.md              # Milestone v0.2（UI/UX 刷新 ＆ 開発基盤整備）品質分析・改善レポート
         ├── v0.3-search-prefetch.md    # Milestone v0.3（検索/ランキング・先読みキャッシュ・更新チェック ＆ 実機基盤改善）品質分析・改善レポート
-        └── v0.4-cloud-sync-reader-ux.md # Milestone v0.4（クラウド同期・ページめくり・リーダーUI改善）品質分析・改善レポート
+        ├── v0.4-cloud-sync-reader-ux.md # Milestone v0.4（クラウド同期・ページめくり・リーダーUI改善）品質分析・改善レポート
+        └── v0.5-reader-customization-and-cache.md # Milestone v0.5（縦書きリーダー組版・設定・キャッシュ管理）品質分析・改善レポート
 ```
 
 > [!NOTE]
