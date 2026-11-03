@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
@@ -14,6 +14,10 @@ const {
   SearchTabActive,
   RankingTabActive,
   SettingsTabActive,
+  PagedWithSeekbar,
+  PagedSinglePage,
+  PagedLoading,
+  ScrollMode,
 } = composeStories(stories);
 
 describe("ReaderBottomOverlay", () => {
@@ -25,6 +29,11 @@ describe("ReaderBottomOverlay", () => {
       expect(overlay).toHaveAttribute("aria-hidden", "false");
       expect(overlay).toHaveClass("translate-y-0");
       expect(overlay).not.toHaveClass("translate-y-full");
+
+      // 連続スクロール（既定）時はシークバー領域が非表示であること
+      expect(
+        screen.queryByTestId("reader-page-seekbar-section"),
+      ).not.toBeInTheDocument();
 
       // ReaderChapterNav
       expect(screen.getByTestId("reader-chapter-nav")).toBeInTheDocument();
@@ -144,6 +153,248 @@ describe("ReaderBottomOverlay", () => {
       const settingsTab = screen.getByTestId("reader-bottom-tab-settings");
       expect(bookshelfTab).toHaveAttribute("aria-selected", "false");
       expect(settingsTab).toHaveAttribute("aria-selected", "true");
+    });
+
+    it("PagedWithSeekbar ストーリーでページシークバー領域・RTLスライダー・ページラベルが表示されること (AC-RD-25)", () => {
+      render(<PagedWithSeekbar />);
+      const seekbarSection = screen.getByTestId("reader-page-seekbar-section");
+      expect(seekbarSection).toBeInTheDocument();
+
+      const seekbar = screen.getByTestId("reader-page-seekbar");
+      expect(seekbar).toBeInTheDocument();
+      expect(seekbar).toHaveAttribute("dir", "rtl");
+      expect(seekbar).toHaveAttribute("min", "1");
+      expect(seekbar).toHaveAttribute("max", "5");
+      expect(seekbar).toHaveValue("2");
+      expect(seekbar).not.toBeDisabled();
+
+      const label = screen.getByTestId("reader-page-seekbar-label");
+      expect(label).toBeInTheDocument();
+      expect(label).toHaveTextContent("2 / 5 ページ");
+    });
+
+    it("PagedSinglePage ストーリーで単一ページ（totalPages=1）時にシークバーが無効化されること (AC-RD-25)", () => {
+      render(<PagedSinglePage />);
+      const seekbarSection = screen.getByTestId("reader-page-seekbar-section");
+      expect(seekbarSection).toBeInTheDocument();
+
+      const seekbar = screen.getByTestId("reader-page-seekbar");
+      expect(seekbar).toBeInTheDocument();
+      expect(seekbar).toBeDisabled();
+      expect(seekbar).toHaveAttribute("min", "1");
+      expect(seekbar).toHaveAttribute("max", "1");
+      expect(seekbar).toHaveValue("1");
+
+      const label = screen.getByTestId("reader-page-seekbar-label");
+      expect(label).toBeInTheDocument();
+      expect(label).toHaveTextContent("1 / 1 ページ");
+    });
+
+    it("PagedLoading ストーリーで通信中にシークバーおよび前後話ボタンが無効化されること (AC-RD-25)", () => {
+      render(<PagedLoading />);
+      const seekbarSection = screen.getByTestId("reader-page-seekbar-section");
+      expect(seekbarSection).toBeInTheDocument();
+
+      const seekbar = screen.getByTestId("reader-page-seekbar");
+      expect(seekbar).toBeInTheDocument();
+      expect(seekbar).toBeDisabled();
+
+      expect(screen.getByTestId("reader-prev-chapter")).toBeDisabled();
+      expect(screen.getByTestId("reader-next-chapter")).toBeDisabled();
+    });
+
+    it("ScrollMode ストーリーで連続スクロール時はシークバー領域が描画されないこと (AC-RD-25)", () => {
+      render(<ScrollMode />);
+      expect(
+        screen.queryByTestId("reader-page-seekbar-section"),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("reader-page-seekbar"),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  describe("RTL ページシークバーの検証（AC-RD-25）", () => {
+    it("effectivePagingMode === 'paged' かつ totalPages > 1 のときシークバー領域と RTL スライダーが正常描画されること", () => {
+      render(
+        <ReaderBottomOverlay
+          isOpen={true}
+          chapterIndex={1}
+          totalChapters={3}
+          effectivePagingMode="paged"
+          currentPage={3}
+          totalPages={10}
+          onPrevChapter={vi.fn()}
+          onNextChapter={vi.fn()}
+        />,
+      );
+
+      const section = screen.getByTestId("reader-page-seekbar-section");
+      expect(section).toBeInTheDocument();
+
+      const seekbar = screen.getByTestId("reader-page-seekbar");
+      expect(seekbar).toBeInTheDocument();
+      expect(seekbar).toHaveAttribute("dir", "rtl");
+      expect(seekbar).toHaveAttribute("min", "1");
+      expect(seekbar).toHaveAttribute("max", "10");
+      expect(seekbar).toHaveValue("3");
+      expect(seekbar).not.toBeDisabled();
+
+      const label = screen.getByTestId("reader-page-seekbar-label");
+      expect(label).toBeInTheDocument();
+      expect(label).toHaveTextContent("3 / 10 ページ");
+    });
+
+    it("スライダー操作（change イベント）で onPageChange コールバックへ数値化されたページ番号が通知されること", () => {
+      const onPageChange = vi.fn();
+      render(
+        <ReaderBottomOverlay
+          isOpen={true}
+          chapterIndex={1}
+          totalChapters={3}
+          effectivePagingMode="paged"
+          currentPage={2}
+          totalPages={8}
+          onPrevChapter={vi.fn()}
+          onNextChapter={vi.fn()}
+          onPageChange={onPageChange}
+        />,
+      );
+
+      const seekbar = screen.getByTestId("reader-page-seekbar");
+      fireEvent.change(seekbar, { target: { value: "6" } });
+
+      expect(onPageChange).toHaveBeenCalledTimes(1);
+      expect(onPageChange).toHaveBeenCalledWith(6);
+    });
+
+    it("onPageChange が未指定の場合にスライダーを操作しても例外が発生しないこと", () => {
+      render(
+        <ReaderBottomOverlay
+          isOpen={true}
+          chapterIndex={1}
+          totalChapters={3}
+          effectivePagingMode="paged"
+          currentPage={2}
+          totalPages={8}
+          onPrevChapter={vi.fn()}
+          onNextChapter={vi.fn()}
+        />,
+      );
+
+      const seekbar = screen.getByTestId("reader-page-seekbar");
+      expect(() => {
+        fireEvent.change(seekbar, { target: { value: "4" } });
+      }).not.toThrow();
+    });
+
+    it("effectivePagingMode === 'scroll' または未指定のときはシークバー領域が描画されないこと", () => {
+      const { rerender } = render(
+        <ReaderBottomOverlay
+          isOpen={true}
+          chapterIndex={1}
+          totalChapters={3}
+          effectivePagingMode="scroll"
+          currentPage={2}
+          totalPages={8}
+          onPrevChapter={vi.fn()}
+          onNextChapter={vi.fn()}
+        />,
+      );
+
+      expect(
+        screen.queryByTestId("reader-page-seekbar-section"),
+      ).not.toBeInTheDocument();
+
+      rerender(
+        <ReaderBottomOverlay
+          isOpen={true}
+          chapterIndex={1}
+          totalChapters={3}
+          currentPage={2}
+          totalPages={8}
+          onPrevChapter={vi.fn()}
+          onNextChapter={vi.fn()}
+        />,
+      );
+
+      expect(
+        screen.queryByTestId("reader-page-seekbar-section"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("totalPages <= 1 のときはスライダーが無効化（disabled）されること", () => {
+      const { rerender } = render(
+        <ReaderBottomOverlay
+          isOpen={true}
+          chapterIndex={1}
+          totalChapters={3}
+          effectivePagingMode="paged"
+          currentPage={1}
+          totalPages={1}
+          isLoading={false}
+          onPrevChapter={vi.fn()}
+          onNextChapter={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByTestId("reader-page-seekbar")).toBeDisabled();
+
+      rerender(
+        <ReaderBottomOverlay
+          isOpen={true}
+          chapterIndex={1}
+          totalChapters={3}
+          effectivePagingMode="paged"
+          currentPage={1}
+          totalPages={0}
+          isLoading={false}
+          onPrevChapter={vi.fn()}
+          onNextChapter={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByTestId("reader-page-seekbar")).toBeDisabled();
+    });
+
+    it("isLoading === true のときは totalPages > 1 であってもスライダーが無効化（disabled）されること", () => {
+      render(
+        <ReaderBottomOverlay
+          isOpen={true}
+          chapterIndex={1}
+          totalChapters={3}
+          effectivePagingMode="paged"
+          currentPage={2}
+          totalPages={5}
+          isLoading={true}
+          onPrevChapter={vi.fn()}
+          onNextChapter={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByTestId("reader-page-seekbar")).toBeDisabled();
+    });
+
+    it("currentPage および totalPages が省略された場合に既定値 1 が適用されること", () => {
+      render(
+        <ReaderBottomOverlay
+          isOpen={true}
+          chapterIndex={1}
+          totalChapters={3}
+          effectivePagingMode="paged"
+          onPrevChapter={vi.fn()}
+          onNextChapter={vi.fn()}
+        />,
+      );
+
+      const seekbar = screen.getByTestId("reader-page-seekbar");
+      expect(seekbar).toHaveAttribute("min", "1");
+      expect(seekbar).toHaveAttribute("max", "1");
+      expect(seekbar).toHaveValue("1");
+      expect(seekbar).toBeDisabled();
+
+      const label = screen.getByTestId("reader-page-seekbar-label");
+      expect(label).toHaveTextContent("1 / 1 ページ");
     });
   });
 
