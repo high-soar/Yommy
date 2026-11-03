@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: Approved
+status: "Review (#203)"
 updated: "2026-11-03"
 tags:
   - architecture
@@ -28,10 +28,15 @@ tags:
   - pagination
   - font-family
   - page-margin
+  - volume-key
+  - hardware-key
   - ho-23
   - ho-24
   - ho-25
+  - ho-28
 related_specs:
+  - docs/specs/changes/issue-203-volume-key-paging.md
+  - docs/specs/changes/archive/issue-202-reader-top-overlay-and-seekbar.md
   - docs/specs/changes/archive/issue-169-font-and-margin-customization.md
   - docs/specs/changes/archive/issue-170-cache-management-and-capacity-visualization.md
   - docs/specs/changes/archive/issue-168-reader-pagination-and-touch-refinement.md
@@ -127,6 +132,7 @@ flowchart TB
         AppBridge["AppBridge Interface<br>(@capacitor/app システム戻るボタン・exitApp / テスト時モック)"]
         WebViewBridge["WebViewDomBridge Interface<br>(内蔵WebView DOM抽出 / テスト時モック)"]
         CloudSyncBridge["CloudSyncBridge Interface<br>(Google Identity Services & Drive appDataFolder / テスト時モック)"]
+        VolumeKeyBridge["VolumeKeyBridge Interface<br>(VolumeKeyPlugin 音量キーインターセプト / テスト時モック)"]
     end
 
     Hooks --> Registry
@@ -135,6 +141,7 @@ flowchart TB
     Hooks --> AppBridge
     Hooks --> WebViewBridge
     Hooks --> CloudSyncBridge
+    Hooks --> VolumeKeyBridge
 ```
 
 ---
@@ -171,6 +178,10 @@ Yommy/
     │   │   ├── types.ts               # CloudSyncBridge, CloudSyncAuthState 定義
     │   │   ├── capacitorCloudSyncBridge.ts # Android ネイティブ Capacitor プラグイン実装
     │   │   └── mockCloudSyncBridge.ts # UT / Storybook / IT 用インメモリ同期モック
+    │   ├── volume-key/                # 【VolumeKeyBridge】ハードウェア音量キーインターセプト・ページ送り（Issue #203）
+    │   │   ├── types.ts               # VolumeKeyBridge, VolumeKeyEvent, VolumeKeyListener 定義
+    │   │   ├── capacitorVolumeKeyBridge.ts # Capacitor プラグイン（VolumeKeyPlugin）ラッパー実装
+    │   │   └── mockVolumeKeyBridge.ts # UT / Storybook / IT 用モック実装（triggerVolumeKey）
     │   ├── http/
     │   │   ├── types.ts               # HttpClientBridge インターフェース定義
     │   │   ├── capacitorHttpClient.ts # CapacitorHttp 実装（CORS回避・User-Agent・タイムアウト制御）
@@ -798,14 +809,60 @@ export interface UseStorageCacheResult {
 }
 ```
 
+### 3.10 ハードウェア音量キーブリッジ（`VolumeKeyBridge`）およびネイティブ連携アーキテクチャ（v0.6 新設: Issue #203）
+
+リーダー画面（`SCR-03`）における片手持ち操作性向上のため、ハードウェア音量キー（Volume Down / Up）を捕捉し、Web 側のページ送り・スクロール送りと連携させるブリッジ層を導入します。
+
+#### 3.10.1 `VolumeKeyBridge` インターフェース契約（`src/bridges/volume-key/types.ts`）
+
+```ts
+export type VolumeKeyDirection = "up" | "down";
+
+export interface VolumeKeyEvent {
+  direction: VolumeKeyDirection;
+}
+
+export type VolumeKeyListener = (event: VolumeKeyEvent) => void;
+
+export interface VolumeKeyBridge {
+  /**
+   * 音量キーインターセプトの有効/無効を切り替える。
+   * Android 実機では有効時のみ KEYCODE_VOLUME_DOWN / KEYCODE_VOLUME_UP を捕捉し、OS 音量バー表示を抑止する。
+   * リーダー離脱時や設定 OFF 時は false にすることで通常の OS 音量調整に戻す。
+   */
+  setVolumeKeyPagingEnabled(enabled: boolean): Promise<void>;
+
+  /**
+   * 音量キー押下イベントリスナーを登録する。
+   * @param listener 音量キーイベントリスナー
+   * @returns リスナー解除関数
+   */
+  addVolumeKeyListener(listener: VolumeKeyListener): () => void;
+}
+```
+
+#### 3.10.2 Android ネイティブ層（`VolumeKeyPlugin` & `MainActivity`）連携仕様
+
+1. **`VolumeKeyPlugin`**:
+   - Capacitor プラグイン（`@CapacitorPlugin(name = "VolumeKey")`）として実装。
+   - `setVolumeKeyPagingEnabled`: Web 側からの有効/無効状態を保持。
+   - `onVolumeKeyDown(direction)`: `notifyListeners("volumeKeyEvent", { direction })` により Web 側リスナーへ非同期通知。
+2. **`MainActivity`（`dispatchKeyEvent` インターセプト）**:
+   - `dispatchKeyEvent(KeyEvent event)` をオーバーライドし、`ACTION_DOWN` かつ `KEYCODE_VOLUME_DOWN` または `KEYCODE_VOLUME_UP` の押下を検知。
+   - `VolumeKeyPlugin.isVolumeKeyPagingEnabled()` が `true` の場合、イベントを消費（`return true;`）して **OS のシステム音量バー表示および音量変更を抑止** し、プラグインへ通知。
+   - `false` の場合は `super.dispatchKeyEvent(event)` を呼び出し、OS 標準の音量調整として透過的に動作させる。
+3. **ブラウザ／テスト用モック（`MockVolumeKeyBridge`）**:
+   - `triggerVolumeKey(direction)` メソッドを提供し、UT や Playwright IT で決定論的に音量キーイベントを発火可能にする。
+   - Web 実行時の利便性としてキーボードイベント（`VolumeDown` / `VolumeUp`、フォールバック `ArrowDown` / `ArrowUp`）との連動もサポート。
+
 ---
 
 ## 4. テスト環境での DI（依存性注入）と決定論的初期化
 
-- `src/app/ServiceProvider.tsx` を介して `HttpClientBridge`、`AppBridge`、`CloudSyncBridge`、各 `Repository`（および基底の `DatabaseAdapter`）を React Context 経由で提供する。
-- **Android / iOS ネイティブ実行時**: `Capacitor.isNativePlatform()` によりネイティブ環境を自動検知し、`CapacitorHttpClient`、`CapacitorAppBridge`、`CapacitorCloudSyncBridge`、および `createDefaultNativeSqliteAdapter`（`CapacitorSqliteAdapter` ＋ `src/storage/schema.ts` の DDL 初期化）を注入する。
-- **Web ブラウザ / Dev 実行時**: `createInMemoryDb`（`sql.js`）および `localStorage` への Base64 バイナリバックアップ（`yommy_sqlite_db_backup`）によるハイブリッド永続化を提供し、`createDefaultMockHttpClient`、`MockAppBridge`、および `MockCloudSyncBridge` を使用する。既存 DB バイナリからの復元時にも `initializeDatabaseSchema` によるスキーママイグレーションを確実に実行する。
-- **UT（Vitest）/ Storybook / Playwright IT 実行時**: `MockHttpClient` ＋ `MockAppBridge` ＋ `MockCloudSyncBridge` ＋ `InMemoryDatabaseAdapter` を注入し、各テストの開始前に `resetTestDb()` を呼び出して 100% 決定論的な状態で検証する。
+- `src/app/ServiceProvider.tsx` を介して `HttpClientBridge`、`AppBridge`、`CloudSyncBridge`、`VolumeKeyBridge`、各 `Repository`（および基底の `DatabaseAdapter`）を React Context 経由で提供する。
+- **Android / iOS ネイティブ実行時**: `Capacitor.isNativePlatform()` によりネイティブ環境を自動検知し、`CapacitorHttpClient`、`CapacitorAppBridge`、`CapacitorCloudSyncBridge`、`CapacitorVolumeKeyBridge`、および `createDefaultNativeSqliteAdapter`（`CapacitorSqliteAdapter` ＋ `src/storage/schema.ts` の DDL 初期化）を注入する。
+- **Web ブラウザ / Dev 実行時**: `createInMemoryDb`（`sql.js`）および `localStorage` への Base64 バイナリバックアップ（`yommy_sqlite_db_backup`）によるハイブリッド永続化を提供し、`createDefaultMockHttpClient`、`MockAppBridge`、`MockCloudSyncBridge`、および `MockVolumeKeyBridge` を使用する。既存 DB バイナリからの復元時にも `initializeDatabaseSchema` によるスキーママイグレーションを確実に実行する。
+- **UT（Vitest）/ Storybook / Playwright IT 実行時**: `MockHttpClient` ＋ `MockAppBridge` ＋ `MockCloudSyncBridge` ＋ `MockVolumeKeyBridge` ＋ `InMemoryDatabaseAdapter` を注入し、各テストの開始前に `resetTestDb()` を呼び出して 100% 決定論的な状態で検証する。
 - **Worktree 運用・環境変数非依存設計**: すべてのテスト（Vitest, Storybook VRT, Playwright IT）およびビルドは、`.env.local` の有無に関わらず 100% 決定論的に PASS する設計（`ServiceProvider` による DI モック分離と安全なフォールバック）を必須とし、テスト実行時に環境変数未定義によるスキップや挙動のブレを生じさせない。
 
 ---
