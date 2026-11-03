@@ -707,34 +707,6 @@ export function useReaderGestures({
     return viewEl ?? containerRef.current;
   }, [containerRef]);
 
-  const isAtScrollEnd = useCallback(
-    (el: HTMLElement | null): boolean => {
-      if (reachedEndRef.current) return true;
-      if (!el) return false;
-      if (isVertical) {
-        const maxScroll = el.scrollWidth - el.clientWidth;
-        return maxScroll > 0 && Math.abs(el.scrollLeft) >= maxScroll - 2;
-      }
-      const maxScroll = el.scrollHeight - el.clientHeight;
-      return maxScroll > 0 && el.scrollTop >= maxScroll - 2;
-    },
-    [isVertical],
-  );
-
-  const isAtScrollStart = useCallback(
-    (el: HTMLElement | null): boolean => {
-      if (reachedStartRef.current) return true;
-      if (!el) return false;
-      if (isVertical) {
-        const maxScroll = el.scrollWidth - el.clientWidth;
-        return maxScroll > 0 && Math.abs(el.scrollLeft) <= 2;
-      }
-      const maxScroll = el.scrollHeight - el.clientHeight;
-      return maxScroll > 0 && el.scrollTop <= 2;
-    },
-    [isVertical],
-  );
-
   // 音量キーによる境界2段階操作ハンドラー
   const triggerVolumeKeyBoundary = useCallback(
     (direction: "next" | "prev", onTrigger: () => void, hintText: string) => {
@@ -848,7 +820,7 @@ export function useReaderGestures({
 
         if (direction === "down") {
           // 音量［ー］: 約85% 順方向スクロール
-          if (isAtScrollEnd(el)) {
+          if (reachedEndRef.current) {
             // スクロール末尾到達時: 2段階操作で次話遷移
             if (chapterIndex < totalChapters) {
               triggerVolumeKeyBoundary(
@@ -864,7 +836,7 @@ export function useReaderGestures({
           }
         } else {
           // 音量［＋］: 約85% 逆方向スクロール
-          if (isAtScrollStart(el)) {
+          if (reachedStartRef.current) {
             // スクロール先頭到達時: 2段階操作で前話遷移
             if (chapterIndex > 1) {
               triggerVolumeKeyBoundary(
@@ -898,8 +870,6 @@ export function useReaderGestures({
       onNextChapter,
       onPrevChapter,
       getScrollElement,
-      isAtScrollEnd,
-      isAtScrollStart,
       scrollContinuously,
     ],
   );
