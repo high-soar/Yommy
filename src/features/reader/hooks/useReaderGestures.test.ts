@@ -2741,4 +2741,428 @@ describe("useReaderGestures", () => {
       expect(currentPg).toBe(4);
     });
   });
+
+  describe("ハードウェア音量キー操作（handleVolumeKey）の連携検証 (AC-RD-26, AC-RD-27, Issue #203)", () => {
+    it("音量キー操作時にオーバーレイが自動で閉じられること (AC-RD-27)", () => {
+      const onCloseOverlay = vi.fn();
+      const { result } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          isOverlayOpen: true,
+          onCloseOverlay,
+        }),
+      );
+
+      act(() => {
+        result.current.handleVolumeKey("down");
+      });
+      expect(onCloseOverlay).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        result.current.handleVolumeKey("up");
+      });
+      expect(onCloseOverlay).toHaveBeenCalledTimes(2);
+    });
+
+    describe("縦書きページめくりモード（isPaged）", () => {
+      it("音量［ー］（down）押下により次ページへのスライドアニメーションが開始され200ms後に確定すること (AC-RD-26)", () => {
+        const onPageChange = vi.fn();
+        const { result } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            currentPage: 2,
+            totalPages: 4,
+            onPageChange,
+          }),
+        );
+
+        act(() => {
+          result.current.handleVolumeKey("down");
+        });
+
+        expect(result.current.isAnimating).toBe(true);
+        expect(result.current.slideOffsetPx).toBe(300);
+        expect(onPageChange).not.toHaveBeenCalled();
+
+        act(() => {
+          vi.advanceTimersByTime(200);
+        });
+
+        expect(result.current.isAnimating).toBe(false);
+        expect(result.current.slideOffsetPx).toBe(0);
+        expect(onPageChange).toHaveBeenCalledWith(3);
+      });
+
+      it("音量［＋］（up）押下により前ページへのスライドアニメーションが開始され200ms後に確定すること (AC-RD-26)", () => {
+        const onPageChange = vi.fn();
+        const { result } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            currentPage: 3,
+            totalPages: 4,
+            onPageChange,
+          }),
+        );
+
+        act(() => {
+          result.current.handleVolumeKey("up");
+        });
+
+        expect(result.current.isAnimating).toBe(true);
+        expect(result.current.slideOffsetPx).toBe(-300);
+        expect(onPageChange).not.toHaveBeenCalled();
+
+        act(() => {
+          vi.advanceTimersByTime(200);
+        });
+
+        expect(result.current.isAnimating).toBe(false);
+        expect(result.current.slideOffsetPx).toBe(0);
+        expect(onPageChange).toHaveBeenCalledWith(2);
+      });
+
+      it("スライドアニメーション中に音量キーが連続押下された場合、直前の保留中ページが即座に確定されること (高速連打対応, AC-RD-17c)", () => {
+        const onPageChange = vi.fn();
+        const { result } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            currentPage: 1,
+            totalPages: 5,
+            onPageChange,
+          }),
+        );
+
+        act(() => {
+          result.current.handleVolumeKey("down");
+        });
+        expect(result.current.isAnimating).toBe(true);
+
+        vi.advanceTimersByTime(100);
+        act(() => {
+          result.current.handleVolumeKey("down");
+        });
+
+        expect(onPageChange).toHaveBeenCalledWith(2);
+
+        act(() => {
+          vi.advanceTimersByTime(200);
+        });
+        expect(onPageChange).toHaveBeenCalledWith(3);
+      });
+
+      it("最終ページ到達時、音量［ー］の1回目で案内ヒント「もう一度操作で次の話へ」が表示され、2.5秒以内の再操作で次話遷移すること (AC-RD-27)", () => {
+        const onNextChapter = vi.fn();
+        const { result } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            currentPage: 4,
+            totalPages: 4,
+            chapterIndex: 2,
+            totalChapters: 5,
+            onNextChapter,
+          }),
+        );
+
+        act(() => {
+          result.current.handleVolumeKey("down");
+        });
+        expect(onNextChapter).not.toHaveBeenCalled();
+        expect(result.current.boundaryHint).toBe("もう一度操作で次の話へ");
+
+        vi.advanceTimersByTime(1000);
+        act(() => {
+          result.current.handleVolumeKey("down");
+        });
+        expect(onNextChapter).toHaveBeenCalledTimes(1);
+        expect(result.current.boundaryHint).toBeNull();
+      });
+
+      it("最終ページ到達後、2.5秒経過してから音量［ー］を押下した場合は再度1回目の案内ヒント表示となること", () => {
+        const onNextChapter = vi.fn();
+        const { result } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            currentPage: 4,
+            totalPages: 4,
+            chapterIndex: 2,
+            totalChapters: 5,
+            onNextChapter,
+          }),
+        );
+
+        act(() => {
+          result.current.handleVolumeKey("down");
+        });
+        expect(result.current.boundaryHint).toBe("もう一度操作で次の話へ");
+
+        act(() => {
+          vi.advanceTimersByTime(2500);
+        });
+        expect(result.current.boundaryHint).toBeNull();
+
+        act(() => {
+          result.current.handleVolumeKey("down");
+        });
+        expect(onNextChapter).not.toHaveBeenCalled();
+        expect(result.current.boundaryHint).toBe("もう一度操作で次の話へ");
+      });
+
+      it("最終話（chapterIndex === totalChapters）の最終ページでは音量［ー］を押しても案内ヒントが表示されず次話遷移もしないこと", () => {
+        const onNextChapter = vi.fn();
+        const { result } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            currentPage: 4,
+            totalPages: 4,
+            chapterIndex: 5,
+            totalChapters: 5,
+            onNextChapter,
+          }),
+        );
+
+        act(() => {
+          result.current.handleVolumeKey("down");
+        });
+        expect(onNextChapter).not.toHaveBeenCalled();
+        expect(result.current.boundaryHint).toBeNull();
+      });
+
+      it("第1ページ到達時、音量［＋］の1回目で案内ヒント「もう一度操作で前の話へ」が表示され、2.5秒以内の再操作で前話遷移すること (AC-RD-27)", () => {
+        const onPrevChapter = vi.fn();
+        const { result } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            currentPage: 1,
+            totalPages: 4,
+            chapterIndex: 2,
+            totalChapters: 5,
+            onPrevChapter,
+          }),
+        );
+
+        act(() => {
+          result.current.handleVolumeKey("up");
+        });
+        expect(onPrevChapter).not.toHaveBeenCalled();
+        expect(result.current.boundaryHint).toBe("もう一度操作で前の話へ");
+
+        vi.advanceTimersByTime(1000);
+        act(() => {
+          result.current.handleVolumeKey("up");
+        });
+        expect(onPrevChapter).toHaveBeenCalledTimes(1);
+        expect(result.current.boundaryHint).toBeNull();
+      });
+
+      it("第1話（chapterIndex === 1）の第1ページでは音量［＋］を押しても案内ヒントが表示されず前話遷移もしないこと", () => {
+        const onPrevChapter = vi.fn();
+        const { result } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            currentPage: 1,
+            totalPages: 4,
+            chapterIndex: 1,
+            totalChapters: 5,
+            onPrevChapter,
+          }),
+        );
+
+        act(() => {
+          result.current.handleVolumeKey("up");
+        });
+        expect(onPrevChapter).not.toHaveBeenCalled();
+        expect(result.current.boundaryHint).toBeNull();
+      });
+    });
+
+    describe("連続スクロールモード（!isPaged）", () => {
+      it("縦書き（vertical-rl）スクロール時、音量［ー］で横スクロール（約85%）順方向へ進み、音量［＋］で逆方向へ戻ること (AC-RD-26)", () => {
+        const scrollByMock = vi.fn();
+        mockContainer.scrollBy = scrollByMock;
+
+        const { result } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            writingMode: "vertical-rl",
+            pagingMode: "scroll",
+            containerRef: { current: mockContainer },
+          }),
+        );
+
+        act(() => {
+          result.current.handleVolumeKey("down");
+        });
+        expect(scrollByMock).toHaveBeenCalledWith({
+          left: -255,
+          behavior: "smooth",
+        });
+
+        act(() => {
+          result.current.handleVolumeKey("up");
+        });
+        expect(scrollByMock).toHaveBeenCalledWith({
+          left: 255,
+          behavior: "smooth",
+        });
+      });
+
+      it("横書き（horizontal-tb）スクロール時、音量［ー］で縦スクロール（約85%）順方向へ進み、音量［＋］で逆方向へ戻ること (AC-RD-26)", () => {
+        const scrollByMock = vi.fn();
+        mockContainer.scrollBy = scrollByMock;
+        Object.defineProperty(mockContainer, "clientHeight", {
+          value: 500,
+          configurable: true,
+          writable: true,
+        });
+
+        const { result } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            writingMode: "horizontal-tb",
+            pagingMode: "scroll",
+            containerRef: { current: mockContainer },
+          }),
+        );
+
+        act(() => {
+          result.current.handleVolumeKey("down");
+        });
+        expect(scrollByMock).toHaveBeenCalledWith({
+          top: 425,
+          behavior: "smooth",
+        });
+
+        act(() => {
+          result.current.handleVolumeKey("up");
+        });
+        expect(scrollByMock).toHaveBeenCalledWith({
+          top: -425,
+          behavior: "smooth",
+        });
+      });
+
+      it("scrollBy が未定義の場合、scrollLeft / scrollTop が直接加減算されること", () => {
+        mockContainer.scrollBy =
+          undefined as unknown as typeof mockContainer.scrollBy;
+        mockContainer.scrollLeft = 0;
+
+        const { result } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            writingMode: "vertical-rl",
+            pagingMode: "scroll",
+            containerRef: { current: mockContainer },
+          }),
+        );
+
+        act(() => {
+          result.current.handleVolumeKey("down");
+        });
+        expect(mockContainer.scrollLeft).toBe(-255);
+
+        act(() => {
+          result.current.handleVolumeKey("up");
+        });
+        expect(mockContainer.scrollLeft).toBe(0);
+      });
+
+      it("スクロール末尾到達時、音量［ー］の1回目で「もう一度操作で次の話へ」が表示され、2.5秒以内の再操作で次話遷移すること (AC-RD-27)", () => {
+        const onNextChapter = vi.fn();
+        const { result } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            pagingMode: "scroll",
+            chapterIndex: 2,
+            totalChapters: 5,
+            onNextChapter,
+          }),
+        );
+
+        act(() => {
+          result.current.handleScrollProgressChange(1.0);
+        });
+
+        act(() => {
+          result.current.handleVolumeKey("down");
+        });
+        expect(onNextChapter).not.toHaveBeenCalled();
+        expect(result.current.boundaryHint).toBe("もう一度操作で次の話へ");
+
+        vi.advanceTimersByTime(1000);
+        act(() => {
+          result.current.handleVolumeKey("down");
+        });
+        expect(onNextChapter).toHaveBeenCalledTimes(1);
+        expect(result.current.boundaryHint).toBeNull();
+      });
+
+      it("スクロール先頭到達時、音量［＋］の1回目で「もう一度操作で前の話へ」が表示され、2.5秒以内の再操作で前話遷移すること (AC-RD-27)", () => {
+        const onPrevChapter = vi.fn();
+        const { result } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            pagingMode: "scroll",
+            chapterIndex: 2,
+            totalChapters: 5,
+            onPrevChapter,
+          }),
+        );
+
+        act(() => {
+          result.current.handleScrollProgressChange(0.0);
+        });
+
+        act(() => {
+          result.current.handleVolumeKey("up");
+        });
+        expect(onPrevChapter).not.toHaveBeenCalled();
+        expect(result.current.boundaryHint).toBe("もう一度操作で前の話へ");
+
+        vi.advanceTimersByTime(1000);
+        act(() => {
+          result.current.handleVolumeKey("up");
+        });
+        expect(onPrevChapter).toHaveBeenCalledTimes(1);
+        expect(result.current.boundaryHint).toBeNull();
+      });
+
+      it("最終話スクロール末尾での音量［ー］や第1話スクロール先頭での音量［＋］ではヒント表示も遷移もしないこと", () => {
+        const onNextChapter = vi.fn();
+        const { result: lastResult } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            pagingMode: "scroll",
+            chapterIndex: 5,
+            totalChapters: 5,
+            onNextChapter,
+          }),
+        );
+
+        act(() => {
+          lastResult.current.handleScrollProgressChange(1.0);
+          lastResult.current.handleVolumeKey("down");
+        });
+        expect(onNextChapter).not.toHaveBeenCalled();
+        expect(lastResult.current.boundaryHint).toBeNull();
+
+        const onPrevChapter = vi.fn();
+        const { result: firstResult } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            pagingMode: "scroll",
+            chapterIndex: 1,
+            totalChapters: 5,
+            onPrevChapter,
+          }),
+        );
+
+        act(() => {
+          firstResult.current.handleScrollProgressChange(0.0);
+          firstResult.current.handleVolumeKey("up");
+        });
+        expect(onPrevChapter).not.toHaveBeenCalled();
+        expect(firstResult.current.boundaryHint).toBeNull();
+      });
+    });
+  });
 });

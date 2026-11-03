@@ -106,6 +106,8 @@ export interface UseReaderResult {
   scrollProgress: number;
   pagingMode: ReaderPagingMode;
   effectivePagingMode: "paged" | "scroll";
+  /** ハードウェア音量キーページ送り有効フラグ（既定値: false、v0.6 Issue #203） */
+  enableVolumeKeyPaging: boolean;
   currentPage: number;
   totalPages: number;
   isLoading: boolean;
@@ -1010,6 +1012,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     scrollProgress,
     pagingMode,
     effectivePagingMode,
+    enableVolumeKeyPaging: false,
     currentPage,
     totalPages,
     isLoading,

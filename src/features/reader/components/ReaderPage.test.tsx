@@ -5,6 +5,8 @@ import { composeStories } from "@storybook/react";
 import * as stories from "./ReaderPage.stories";
 import { ReaderPage, type ReaderPageProps } from "./ReaderPage";
 import type { NovelRecord, ChapterRecord } from "../../../storage/types";
+import { ServiceProvider } from "../../../app/ServiceProvider";
+import { MockVolumeKeyBridge } from "../../../bridges/volume-key/mockVolumeKeyBridge";
 
 const {
   Default,
@@ -1508,6 +1510,219 @@ describe("ReaderPage", () => {
       expect(topOverlay).toHaveAttribute("aria-hidden", "true");
       expect(bottomOverlay).toHaveAttribute("aria-hidden", "true");
       expect(onScrollProgressChange).toHaveBeenCalled();
+    });
+  });
+
+  describe("ハードウェア音量キー操作連携（enableVolumeKeyPaging / AC-RD-26, AC-RD-27）", () => {
+    it("enableVolumeKeyPaging=true のとき volumeKeyBridge.setVolumeKeyPagingEnabled(true) が呼び出されリスナーが登録されること", () => {
+      const mockBridge = new MockVolumeKeyBridge();
+      const setEnabledSpy = vi.spyOn(mockBridge, "setVolumeKeyPagingEnabled");
+      const addListenerSpy = vi.spyOn(mockBridge, "addVolumeKeyListener");
+
+      const { unmount } = render(
+        <ServiceProvider services={{ volumeKeyBridge: mockBridge }}>
+          <ReaderPage
+            {...createDefaultProps({
+              enableVolumeKeyPaging: true,
+            })}
+          />
+        </ServiceProvider>,
+      );
+
+      expect(setEnabledSpy).toHaveBeenCalledWith(true);
+      expect(addListenerSpy).toHaveBeenCalled();
+
+      unmount();
+      expect(setEnabledSpy).toHaveBeenCalledWith(false);
+    });
+
+    it("enableVolumeKeyPaging=false のとき volumeKeyBridge.setVolumeKeyPagingEnabled(true) は呼び出されないこと", () => {
+      const mockBridge = new MockVolumeKeyBridge();
+      const setEnabledSpy = vi.spyOn(mockBridge, "setVolumeKeyPagingEnabled");
+      const addListenerSpy = vi.spyOn(mockBridge, "addVolumeKeyListener");
+
+      render(
+        <ServiceProvider services={{ volumeKeyBridge: mockBridge }}>
+          <ReaderPage
+            {...createDefaultProps({
+              enableVolumeKeyPaging: false,
+            })}
+          />
+        </ServiceProvider>,
+      );
+
+      expect(setEnabledSpy).not.toHaveBeenCalled();
+      expect(addListenerSpy).not.toHaveBeenCalled();
+    });
+
+    it("音量［ー］押下イベントで次ページスライドアニメーションが開始され200ms後に確定すること (AC-RD-26)", () => {
+      vi.useFakeTimers();
+      try {
+        const mockBridge = new MockVolumeKeyBridge();
+        const onPageChange = vi.fn();
+
+        render(
+          <ServiceProvider services={{ volumeKeyBridge: mockBridge }}>
+            <ReaderPage
+              {...createDefaultProps({
+                enableVolumeKeyPaging: true,
+                currentPage: 1,
+                totalPages: 3,
+                onPageChange,
+              })}
+            />
+          </ServiceProvider>,
+        );
+
+        act(() => {
+          mockBridge.triggerVolumeKey("down");
+        });
+
+        act(() => {
+          vi.advanceTimersByTime(200);
+        });
+
+        expect(onPageChange).toHaveBeenCalledWith(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("音量［＋］押下イベントで前ページスライドアニメーションが開始され200ms後に確定すること (AC-RD-26)", () => {
+      vi.useFakeTimers();
+      try {
+        const mockBridge = new MockVolumeKeyBridge();
+        const onPageChange = vi.fn();
+
+        render(
+          <ServiceProvider services={{ volumeKeyBridge: mockBridge }}>
+            <ReaderPage
+              {...createDefaultProps({
+                enableVolumeKeyPaging: true,
+                currentPage: 2,
+                totalPages: 3,
+                onPageChange,
+              })}
+            />
+          </ServiceProvider>,
+        );
+
+        act(() => {
+          mockBridge.triggerVolumeKey("up");
+        });
+
+        act(() => {
+          vi.advanceTimersByTime(200);
+        });
+
+        expect(onPageChange).toHaveBeenCalledWith(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("最終ページ到達時に音量［ー］の1回目で案内ヒントが表示され、2.5秒以内の2回目で onNextChapter が呼び出されること (AC-RD-27)", () => {
+      vi.useFakeTimers();
+      try {
+        const mockBridge = new MockVolumeKeyBridge();
+        const onNextChapter = vi.fn();
+
+        render(
+          <ServiceProvider services={{ volumeKeyBridge: mockBridge }}>
+            <ReaderPage
+              {...createDefaultProps({
+                enableVolumeKeyPaging: true,
+                currentPage: 3,
+                totalPages: 3,
+                chapterIndex: 1,
+                totalChapters: 3,
+                onNextChapter,
+              })}
+            />
+          </ServiceProvider>,
+        );
+
+        act(() => {
+          mockBridge.triggerVolumeKey("down");
+        });
+
+        expect(
+          screen.getByTestId("reader-episode-boundary-hint"),
+        ).toHaveTextContent("もう一度操作で次の話へ");
+        expect(onNextChapter).not.toHaveBeenCalled();
+
+        act(() => {
+          vi.advanceTimersByTime(1000);
+        });
+
+        act(() => {
+          mockBridge.triggerVolumeKey("down");
+        });
+
+        expect(onNextChapter).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("オーバーレイ展開中に音量キーイベントが発火した際、オーバーレイが自動で非表示になること (AC-RD-27)", () => {
+      const mockBridge = new MockVolumeKeyBridge();
+
+      render(
+        <ServiceProvider services={{ volumeKeyBridge: mockBridge }}>
+          <ReaderPage
+            {...createDefaultProps({
+              enableVolumeKeyPaging: true,
+              initialOverlayOpen: true,
+              currentPage: 1,
+              totalPages: 3,
+            })}
+          />
+        </ServiceProvider>,
+      );
+
+      expect(screen.getByTestId("reader-top-overlay")).toHaveAttribute(
+        "aria-hidden",
+        "false",
+      );
+
+      act(() => {
+        mockBridge.triggerVolumeKey("down");
+      });
+
+      expect(screen.getByTestId("reader-top-overlay")).toHaveAttribute(
+        "aria-hidden",
+        "true",
+      );
+    });
+
+    it("enableVolumeKeyPaging が true から false に切り替わった場合、リスナーが解除され setVolumeKeyPagingEnabled(false) が呼ばれること", () => {
+      const mockBridge = new MockVolumeKeyBridge();
+      const setEnabledSpy = vi.spyOn(mockBridge, "setVolumeKeyPagingEnabled");
+
+      const { rerender } = render(
+        <ServiceProvider services={{ volumeKeyBridge: mockBridge }}>
+          <ReaderPage
+            {...createDefaultProps({
+              enableVolumeKeyPaging: true,
+            })}
+          />
+        </ServiceProvider>,
+      );
+
+      expect(setEnabledSpy).toHaveBeenCalledWith(true);
+
+      rerender(
+        <ServiceProvider services={{ volumeKeyBridge: mockBridge }}>
+          <ReaderPage
+            {...createDefaultProps({
+              enableVolumeKeyPaging: false,
+            })}
+          />
+        </ServiceProvider>,
+      );
+
+      expect(setEnabledSpy).toHaveBeenCalledWith(false);
     });
   });
 });

@@ -8,6 +8,7 @@ import type {
   ReaderFontFamily,
 } from "../../../storage/types";
 import type { BottomTab } from "../../../shared/ui/BottomTabBar";
+import type { VolumeKeyBridge } from "../../../bridges/volume-key/types";
 import { ReaderView } from "./ReaderView";
 import { ReaderTopOverlay } from "./ReaderTopOverlay";
 import { ReaderBottomOverlay } from "./ReaderBottomOverlay";
@@ -39,6 +40,10 @@ export interface ReaderPageProps {
   initialScrollProgress: number;
   /** ページ送りモード（auto / paged / scroll、省略時: 'auto'） */
   pagingMode?: ReaderPagingMode;
+  /** ハードウェア音量キー送り有効フラグ（省略時: false、v0.6 Issue #203） */
+  enableVolumeKeyPaging?: boolean;
+  /** 音量キーブリッジ（省略時: ServiceContext より取得、v0.6 Issue #203） */
+  volumeKeyBridge?: VolumeKeyBridge;
   /** ページめくり表示時の現在ページ番号（省略時: 1） */
   currentPage?: number;
   /** ページめくり表示時の総ページ数（省略時: 1） */
@@ -97,6 +102,8 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
   pageMarginPx,
   initialScrollProgress,
   pagingMode = "auto",
+  enableVolumeKeyPaging: _enableVolumeKeyPaging = false,
+  volumeKeyBridge: _propsVolumeKeyBridge,
   currentPage = 1,
   totalPages = 1,
   isLoading,

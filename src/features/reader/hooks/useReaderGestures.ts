@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { WritingMode, ReaderPagingMode } from "../../../storage/types";
+import type { VolumeKeyDirection } from "../../../bridges/volume-key/types";
 import { resolveEffectivePagingMode } from "./useReader";
 
 export interface UseReaderGesturesOptions {
@@ -66,6 +67,8 @@ export interface UseReaderGesturesResult {
   handleWheel: (e: React.WheelEvent) => void;
   /** 連続スクロール用進捗通知ハンドラー（2段階判定トラッキング） */
   handleScrollProgressChange: (progress: number) => void;
+  /** ハードウェア音量キー操作ハンドラー（AC-RD-26, AC-RD-27, Issue #203） */
+  handleVolumeKey: (direction: VolumeKeyDirection) => void;
 }
 
 /**
@@ -687,5 +690,6 @@ export function useReaderGestures({
     handleMainClick,
     handleWheel,
     handleScrollProgressChange,
+    handleVolumeKey: () => {},
   };
 }
