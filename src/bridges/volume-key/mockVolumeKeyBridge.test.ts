@@ -199,5 +199,16 @@ describe("MockVolumeKeyBridge", () => {
           .__yommyVolumeKeyBridge,
       ).toBe(bridge);
     });
+
+    it("window が存在しない環境（SSR）でも例外なく初期化および destroy できること", () => {
+      vi.stubGlobal("window", undefined);
+      try {
+        const ssrBridge = new MockVolumeKeyBridge();
+        expect(ssrBridge.isVolumeKeyPagingEnabled()).toBe(false);
+        expect(() => ssrBridge.destroy()).not.toThrow();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
   });
 });
