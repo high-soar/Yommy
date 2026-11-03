@@ -37,6 +37,7 @@ export interface ReaderContainerProps {
  * 4. 下部タブ遷移時および OS バックキー（popstate）離脱時のスクロール進捗率自動保存（flushBookmark, AC-RD-08）
  * 5. 全画面テキスト表示化（AC-RD-09）
  * 6. ページ送りモード（auto / paged / scroll）とページネーション状態・コールバックの伝播（AC-RD-15, AC-RD-16, AC-RD-20）
+ * 7. 上部オーバーレイ「← 目次」押下時のしおり保存と作品詳細遷移（AC-RD-24, TR-06）
  */
 export const ReaderContainer: React.FC<ReaderContainerProps> = ({
   novelId,
@@ -46,6 +47,7 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
   onBackToBookshelf,
   onNavigateSettings,
   onNavigateChapter,
+  onBackToToc,
 }) => {
   const router = useRouter();
   const {
@@ -145,6 +147,19 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
     [updateScrollProgress],
   );
 
+  // 上部オーバーレイ「← 目次」押下時の目次復帰（しおり即時保存の上で作品詳細へ遷移、AC-RD-24, TR-06）
+  const handleBackToToc = useCallback(async () => {
+    await flushBookmark();
+    if (onBackToToc) {
+      onBackToToc();
+    } else {
+      const targetId = novelId ?? novel?.id;
+      if (targetId) {
+        router.navigateToNovelDetail(targetId);
+      }
+    }
+  }, [flushBookmark, novelId, novel?.id, onBackToToc, router]);
+
   return (
     <ReaderPage
       novel={novel}
@@ -170,6 +185,7 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
       onTotalPagesChange={setTotalPages}
       onScrollProgressChange={handleScrollProgressChange}
       onSelectTab={handleSelectTab}
+      onBackToToc={handleBackToToc}
     />
   );
 };

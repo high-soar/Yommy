@@ -1366,7 +1366,7 @@ describe("ReaderPage", () => {
       expect(topOverlay).toHaveAttribute("aria-hidden", "false");
     });
 
-    it("画面中央クリックで上下オーバーレイが同時に開閉トグルすること (AC-RD-22)", () => {
+    it("画面中央タップで上下オーバーレイが同時に開閉トグルすること (AC-RD-22)", () => {
       render(
         <ReaderPage
           {...createDefaultProps({
@@ -1385,14 +1385,12 @@ describe("ReaderPage", () => {
 
       // 中央タップ: 開
       Object.defineProperty(main, "clientWidth", {
-        value: 500,
+        value: 300,
         configurable: true,
+        writable: true,
       });
-      Object.defineProperty(main, "clientHeight", {
-        value: 800,
-        configurable: true,
-      });
-      fireEvent.click(main, { clientX: 250, clientY: 400 });
+      firePointer(main, "pointerdown", { clientX: 150, clientY: 100 });
+      firePointer(main, "pointerup", { clientX: 150, clientY: 100 });
 
       expect(topOverlay).toHaveAttribute("aria-hidden", "false");
       expect(topOverlay).toHaveClass("translate-y-0");
@@ -1400,7 +1398,8 @@ describe("ReaderPage", () => {
       expect(bottomOverlay).toHaveClass("translate-y-0");
 
       // 再タップ: 閉
-      fireEvent.click(main, { clientX: 250, clientY: 400 });
+      firePointer(main, "pointerdown", { clientX: 150, clientY: 100 });
+      firePointer(main, "pointerup", { clientX: 150, clientY: 100 });
       expect(topOverlay).toHaveAttribute("aria-hidden", "true");
       expect(bottomOverlay).toHaveAttribute("aria-hidden", "true");
     });
@@ -1421,15 +1420,13 @@ describe("ReaderPage", () => {
       expect(topOverlay).toHaveAttribute("aria-hidden", "true");
       expect(bottomOverlay).toHaveAttribute("aria-hidden", "true");
 
-      // タッチゾーンタップ（pointerdown + pointerup）
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 700 });
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 700 });
-
+      // キーボード（Enter）で展開
+      fireEvent.keyDown(touchZone, { key: "Enter" });
       expect(topOverlay).toHaveAttribute("aria-hidden", "false");
       expect(bottomOverlay).toHaveAttribute("aria-hidden", "false");
 
-      // キーボード（Enter）
-      fireEvent.keyDown(touchZone, { key: "Enter" });
+      // キーボード（Space）で閉じる
+      fireEvent.keyDown(touchZone, { key: " " });
       expect(topOverlay).toHaveAttribute("aria-hidden", "true");
       expect(bottomOverlay).toHaveAttribute("aria-hidden", "true");
     });
@@ -1439,7 +1436,7 @@ describe("ReaderPage", () => {
       const onNextChapter = vi.fn();
       const onScrollProgressChange = vi.fn();
 
-      const { rerender } = render(
+      render(
         <ReaderPage
           {...createDefaultProps({
             initialOverlayOpen: true,
@@ -1454,36 +1451,63 @@ describe("ReaderPage", () => {
 
       const topOverlay = screen.getByTestId("reader-top-overlay");
       const bottomOverlay = screen.getByTestId("reader-bottom-overlay");
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
       expect(topOverlay).toHaveAttribute("aria-hidden", "false");
       expect(bottomOverlay).toHaveAttribute("aria-hidden", "false");
 
-      // 前話ボタン押下
-      const prevBtn = screen.getByTestId("reader-bottom-nav-prev");
+      // 前話ボタン押下でオーバーレイが閉じる
+      const prevBtn = screen.getByTestId("reader-prev-chapter");
       fireEvent.click(prevBtn);
       expect(onPrevChapter).toHaveBeenCalledTimes(1);
       expect(topOverlay).toHaveAttribute("aria-hidden", "true");
       expect(bottomOverlay).toHaveAttribute("aria-hidden", "true");
 
-      // 再度オーバーレイを開いて次話ボタン押下
-      rerender(
-        <ReaderPage
-          {...createDefaultProps({
-            initialOverlayOpen: true,
-            chapterIndex: 2,
-            totalChapters: 3,
-            onPrevChapter,
-            onNextChapter,
-            onScrollProgressChange,
-          })}
-        />,
-      );
+      // タッチゾーン操作で再度開く
+      fireEvent.keyDown(touchZone, { key: "Enter" });
       expect(topOverlay).toHaveAttribute("aria-hidden", "false");
+      expect(bottomOverlay).toHaveAttribute("aria-hidden", "false");
 
-      const nextBtn = screen.getByTestId("reader-bottom-nav-next");
+      // 次話ボタン押下でオーバーレイが閉じる
+      const nextBtn = screen.getByTestId("reader-next-chapter");
       fireEvent.click(nextBtn);
       expect(onNextChapter).toHaveBeenCalledTimes(1);
       expect(topOverlay).toHaveAttribute("aria-hidden", "true");
       expect(bottomOverlay).toHaveAttribute("aria-hidden", "true");
+    });
+
+    it("連続スクロールモードでの本文スクロール時に上下オーバーレイが自動で閉じること", () => {
+      const onScrollProgressChange = vi.fn();
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            initialOverlayOpen: true,
+            pagingMode: "scroll",
+            writingMode: "horizontal-tb",
+            onScrollProgressChange,
+          })}
+        />,
+      );
+
+      const topOverlay = screen.getByTestId("reader-top-overlay");
+      const bottomOverlay = screen.getByTestId("reader-bottom-overlay");
+      expect(topOverlay).toHaveAttribute("aria-hidden", "false");
+      expect(bottomOverlay).toHaveAttribute("aria-hidden", "false");
+
+      const readerView = screen.getByTestId("reader-view");
+      Object.defineProperty(readerView, "scrollHeight", {
+        value: 2000,
+        configurable: true,
+      });
+      Object.defineProperty(readerView, "clientHeight", {
+        value: 1000,
+        configurable: true,
+      });
+      readerView.scrollTop = 500;
+      fireEvent.scroll(readerView);
+
+      expect(topOverlay).toHaveAttribute("aria-hidden", "true");
+      expect(bottomOverlay).toHaveAttribute("aria-hidden", "true");
+      expect(onScrollProgressChange).toHaveBeenCalled();
     });
   });
 });
