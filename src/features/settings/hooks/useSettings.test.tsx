@@ -91,7 +91,7 @@ describe("useSettings", () => {
             lineHeight: 2.0,
             pageMarginPx: 16,
             enableTapPaging: true,
-            enableVolumeKeyPaging: false,
+            enableVolumeKeyPaging: true,
             pagingMode: "paged",
             updatedAt: "2026-10-27T10:00:00Z",
           }),
@@ -114,6 +114,7 @@ describe("useSettings", () => {
       expect(result.current.fontSizePx).toBe(22);
       expect(result.current.lineHeight).toBe(2.0);
       expect(result.current.pageMarginPx).toBe(16);
+      expect(result.current.enableVolumeKeyPaging).toBe(true);
       expect(result.current.pagingMode).toBe("paged");
       expect(result.current.error).toBeNull();
     });
@@ -135,6 +136,7 @@ describe("useSettings", () => {
       expect(result.current.fontSizePx).toBe(18);
       expect(result.current.lineHeight).toBe(1.8);
       expect(result.current.pageMarginPx).toBe(20);
+      expect(result.current.enableVolumeKeyPaging).toBe(false);
       expect(getReaderSettings).not.toHaveBeenCalled();
     });
 
@@ -161,6 +163,7 @@ describe("useSettings", () => {
       expect(result.current.fontSizePx).toBe(18);
       expect(result.current.lineHeight).toBe(1.8);
       expect(result.current.pageMarginPx).toBe(20);
+      expect(result.current.enableVolumeKeyPaging).toBe(false);
       expect(result.current.error).toBeNull();
     });
   });
@@ -511,6 +514,66 @@ describe("useSettings", () => {
 
       expect(result.current.error).toBe("Page margin save error");
       expect(result.current.pageMarginPx).toBe(20);
+    });
+  });
+
+  describe("音量キーでページ送り切替 (toggleVolumeKeyPaging)", () => {
+    it("false と true を交互に切り替え、settingsRepository を更新すること (AC-ST-19)", async () => {
+      const updateReaderSettings = vi.fn().mockResolvedValue({});
+      const services = createMockServices({
+        settingsRepoOverrides: { updateReaderSettings },
+      });
+
+      const { result } = renderHook(() => useSettings(), {
+        wrapper: createWrapper(services),
+      });
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      expect(result.current.enableVolumeKeyPaging).toBe(false);
+
+      // false -> true
+      await act(async () => {
+        await result.current.toggleVolumeKeyPaging();
+      });
+
+      expect(result.current.enableVolumeKeyPaging).toBe(true);
+      expect(updateReaderSettings).toHaveBeenCalledWith({
+        enableVolumeKeyPaging: true,
+      });
+
+      // true -> false
+      await act(async () => {
+        await result.current.toggleVolumeKeyPaging();
+      });
+
+      expect(result.current.enableVolumeKeyPaging).toBe(false);
+      expect(updateReaderSettings).toHaveBeenCalledWith({
+        enableVolumeKeyPaging: false,
+      });
+    });
+
+    it("設定保存時に例外が発生した場合、エラーメッセージが設定され直前の enableVolumeKeyPaging にロールバックされること (AC-ST-07, AC-ST-19)", async () => {
+      const updateReaderSettings = vi
+        .fn()
+        .mockRejectedValue(new Error("Volume key paging save error"));
+      const services = createMockServices({
+        settingsRepoOverrides: { updateReaderSettings },
+      });
+
+      const { result } = renderHook(() => useSettings(), {
+        wrapper: createWrapper(services),
+      });
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.enableVolumeKeyPaging).toBe(false);
+
+      await act(async () => {
+        await result.current.toggleVolumeKeyPaging();
+      });
+
+      expect(result.current.error).toBe("Volume key paging save error");
+      expect(result.current.enableVolumeKeyPaging).toBe(false);
     });
   });
 

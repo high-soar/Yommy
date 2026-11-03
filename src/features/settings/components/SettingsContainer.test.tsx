@@ -48,6 +48,12 @@ describe("SettingsContainer", () => {
       // 画面余白の初期値: 20px (AC-ST-18)
       expect(screen.getByTestId("page-margin-value")).toHaveTextContent("20px");
 
+      // 音量キーでページ送りの初期値: false (AC-ST-19)
+      expect(screen.getByTestId("toggle-volume-key-paging")).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      );
+
       // SettingsPage への初期値 Props 反映 (R1-32)
       const page = screen.getByTestId("settings-page");
       expect(page).toHaveAttribute("data-writing-mode", "vertical-rl");
@@ -57,6 +63,7 @@ describe("SettingsContainer", () => {
       expect(page).toHaveAttribute("data-font-family", "biz-ud-mincho");
       expect(page).toHaveAttribute("data-page-margin", "20");
       expect(page).toHaveAttribute("data-paging-mode", "auto");
+      expect(page).toHaveAttribute("data-enable-volume-key-paging", "false");
     });
 
     it("組み方向切替ボタンを操作したとき、縦書きと横書きが相互に切り替わること (AC-ST-03)", async () => {
@@ -272,6 +279,38 @@ describe("SettingsContainer", () => {
         expect(screen.getByTestId("paging-mode-note")).toBeInTheDocument();
         expect(screen.getByTestId("paging-mode-note")).toHaveTextContent(
           "※横書き表示時は連続スクロール固定となります",
+        );
+      });
+    });
+
+    it("音量キーでページ送りトグルを操作したとき、設定が切り替わり永続化されること (AC-ST-19)", async () => {
+      const user = userEvent.setup();
+      render(<Default />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+      });
+
+      const volumeKeyToggle = screen.getByTestId("toggle-volume-key-paging");
+      expect(volumeKeyToggle).toHaveAttribute("aria-pressed", "false");
+
+      // false -> true
+      await user.click(volumeKeyToggle);
+      await waitFor(() => {
+        expect(volumeKeyToggle).toHaveAttribute("aria-pressed", "true");
+        expect(screen.getByTestId("settings-page")).toHaveAttribute(
+          "data-enable-volume-key-paging",
+          "true",
+        );
+      });
+
+      // true -> false
+      await user.click(volumeKeyToggle);
+      await waitFor(() => {
+        expect(volumeKeyToggle).toHaveAttribute("aria-pressed", "false");
+        expect(screen.getByTestId("settings-page")).toHaveAttribute(
+          "data-enable-volume-key-paging",
+          "false",
         );
       });
     });

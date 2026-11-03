@@ -33,6 +33,8 @@ export interface SettingsPageProps {
   fontFamily?: ReaderFontFamily;
   /** 現在の画面余白 px（省略時: 20、v0.5 Issue #169） */
   pageMarginPx?: number;
+  /** ハードウェア音量キー送り有効フラグ（省略時: false、v0.6 Issue #203） */
+  enableVolumeKeyPaging?: boolean;
   /** 現在のページ送りモード（省略時: "auto"、v0.4 Issue #122） */
   pagingMode?: ReaderPagingMode;
   /** 設定読み込み中フラグ（省略時: false） */
@@ -51,6 +53,8 @@ export interface SettingsPageProps {
   onChangePageMargin?: (marginPx: number) => void;
   /** ページ送りモード変更時のコールバック（v0.4 Issue #122） */
   onChangePagingMode?: (mode: ReaderPagingMode) => void;
+  /** 音量キー送りトグルボタン押下時のコールバック（v0.6 Issue #203） */
+  onToggleVolumeKeyPaging?: () => void;
   /** Google アカウント認証状態（v0.4） */
   cloudSyncAuthState?: CloudSyncAuthState;
   /** 最終同期完了日時（ISO 8601、v0.4） */
@@ -150,9 +154,15 @@ const THEME_OPTIONS: readonly ThemeOption[] = [
 const STEPPER_BUTTON_BASE =
   "w-9 h-9 flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-xs";
 
+const TOGGLE_SWITCH_BASE =
+  "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
+
+const TOGGLE_SWITCH_THUMB_BASE =
+  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out";
+
 /**
- * 設定画面（SCR-05）の Presentational コンポーネント（AC-ST-03, AC-ST-04, AC-ST-05, AC-ST-13）
- * ヘッダー、組版設定項目（組み方向・ページ送り・テーマ・文字サイズ・行間）、および組版プレビューを配置する
+ * 設定画面（SCR-05）の Presentational コンポーネント（AC-ST-03〜05, AC-ST-13, AC-ST-17〜19）
+ * ヘッダー、組版設定項目（組み方向・ページ送り・テーマ・フォント種別・文字サイズ・行間・画面余白・音量キー送り）、および組版プレビューを配置する
  */
 export const SettingsPage: React.FC<SettingsPageProps> = ({
   writingMode,
@@ -161,6 +171,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   lineHeight = 1.8,
   fontFamily = DEFAULT_FONT_FAMILY,
   pageMarginPx = DEFAULT_PAGE_MARGIN_PX,
+  enableVolumeKeyPaging = false,
   pagingMode = "auto",
   isLoading = false,
   error = null,
@@ -175,6 +186,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onChangeFontFamily,
   onChangePageMargin,
   onChangePagingMode,
+  onToggleVolumeKeyPaging,
   onSignInGoogle,
   onSignOutGoogle,
   onSyncNow,
@@ -231,6 +243,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       data-font-family={fontFamily}
       data-page-margin={pageMarginPx}
       data-paging-mode={pagingMode}
+      data-enable-volume-key-paging={enableVolumeKeyPaging ? "true" : "false"}
       data-cloud-sync-status={cloudSyncAuthState.status}
       data-is-loading={isLoading ? "true" : undefined}
       className={rootClasses}
@@ -511,6 +524,39 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 ＋
               </button>
             </div>
+          </div>
+
+          <div className="flex items-center justify-between py-3 border-b border-slate-200 dark:border-slate-800">
+            <div>
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                音量キーでページ送り
+              </span>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                音量［ー］で次へ、音量［＋］で前へ移動します
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              data-testid="toggle-volume-key-paging"
+              aria-label="音量キーでページ送り"
+              aria-checked={enableVolumeKeyPaging}
+              aria-pressed={enableVolumeKeyPaging}
+              disabled={isLoading}
+              onClick={onToggleVolumeKeyPaging}
+              className={`${TOGGLE_SWITCH_BASE} ${
+                enableVolumeKeyPaging
+                  ? "bg-blue-600"
+                  : "bg-slate-300 dark:bg-slate-700"
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`${TOGGLE_SWITCH_THUMB_BASE} ${
+                  enableVolumeKeyPaging ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
           </div>
         </section>
 
