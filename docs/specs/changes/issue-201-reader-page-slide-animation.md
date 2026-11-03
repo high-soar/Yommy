@@ -17,7 +17,6 @@ tags:
   - ho-26
 related_specs:
   - docs/specs/requirements.md
-  - docs/specs/architecture.md
   - docs/specs/screen-transitions.md
   - docs/specs/features/reader-view.md
 related_tests:
@@ -126,7 +125,6 @@ sequenceDiagram
 | :------------------------------------- | :-------------: | :----------------------------------------------------------------------------------------------------------------- |
 | `docs/specs/requirements.md`           | `Review (#201)` | 要件 `SYS-REQ-11` にタップおよびスワイプ離上時の 2段階水平スライドアニメーション、高速連打時の即時確定仕様を明記。 |
 | `docs/specs/screen-transitions.md`     | `Review (#201)` | `SCR-03` 小説リーダー画面の縦書きページめくり概要に、タップ・スワイプ完了時の視覚的スライド遷移を追記。            |
-| `docs/specs/architecture.md`           | `Review (#201)` | リーダー画面ジェスチャー・組版コンポーネント構成におけるスライドアニメーション・連打制御の責務を追記。             |
 | `docs/specs/features/reader-view.md`   | `Review (#201)` | セクション 3.4（`ReaderView`）、3.5（`ReaderPage`）、6（受入条件 `AC-RD-16`, `AC-RD-17`）を本仕様に合わせて更新。  |
 | `docs/quality/bug-and-handover-log.md` | `Review (#201)` | 申し送り事項 `HO-26`（Android 実機での水平スライドアニメーション滑らかさ・高速連打検証）を登録。                   |
 
