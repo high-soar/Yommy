@@ -19,6 +19,14 @@ export interface ReaderBottomOverlayProps {
   onNextChapter: () => void;
   /** 下部タブ選択時のコールバック */
   onSelectTab?: (tab: BottomTab) => void;
+  /** 実効ページ送りモード（'paged' または 'scroll'、省略時: 'scroll'） */
+  effectivePagingMode?: "paged" | "scroll";
+  /** ページめくり表示時の現在ページ番号（1始まり、省略時: 1） */
+  currentPage?: number;
+  /** ページめくり表示時の総ページ数（省略時: 1） */
+  totalPages?: number;
+  /** ページシークバー操作時のコールバック */
+  onPageChange?: (targetPage: number) => void;
 }
 
 interface ReaderTabItem {

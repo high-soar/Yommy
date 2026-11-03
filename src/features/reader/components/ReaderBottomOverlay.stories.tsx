@@ -21,6 +21,7 @@ const meta: Meta<typeof ReaderBottomOverlay> = {
     onPrevChapter: fn(),
     onNextChapter: fn(),
     onSelectTab: fn(),
+    onPageChange: fn(),
   },
 };
 
@@ -124,5 +125,66 @@ export const SettingsTabActive: Story = {
     chapterIndex: 2,
     totalChapters: 5,
     activeTab: "settings",
+  },
+};
+
+/**
+ * 縦書きページめくり表示時（シークバー表示・全5ページ中2ページ目）
+ */
+export const PagedWithSeekbar: Story = {
+  name: "ページめくり（シークバー表示・2/5ページ）",
+  args: {
+    isOpen: true,
+    chapterIndex: 2,
+    totalChapters: 5,
+    effectivePagingMode: "paged",
+    currentPage: 2,
+    totalPages: 5,
+  },
+};
+
+/**
+ * 縦書きページめくり表示・単一ページ（シークバー無効化）
+ */
+export const PagedSinglePage: Story = {
+  name: "ページめくり（単一ページ・シークバー無効）",
+  args: {
+    isOpen: true,
+    chapterIndex: 2,
+    totalChapters: 5,
+    effectivePagingMode: "paged",
+    currentPage: 1,
+    totalPages: 1,
+  },
+};
+
+/**
+ * 縦書きページめくり表示・通信中（シークバー無効化）
+ */
+export const PagedLoading: Story = {
+  name: "ページめくり（通信中・シークバー無効）",
+  args: {
+    isOpen: true,
+    chapterIndex: 2,
+    totalChapters: 5,
+    isLoading: true,
+    effectivePagingMode: "paged",
+    currentPage: 2,
+    totalPages: 5,
+  },
+};
+
+/**
+ * 連続スクロールモード（シークバー非表示）
+ */
+export const ScrollMode: Story = {
+  name: "連続スクロール（シークバー非表示）",
+  args: {
+    isOpen: true,
+    chapterIndex: 2,
+    totalChapters: 5,
+    effectivePagingMode: "scroll",
+    currentPage: 1,
+    totalPages: 5,
   },
 };
