@@ -64,9 +64,9 @@ const READER_TABS: ReaderTabItem[] = [
 ];
 
 /**
- * 前後話ナビゲーションと4タブバー（本棚/検索/ランキング/設定）を統合したスライドインオーバーレイ（Presentational）
+ * ページシークバー（RTL）、前後話ナビゲーション、および4タブバー（本棚/検索/ランキング/設定）を統合したスライドインオーバーレイ（Presentational）
  *
- * 画面最下部タッチでスライドイン表示され、読書没入感を保ちつつ素早いナビゲーションを提供する。
+ * 画面最下部タッチや中央タップでスライドイン表示され、読書没入感を保ちつつ素早いページシーク・エピソード遷移・ナビゲーションを提供する。
  */
 export const ReaderBottomOverlay: React.FC<ReaderBottomOverlayProps> = ({
   isOpen,
@@ -77,6 +77,10 @@ export const ReaderBottomOverlay: React.FC<ReaderBottomOverlayProps> = ({
   onPrevChapter,
   onNextChapter,
   onSelectTab,
+  effectivePagingMode = "scroll",
+  currentPage = 1,
+  totalPages = 1,
+  onPageChange,
 }) => {
   return (
     <div
@@ -87,7 +91,36 @@ export const ReaderBottomOverlay: React.FC<ReaderBottomOverlayProps> = ({
         isOpen ? "translate-y-0" : "translate-y-full pointer-events-none"
       }`}
     >
-      {/* 上段: 前後話ナビゲーション */}
+      {/* 最上段: ページシークバー領域（paged モード時のみ描画） */}
+      {effectivePagingMode === "paged" && (
+        <div
+          data-testid="reader-page-seekbar-section"
+          className="px-3 pt-2.5 pb-0 max-w-4xl mx-auto w-full flex flex-col gap-1"
+        >
+          <div className="flex justify-end items-center text-xs">
+            <span
+              data-testid="reader-page-seekbar-label"
+              className="font-medium text-zinc-600 dark:text-zinc-300 select-none"
+            >
+              {currentPage} / {totalPages} ページ
+            </span>
+          </div>
+          <input
+            type="range"
+            data-testid="reader-page-seekbar"
+            dir="rtl"
+            min={1}
+            max={totalPages}
+            value={currentPage}
+            disabled={totalPages <= 1 || isLoading}
+            onChange={(e) => onPageChange?.(Number(e.target.value))}
+            aria-label="ページ位置シークバー"
+            className="w-full h-2 bg-zinc-200 dark:bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-emerald-600 dark:accent-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed"
+          />
+        </div>
+      )}
+
+      {/* 中段: 前後話ナビゲーション */}
       <div className="p-3 pb-2 max-w-4xl mx-auto w-full">
         <ReaderChapterNav
           chapterIndex={chapterIndex}
