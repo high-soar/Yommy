@@ -347,9 +347,9 @@ src/features/reader/
      - 総ページ数 $P_{total}$、現在ページ $P_{current}$（1始まり）のとき：
        - 進捗率算出: `progress = totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0`
        - ページ復元: `targetPage = totalPages > 1 ? Math.round(clampedInitialProgress * (totalPages - 1)) + 1 : 1`
-  4. **位置復元の発火トリガー条件とスクロール境界同期（`R1-18`）**:
+  4. **位置復元の発火トリガー条件（`R1-18`）**:
      - マウント時、および `initialScrollProgress`・`bodyHtml`（エピソード切替時）・`writingMode`（縦書き/横書き切替時）・`pagingMode`（ページ送りモード切替時）のいずれかが変化したタイミングで、進捗率に基づく位置復元を実行する。
-     - 連続スクロールモード（`!isPaged`）での位置復元完了直後（および 1 画面内に全文が収まる短文 `maxScroll <= 0` の場合）にも `handleScroll()` を同期実行して `onScrollProgressChange(progress)` を通知し、`useReaderGestures` のスクロール端到達フラグ（`reachedStartRef` / `reachedEndRef`）を即座に同期させる。なお `maxScroll <= 0`（スクロールバーが発生しない短文）のときは先頭かつ末尾に到達しているものとして両端の 2 段階遷移を有効とする。
+     - なお、連続スクロールモード（`!isPaged`）で初期表示直後（`scroll` イベント未発火時）や 1 画面内に全文が収まる短文（`maxScroll <= 0`）の場合でも端での 2 段階遷移が確実に動作するよう、`useReaderGestures` 側の `syncScrollBoundaryState()` により各操作開始時（ポインター・タッチ・ホイール・音量キー）に実 DOM のスクロール位置および `maxScroll <= 0` から先頭・末尾到達フラグ（`reachedStartRef` / `reachedEndRef`）を同期評価する。
 
 ---
 
@@ -445,10 +445,10 @@ src/features/reader/
 - **最下部タッチゾーン**:
   - 実効 `"scroll"` モード時: 画面最下部（下端約 72px、全幅 `left-0 right-0`）のタップ操作によりオーバーレイ開閉をトグルする。
   - 実効 `"paged"` モード時: 左右端 20%（`left-0 w-[20%]` / `right-0 w-[20%]`）の次/前ページめくりタップ領域とのイベント競合・誤動作を解消するため、最下部タッチゾーンを画面中央 60%（`left-[20%] right-[20%]`）に制限して配置する。
-- **ジェスチャータイマークリーンアップおよび話数・モード切替時の状態リセット（`useReaderGestures`：`R1-18`, `R1-19`）**:
+- **ジェスチャータイマークリーンアップおよび話数・モード切替時の状態リセット・スクロール境界同期（`useReaderGestures`：`R1-18`, `R1-19`）**:
   - ページ送りアニメーション完了タイマー（`animationTimerRef`）、境界ヒント自動消去タイマー（`boundaryTapTimerRef`, `scrollBoundaryTimerRef`）を保持し、再操作時およびコンポーネントアンマウント時に `clearTimeout` による確実な破棄を行う。
-  - エピソード切替（`chapterIndex` 変化）または実効ページ送りモード切替（`isPaged` 変化）が発生した際は、進行中の `animationTimerRef` や境界タイマーを即座にクリアし、`pendingTargetPageRef`、`lastTargetPageRef`、`isAnimating`、`slideOffsetPx`、`boundaryHint`、およびスクロール端到達フラグ（`reachedStartRef` / `reachedEndRef` / `wasAtStartOnDownRef` / `wasAtEndOnDownRef`）をすべて初期状態（`initialScrollProgress <= 0` で先頭到達、`>= 1` で末尾到達）へリセットすることで、旧エピソードの遅延タイマー発火によるページ位置上書き競合（`R1-19`）や境界状態の持ち越し（`R1-18`）を防止する。
-  - また連続スクロールモードにおいて `triggerVolumeKeyBoundary` により 2 回目押下で前後話遷移が確定した際にも、境界タイマーおよび端到達フラグを即座にリセットする。
+  - エピソード切替（`chapterIndex` 変化）または実効ページ送りモード切替（`isPaged` 変化）が発生した際は、進行中の `animationTimerRef` や境界タイマーを即座にクリアし、`pendingTargetPageRef`、`lastTargetPageRef`、`isAnimating`、`slideOffsetPx`、`boundaryHint`、およびスクロール端到達フラグ（`reachedStartRef` / `reachedEndRef` / `wasAtStartOnDownRef` / `wasAtEndOnDownRef`）をすべて初期状態（`false`）へリセットすることで、旧エピソードの遅延タイマー発火によるページ位置上書き競合（`R1-19`）や境界状態の持ち越し（`R1-18`）を防止する。
+  - 連続スクロールモード（`!isPaged`）においては、`syncScrollBoundaryState()` により各操作開始時（`handlePointerDown`, `handleTouchStart`, `handleWheel`, `handleVolumeKey`）に `getScrollElement()` の実 DOM 座標（および 1 画面短文 `maxScroll <= 0` の両端到達判定）から `reachedStartRef` / `reachedEndRef` を同期し、`scroll` イベント発火前の初期状態でも端での 2 段階遷移が確実に発動するようにする。また `triggerVolumeKeyBoundary` により 2 回目押下で前後話遷移が確定した際にも、境界タイマーおよび端到達フラグ（`reachedStartRef` / `reachedEndRef`）を即座に `false` へリセットする。
 - **自動非表示（Auto-Hide）**:
   - オーバーレイ表示中に「本文エリアのスクロール／ページ送り操作」「本文エリアの再タップ」「前後話への移動」が行われた場合は、自動的にオーバーレイを閉じる（※シークバー操作時は除く）。
 - **メイン表示領域の排他描画ルール**:
