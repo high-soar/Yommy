@@ -68,7 +68,8 @@ docs/
         ├── v0.2-ui-ux.md              # Milestone v0.2（UI/UX 刷新 ＆ 開発基盤整備）品質分析・改善レポート
         ├── v0.3-search-prefetch.md    # Milestone v0.3（検索/ランキング・先読みキャッシュ・更新チェック ＆ 実機基盤改善）品質分析・改善レポート
         ├── v0.4-cloud-sync-reader-ux.md # Milestone v0.4（クラウド同期・ページめくり・リーダーUI改善）品質分析・改善レポート
-        └── v0.5-reader-customization-and-cache.md # Milestone v0.5（縦書きリーダー組版・設定・キャッシュ管理）品質分析・改善レポート
+        ├── v0.5-reader-customization-and-cache.md # Milestone v0.5（縦書きリーダー組版・設定・キャッシュ管理）品質分析・改善レポート
+        └── v0.6-reader-animation-overlay-and-volume-key.md # Milestone v0.6（リーダーページ送りアニメーション・上下連動オーバーレイ＆シークバー・音量キー送り）品質分析・改善レポート
 ```
 
 > [!NOTE]
