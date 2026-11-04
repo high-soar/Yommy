@@ -3,7 +3,7 @@ type: spec-feature
 title: "小説リーダー画面仕様書（SCR-03: Novel Reader）"
 description: "小説本文の全画面（100dvh）縦書き・横書き組版表示、ページめくり（タップ/Kindle様式スワイプ送り）と連続スクロール切替、ハードウェア音量キー操作連携、エピソード端シームレス遷移、上下連動オーバーレイ（ReaderTopOverlay: 作品名・サブタイトル1行固定省略・目次導線 / ReaderBottomOverlay: RTLページシークバー・前後話ナビ・下部タブ）、ルビ・傍点描画、4カラーテーマ・文字サイズ・行間設定の永続化、前後エピソード遷移、未キャッシュ話のオンデマンド取得、既読・しおり・進捗率の自動保存/復元、およびSCN-01統合シナリオの正本仕様。"
 status: "Approved"
-updated: "2026-11-04"
+updated: "2026-11-05"
 tags:
   - reader
   - scr-03
@@ -321,7 +321,7 @@ src/features/reader/
     - 紙の本と同じように **左から右へのスワイプ（`dx > 0`, `slideOffsetPx > 0`）または画面左端約 20% タップで左側の次ページが画面内に水平スライドイン** する。スライドアニメーション中（`isAnimating === true`）は `transition: left 200ms ease-out` で滑らかに遷移し、ドラッグ中およびアニメーション完了時のリセット時（`isAnimating === false`）は `transition: none` とすることで、逆戻りアニメーションや視覚的ジャンプを排除して滑らかに中央スロットへ引き継ぐ（R1-28, R1-29, v0.6 Issue #201）。
     - 画面隅に控えめなページインジケーター（`data-testid="reader-page-indicator"`、例: `3 / 12`）を表示する。組み方向に関わらず常に水平表記とするため `writing-mode: horizontal-tb` を固定適用し、縦書き時における画面外クリップ・テキスト途切れを防止する。
     - 総ページ数 `totalPages` は、マルチカラム要素の `scrollHeight`（`Math.max(1, Math.round((scrollHeight + pageMarginPx * 2) / pageHeight))`）から算出し、話数遷移直後・しおり復元時・2ページ目以降のリサイズ時にも総ページ数が縮小しないことを保証する（R1-28, R1-29）。
-    - 画面回転やウィンドウリサイズ発生時は、`window.addEventListener("resize", ...)` に連動して総ページ数（`totalPages`）の再計測（`onTotalPagesChange`）を自動実行し、レイアウト変更に即座に追従する。また、`bodyHtml`・`chapterTitle`・`initialScrollProgress`・`writingMode`・`fontSizePx`・`lineHeight`・`fontFamily`・`pageMarginPx` の変化時やコンテナ寸法変化時にも総ページ数を再評価し、エピソード遷移直後のページ位置復元（末尾ページ復元等）を確実に発火させる（R2-04, R1-23）。
+    - 画面回転やウィンドウリサイズ発生時は、`window.addEventListener("resize", ...)` に連動して総ページ数（`totalPages`）の再計測（`onTotalPagesChange`）を自動実行し、レイアウト変更に即座に追従する。また、初回マウント時（`containerRef` 接続直後の初回計測時）には実 DOM の `clientWidth` / `clientHeight` からスロット本文の幅・高さ（`width: Math.max(1, currentWidth - pageMarginPx * 2)px`, `height: Math.max(1, currentHeight - pageMarginPx * 2)px`）を即座に適用した上で `scrollHeight` を計測して 0px 幅レイアウトによる過大ページ数算出を防ぎ、さらに `bodyHtml`・`chapterTitle`・`initialScrollProgress`・`writingMode`・`fontSizePx`・`lineHeight`・`fontFamily`・`pageMarginPx`・`containerWidth`・`containerHeight` の変化時にも総ページ数を再評価し、エピソード遷移や別画面からのリーダー再遷移直後のページ位置復元を確実に発火させる（R2-04, R1-23, R1-26）。
     - 実効 `paged` モードで再開・ページ遷移した際は、スクロール位置（`scrollLeft` / `scrollTop`）を `0` にリセットし、`restoreScrollPosition` は実効 `!isPaged`（連続スクロールモード）のみに限定して実行することで、`scrollLeft` とスライドによる二重変位バグを防止する。
 - **連続スクロール仕様（実効 `"scroll"` 時）**:
   - 縦書き時: CSS `writing-mode: vertical-rl`、`text-orientation: mixed`、水平スクロール（`overflow-x-auto overflow-y-hidden`）。
@@ -553,7 +553,7 @@ export interface UseReaderResult {
    - また「次の話へ」遷移（`TR-05`）実行時にも、現在話に対して `chapterRepository.markChapterRead(targetNovel.id, currentChapterIndex, true)` を確実に実行する。
 4. **しおり（`bookmark_chapter_index`）と進捗率（`bookmark_scroll_progress`）の復元・自動保存（`SYS-REQ-12`, `TR-06`）**:
    - **エピソード表示開始時**:
-     - `targetNovel.bookmarkChapterIndex === targetChapterIndex`（保存済みしおり話と一致する場合）: 保存済みの `targetNovel.bookmarkScrollProgress`（`0.0 〜 1.0`）を `initialScrollProgress` および `scrollProgress` にセットして位置を復元する。実効 `"paged"` モード時は初回 `setTotalPages(validTotal)` 計測時に `targetPage = validTotal > 1 ? Math.round(initialScrollProgress * (validTotal - 1)) + 1 : 1` で現在ページを復元する（初回計測以降の総ページ数変更時は現在ページ位置を維持し範囲外クランプのみ行う）。
+     - `targetNovel.bookmarkChapterIndex === targetChapterIndex`（保存済みしおり話と一致する場合）: 保存済みの `targetNovel.bookmarkScrollProgress`（`0.0 〜 1.0`）を `initialScrollProgress` および `scrollProgress` にセットして位置を復元する。実効 `"paged"` モード時は、**ユーザーがページ移動操作（`goToPage` / `nextPage` / `prevPage`）を行うまでの初期レイアウト・フォント計測期間中（`!hasUserChangedPageRef.current`）に呼び出されるすべての `setTotalPages(validTotal)` において**、`targetPage = validTotal > 1 ? Math.round(initialScrollProgress * (validTotal - 1)) + 1 : 1` で現在ページを再算出し復元する（これにより初回仮計測後の `requestAnimationFrame` や `document.fonts.ready` 等による確定総ページ数通知時にも、中間ページが最終ページや先頭ページへ化けることなく正確に復元される：`R1-26`, `AC-RD-20`）。ユーザーが一度でもページ移動操作を行った後（`hasUserChangedPageRef.current === true`）の総ページ数変更時（ウィンドウリサイズ等）は、初期進捗率への巻き戻しを行わず現在ページ位置を維持し範囲外クランプのみ行う。
      - `targetNovel.bookmarkChapterIndex !== targetChapterIndex`（別話を開いた場合、または前後話遷移 `TR-05` 時）: `initialScrollProgress = 0`, `scrollProgress = 0`, `currentPage = 1` にセットし、直ちに `novelRepository.updateBookmark(targetNovel.id, targetChapterIndex, 0)` を実行してしおりを現在話の先頭へ更新する。
    - **スクロール／ページめくり操作時および画面離脱時**:
      - ユーザースクロール時またはページ遷移時（`goToPage(targetPage)` / `nextPage()` / `prevPage()`）、算出された進捗率 `progress = totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0`（`0.0 〜 1.0`）で `scrollProgress` を更新し、`novelRepository.updateBookmark(novel.id, chapterIndex, clampedProgress)` で DB へ自動保存する。
