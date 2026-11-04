@@ -237,4 +237,60 @@ describe("Android ビルド設定および署名・バージョン管理検証 (
       expect(content).toMatch(/multipart\/related/);
     });
   });
+
+  describe("VolumeKeyPlugin.java および MainActivity.java 音量キー連携検証 (AC-RD-26, Issue #203)", () => {
+    const volumeKeyPluginPath = path.resolve(
+      rootDir,
+      "android/app/src/main/java/com/yommy/app/VolumeKeyPlugin.java",
+    );
+    const mainActivityPath = path.resolve(
+      rootDir,
+      "android/app/src/main/java/com/yommy/app/MainActivity.java",
+    );
+
+    it('VolumeKeyPlugin.java が存在し、@CapacitorPlugin(name = "VolumeKey") が定義されていること', () => {
+      expect(fs.existsSync(volumeKeyPluginPath)).toBe(true);
+      const content = fs.readFileSync(volumeKeyPluginPath, "utf-8");
+
+      expect(content).toMatch(
+        /@CapacitorPlugin\s*\(\s*name\s*=\s*"VolumeKey"\s*\)/,
+      );
+    });
+
+    it("VolumeKeyPlugin.java が volatile volumeKeyPagingEnabled を持ち、load() と handleOnDestroy() の双方で false に初期化していること (R1-03)", () => {
+      const content = fs.readFileSync(volumeKeyPluginPath, "utf-8");
+
+      expect(content).toMatch(
+        /private\s+static\s+volatile\s+boolean\s+volumeKeyPagingEnabled\s*=\s*false\s*;/,
+      );
+      expect(content).toMatch(
+        /public\s+void\s+load\s*\(\s*\)\s*\{[\s\S]*?volumeKeyPagingEnabled\s*=\s*false\s*;/,
+      );
+      expect(content).toMatch(
+        /protected\s+void\s+handleOnDestroy\s*\(\s*\)\s*\{[\s\S]*?volumeKeyPagingEnabled\s*=\s*false\s*;/,
+      );
+    });
+
+    it("MainActivity.java の onCreate 内で registerPlugin(VolumeKeyPlugin.class) が登録されていること", () => {
+      expect(fs.existsSync(mainActivityPath)).toBe(true);
+      const content = fs.readFileSync(mainActivityPath, "utf-8");
+
+      expect(content).toMatch(
+        /onCreate\s*\([\s\S]*?registerPlugin\s*\(\s*VolumeKeyPlugin\.class\s*\)/,
+      );
+    });
+
+    it("MainActivity.java の dispatchKeyEvent で音量キーと VolumeKeyPlugin.isVolumeKeyPagingEnabled()、getRepeatCount() == 0 を判定していること", () => {
+      const content = fs.readFileSync(mainActivityPath, "utf-8");
+
+      expect(content).toMatch(
+        /public\s+boolean\s+dispatchKeyEvent\s*\(\s*KeyEvent\s+event\s*\)/,
+      );
+      expect(content).toMatch(/KeyEvent\.KEYCODE_VOLUME_DOWN/);
+      expect(content).toMatch(/KeyEvent\.KEYCODE_VOLUME_UP/);
+      expect(content).toMatch(/VolumeKeyPlugin\.isVolumeKeyPagingEnabled\(\)/);
+      expect(content).toMatch(/KeyEvent\.ACTION_DOWN/);
+      expect(content).toMatch(/event\.getRepeatCount\(\)\s*==\s*0/);
+    });
+  });
 });
