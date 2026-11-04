@@ -37,6 +37,7 @@ tags:
 related_specs:
   - docs/specs/changes/archive/issue-203-volume-key-paging.md
   - docs/specs/changes/archive/issue-202-reader-top-overlay-and-seekbar.md
+  - docs/specs/changes/archive/issue-201-reader-page-slide-animation.md
   - docs/specs/changes/archive/issue-169-font-and-margin-customization.md
   - docs/specs/changes/archive/issue-170-cache-management-and-capacity-visualization.md
   - docs/specs/changes/archive/issue-168-reader-pagination-and-touch-refinement.md
@@ -77,8 +78,10 @@ related_tests:
   - src/bridges/app/index.test.ts
   - src/bridges/volume-key/mockVolumeKeyBridge.test.ts
   - src/bridges/volume-key/capacitorVolumeKeyBridge.test.ts
+  - src/bridges/volume-key/index.test.ts
   - src/bridges/cloud-sync/capacitorCloudSyncBridge.test.ts
   - src/bridges/cloud-sync/mockCloudSyncBridge.test.ts
+  - src/bridges/cloud-sync/index.test.ts
   - src/features/cloud-sync/services/syncEngine.test.ts
   - src/storage/repositories/appSettingsRepository.test.ts
   - src/storage/repositories/chapterRepository.test.ts
@@ -194,10 +197,10 @@ Yommy/
     ├── features/                      # 【3. Viewer & UI Layer（画面・機能別モジュール）】
     │   ├── bookshelf/                 # SCR-01: 本棚一覧（空状態での検索/ランキング誘導・更新チェック・ソート）
     │   ├── novel-detail/              # SCR-02: 作品詳細・目次一覧・取得操作・一括キャッシュ
-    │   ├── reader/                    # SCR-03: 小説リーダー（全画面100dvh・最下部タッチオーバーレイ・縦書きCSSマルチカラム組版・touch-action制御・ページめくり・スクロール前後話ボタン・ルビ・しおり保存）
+    │   ├── reader/                    # SCR-03: 小説リーダー（全画面100dvh・上下連動オーバーレイ＆RTLシークバー・縦書きCSSマルチカラム組版・2段階水平スライドアニメーション・音量キー送り・ルビ・しおり保存）
     │   ├── search/                    # SCR-06: 検索画面（カクヨム作品検索・カードから本棚追加・SCR-02遷移）
     │   ├── ranking/                   # SCR-07: ランキング画面（期間/ジャンル別ランキング・カードから本棚追加・SCR-02遷移）
-    │   ├── settings/                  # SCR-05: 設定画面（組版・テーマ設定・サンプル文章プレビュー・クラウド同期連携）
+    │   ├── settings/                  # SCR-05: 設定画面（組版・テーマ・フォント・余白・音量キー送り設定・サンプル文章プレビュー・クラウド同期・キャッシュ管理）
     │   └── cloud-sync/                # クラウド同期（Google Drive appDataFolder・SyncEngine）（Issue #120）
     │       ├── types.ts               # YommySyncState, SyncNovelData 等の同期データ型定義
     │       └── services/              # スキーマ検証・競合マージ・デバウンス同期エンジン
@@ -824,7 +827,7 @@ export interface VolumeKeyEvent {
   direction: VolumeKeyDirection;
 }
 
-export type VolumeKeyListener = (event: VolumeKeyEvent) => void;
+export type VolumeKeyListener = (event: VolumeKeyEvent) => void | Promise<void>;
 
 export interface VolumeKeyBridge {
   /**
@@ -847,7 +850,8 @@ export interface VolumeKeyBridge {
 
 1. **`VolumeKeyPlugin`**:
    - Capacitor プラグイン（`@CapacitorPlugin(name = "VolumeKey")`）として実装。
-   - `setVolumeKeyPagingEnabled`: Web 側からの有効/無効状態を保持。
+   - `setVolumeKeyPagingEnabled`: Web 側からの有効/無効状態を `private static volatile boolean volumeKeyPagingEnabled` に保持。
+   - **ライフサイクル初期化・破棄保護（`R1-03`）**: `load()`（プラグイン初期化・WebView リロード時）および `handleOnDestroy()`（Activity 破棄・画面回転による再生成時）において必ず `volumeKeyPagingEnabled = false` にリセットし、Web 側の `cleanup` が呼ばれる前に Activity 再生成やリロードが発生した場合でも、リーダー外画面で音量キーが誤ってインターセプトされ続ける状態リークを防止する。
    - `onVolumeKeyDown(direction)`: `notifyListeners("volumeKeyEvent", { direction })` により Web 側リスナーへ非同期通知。
 2. **`MainActivity`（`dispatchKeyEvent` インターセプト）**:
    - `dispatchKeyEvent(KeyEvent event)` をオーバーライドし、`KEYCODE_VOLUME_DOWN` または `KEYCODE_VOLUME_UP` を捕捉。
@@ -857,7 +861,7 @@ export interface VolumeKeyBridge {
    - `VolumeKeyPlugin.isVolumeKeyPagingEnabled()` が `false`（または音量キー以外）の場合は `super.dispatchKeyEvent(event)` を呼び出し、OS 標準の音量調整として透過的に動作させる。
 3. **ブラウザ／テスト用モック（`MockVolumeKeyBridge`）**:
    - `triggerVolumeKey(direction)` メソッドを提供し、UT や Playwright IT で決定論的に音量キーイベントを発火可能にする。
-   - Web 実行時の利便性としてキーボードイベント（`VolumeDown` / `VolumeUp`、フォールバック `ArrowDown` / `ArrowUp`）との連動もサポート。
+   - Web 実行時の利便性として、`enabled === true` の間のみ `window` の `keydown` イベントでハードウェア音量キーコード（`AudioVolumeDown` / `VolumeDown` → `direction: "down"`、`AudioVolumeUp` / `VolumeUp` → `direction: "up"`）を捕捉し、登録済みリスナーへ通知する。
 
 ---
 

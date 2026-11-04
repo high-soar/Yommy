@@ -624,7 +624,8 @@ describe("ReaderContainer", () => {
   });
 
   describe("OS バックキーおよび画面離脱時のしおり自動保存 (AC-RD-08, TR-06)", () => {
-    it("popstate イベント（OS バックキー操作）発生時に flushBookmark が実行されること", async () => {
+    it("popstate イベント（OS バックキー操作）発生時に flushBookmark が実行されること (R1-11)", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -640,14 +641,23 @@ describe("ReaderContainer", () => {
 
       await waitFor(() => {
         expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
         expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
       });
 
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 20));
+      });
       updateBookmarkSpy.mockClear();
 
       await act(async () => {
         window.dispatchEvent(new PopStateEvent("popstate"));
-        await new Promise((r) => setTimeout(r, 50));
       });
 
       await waitFor(
@@ -658,7 +668,8 @@ describe("ReaderContainer", () => {
       );
     }, 15000);
 
-    it("コンポーネントのアンマウント時に flushBookmark が実行されること", async () => {
+    it("コンポーネントのアンマウント時に flushBookmark が実行されること (R1-11)", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -674,9 +685,19 @@ describe("ReaderContainer", () => {
 
       await waitFor(() => {
         expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
         expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
       });
 
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 20));
+      });
       updateBookmarkSpy.mockClear();
 
       unmount();
@@ -1105,7 +1126,7 @@ describe("ReaderContainer", () => {
       });
     });
 
-    it("ReaderPage に渡された onTotalPagesChange が呼ばれた際、totalPages が更新されること", async () => {
+    it("ReaderPage に渡された onTotalPagesChange が呼ばれた際、totalPages が更新されること (R1-11)", async () => {
       const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -1121,6 +1142,15 @@ describe("ReaderContainer", () => {
 
       await waitFor(() => {
         expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ isLoading: false }),
+          undefined,
+        );
+      });
+
+      // ReaderView の初期 100ms 計測タイマーが完了するのを待機して競合上書きを防止
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 120));
       });
 
       // 直近の呼び出しから onTotalPagesChange を取得して発火
@@ -1133,7 +1163,7 @@ describe("ReaderContainer", () => {
 
       await waitFor(
         () => {
-          expect(pageSpy).toHaveBeenCalledWith(
+          expect(pageSpy).toHaveBeenLastCalledWith(
             expect.objectContaining({
               totalPages: 12,
             }),
@@ -1144,7 +1174,7 @@ describe("ReaderContainer", () => {
       );
     }, 15000);
 
-    it("ReaderPage に渡された onPageChange が呼ばれた際、currentPage が更新されること", async () => {
+    it("ReaderPage に渡された onPageChange が呼ばれた際、currentPage が更新されること (R1-11)", async () => {
       const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -1160,6 +1190,15 @@ describe("ReaderContainer", () => {
 
       await waitFor(() => {
         expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ isLoading: false }),
+          undefined,
+        );
+      });
+
+      // ReaderView の初期 100ms 計測タイマーが完了するのを待機して競合上書きを防止
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 120));
       });
 
       // 先に totalPages を設定
@@ -1170,7 +1209,7 @@ describe("ReaderContainer", () => {
 
       await waitFor(
         () => {
-          expect(pageSpy).toHaveBeenCalledWith(
+          expect(pageSpy).toHaveBeenLastCalledWith(
             expect.objectContaining({ totalPages: 10 }),
             undefined,
           );
@@ -1188,7 +1227,7 @@ describe("ReaderContainer", () => {
 
       await waitFor(
         () => {
-          expect(pageSpy).toHaveBeenCalledWith(
+          expect(pageSpy).toHaveBeenLastCalledWith(
             expect.objectContaining({
               currentPage: 4,
             }),
@@ -1257,7 +1296,8 @@ describe("ReaderContainer", () => {
       expect(typeof lastProps?.onBackToToc).toBe("function");
     });
 
-    it("カスタム onBackToToc が渡された場合、「← 目次」押下で flushBookmark 実行後にカスタムコールバックが呼ばれること", async () => {
+    it("カスタム onBackToToc が渡された場合、ReaderPage の onBackToToc 呼び出しで flushBookmark 実行後にカスタムコールバックが呼ばれること (R1-23)", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const onBackToToc = vi.fn();
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
@@ -1277,14 +1317,10 @@ describe("ReaderContainer", () => {
         expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
-      // オーバーレイ展開
-      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
-
-      // 上部オーバーレイの「← 目次」ボタンを押下
-      const backBtn = screen.getByTestId("reader-top-back-to-toc");
-      fireEvent.click(backBtn);
+      const lastProps = pageSpy.mock.lastCall?.[0];
+      await act(async () => {
+        await lastProps?.onBackToToc?.();
+      });
 
       await waitFor(() => {
         expect(updateBookmarkSpy).toHaveBeenCalled();
@@ -1292,7 +1328,8 @@ describe("ReaderContainer", () => {
       });
     });
 
-    it("onBackToToc 省略時、「← 目次」押下で flushBookmark 実行後にルーターの navigateToNovelDetail が呼ばれること", async () => {
+    it("onBackToToc 省略時、ReaderPage の onBackToToc 呼び出しで flushBookmark 実行後にルーターの navigateToNovelDetail が呼ばれること (R1-23)", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -1310,14 +1347,10 @@ describe("ReaderContainer", () => {
         expect(screen.getByTestId("reader-view")).toBeInTheDocument();
       });
 
-      // オーバーレイ展開
-      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
-
-      // 「← 目次」ボタンを押下
-      const backBtn = screen.getByTestId("reader-top-back-to-toc");
-      fireEvent.click(backBtn);
+      const lastProps = pageSpy.mock.lastCall?.[0];
+      await act(async () => {
+        await lastProps?.onBackToToc?.();
+      });
 
       await waitFor(() => {
         expect(updateBookmarkSpy).toHaveBeenCalled();

@@ -74,6 +74,15 @@ MK 作業はファイル編集数やテスト・VRT 実行ログが多く、メ�
   - **モバイル WebView におけるジェスチャーイベントの Pointer / Touch 分離規律（原因 `L` 再発防止）**:
     - ネイティブスクロールが共存するモード（実効 `scroll` モード等）では、WebView の仕様によりスクロール開始直後に `pointercancel` が発火する。
     - PointerEvent 用の開始座標（`pointerStartRef`）と TouchEvent 用の開始座標（`touchStartRef`）を別個の ref として分離管理し、`pointercancel` 発生時に Touch 側の座標情報を誤消去しないこと（端部到達後 2 段階スワイプ等のジェスチャー不発を防止）。
+  - **アニメーション・境界タイマーの `chapterIndex` / `isPaged` 切替時クリーンアップと操作開始時スクロール境界評価（原因 `A`/`D` 再発防止: `R1-18`, `R1-19`）**:
+    - ページ送りアニメーションタイマー（200ms 等）やエピソード境界ヒントタイマーを持つ Hook では、`chapterIndex`（話数移動）や `isPaged`（モード切替）が変化した際に進行中のタイマー・保留ページ参照・境界フラグ（`false`）を即座にクリアし、旧エピソードの遅延タイマー発火によるページ位置上書き競合を防止すること。
+    - 連続スクロールモードの端到達フラグ（`reachedStartRef` / `reachedEndRef`）は、`syncScrollBoundaryState()` 等により各操作開始時（ポインター・タッチ・ホイール・音量キー）に実 DOM 座標および 1 画面短文（`maxScroll <= 0`）時の両端到達判定から同期評価し、`scroll` イベント発火前の初期状態でも端 2 段階遷移を確実に機能させること。
+  - **ネイティブ Bridge イベント購読順序と Promise `.catch()` 保護・`static` 状態解放（原因 `A`/`S`/`L` 再発防止: `R1-03`, `R1-04`, `R1-08`, `R1-12`）**:
+    - Capacitor Java プラグインで `static` フラグを保持する場合は、`load()` および `handleOnDestroy()` で必ず `false` にリセットし、`scripts/android-build-config.test.ts` に契約テストを追加すること。
+    - Web 側でネイティブ Bridge を有効化する際は、`add*Listener` を先行登録してから `set*Enabled(true).catch(() => {})` を呼び出し、クリーンアップ時も `.catch(() => {})` で Unhandled Rejection を防止すること。
+  - **Container / Page テストにおける `vi.spyOn` / `vi.mock` を用いた親子分離と実時間依存（固定過去日付）の排除（原因 `A`/`B` 再発防止: `R1-01`, `R1-11`, `R1-23`）**:
+    - Container / Page の単体テストでは直下の子コンポーネントへの Props・コールバック受け渡しを `vi.spyOn`（または `vi.mock`）で検証し、子・孫の内部 DOM 重複アサートや CI 高負荷時の非同期競合を排除すること。
+    - `Date.now()` と比較する保持期限（Tombstone GC・TTL 等）のテストでは固定過去日付をハードコードせず、必ず `Date.now()` からの相対日時計算（`new Date(baseNow - days * 86_400_000).toISOString()` 等）または `vi.setSystemTime` を使用すること。
   - `*.test.tsx` で `composeStories` による全 Story 実行＋内部ロジック補完テストを記述する。
 - **失敗確認とコミット**: `npx vitest run <対象テスト>` を実行し、未実装により期待通り失敗することを確認して `test(<scope>): ...（Red）` をコミットする。
 

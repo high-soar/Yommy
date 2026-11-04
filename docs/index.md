@@ -25,7 +25,7 @@ docs/
 │   │   ├── search.md                  # 検索画面仕様書（SCR-06: SearchPage / SearchNovelCard / useNovelSearch）
 │   │   ├── ranking.md                 # ランキング画面仕様書（SCR-07: RankingPage / RankingNovelCard / useNovelRanking）
 │   │   ├── novel-detail.md            # 作品詳細・目次画面仕様書（SCR-02: NovelDetailPage / EpisodeList / useNovelDetail）
-│   │   ├── reader-view.md             # 小説リーダー画面仕様書（SCR-03: ReaderPage / ReaderView / ReaderBottomOverlay / ReaderChapterNav / useReader）
+│   │   ├── reader-view.md             # 小説リーダー画面仕様書（SCR-03: ReaderPage / ReaderView / ReaderTopOverlay / ReaderBottomOverlay / ReaderChapterNav / useReader / useReaderGestures）
 │   │   └── settings.md                # 設定画面仕様書（SCR-05: SettingsPage / SettingsContainer / SampleTextPreview / useSettings）
 │   ├── parsers/                       # [App全体正本] 小説サイト別の現在スクレイピング・DOM解析仕様書
 │   │   └── kakuyomu.md                # カクヨム パーサー・スクレイピング仕様書（kakuyomu.jp）
@@ -68,7 +68,8 @@ docs/
         ├── v0.2-ui-ux.md              # Milestone v0.2（UI/UX 刷新 ＆ 開発基盤整備）品質分析・改善レポート
         ├── v0.3-search-prefetch.md    # Milestone v0.3（検索/ランキング・先読みキャッシュ・更新チェック ＆ 実機基盤改善）品質分析・改善レポート
         ├── v0.4-cloud-sync-reader-ux.md # Milestone v0.4（クラウド同期・ページめくり・リーダーUI改善）品質分析・改善レポート
-        └── v0.5-reader-customization-and-cache.md # Milestone v0.5（縦書きリーダー組版・設定・キャッシュ管理）品質分析・改善レポート
+        ├── v0.5-reader-customization-and-cache.md # Milestone v0.5（縦書きリーダー組版・設定・キャッシュ管理）品質分析・改善レポート
+        └── v0.6-reader-animation-overlay-and-volume-key.md # Milestone v0.6（リーダーページ送りアニメーション・上下連動オーバーレイ＆シークバー・音量キー送り）品質分析・改善レポート
 ```
 
 > [!NOTE]

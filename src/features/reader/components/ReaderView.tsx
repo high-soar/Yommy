@@ -314,9 +314,6 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const pageWidth = containerRef.current?.clientWidth ?? containerWidth;
   const pageHeight = containerRef.current?.clientHeight ?? containerHeight;
 
-  // 将来のジェスチャー遷移連携・アニメーション中制御のために参照
-  void isAnimating;
-
   // 小説本文・ヘッダー描画用ヘルパー
   const renderNovelContent = (active: boolean = true) => (
     <>

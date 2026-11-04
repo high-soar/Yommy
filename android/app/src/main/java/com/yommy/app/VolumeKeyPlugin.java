@@ -18,10 +18,12 @@ public class VolumeKeyPlugin extends Plugin {
     public void load() {
         super.load();
         instance = this;
+        volumeKeyPagingEnabled = false;
     }
 
     @Override
     protected void handleOnDestroy() {
+        volumeKeyPagingEnabled = false;
         if (instance == this) {
             instance = null;
         }

@@ -3,7 +3,7 @@ type: spec-feature
 title: "本棚画面仕様書（SCR-01: Bookshelf）"
 description: "登録済み小説カード一覧の表示、しおり位置からのワンタップ読書再開、および検索・ランキング画面への誘導を提供する本棚画面（SCR-01）の正本仕様。"
 status: Approved
-updated: "2026-11-01"
+updated: "2026-11-04"
 tags:
   - bookshelf
   - scr-01
@@ -283,3 +283,14 @@ export interface UseBookshelfResult {
 | **`AC-BS-11`** | 本棚5種ソート切り替えと永続化                   | 本棚ヘッダーのソートセレクター（`bookshelf-sort-select`）から5種類のソート順を切り替えることができ、一覧が即時正しく並び替わり、選択結果が DB に永続化され、アプリ再起動後も同一の並び順が維持されること。                                                                                         | `SYS-REQ-04` / `TR-16`                         |
 | **`AC-BS-12`** | OS バックキー2回押下でのアプリ終了              | 本棚画面での OS バックキー2秒以内2回押下によるアプリ終了および1回目押下時のトースト表示 (TR-13)。                                                                                                                                                                                                  | `SYS-REQ-16` / `TR-13`                         |
 | **`AC-BS-13`** | クラウド同期連携（自動Pull・作品追加/削除Push） | アプリ起動時または5分以上バックグラウンド休止後の復帰時に自動Pullが実行されリモートの変更が本棚へ反映されること。また作品追加または削除時に自動Pushがデバウンス実行され、作品削除時は `deleted_novels` へTombstoneが記録されること。未連携（unlinked）時は Pull/Push をスキップすること（R1-14）。 | `SYS-REQ-06`                                   |
+
+---
+
+## 6. Playwright システム結合テスト（E2E シナリオ連携）
+
+本棚画面（`SCR-01`）に関連する E2E 動作は、`test/it/scenarios/` 配下の以下のシナリオで継続回帰検証されます（詳細は [docs/specs/screen-transitions.md §4](../screen-transitions.md#4-playwright-システム結合テストe2e-シナリオ-scn-01--scn-06マッピング) を参照）：
+
+- **`SCN-01`（`test/it/scenarios/scn01-poc-vertical-reader.spec.ts`）**: 空状態表示、作品カード表示、作品詳細遷移、「続きから読む」によるリーダー直行としおり復元（`TR-02`, `TR-03`, `AC-BS-01`〜`07`）。
+- **`SCN-02`（`test/it/scenarios/scn02-search-ranking-discovery.spec.ts`）**: 空状態からの検索・ランキング画面への誘導導線および探索画面からの作品追加反映（`TR-15`, `AC-BS-01`）。
+- **`SCN-03`（`test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts`）**: 本棚表示時の自動/手動一括更新チェック、「NEW」バッジ表示と作品詳細/リーダー閲覧による解除、5種ソート切替と永続化、OS バックキー2回押下終了トースト（`TR-02`, `TR-03`, `TR-13`, `TR-16`, `TR-17`, `AC-BS-08`〜`12`）。
+- **`SCN-05`（`test/it/scenarios/scn05-cloud-sync.spec.ts`）**: Google Drive クラウド同期によるリモート作品・しおりの本棚自動反映および作品削除時の Tombstone 伝播（`AC-BS-13`）。

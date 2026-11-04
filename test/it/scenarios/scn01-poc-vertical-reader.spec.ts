@@ -432,8 +432,62 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(pageIndicator).toHaveText(`1 / ${totalPagesStr}`);
     await expect(swipeTrack).toHaveCSS("transition-property", "none");
 
-    // 再度左端タップで最終ページ（第2ページ）へ移動
+    // Kindle様式: ドラッグ追従・30%未満スナップバック・30%以上ドラッグ確定遷移の検証（AC-RD-17b, R1-21）
+    const initialSwipeLeft = await swipeTrack.evaluate(
+      (el) => (el as HTMLElement).style.left,
+    );
+
     if (readerBox) {
+      // 1. 30%未満（30px）かつ低速（velocity < 0.5 px/ms）のドラッグ＆リリースでスナップバックしページ1に留まること
+      const startX = readerBox.x + 100;
+      const smallDragX = startX + 30;
+      const dragY = readerBox.y + readerBox.height * 0.4;
+      await page.mouse.move(startX, dragY);
+      await page.mouse.down();
+      await page.mouse.move(smallDragX, dragY, { steps: 5 });
+      const draggingSwipeLeft = await swipeTrack.evaluate(
+        (el) => (el as HTMLElement).style.left,
+      );
+      expect(draggingSwipeLeft).not.toBe(initialSwipeLeft);
+      await page.waitForTimeout(100);
+      await page.mouse.up();
+    }
+    await expect(swipeTrack).toHaveCSS("transition-property", "none");
+    await expect(readerView).toHaveAttribute("data-current-page", "1");
+
+    await page.evaluate(() => window.getSelection()?.removeAllRanges());
+
+    if (readerBox) {
+      // 2. 30%以上（約40%）の右方向ドラッグ＆リリースで次ページ（第2ページ）へ確定遷移すること（AC-RD-17b）
+      const startX = readerBox.x + 100;
+      const largeDragX = startX + readerBox.width * 0.4;
+      const dragY = readerBox.y + readerBox.height * 0.4;
+      await page.mouse.move(startX, dragY);
+      await page.mouse.down();
+      await page.mouse.move(largeDragX, dragY, { steps: 10 });
+      await page.mouse.up();
+    }
+    await expect(readerView).toHaveAttribute("data-current-page", "2");
+    await expect(pageIndicator).toHaveText(`2 / ${totalPagesStr}`);
+    await expect(swipeTrack).toHaveCSS("transition-property", "none");
+
+    // 右端タップで第1ページへ戻す
+    if (readerBox) {
+      await page.mouse.click(
+        readerBox.x + readerBox.width * 0.9,
+        readerBox.y + readerBox.height * 0.4,
+      );
+    }
+    await expect(readerView).toHaveAttribute("data-current-page", "1");
+    await expect(swipeTrack).toHaveCSS("transition-property", "none");
+
+    // Kindle様式: 高速連打（200msアニメーション完了前の連続左端タップ）で進行中ページが即時確定され次操作が取りこぼされないこと（AC-RD-17c, R1-21）
+    const boundaryHint = page.getByTestId("reader-episode-boundary-hint");
+    if (readerBox) {
+      await page.mouse.click(
+        readerBox.x + readerBox.width * 0.1,
+        readerBox.y + readerBox.height * 0.4,
+      );
       await page.mouse.click(
         readerBox.x + readerBox.width * 0.1,
         readerBox.y + readerBox.height * 0.4,
@@ -441,6 +495,8 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     }
     await expect(readerView).toHaveAttribute("data-current-page", "2");
     await expect(pageIndicator).toHaveText(`2 / ${totalPagesStr}`);
+    await expect(boundaryHint).toBeVisible();
+    await expect(boundaryHint).toHaveText("もう一度タップで次の話へ");
     await expect(swipeTrack).toHaveCSS("transition-property", "none");
 
     // paged モードにおけるページ位置復元の検証（R1-18, AC-RD-19, AC-RD-20）
@@ -461,7 +517,6 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
 
     // 最終ページでの端 2 段階タップによる前後話遷移（AC-RD-18, TR-05）
     // 1 回目の左端タップ（幅約 20%）で案内ヒントが表示されることを確認
-    const boundaryHint = page.getByTestId("reader-episode-boundary-hint");
     if (readerBox) {
       await page.mouse.click(
         readerBox.x + readerBox.width * 0.1,

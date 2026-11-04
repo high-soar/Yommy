@@ -252,9 +252,64 @@ export function useReaderGestures({
   const wasAtEndOnDownRef = useRef(false);
   const wasAtStartOnDownRef = useRef(false);
 
+  // エピソード遷移またはページ送りモード切替時に進行中アニメーション・境界フラグ・ヒントをリセット（R1-18, R1-19）
+  const prevChapterAndModeRef = useRef({ chapterIndex, isPaged });
+  useEffect(() => {
+    const prev = prevChapterAndModeRef.current;
+    if (prev.chapterIndex === chapterIndex && prev.isPaged === isPaged) {
+      return;
+    }
+    prevChapterAndModeRef.current = { chapterIndex, isPaged };
+
+    if (animationTimerRef.current) {
+      clearTimeout(animationTimerRef.current);
+      animationTimerRef.current = null;
+    }
+    pendingTargetPageRef.current = null;
+    lastTargetPageRef.current = null;
+    setIsAnimating(false);
+    setSlideOffsetPx(0);
+
+    reachedEndRef.current = false;
+    reachedStartRef.current = false;
+    wasAtEndOnDownRef.current = false;
+    wasAtStartOnDownRef.current = false;
+    clearBoundaryTap();
+    clearScrollSwipe();
+    clearVolumeKeyBoundary();
+  }, [
+    chapterIndex,
+    isPaged,
+    clearBoundaryTap,
+    clearScrollSwipe,
+    clearVolumeKeyBoundary,
+  ]);
+
   const getContainerWidth = useCallback((): number => {
     return containerRef?.current?.clientWidth || window.innerWidth;
   }, [containerRef]);
+
+  const getScrollElement = useCallback((): HTMLElement | null => {
+    if (!containerRef?.current) return null;
+    const viewEl = containerRef.current.querySelector<HTMLElement>(
+      '[data-testid="reader-view"]',
+    );
+    return viewEl ?? containerRef.current;
+  }, [containerRef]);
+
+  // 連続スクロールモードにおけるDOMスクロール位置からの端到達フラグ同期（初期オープン時・1画面未満短文対応: R1-18）
+  const syncScrollBoundaryState = useCallback(() => {
+    const el = getScrollElement();
+    if (!el) return;
+    const scrollSize = isVertical ? el.scrollWidth : el.scrollHeight;
+    const clientSize = isVertical ? el.clientWidth : el.clientHeight;
+    if (scrollSize > 0) {
+      const maxScroll = scrollSize - clientSize;
+      const currentScroll = isVertical ? Math.abs(el.scrollLeft) : el.scrollTop;
+      reachedStartRef.current = maxScroll <= 0 || currentScroll <= 5;
+      reachedEndRef.current = maxScroll <= 0 || maxScroll - currentScroll <= 5;
+    }
+  }, [getScrollElement, isVertical]);
 
   // 連続スクロール端2段階アクション発火ヘルパー（AC-RD-19）
   const triggerScrollBoundaryAction = useCallback(
@@ -317,11 +372,12 @@ export function useReaderGestures({
       hasTriggeredInGestureRef.current = false;
 
       if (!isPaged) {
+        syncScrollBoundaryState();
         wasAtEndOnDownRef.current = reachedEndRef.current;
         wasAtStartOnDownRef.current = reachedStartRef.current;
       }
     },
-    [isPaged, isAnimating, flushPendingAnimation],
+    [isPaged, isAnimating, flushPendingAnimation, syncScrollBoundaryState],
   );
 
   // Pointer Move
@@ -597,11 +653,12 @@ export function useReaderGestures({
       };
       hasTriggeredInGestureRef.current = false;
       if (!isPaged) {
+        syncScrollBoundaryState();
         wasAtEndOnDownRef.current = reachedEndRef.current;
         wasAtStartOnDownRef.current = reachedStartRef.current;
       }
     },
-    [isPaged],
+    [isPaged, syncScrollBoundaryState],
   );
 
   const handleTouchMove = useCallback(
@@ -644,6 +701,7 @@ export function useReaderGestures({
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
       if (isPaged) return;
+      syncScrollBoundaryState();
 
       const isNextWheel = isVertical
         ? e.deltaX < 0 || e.deltaY > 0
@@ -658,7 +716,7 @@ export function useReaderGestures({
         triggerScrollBoundaryAction("prev");
       }
     },
-    [isPaged, isVertical, triggerScrollBoundaryAction],
+    [isPaged, isVertical, syncScrollBoundaryState, triggerScrollBoundaryAction],
   );
 
   // Scroll Progress（連続スクロールモードの端到達判定トラッキング）
@@ -699,19 +757,18 @@ export function useReaderGestures({
     onCloseOverlay();
   }, [onCloseOverlay]);
 
-  const getScrollElement = useCallback((): HTMLElement | null => {
-    if (!containerRef?.current) return null;
-    const viewEl = containerRef.current.querySelector<HTMLElement>(
-      '[data-testid="reader-view"]',
-    );
-    return viewEl ?? containerRef.current;
-  }, [containerRef]);
-
   // 音量キーによる境界2段階操作ハンドラー
   const triggerVolumeKeyBoundary = useCallback(
     (direction: "next" | "prev", onTrigger: () => void, hintText: string) => {
       if (pendingVolumeKeyBoundaryRef.current === direction) {
         clearVolumeKeyBoundary();
+        if (direction === "next") {
+          wasAtEndOnDownRef.current = false;
+          reachedEndRef.current = false;
+        } else {
+          wasAtStartOnDownRef.current = false;
+          reachedStartRef.current = false;
+        }
         onTrigger();
       } else {
         clearVolumeKeyBoundary();
@@ -816,6 +873,7 @@ export function useReaderGestures({
       } else {
         // 連続スクロールモード
         onCloseOverlay();
+        syncScrollBoundaryState();
         const el = getScrollElement();
 
         if (direction === "down") {
@@ -869,6 +927,7 @@ export function useReaderGestures({
       triggerVolumeKeyBoundary,
       onNextChapter,
       onPrevChapter,
+      syncScrollBoundaryState,
       getScrollElement,
       scrollContinuously,
     ],
