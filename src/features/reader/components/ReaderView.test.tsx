@@ -938,6 +938,44 @@ describe("ReaderView", () => {
       expect(onTotalPagesChange).toHaveBeenCalledWith(1);
     });
 
+    it("初回マウント時（containerRef 未接続の初回 render 直後）でも実 DOM の clientWidth / clientHeight からスロット幅・高さが即座に適用された上で scrollHeight が計測され、0px 幅レイアウトによる過大ページ数が通知されないこと (R1-26, AC-RD-16)", () => {
+      const clientWidthSpy = vi
+        .spyOn(HTMLElement.prototype, "clientWidth", "get")
+        .mockReturnValue(400);
+      const clientHeightSpy = vi
+        .spyOn(HTMLElement.prototype, "clientHeight", "get")
+        .mockReturnValue(600);
+      const scrollHeightSpy = vi
+        .spyOn(HTMLElement.prototype, "scrollHeight", "get")
+        .mockImplementation(function (this: HTMLElement) {
+          // スロット本文に幅（400 - 20*2 = 360px）と高さ（600 - 20*2 = 560px）が適用されている場合は正常な3ページ分（1760px）、
+          // 未適用（width: ""）のまま計測された場合は1行1文字折り返しによる異常な20ページ分（11960px）を返す
+          if (this.style?.width === "360px" && this.style?.height === "560px") {
+            return 1760;
+          }
+          return 11960;
+        });
+
+      try {
+        const onTotalPagesChange = vi.fn();
+        render(
+          <ReaderView
+            bodyHtml="<p>本文</p>"
+            writingMode="vertical-rl"
+            pagingMode="paged"
+            onTotalPagesChange={onTotalPagesChange}
+          />,
+        );
+
+        expect(onTotalPagesChange).toHaveBeenCalledWith(3);
+        expect(onTotalPagesChange).not.toHaveBeenCalledWith(20);
+      } finally {
+        clientWidthSpy.mockRestore();
+        clientHeightSpy.mockRestore();
+        scrollHeightSpy.mockRestore();
+      }
+    });
+
     it("実効 scroll モードのときは onTotalPagesChange が呼び出されないこと", () => {
       const onTotalPagesChange = vi.fn();
       render(
