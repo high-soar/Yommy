@@ -3,7 +3,7 @@ type: spec-feature
 title: "ランキング画面仕様書（SCR-07: Novel Ranking）"
 description: "複数小説サイト（v0.3はカクヨム）のランキング一覧（期間×総合/主要ジャンル）、順位バッジ表示、作品カード一覧およびその場での本棚追加を提供するランキング画面（SCR-07）の正本仕様。"
 status: Approved
-updated: "2026-11-01"
+updated: "2026-11-04"
 tags:
   - ranking
   - scr-07
@@ -220,3 +220,5 @@ export interface UseNovelRankingResult {
   - SQLite リポジトリとの連携テストは `resetTestDb()` を使用して決定論的に実行。
 - **Storybook ＆ VRT (1280px / 375px)**:
   - 総合週間ランキング、1〜3位バッジ表示状態、追加処理中状態、登録済み状態、空状態、通信エラー状態の各ストーリーを作成し VRT 検証を実施。
+- **Playwright システム結合テスト（`SCN-02`: `test/it/scenarios/scn02-search-ranking-discovery.spec.ts`）**:
+  - 本棚空状態または下部タブからのランキング画面遷移（`TR-01`, `TR-15`）、期間タブ×ジャンルピル切り替え、1〜3位強調順位バッジ表示（`AC-RK-01`〜`05`）、カード内「＋ 本棚に追加」その場登録（`AC-RK-06`）、およびカード本体タップによる作品詳細（`SCR-02`）遷移と OS バックキーによるランキング画面への論理復帰（`TR-14`, `TR-07`, `AC-RK-07`）を一気通貫で検証。

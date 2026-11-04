@@ -3,7 +3,7 @@ type: spec-feature
 title: "検索画面仕様書（SCR-06: Novel Search）"
 description: "複数小説サイト（v0.3はカクヨム）のキーワード検索、並び順・ジャンル・連載状態フィルタ、作品カード一覧およびその場での本棚追加を提供する検索画面（SCR-06）の正本仕様。"
 status: Approved
-updated: "2026-11-01"
+updated: "2026-11-04"
 tags:
   - search
   - scr-06
@@ -256,3 +256,5 @@ export interface UseNovelSearchResult {
   - SQLite リポジトリとの連携テストは `resetTestDb()` を使用して決定論的に実行。
 - **Storybook ＆ VRT (1280px / 375px)**:
   - キーワード未入力初期状態、検索結果一覧表示状態、追加処理中状態、登録済み状態、空状態（0件）、通信エラー状態の各ストーリーを作成し VRT 検証を実施。
+- **Playwright システム結合テスト（`SCN-02`: `test/it/scenarios/scn02-search-ranking-discovery.spec.ts`）**:
+  - 本棚空状態からの検索画面遷移（`TR-15`）、キーワード検索・並び順/連載状態/ジャンルフィルタ・次ページ読み込み（`AC-SE-01`〜`05`, `08`）、カード内「＋ 本棚に追加」その場登録（`AC-SE-06`）、およびカード本体タップによる作品詳細（`SCR-02`）遷移と OS バックキーによる検索画面への論理復帰（`TR-14`, `TR-07`, `AC-SE-07`）を一気通貫で検証。

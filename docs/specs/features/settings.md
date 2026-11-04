@@ -105,7 +105,7 @@ src/features/settings/
 │   ├── useCloudSync.ts                    # Google Drive クラウド同期状態管理・操作フック（v0.4）
 │   ├── useCloudSync.test.ts               # クラウド同期フック単体テスト（Vitest）
 │   ├── useStorageCache.ts                 # 全体キャッシュ集計・一括本文キャッシュ削除フック（v0.5）
-│   └── useStorageCache.test.ts            # ストレージキャッシュフック単体テスト（Vitest）
+│   └── useStorageCache.test.tsx           # ストレージキャッシュフック単体テスト（Vitest）
 └── components/
     ├── SampleTextPreview.tsx              # ルビ・傍点を含む固定小説文のリアルタイム組版プレビュー（Presentational）
     ├── SampleTextPreview.stories.tsx
@@ -211,6 +211,7 @@ src/features/settings/
 | `storageCacheError`             | `string \| null`                                              | 任意 | `null`                   | ストレージキャッシュ操作エラーメッセージ（v0.5 Issue #170）                |
 | `initialShowStorageCacheDialog` | `boolean`                                                     | 任意 | `false`                  | キャッシュ整理ダイアログ初期表示フラグ（Storybook/UT用）                   |
 | `onClearStorageCache`           | `(options: { onlyRead: boolean }) => void \| Promise<number>` | 任意 | -                        | ストレージキャッシュ一括削除確定時コールバック（v0.5 Issue #170）          |
+| `className`                     | `string`                                                      | 任意 | `""`                     | 追加の CSS クラス名（任意）                                                |
 
 #### 表示項目・セマンティック属性・境界制御ルール
 
@@ -269,15 +270,17 @@ Google Drive（`appDataFolder`）とのアカウント連携・解除、手動�
 
 #### プロパティ契約（`CloudSyncSectionProps`）
 
-| プロパティ名   | 型                    | 必須 | 既定値  | 説明                                                                     |
-| :------------- | :-------------------- | :--- | :------ | :----------------------------------------------------------------------- |
-| `authState`    | `CloudSyncAuthState`  | 必須 | -       | 現在の認証連携状態（`unlinked`, `authenticating`, `connected`, `error`） |
-| `lastSyncedAt` | `string \| null`      | 必須 | -       | 最終同期日時（ISO 8601 文字列、未同期は `null`）                         |
-| `isSyncing`    | `boolean`             | 必須 | `false` | 同期通信処理中フラグ                                                     |
-| `error`        | `string \| null`      | 任意 | `null`  | 同期または認証エラーメッセージ                                           |
-| `onSignIn`     | `() => Promise<void>` | 必須 | -       | 「Google アカウントと連携」ボタン押下時のコールバック                    |
-| `onSignOut`    | `() => Promise<void>` | 必須 | -       | 「連携解除」確認ダイアログ承認時のコールバック                           |
-| `onSyncNow`    | `() => Promise<void>` | 必須 | -       | 「今すぐ同期」ボタン押下時のコールバック                                 |
+| プロパティ名                  | 型                    | 必須 | 既定値  | 説明                                                                     |
+| :---------------------------- | :-------------------- | :--- | :------ | :----------------------------------------------------------------------- |
+| `authState`                   | `CloudSyncAuthState`  | 必須 | -       | 現在の認証連携状態（`unlinked`, `authenticating`, `connected`, `error`） |
+| `lastSyncedAt`                | `string \| null`      | 必須 | -       | 最終同期日時（ISO 8601 文字列、未同期は `null`）                         |
+| `isSyncing`                   | `boolean`             | 必須 | `false` | 同期通信処理中フラグ                                                     |
+| `error`                       | `string \| null`      | 任意 | `null`  | 同期または認証エラーメッセージ                                           |
+| `initialShowDisconnectDialog` | `boolean`             | 任意 | `false` | 解除確認ダイアログ初期表示フラグ（Storybook / テスト用）                 |
+| `onSignIn`                    | `() => Promise<void>` | 任意 | -       | 「Google アカウントと連携」ボタン押下時のコールバック                    |
+| `onSignOut`                   | `() => Promise<void>` | 任意 | -       | 「連携解除」確認ダイアログ承認時のコールバック                           |
+| `onSyncNow`                   | `() => Promise<void>` | 任意 | -       | 「今すぐ同期」ボタン押下時のコールバック                                 |
+| `className`                   | `string`              | 任意 | `""`    | カスタムクラス名                                                         |
 
 #### 表示項目・セマンティック属性
 
@@ -479,3 +482,14 @@ export interface UseStorageCacheResult {
 | **`AC-ST-17`** | フォント種別切替と永続化（v0.5 Issue #169）                 | フォント種別セレクター（`font-family-select`）で 5 種（UD明朝 / 明朝体 / UDゴシック / ゴシック体 / 教科書体 Klee）から選択でき、プレビュー枠のフォントスタックおよび `reader_settings` へ即時反映・永続化され、リロード後およびリーダー画面（`SCR-03`）でも設定が維持・反映されること。                                                                                                                                                                                                                                                                                                                                                     | `SYS-REQ-09`                   |
 | **`AC-ST-18`** | 画面余白ステッパー境界制御と永続化（v0.5 Issue #169）       | 画面余白（`8〜48px`、`±4px` 刻み、初期値 `20px`）の `−` / `＋` ボタン（`page-margin-decrease` / `page-margin-increase`）で値が変更でき、上限（`48px`）・下限（`8px`）で各ボタンが `disabled` となり、プレビュー枠のパディングおよび `reader_settings` へ即時反映・永続化され、リロード後およびリーダー画面（`SCR-03`）でも設定が維持・反映されること。                                                                                                                                                                                                                                                                                      | `SYS-REQ-09`                   |
 | **`AC-ST-19`** | 音量キー送りトグル設定と永続化（v0.6 Issue #203）           | 設定画面（`SCR-05`）の「表示・組版設定」セクションに「音量キーでページ送り」ON/OFF トグル（`data-testid="toggle-volume-key-paging"`, `aria-pressed={enableVolumeKeyPaging}`、初期値 `false`）が表示され、タップで ON/OFF 切替でき、`reader_settings` へ永続化されること。保存失敗時は直前の値へロールバックされ、エラー警告（`settings-error-alert`）が表示されること。                                                                                                                                                                                                                                                                     | `SYS-REQ-11` / `SCR-05`        |
+
+---
+
+## 6. Playwright システム結合テスト（E2E シナリオ連携）
+
+設定画面（`SCR-05`）に関連する E2E 動作は、`test/it/scenarios/` 配下の以下のシナリオで継続回帰検証されます（詳細は [docs/specs/screen-transitions.md §4](../screen-transitions.md#4-playwright-システム結合テストe2e-シナリオ-scn-01--scn-06マッピング) を参照）：
+
+- **`SCN-01`（`test/it/scenarios/scn01-poc-vertical-reader.spec.ts`）**: 組版設定（縦書き/横書き、ページ送りモード、フォント種別 5 種、画面余白 8〜48px 等）の変更・永続化とリーダー画面への動的反映、および OS バックキーによる直前画面復帰（`TR-12`, `AC-ST-01`〜`07`, `13`, `17`, `18`）。
+- **`SCN-04`（`test/it/scenarios/scn04-prefetch-and-cache.spec.ts`）**: ストレージ・キャッシュ管理セクションにおける全体キャッシュ容量表示と本文キャッシュ一括削除（既読のみ／全話、`TR-20`, `AC-ST-14`〜`16`）。
+- **`SCN-05`（`test/it/scenarios/scn05-cloud-sync.spec.ts`）**: Google Drive クラウド同期セクションでのアカウント連携・手動即時同期・連携解除（`AC-ST-08`〜`12`）。
+- **`SCN-06`（`test/it/scenarios/scn06-volume-key-paging.spec.ts`）**: 「音量キーでページ送り」ON/OFF トグル切替・永続化とリーダー画面での音量キーページ送り・スクロール送り・端 2 段階遷移連携（`AC-ST-19`, `AC-RD-26`, `AC-RD-27`）。

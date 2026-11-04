@@ -25,7 +25,7 @@ docs/
 │   │   ├── search.md                  # 検索画面仕様書（SCR-06: SearchPage / SearchNovelCard / useNovelSearch）
 │   │   ├── ranking.md                 # ランキング画面仕様書（SCR-07: RankingPage / RankingNovelCard / useNovelRanking）
 │   │   ├── novel-detail.md            # 作品詳細・目次画面仕様書（SCR-02: NovelDetailPage / EpisodeList / useNovelDetail）
-│   │   ├── reader-view.md             # 小説リーダー画面仕様書（SCR-03: ReaderPage / ReaderView / ReaderBottomOverlay / ReaderChapterNav / useReader）
+│   │   ├── reader-view.md             # 小説リーダー画面仕様書（SCR-03: ReaderPage / ReaderView / ReaderTopOverlay / ReaderBottomOverlay / ReaderChapterNav / useReader / useReaderGestures）
 │   │   └── settings.md                # 設定画面仕様書（SCR-05: SettingsPage / SettingsContainer / SampleTextPreview / useSettings）
 │   ├── parsers/                       # [App全体正本] 小説サイト別の現在スクレイピング・DOM解析仕様書
 │   │   └── kakuyomu.md                # カクヨム パーサー・スクレイピング仕様書（kakuyomu.jp）
