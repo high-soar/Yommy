@@ -3,7 +3,7 @@ type: guideline
 title: テスト・実装規律の正本（SSOT）
 description: Yommyの3層テスト体系（Parser/Storage/Viewer）、TDDコミット規約、1対1 Story/UT、親子分離、C0/C1 100%、縦書きVRT、および原因D設計同期ルールの正本。
 status: Approved
-updated: "2026-11-04"
+updated: "2026-11-05"
 tags: [testing, tdd, vrt, storybook, vitest, playwright, coverage]
 related_specs:
   - docs/index.md
@@ -152,6 +152,9 @@ Git Worktree を用いた並行開発やフォーク環境において、環境�
 5. **実時間・固定過去日付依存（Time-bomb）の排除（v0.6 `R1-01` 再発防止）**:
    - 30日間 Tombstone 保持期限（`TOMBSTONE_RETENTION_MS`）や 7日間キャッシュ鮮度（`CACHE_TTL_MS`）など、実行時の `Date.now()` と比較されるロジックのテストにおいて、固定カレンダー日付（例: `"2026-10-05T00:00:00.000Z"`）をハードコードしてはならない（日数経過後にテストが突然失敗する時限爆弾となるため）。
    - 必ず `Date.now()` からの相対オフセット計算（例: `new Date(baseNow - 5 * 86_400_000).toISOString()`）または `vi.setSystemTime` を用い、いつ実行しても 100% 決定論的に PASS するよう記述すること。
+6. **マルチパス DOM 計測を伴う初期位置復元の耐性保証（v0.6 `R1-26` 再発防止）**:
+   - ページめくり組版のように初回マウント・コンテナ寸法反映・`requestAnimationFrame`・`document.fonts.ready` 等で総ページ数（`setTotalPages`）が複数回更新される UI では、最初の 1 回の計測コールバックだけで初期復元フラグを消費（`false` 化）してはならない（初回 0px 幅等の仮計測値に引きずられ、確定計測時に中間ページが最終ページや 1 ページ目へ化けるため）。
+   - ユーザーが明示的なページ移動操作（`goToPage` 等）を行うまでの初期レイアウト確定期間中は、総ページ数が更新されるたびに保存済み進捗率（`initialScrollProgress`）から目標ページを再算出して復元し、また 3 ページ以上ある長文の中間ページ（先頭でも最終でもないページ）から別画面へ移動・再遷移するテストを UT および Playwright IT で検証すること。
 
 ---
 
