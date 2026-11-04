@@ -226,7 +226,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     return () => window.removeEventListener("resize", handleResize);
   }, [isPaged, onTotalPagesChange, pageMarginPx]);
 
-  // DOM 寸法計測（総ページ数算出）: マウント時および chapterTitle, bodyHtml, initialScrollProgress, writingMode, fontSizePx, lineHeight, fontFamily, pageMarginPx, pagingMode, containerHeight 変更時
+  // DOM 寸法計測（総ページ数算出）: マウント時および chapterTitle, bodyHtml, initialScrollProgress, writingMode, fontSizePx, lineHeight, fontFamily, pageMarginPx, pagingMode, containerWidth, containerHeight 変更時
   useEffect(() => {
     if (!isPaged) return;
     const container = containerRef.current;
@@ -237,7 +237,12 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
     const measure = () => {
       if (isDisposed) return;
+      const currentWidth = container.clientWidth || containerWidth;
       const currentHeight = container.clientHeight || containerHeight;
+      if (currentWidth > 0 && currentHeight > 0) {
+        content.style.width = `${Math.max(1, currentWidth - pageMarginPx * 2)}px`;
+        content.style.height = `${Math.max(1, currentHeight - pageMarginPx * 2)}px`;
+      }
       const measuredPages = calculateMeasuredTotalPages(
         content.scrollHeight,
         currentHeight,
@@ -281,6 +286,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     fontFamily,
     pageMarginPx,
     pagingMode,
+    containerWidth,
     containerHeight,
     onTotalPagesChange,
   ]);
