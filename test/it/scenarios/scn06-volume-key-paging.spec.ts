@@ -36,6 +36,14 @@ test.describe("SCN-06: ハードウェア音量キーによるページ送り・
   test("設定画面ON/OFFトグル・リーダー画面音量キーページ送り（縦書きスライド）・オーバーレイ自動消去・境界2段階遷移・連続スクロール・無効時抑止の一連の動作が正常に機能する", async ({
     page,
   }) => {
+    const waitForServicesReady = async () => {
+      await page.waitForFunction(
+        () =>
+          typeof window.__yommyServices !== "undefined" &&
+          window.__yommyServices.isReady === true,
+      );
+    };
+
     // 1. 設定画面（/settings）で初期状態で音量キートグルが OFF であることを確認（SYS-REQ-11 / AC-ST-19）
     const tabSettings = page.getByTestId("tab-settings");
     await tabSettings.click();
@@ -47,6 +55,7 @@ test.describe("SCN-06: ハードウェア音量キーによるページ送り・
 
     // 2. 初期状態（OFF）でリーダー画面へ遷移し、音量キーを押下してもページめくりが発生しないことを確認
     await page.goto("/novels/kakuyomu:16817330658027210412/chapters/1");
+    await waitForServicesReady();
     const readerView = page.getByTestId("reader-view");
     await expect(readerView).toBeVisible();
     await expect(readerView).toHaveAttribute("data-current-page", "1");
@@ -59,16 +68,19 @@ test.describe("SCN-06: ハードウェア音量キーによるページ送り・
 
     // 3. 設定画面（/settings）へ戻り、「音量キーでページ送り」トグルを ON に変更・永続化確認（AC-ST-19）
     await page.goto("/settings");
+    await waitForServicesReady();
     await expect(toggleVolumeKey).toBeVisible();
     await toggleVolumeKey.click();
     await expect(toggleVolumeKey).toBeChecked();
 
     // リロードしても ON が維持されることを確認（永続化検証）
     await page.reload();
+    await waitForServicesReady();
     await expect(page.getByTestId("toggle-volume-key-paging")).toBeChecked();
 
     // 4. リーダー画面（/novels/.../chapters/1）へ遷移し、音量［ー］/［＋］によるページ送り・戻りを検証（AC-RD-26）
     await page.goto("/novels/kakuyomu:16817330658027210412/chapters/1");
+    await waitForServicesReady();
     await expect(readerView).toBeVisible();
     await expect(readerView).toHaveAttribute("data-current-page", "1");
 
@@ -111,8 +123,14 @@ test.describe("SCN-06: ハードウェア音量キーによるページ送り・
     while (
       Number(await readerView.getAttribute("data-current-page")) < totalPages
     ) {
+      const current = Number(
+        await readerView.getAttribute("data-current-page"),
+      );
       await page.keyboard.press("AudioVolumeDown");
-      await page.waitForTimeout(350); // アニメーション完了待機
+      await expect(readerView).toHaveAttribute(
+        "data-current-page",
+        String(current + 1),
+      );
     }
     await expect(readerView).toHaveAttribute(
       "data-current-page",
@@ -150,14 +168,16 @@ test.describe("SCN-06: ハードウェア音量キーによるページ送り・
       "プロローグ：目覚め",
     );
 
-    // 8. 連続スクロールモードでの音量キースクロール送り検証（AC-RD-26）
+    // 8. 連続スクロールモードでの音量キースクロール送り・境界2段階遷移の検証（AC-RD-26, AC-RD-27, R1-18）
     // 設定画面で横書きに変更（横書き時は連続スクロール固定）
     await page.goto("/settings");
+    await waitForServicesReady();
     const toggleOrientation = page.getByTestId("toggle-orientation");
     await toggleOrientation.click();
 
     // リーダー画面へ戻る
     await page.goto("/novels/kakuyomu:16817330658027210412/chapters/1");
+    await waitForServicesReady();
     await expect(readerView).toBeVisible();
     await expect(readerView).toHaveAttribute(
       "data-effective-paging-mode",
@@ -167,7 +187,6 @@ test.describe("SCN-06: ハードウェア音量キーによるページ送り・
     // スクロール位置を先頭（0）に設定
     await readerView.evaluate((el) => {
       el.scrollTop = 0;
-      el.dispatchEvent(new Event("scroll"));
     });
     await expect
       .poll(async () => {
@@ -183,18 +202,55 @@ test.describe("SCN-06: ハードウェア音量キーによるページ送り・
       })
       .toBeGreaterThan(50);
 
-    const scrolledTop = await readerView.evaluate((el) => el.scrollTop);
-
     // 音量［＋］押下で逆方向へスクロールが戻ること
     await page.keyboard.press("AudioVolumeUp");
     await expect
       .poll(async () => {
         return readerView.evaluate((el) => el.scrollTop);
       })
-      .toBeLessThan(scrolledTop);
+      .toBe(0);
+
+    // 連続スクロール末尾まで移動し、音量［ー］2回で次話（第2話）へ遷移すること（AC-RD-27, R1-18）
+    await readerView.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+      el.dispatchEvent(new Event("scroll"));
+    });
+    await expect
+      .poll(async () => {
+        return readerView.evaluate(
+          (el) => el.scrollHeight - el.clientHeight - el.scrollTop,
+        );
+      })
+      .toBeLessThanOrEqual(2);
+
+    await page.keyboard.press("AudioVolumeDown");
+    await expect(boundaryHint).toBeVisible();
+    await expect(boundaryHint).toHaveText("もう一度操作で次の話へ");
+
+    await page.keyboard.press("AudioVolumeDown");
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/2/,
+    );
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "第1話 見知らぬ空",
+    );
+
+    // 第2話オープン直後の先頭位置で（手動scrollイベント発火なしで）音量［＋］2回で第1話へ戻れること（AC-RD-27, R1-18）
+    await page.keyboard.press("AudioVolumeUp");
+    await expect(boundaryHint).toBeVisible();
+    await expect(boundaryHint).toHaveText("もう一度操作で前の話へ");
+
+    await page.keyboard.press("AudioVolumeUp");
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1/,
+    );
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "プロローグ：目覚め",
+    );
 
     // 9. 設定画面でトグルを OFF に戻した際、音量キー操作が無効化されることの検証
     await page.goto("/settings");
+    await waitForServicesReady();
     const toggleVolumeKeyOff = page.getByTestId("toggle-volume-key-paging");
     await toggleVolumeKeyOff.click();
     await expect(toggleVolumeKeyOff).not.toBeChecked();
@@ -209,6 +265,7 @@ test.describe("SCN-06: ハードウェア音量キーによるページ送り・
 
     // リーダーへ戻る
     await page.goto("/novels/kakuyomu:16817330658027210412/chapters/1");
+    await waitForServicesReady();
     await expect(page.getByTestId("reader-chapter-title")).toHaveText(
       "プロローグ：目覚め",
     );
