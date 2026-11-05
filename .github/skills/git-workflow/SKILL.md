@@ -56,10 +56,13 @@ Phase 3 以降の PR 作業では、[.github/pull_request_template.md](../../pul
    push 後、リモート上の必須ワークフロー（CI / VRT / IT）がすべて PASS することを確認する。失敗した場合は原因を特定して修正 push する。
 5. **独立 AI レビュー（`pr-reviewer`）の実施**:
    - 実装サブエージェントとは独立したコンテキストで [.github/agents/pr-reviewer.agent.md](../../agents/pr-reviewer.agent.md) の手順に従い PR レビューを実施し、[docs/guidelines/review-comment-format.md](../../../docs/guidelines/review-comment-format.md) の形式で PR にコメントを記録する。
-6. **指摘是正・設計同期・スレッド収束（Resolve）**:
-   - 指摘事項（`[P0]`〜`[P3]`）がある場合、修正コミット（および [docs/quality/bug-and-handover-log.md](../../../docs/quality/bug-and-handover-log.md) と PR 本文のバグ記録表への追記）を行う。
-   - **原因が `D`（設計・仕様不備）の場合は、必ず同一 PR 内で `docs/specs/` の設計書も同時修正する**。
-   - 各コメントスレッドに修正コミット SHA と検証結果を返信し、`pr-reviewer` による再確認を経て全スレッドを Resolve する。
+6. **指摘是正 ＆ 独立レビュアー（`pr-reviewer`）による再レビュー解消確認（Resolve 収束）**:
+   - 指摘事項（`[P0]`〜`[P3]`）がある場合、以下の 4 ステップを確実に実行する（**Main/Worker による自己判断での Gate 6 完了判定は厳禁**）：
+     1. 修正コミットを作成し、静的検査・自動テストの PASS を確認する（原因が `D` の場合は同一 PR 内で `docs/specs/` も同時修正し、PR 本文・`bug-and-handover-log.md` に追記）。
+     2. 各コメントスレッド / PR に修正コミット SHA と検証結果を返信する。
+     3. 独立レビュアー（`pr-reviewer`）サブエージェントを再度起動し、Round 2+ 再レビューを依頼する。
+     4. `pr-reviewer` が PR に全指摘の解消確認（Resolved）コメントを投稿したことを確認し、Gate 6 完了とする。
+   - 指摘事項が 0 件の場合は、Gate 6 は自動的に完了（N/A）扱いとする。
 7. **PR 種別に応じたマージ実行（👤 人間マージ待機 または 🤖 AI 自律マージ）**:
    上記 1〜6 がすべて完了した時点で、[docs/guidelines/workflow.md §4](../../../docs/guidelines/workflow.md#4-task-completion-gate7つの完了条件) の区分に従い以下のように完了処理を行う：
    - **👤 人間マージ待機とする PR**:

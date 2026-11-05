@@ -14,7 +14,7 @@ Closes #
 - [ ] `npm run test:unit` / `npm run test:coverage`（対象ファイル C0/C1/Functions 100%）PASS
 - [ ] UI/Story 変更時: `npm run test:vrt`（1280px / 375px）PASS
 - [ ] IT 変更・対象時: `npm run test:it`（Playwright 全シナリオ）PASS
-- [ ] 独立 AI レビュー（`pr-reviewer`）実施 ＆ 全指摘スレッド Resolve 収束済み
+- [ ] 独立 AI レビュー（`pr-reviewer`）実施 ＆ 指摘是正後の pr-reviewer 再確認（Round 2+）によるスレッド収束完了
 
 ---
 
