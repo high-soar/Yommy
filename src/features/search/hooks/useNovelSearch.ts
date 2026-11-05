@@ -68,13 +68,15 @@ interface ExecuteSearchParams {
  *
  * キーワード検索、並び順・連載状況・ジャンルフィルタリング、次ページ追加読み込み、
  * 登録済み作品の照合・その場本棚追加、および詳細画面への遷移制御を提供する。
+ * 通信中（isLoading === true）の重複リクエストガードおよび非同期競合（Race Condition）防止を内包する（v0.7 Issue #238 / AC-SE-09）。
  */
 export function useNovelSearch(): UseNovelSearchResult {
   const { httpClient, parserRegistry, novelRepository, syncEngine, isReady } =
     useServices();
   const router = useRouter();
 
-  const [selectedSite, setSelectedSite] = useState<NovelSiteType>("kakuyomu");
+  const [selectedSite, setSelectedSiteState] =
+    useState<NovelSiteType>("kakuyomu");
   const [keyword, setKeyword] = useState<string>("");
   const [order, setOrderState] = useState<NovelSearchOrder>("weekly_ranking");
   const [serialStatus, setSerialStatusState] =
@@ -95,6 +97,14 @@ export function useNovelSearch(): UseNovelSearchResult {
 
   const [hasSearched, setHasSearched] = useState<boolean>(false);
   const hasSearchedRef = useRef<boolean>(false);
+
+  // 通信重複ガードおよび非同期競合（Race Condition）防止用 ref
+  const isSearchingRef = useRef<boolean>(false);
+
+  const setSelectedSite = useCallback((site: NovelSiteType) => {
+    if (isSearchingRef.current) return;
+    setSelectedSiteState(site);
+  }, []);
 
   // DB内の登録済み作品ID一覧を更新
   const refreshRegisteredIds = useCallback(async () => {
@@ -122,6 +132,9 @@ export function useNovelSearch(): UseNovelSearchResult {
   // 内部検索実行処理
   const executeSearch = useCallback(
     async (params?: ExecuteSearchParams) => {
+      if (isSearchingRef.current) return;
+      isSearchingRef.current = true;
+
       const targetOrder = params?.order !== undefined ? params.order : order;
       const targetSerial =
         params?.serialStatus !== undefined ? params.serialStatus : serialStatus;
@@ -162,6 +175,7 @@ export function useNovelSearch(): UseNovelSearchResult {
         setItems([]);
         setHasNextPage(false);
       } finally {
+        isSearchingRef.current = false;
         setIsLoading(false);
       }
     },
@@ -182,7 +196,7 @@ export function useNovelSearch(): UseNovelSearchResult {
   }, [executeSearch]);
 
   const loadMore = useCallback(async () => {
-    if (!hasNextPage || isLoadingMore || isLoading) {
+    if (!hasNextPage || isLoadingMore || isLoading || isSearchingRef.current) {
       return;
     }
 
@@ -238,6 +252,7 @@ export function useNovelSearch(): UseNovelSearchResult {
 
   const setOrder = useCallback(
     (newOrder: NovelSearchOrder) => {
+      if (isSearchingRef.current) return;
       setOrderState(newOrder);
       if (hasSearchedRef.current) {
         void executeSearch({ order: newOrder });
@@ -248,6 +263,7 @@ export function useNovelSearch(): UseNovelSearchResult {
 
   const setSerialStatus = useCallback(
     (newStatus: NovelSerialStatus) => {
+      if (isSearchingRef.current) return;
       setSerialStatusState(newStatus);
       if (hasSearchedRef.current) {
         void executeSearch({ serialStatus: newStatus });
@@ -258,6 +274,7 @@ export function useNovelSearch(): UseNovelSearchResult {
 
   const setGenre = useCallback(
     (newGenre: string | undefined) => {
+      if (isSearchingRef.current) return;
       setGenreState(newGenre);
       if (hasSearchedRef.current) {
         void executeSearch({ genre: newGenre });

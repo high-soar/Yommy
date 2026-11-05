@@ -5,7 +5,7 @@ import { composeStories } from "@storybook/react";
 import * as stories from "./SearchFilterBar.stories";
 import { SearchFilterBar } from "./SearchFilterBar";
 
-const { Default, Filtered } = composeStories(stories);
+const { Default, Filtered, Disabled } = composeStories(stories);
 
 describe("SearchFilterBar コンポーネント", () => {
   it("Default ストーリー: デフォルトの並び順・連載状況・ジャンル（すべて）が選択されていること", () => {
@@ -32,6 +32,19 @@ describe("SearchFilterBar コンポーネント", () => {
 
     const genreFantasy = screen.getByTestId("search-genre-fantasy");
     expect(genreFantasy).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("Disabled ストーリー: disabled が真のとき、並び順セレクタ、連載状態ピル、ジャンルピルが無効化されていること (AC-SE-09)", () => {
+    render(<Disabled />);
+
+    const orderSelect = screen.getByTestId("search-order-select");
+    expect(orderSelect).toBeDisabled();
+
+    const serialAll = screen.getByTestId("search-serial-all");
+    expect(serialAll).toBeDisabled();
+
+    const genreAll = screen.getByTestId("search-genre-all");
+    expect(genreAll).toBeDisabled();
   });
 
   it("並び順変更時に onSelectOrder が呼び出されること", async () => {
@@ -97,5 +110,35 @@ describe("SearchFilterBar コンポーネント", () => {
     await user.click(allPill);
 
     expect(handleGenre).toHaveBeenCalledWith(undefined);
+  });
+
+  it("disabled が true のとき、並び順セレクタ、連載状態ピル、ジャンルピルを操作してもコールバックが発火しないこと (AC-SE-09)", async () => {
+    const user = userEvent.setup();
+    const handleOrder = vi.fn();
+    const handleSerial = vi.fn();
+    const handleGenre = vi.fn();
+
+    render(
+      <SearchFilterBar
+        selectedOrder="weekly_ranking"
+        onSelectOrder={handleOrder}
+        selectedSerialStatus="all"
+        onSelectSerialStatus={handleSerial}
+        selectedGenre={undefined}
+        onSelectGenre={handleGenre}
+        disabled={true}
+      />,
+    );
+
+    const orderSelect = screen.getByTestId("search-order-select");
+    expect(orderSelect).toBeDisabled();
+
+    const completedPill = screen.getByTestId("search-serial-completed");
+    await user.click(completedPill);
+    expect(handleSerial).not.toHaveBeenCalled();
+
+    const sfPill = screen.getByTestId("search-genre-sf");
+    await user.click(sfPill);
+    expect(handleGenre).not.toHaveBeenCalled();
   });
 });

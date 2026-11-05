@@ -101,6 +101,18 @@ export const Loading: Story = {
 };
 
 /**
+ * ランキング画面（既存データが存在する状態でのローディング表示 / v0.7 Issue #238）
+ */
+export const LoadingWithItems: Story = {
+  name: "既存データ存在時のローディング（置換表示）",
+  args: {
+    selectedPeriod: "monthly",
+    items: [sampleRankingItem1, sampleRankingItem2],
+    isLoading: true,
+  },
+};
+
+/**
  * ランキング画面（対象期間・ジャンルのランキング0件空状態）
  */
 export const Empty: Story = {

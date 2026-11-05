@@ -1037,4 +1037,131 @@ describe("useNovelSearch", () => {
       expect(result.current.registeredWorkIds.size).toBe(0);
     });
   });
+
+  it("検索実行中（isLoading === true）に search / loadMore / setOrder / retry を連続して呼んでも重複リクエストがガードされること (AC-SE-09)", async () => {
+    let getHtmlResolve: ((val: HttpResponse) => void) | null = null;
+    let getHtmlCallCount = 0;
+
+    mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/search/, () => {
+      getHtmlCallCount++;
+      return new Promise<HttpResponse>((resolve) => {
+        getHtmlResolve = resolve;
+      });
+    });
+
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.setKeyword("異世界");
+    });
+
+    // 検索開始
+    act(() => {
+      void result.current.search();
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(true);
+      expect(getHtmlCallCount).toBe(1);
+    });
+
+    // isLoading 中に setSelectedSite / search / loadMore / setOrder / setSerialStatus / setGenre / retry を呼び出す
+    act(() => {
+      result.current.setSelectedSite("kakuyomu");
+      void result.current.search();
+      void result.current.loadMore();
+      result.current.setOrder("popular");
+      result.current.setSerialStatus("running");
+      result.current.setGenre("fantasy");
+      void result.current.retry();
+    });
+
+    // 重複リクエストは抑止され、getHtmlCallCount は 1 のまま
+    expect(getHtmlCallCount).toBe(1);
+
+    // リクエストを解決
+    await act(async () => {
+      getHtmlResolve?.({
+        status: 200,
+        url: "https://kakuyomu.jp/search?order=weekly_ranking&q=%E7%95%B0%E4%B8%96%E7%95%8C",
+        headers: {},
+        html: searchApolloHtml,
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.items.length).toBeGreaterThan(0);
+    });
+  });
+
+  it("古い非同期検索リクエストが遅れて解決した場合に最新の結果が上書きされないこと (AC-SE-09)", async () => {
+    const resolvers: Array<(val: HttpResponse) => void> = [];
+
+    mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/search/, () => {
+      return new Promise<HttpResponse>((resolve) => {
+        resolvers.push(resolve);
+      });
+    });
+
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.setKeyword("テスト");
+    });
+
+    // 1回目のリクエスト開始
+    act(() => {
+      void result.current.search();
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(true);
+      expect(resolvers.length).toBe(1);
+    });
+
+    // 1回目を解決
+    await act(async () => {
+      resolvers[0]({
+        status: 200,
+        url: "https://kakuyomu.jp/search?q=%E3%83%86%E3%82%B9%E3%83%88",
+        headers: {},
+        html: searchApolloHtml,
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.items.length).toBeGreaterThan(0);
+    });
+
+    // 2回目のリクエストを開始
+    act(() => {
+      result.current.setOrder("popular");
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(true);
+      expect(resolvers.length).toBe(2);
+    });
+
+    // 2回目を解決（空データ）
+    await act(async () => {
+      resolvers[1]({
+        status: 200,
+        url: "https://kakuyomu.jp/search?order=popular&q=%E3%83%86%E3%82%B9%E3%83%88",
+        headers: {},
+        html: searchEmptyHtml,
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.items).toEqual([]);
+    });
+  });
 });

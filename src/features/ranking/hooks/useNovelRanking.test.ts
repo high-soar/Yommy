@@ -204,6 +204,114 @@ describe("useNovelRanking", () => {
     });
   });
 
+  it("ランキング取得中（isLoading === true）に setPeriod / setGenre / retry を連続して呼んでも重複リクエストがガードされること (AC-RK-08)", async () => {
+    let getHtmlResolve: ((val: HttpResponse) => void) | null = null;
+    let getHtmlCallCount = 0;
+
+    mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/rankings\//, () => {
+      getHtmlCallCount++;
+      return new Promise<HttpResponse>((resolve) => {
+        getHtmlResolve = resolve;
+      });
+    });
+
+    const { result } = renderHook(() => useNovelRanking(), {
+      wrapper: createWrapper(),
+    });
+
+    // 初回取得中
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(true);
+      expect(getHtmlCallCount).toBe(1);
+    });
+
+    // isLoading 中に setSelectedSite / setPeriod / setGenre / retry を呼び出す
+    act(() => {
+      result.current.setSelectedSite("kakuyomu");
+      result.current.setPeriod("monthly");
+      result.current.setGenre("fantasy");
+      void result.current.retry();
+    });
+
+    // 重複リクエストは抑止され、getHtmlCallCount は 1 のまま
+    expect(getHtmlCallCount).toBe(1);
+
+    // 初回リクエストを解決
+    await act(async () => {
+      getHtmlResolve?.({
+        status: 200,
+        url: "https://kakuyomu.jp/rankings/weekly",
+        headers: {},
+        html: rankingApolloHtml,
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.items.length).toBeGreaterThan(0);
+    });
+  });
+
+  it("古い非同期リクエストが遅れて解決した場合に最新の結果が上書きされないこと (AC-RK-08)", async () => {
+    const resolvers: Array<(val: HttpResponse) => void> = [];
+
+    mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/rankings\//, () => {
+      return new Promise<HttpResponse>((resolve) => {
+        resolvers.push(resolve);
+      });
+    });
+
+    const { result } = renderHook(() => useNovelRanking(), {
+      wrapper: createWrapper(),
+    });
+
+    // 1回目のリクエスト中
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(true);
+      expect(resolvers.length).toBe(1);
+    });
+
+    // 1回目を解決
+    await act(async () => {
+      resolvers[0]({
+        status: 200,
+        url: "https://kakuyomu.jp/rankings/weekly",
+        headers: {},
+        html: rankingApolloHtml,
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.items.length).toBeGreaterThan(0);
+    });
+
+    // 2回目のリクエストを開始
+    act(() => {
+      result.current.setPeriod("monthly");
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(true);
+      expect(resolvers.length).toBe(2);
+    });
+
+    // 2回目を解決（空データ）
+    await act(async () => {
+      resolvers[1]({
+        status: 200,
+        url: "https://kakuyomu.jp/rankings/monthly",
+        headers: {},
+        html: rankingEmptyHtml,
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.items).toEqual([]);
+    });
+  });
+
   it("カードの「＋ 本棚に追加」で DB に保存され registeredWorkIds が更新されること (AC-RK-06)", async () => {
     const { result } = renderHook(() => useNovelRanking(), {
       wrapper: createWrapper(),

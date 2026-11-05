@@ -1,11 +1,11 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./SearchInputBar.stories";
 import { SearchInputBar } from "./SearchInputBar";
 
-const { Empty, WithKeyword } = composeStories(stories);
+const { Empty, WithKeyword, Loading } = composeStories(stories);
 
 describe("SearchInputBar コンポーネント", () => {
   it("Empty ストーリー: 入力欄と検索ボタンが表示され、クリアボタンは非表示であること", () => {
@@ -32,6 +32,16 @@ describe("SearchInputBar コンポーネント", () => {
     const clearButton = screen.getByTestId("search-clear-button");
     expect(clearButton).toBeInTheDocument();
     expect(clearButton).toHaveAttribute("aria-label", "キーワードをクリア");
+  });
+
+  it("Loading ストーリー: isLoading が真のとき検索ボタンが無効化され、テキスト入力は入力可能を維持すること (AC-SE-09)", () => {
+    render(<Loading />);
+
+    const submitBtn = screen.getByTestId("search-submit-button");
+    expect(submitBtn).toBeDisabled();
+
+    const input = screen.getByTestId("search-input");
+    expect(input).toBeEnabled();
   });
 
   it("キーワード入力時に onChangeKeyword が呼び出されること", async () => {
@@ -108,5 +118,31 @@ describe("SearchInputBar コンポーネント", () => {
     await user.type(input, "{Enter}");
 
     expect(handleSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("isLoading が true のとき、フォーム送信（Enterキーやボタンクリック）を試みても onSubmitSearch が呼ばれないこと (AC-SE-09)", async () => {
+    const user = userEvent.setup();
+    const handleSubmit = vi.fn();
+
+    render(
+      <SearchInputBar
+        keyword="テスト"
+        onChangeKeyword={vi.fn()}
+        onSubmitSearch={handleSubmit}
+        isLoading={true}
+      />,
+    );
+
+    const submitButton = screen.getByTestId("search-submit-button");
+    await user.click(submitButton);
+    expect(handleSubmit).not.toHaveBeenCalled();
+
+    const input = screen.getByTestId("search-input");
+    await user.type(input, "{Enter}");
+    expect(handleSubmit).not.toHaveBeenCalled();
+
+    // フォーム直接送信時も isLoading ガードにより onSubmitSearch が呼ばれないこと
+    fireEvent.submit(screen.getByRole("search"));
+    expect(handleSubmit).not.toHaveBeenCalled();
   });
 });

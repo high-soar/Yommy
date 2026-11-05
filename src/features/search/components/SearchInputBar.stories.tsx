@@ -37,3 +37,14 @@ export const WithKeyword: Story = {
     keyword: "異世界 魔法",
   },
 };
+
+/**
+ * 検索キーワード入力バー（検索通信中・ボタン無効化 / v0.7 Issue #238）
+ */
+export const Loading: Story = {
+  name: "検索通信中（ボタン無効化）",
+  args: {
+    keyword: "異世界 魔法",
+    isLoading: true,
+  },
+};

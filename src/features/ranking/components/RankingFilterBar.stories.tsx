@@ -40,3 +40,15 @@ export const Filtered: Story = {
     selectedGenre: "fantasy",
   },
 };
+
+/**
+ * ランキング絞り込みバー（通信中・操作無効化時 / v0.7 Issue #238）
+ */
+export const Disabled: Story = {
+  name: "操作無効化（ローディング中）",
+  args: {
+    selectedPeriod: "weekly",
+    selectedGenre: undefined,
+    disabled: true,
+  },
+};

@@ -6,8 +6,15 @@ import * as stories from "./SearchPage.stories";
 import { SearchPage } from "./SearchPage";
 import { sampleSearchItem } from "../types";
 
-const { Initial, Loading, Empty, WithResults, LoadingMore, ErrorState } =
-  composeStories(stories);
+const {
+  Initial,
+  Loading,
+  LoadingWithItems,
+  Empty,
+  WithResults,
+  LoadingMore,
+  ErrorState,
+} = composeStories(stories);
 
 describe("SearchPage コンポーネント", () => {
   it("Initial ストーリー: 未検索の初期案内UIが表示されること", () => {
@@ -30,6 +37,23 @@ describe("SearchPage コンポーネント", () => {
     expect(
       screen.queryByTestId("search-initial-state"),
     ).not.toBeInTheDocument();
+  });
+
+  it("LoadingWithItems ストーリー: 既存データが存在してもローディングが最優先で置換表示され、旧一覧が非表示となること (AC-SE-09)", () => {
+    render(<LoadingWithItems />);
+
+    expect(screen.getByTestId("search-loading")).toBeInTheDocument();
+    expect(screen.queryByTestId("search-results-list")).not.toBeInTheDocument();
+
+    // 検索ボタン・フィルタバー・サイトセレクタが無効化されていること
+    expect(screen.getByTestId("search-submit-button")).toBeDisabled();
+    expect(screen.getByTestId("search-order-select")).toBeDisabled();
+    expect(screen.getByTestId("search-serial-all")).toBeDisabled();
+    expect(screen.getByTestId("search-genre-all")).toBeDisabled();
+    expect(screen.getByTestId("site-selector-kakuyomu")).toBeDisabled();
+
+    // テキスト入力欄は入力可能（enabled）を維持していること
+    expect(screen.getByTestId("search-input")).toBeEnabled();
   });
 
   it("Empty ストーリー: 検索結果0件の空状態UIが表示されること", () => {
@@ -185,5 +209,38 @@ describe("SearchPage コンポーネント", () => {
     await user.click(loadMoreBtn);
 
     expect(handleLoadMore).toHaveBeenCalledTimes(1);
+  });
+
+  it("エラー発生時は items が存在していてもエラーカードのみが表示され、作品一覧が非表示となること (AC-SE-09)", () => {
+    render(
+      <SearchPage
+        selectedSite="kakuyomu"
+        onSelectSite={vi.fn()}
+        keyword="異世界"
+        onChangeKeyword={vi.fn()}
+        onSubmitSearch={vi.fn()}
+        selectedOrder="weekly_ranking"
+        onSelectOrder={vi.fn()}
+        selectedSerialStatus="all"
+        onSelectSerialStatus={vi.fn()}
+        selectedGenre={undefined}
+        onSelectGenre={vi.fn()}
+        items={[sampleSearchItem]}
+        registeredWorkIds={new Set()}
+        addingWorkId={null}
+        isLoading={false}
+        isLoadingMore={false}
+        hasNextPage={false}
+        onLoadMore={vi.fn()}
+        error="通信エラーが発生しました"
+        onRetry={vi.fn()}
+        onAddNovel={vi.fn()}
+        onSelectCard={vi.fn()}
+        hasSearched={true}
+      />,
+    );
+
+    expect(screen.getByTestId("search-error")).toBeInTheDocument();
+    expect(screen.queryByTestId("search-results-list")).not.toBeInTheDocument();
   });
 });

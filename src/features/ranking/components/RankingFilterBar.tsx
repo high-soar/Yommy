@@ -7,6 +7,8 @@ export interface RankingFilterBarProps {
   onSelectPeriod: (period: NovelRankingPeriod) => void;
   selectedGenre?: string;
   onSelectGenre: (genre?: string) => void;
+  /** 通信中操作抑止フラグ（省略時は false） */
+  disabled?: boolean;
 }
 
 /**
@@ -17,6 +19,7 @@ export const RankingFilterBar: React.FC<RankingFilterBarProps> = ({
   onSelectPeriod,
   selectedGenre,
   onSelectGenre,
+  disabled = false,
 }) => {
   return (
     <div
@@ -37,12 +40,21 @@ export const RankingFilterBar: React.FC<RankingFilterBarProps> = ({
                 key={period.value}
                 type="button"
                 data-testid={`ranking-period-${period.value}`}
+                disabled={disabled}
                 aria-pressed={isSelected}
-                onClick={() => onSelectPeriod(period.value)}
+                onClick={() => {
+                  if (!disabled) {
+                    onSelectPeriod(period.value);
+                  }
+                }}
                 className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
                   isSelected
-                    ? "bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-400 shadow-xs"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                    ? `bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-400 shadow-xs ${
+                        disabled ? "cursor-not-allowed opacity-60" : ""
+                      }`
+                    : disabled
+                      ? "text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-60"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
                 }`}
               >
                 {period.label}
@@ -65,12 +77,21 @@ export const RankingFilterBar: React.FC<RankingFilterBarProps> = ({
               key={genre.id ?? "all"}
               type="button"
               data-testid={`ranking-genre-${genre.id ?? "all"}`}
+              disabled={disabled}
               aria-pressed={isSelected}
-              onClick={() => onSelectGenre(genre.id)}
+              onClick={() => {
+                if (!disabled) {
+                  onSelectGenre(genre.id);
+                }
+              }}
               className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap shrink-0 transition-colors border ${
                 isSelected
-                  ? "bg-sky-600 border-sky-600 text-white shadow-xs"
-                  : "bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                  ? `bg-sky-600 border-sky-600 text-white shadow-xs ${
+                      disabled ? "cursor-not-allowed opacity-60" : ""
+                    }`
+                  : disabled
+                    ? "bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-60"
+                    : "bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
               }`}
             >
               {genre.label}

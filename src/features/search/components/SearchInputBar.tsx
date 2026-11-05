@@ -4,6 +4,8 @@ export interface SearchInputBarProps {
   keyword: string;
   onChangeKeyword: (keyword: string) => void;
   onSubmitSearch: () => void;
+  /** 検索通信中フラグ（true時は検索ボタン無効化、テキスト入力はフォーカス・入力可能維持 / v0.7 Issue #238） */
+  isLoading?: boolean;
 }
 
 /**
@@ -13,9 +15,11 @@ export const SearchInputBar: React.FC<SearchInputBarProps> = ({
   keyword,
   onChangeKeyword,
   onSubmitSearch,
+  isLoading = false,
 }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     onSubmitSearch();
   };
 
@@ -57,7 +61,12 @@ export const SearchInputBar: React.FC<SearchInputBarProps> = ({
         type="submit"
         data-testid="search-submit-button"
         aria-label="検索"
-        className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white text-sm font-medium shadow-xs transition-colors shrink-0 flex items-center justify-center min-h-[38px]"
+        disabled={isLoading}
+        className={`px-4 py-2 rounded-xl text-white text-sm font-medium shadow-xs transition-colors shrink-0 flex items-center justify-center min-h-[38px] ${
+          isLoading
+            ? "bg-slate-400 dark:bg-slate-600 cursor-not-allowed opacity-60"
+            : "bg-sky-600 hover:bg-sky-500 active:bg-sky-700"
+        }`}
       >
         検索
       </button>
