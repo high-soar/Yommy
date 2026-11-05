@@ -76,6 +76,7 @@ export const RankingPage: React.FC<RankingPageProps> = ({
           <SiteSelector
             selectedSite={selectedSite}
             onSelectSite={onSelectSite}
+            disabled={isLoading}
           />
         </div>
 
@@ -84,13 +85,14 @@ export const RankingPage: React.FC<RankingPageProps> = ({
           onSelectPeriod={onSelectPeriod}
           selectedGenre={selectedGenre}
           onSelectGenre={onSelectGenre}
+          disabled={isLoading}
         />
       </header>
 
       {/* スクロール可能なランキングコンテンツ領域 */}
       <div className="flex-1 overflow-y-auto px-4 py-4 min-h-0">
-        {/* エラー表示 */}
-        {error && (
+        {/* 1. エラー表示 */}
+        {error ? (
           <div
             data-testid="ranking-error"
             className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 flex flex-col items-center text-center gap-3 my-4"
@@ -108,10 +110,8 @@ export const RankingPage: React.FC<RankingPageProps> = ({
               再試行する
             </button>
           </div>
-        )}
-
-        {/* 初回ローディング（結果がまだない場合） */}
-        {isLoading && items.length === 0 && (
+        ) : isLoading ? (
+          /* 2. ローディング（items.length に依存せず常に最優先でスピナー描画、旧リスト非表示） */
           <div
             data-testid="ranking-loading"
             className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-slate-400 gap-3"
@@ -119,10 +119,8 @@ export const RankingPage: React.FC<RankingPageProps> = ({
             <div className="w-8 h-8 border-3 border-sky-600 border-t-transparent rounded-full animate-spin" />
             <p className="text-sm font-medium">ランキングを取得中...</p>
           </div>
-        )}
-
-        {/* ランキング結果 0 件空状態 */}
-        {!isLoading && !error && items.length === 0 && (
+        ) : items.length === 0 ? (
+          /* 3. ランキング結果 0 件空状態 */
           <div
             data-testid="ranking-empty-state"
             className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-slate-400 gap-3 text-center"
@@ -139,10 +137,8 @@ export const RankingPage: React.FC<RankingPageProps> = ({
               </p>
             </div>
           </div>
-        )}
-
-        {/* ランキング作品カード一覧 */}
-        {items.length > 0 && (
+        ) : (
+          /* 4. ランキング作品カード一覧 */
           <div
             data-testid="ranking-results-list"
             className="flex flex-col gap-3 max-w-3xl mx-auto pb-6"

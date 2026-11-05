@@ -69,6 +69,10 @@ export function useNovelRanking(): UseNovelRankingResult {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // 通信中重複ガードおよび非同期競合防止用ref
+  const isFetchingRef = useRef<boolean>(false);
+  const fetchIdRef = useRef<number>(0);
+
   // DB内の登録済み作品ID一覧を更新
   const refreshRegisteredIds = useCallback(async () => {
     if (!novelRepository) return;
@@ -88,6 +92,10 @@ export function useNovelRanking(): UseNovelRankingResult {
   // ランキング取得処理
   const executeFetch = useCallback(
     async (params?: ExecuteFetchParams) => {
+      if (isFetchingRef.current) return;
+      isFetchingRef.current = true;
+      const currentFetchId = ++fetchIdRef.current;
+
       const targetSite =
         params?.site !== undefined ? params.site : selectedSite;
       const targetPeriod =
@@ -113,16 +121,23 @@ export function useNovelRanking(): UseNovelRankingResult {
         });
 
         const response = await httpClient.getHtml({ url });
+        if (currentFetchId !== fetchIdRef.current) return;
+
         const result = parser.getRanking(response.html, url);
+        if (currentFetchId !== fetchIdRef.current) return;
 
         setItems(result.items);
         await refreshRegisteredIds();
       } catch (err) {
+        if (currentFetchId !== fetchIdRef.current) return;
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
         setItems([]);
       } finally {
-        setIsLoading(false);
+        if (currentFetchId === fetchIdRef.current) {
+          isFetchingRef.current = false;
+          setIsLoading(false);
+        }
       }
     },
     [
@@ -149,6 +164,7 @@ export function useNovelRanking(): UseNovelRankingResult {
 
   const setSelectedSite = useCallback(
     (newSite: NovelSiteType) => {
+      if (isFetchingRef.current) return;
       setSelectedSiteState(newSite);
       void executeFetch({ site: newSite });
     },
@@ -157,6 +173,7 @@ export function useNovelRanking(): UseNovelRankingResult {
 
   const setPeriod = useCallback(
     (newPeriod: NovelRankingPeriod) => {
+      if (isFetchingRef.current) return;
       setPeriodState(newPeriod);
       void executeFetch({ period: newPeriod });
     },
@@ -165,6 +182,7 @@ export function useNovelRanking(): UseNovelRankingResult {
 
   const setGenre = useCallback(
     (newGenre: string | undefined) => {
+      if (isFetchingRef.current) return;
       setGenreState(newGenre);
       void executeFetch({ genre: newGenre });
     },
@@ -172,6 +190,7 @@ export function useNovelRanking(): UseNovelRankingResult {
   );
 
   const retry = useCallback(async () => {
+    if (isFetchingRef.current) return;
     await executeFetch();
   }, [executeFetch]);
 
