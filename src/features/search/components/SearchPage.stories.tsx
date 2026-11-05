@@ -63,6 +63,19 @@ export const Loading: Story = {
 };
 
 /**
+ * 検索画面（既存検索データが存在する状態でのローディング表示 / v0.7 Issue #238）
+ */
+export const LoadingWithItems: Story = {
+  name: "既存検索結果存在時のローディング（置換表示）",
+  args: {
+    keyword: "異世界",
+    hasSearched: true,
+    items: [sampleSearchItem],
+    isLoading: true,
+  },
+};
+
+/**
  * 検索画面（検索結果0件空状態）
  */
 export const Empty: Story = {
