@@ -3,9 +3,10 @@ type: quality-log
 title: 品質記録・バグ記録票 ＆ 申し送り管理シート（Bug & Handover Log）
 description: 製品コードと支援成果物を分離したバグ記録（原因5分類 L/S/D/B/A）および後続タスクへの申し送り事項（HO-xx）を追跡する正本シート。
 status: "Approved"
-updated: "2026-11-05"
+updated: "2026-11-06"
 tags: [quality, bug-log, handover, dre, kaizen]
 related_specs:
+  - docs/specs/changes/issue-238-loading-ux-clarification.md
   - docs/specs/changes/archive/issue-203-volume-key-paging.md
   - docs/specs/changes/archive/issue-202-reader-top-overlay-and-seekbar.md
   - docs/specs/changes/archive/issue-201-reader-page-slide-animation.md
@@ -92,11 +93,12 @@ related_tests: []
 > - Milestone `v0.5` で解決済みの申し送り（`HO-15`, `HO-22`, `HO-23`, `HO-24`, `HO-25`）: [docs/quality/archive/v0.5-reader-customization-and-cache-log.md](archive/v0.5-reader-customization-and-cache-log.md)
 > - Milestone `v0.6` で解決済みの申し送り（`HO-26`〜`HO-28`）: [docs/quality/archive/v0.6-reader-animation-overlay-and-volume-key-log.md](archive/v0.6-reader-animation-overlay-and-volume-key-log.md)
 
-現在、未解決（`Open`）の申し送り事項はありません。次期 Milestone `v0.7` 作業中に発生した申し送り事項は、本表へ `HO-29` より連番で登録します。
+現在、未解決（`Open`）の申し送り事項は 2 件（`HO-29`, `HO-30`）です。Milestone `v0.7` 作業中に発生した追加の申し送り事項は、本表へ `HO-31` より連番で登録します。
 
-| ID  | 起票元 Issue / PR | 申し送り事項の内容 | 解決先（対象 Issue / 成果物） | 完了ゲート | 状態 (`Open` / `Resolved`) |
-| :-: | :---------------: | :----------------- | :---------------------------- | :--------- | :------------------------: |
-|     |                   |                    |                               |            |                            |
+|     ID      | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                           | 解決先（対象 Issue / 成果物）          | 完了ゲート              | 状態 (`Open` / `Resolved`) |
+| :---------: | :---------------: | :------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------- | :---------------------- | :------------------------: |
+| **`HO-29`** | Issue #239, #240  | 小説家になろう（`narou`: `ncode.syosetu.com`）作品の複数ページ目次取得・クラウド同期および検索・ランキング探索の実機検証                     | Milestone `v0.7` 実機検証 / Issue #241 | Milestone `v0.7` 完了前 |           `Open`           |
+| **`HO-30`** |    Issue #238     | Android 実機での低速モバイル回線下におけるランキング・検索の条件切替、およびリーダー未キャッシュ話遷移時のローディング表示 UX の実機体感確認 | Milestone `v0.7` 実機検証 / Issue #241 | Milestone `v0.7` 完了前 |           `Open`           |
 
 ---
 

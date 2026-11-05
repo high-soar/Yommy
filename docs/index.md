@@ -30,6 +30,7 @@ docs/
 │   ├── parsers/                       # [App全体正本] 小説サイト別の現在スクレイピング・DOM解析仕様書
 │   │   └── kakuyomu.md                # カクヨム パーサー・スクレイピング仕様書（kakuyomu.jp）
 │   └── changes/                       # [差分仕様 (Delta Specs)] 要望（親Issue）ごとの設計差分・テスト計画・Sub-issue分割
+│       ├── issue-238-loading-ux-clarification.md # Webアクセス発生時ローディング状態明示UX改善の差分仕様 (#238)
 │       └── archive/                   # 完了済みの差分仕様アーカイブ（親Issueクローズ時に git mv で移動）
 │           ├── issue-203-volume-key-paging.md # [Archived] ハードウェア音量キーによるページ送り・スクロール送り対応と設定画面ON/OFFトグルの実装設計 (#203)
 │           ├── issue-202-reader-top-overlay-and-seekbar.md # [Archived] リーダー上下連動オーバーレイ＆ページシークバー（RTL）実装の差分仕様 (#202)
