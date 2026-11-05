@@ -5,7 +5,7 @@ import { composeStories } from "@storybook/react";
 import * as stories from "./SiteSelector.stories";
 import { SiteSelector } from "./SiteSelector";
 
-const { Default, NarouSelected } = composeStories(stories);
+const { Default, NarouSelected, Disabled } = composeStories(stories);
 
 describe("SiteSelector コンポーネント (Ranking)", () => {
   it("Default ストーリー: カクヨムがアクティブでなろうが非活性（準備中）であること", () => {
@@ -28,6 +28,16 @@ describe("SiteSelector コンポーネント (Ranking)", () => {
 
     const narouBtn = screen.getByTestId("site-selector-narou");
     expect(narouBtn).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("Disabled ストーリー: disabled が真のとき、全ボタンが無効化されていること (AC-RK-08)", () => {
+    render(<Disabled />);
+
+    const kakuyomuBtn = screen.getByTestId("site-selector-kakuyomu");
+    expect(kakuyomuBtn).toBeDisabled();
+
+    const narouBtn = screen.getByTestId("site-selector-narou");
+    expect(narouBtn).toBeDisabled();
   });
 
   it("利用可能なサイトボタンをクリックした際に onSelectSite が呼ばれること", async () => {
@@ -53,6 +63,24 @@ describe("SiteSelector コンポーネント (Ranking)", () => {
 
     const narouBtn = screen.getByTestId("site-selector-narou");
     await user.click(narouBtn);
+
+    expect(handleSelect).not.toHaveBeenCalled();
+  });
+
+  it("disabled が true のとき、利用可能なサイトボタンをクリックしても onSelectSite が呼ばれないこと (AC-RK-08)", async () => {
+    const user = userEvent.setup();
+    const handleSelect = vi.fn();
+
+    render(
+      <SiteSelector
+        selectedSite="narou"
+        onSelectSite={handleSelect}
+        disabled={true}
+      />,
+    );
+
+    const kakuyomuBtn = screen.getByTestId("site-selector-kakuyomu");
+    await user.click(kakuyomuBtn);
 
     expect(handleSelect).not.toHaveBeenCalled();
   });

@@ -5,7 +5,7 @@ import { composeStories } from "@storybook/react";
 import * as stories from "./RankingFilterBar.stories";
 import { RankingFilterBar } from "./RankingFilterBar";
 
-const { Default, Filtered } = composeStories(stories);
+const { Default, Filtered, Disabled } = composeStories(stories);
 
 describe("RankingFilterBar コンポーネント", () => {
   it("Default ストーリー: デフォルトの集計期間（週間）とジャンル（総合）が選択されていること (AC-RK-01)", () => {
@@ -28,6 +28,16 @@ describe("RankingFilterBar コンポーネント", () => {
 
     const genreFantasy = screen.getByTestId("ranking-genre-fantasy");
     expect(genreFantasy).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("Disabled ストーリー: disabled が真のとき、全期間ボタンおよびジャンルボタンが無効化されていること (AC-RK-08)", () => {
+    render(<Disabled />);
+
+    const periodWeekly = screen.getByTestId("ranking-period-weekly");
+    expect(periodWeekly).toBeDisabled();
+
+    const genreAll = screen.getByTestId("ranking-genre-all");
+    expect(genreAll).toBeDisabled();
   });
 
   it("期間ピル押下時に onSelectPeriod が呼び出されること (AC-RK-02)", async () => {
@@ -72,5 +82,29 @@ describe("RankingFilterBar コンポーネント", () => {
     const allPill = screen.getByTestId("ranking-genre-all");
     await user.click(allPill);
     expect(handleGenre).toHaveBeenCalledWith(undefined);
+  });
+
+  it("disabled が true のとき、期間ピル・ジャンルピルをクリックしてもコールバックが発火しないこと (AC-RK-02, AC-RK-03, AC-RK-08)", async () => {
+    const user = userEvent.setup();
+    const handlePeriod = vi.fn();
+    const handleGenre = vi.fn();
+
+    render(
+      <RankingFilterBar
+        selectedPeriod="weekly"
+        onSelectPeriod={handlePeriod}
+        selectedGenre={undefined}
+        onSelectGenre={handleGenre}
+        disabled={true}
+      />,
+    );
+
+    const dailyPill = screen.getByTestId("ranking-period-daily");
+    await user.click(dailyPill);
+    expect(handlePeriod).not.toHaveBeenCalled();
+
+    const sfPill = screen.getByTestId("ranking-genre-sf");
+    await user.click(sfPill);
+    expect(handleGenre).not.toHaveBeenCalled();
   });
 });

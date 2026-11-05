@@ -7,6 +7,8 @@ export interface RankingFilterBarProps {
   onSelectPeriod: (period: NovelRankingPeriod) => void;
   selectedGenre?: string;
   onSelectGenre: (genre?: string) => void;
+  /** 通信中操作抑止フラグ（省略時は false） */
+  disabled?: boolean;
 }
 
 /**
