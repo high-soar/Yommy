@@ -74,7 +74,8 @@ export function useNovelSearch(): UseNovelSearchResult {
     useServices();
   const router = useRouter();
 
-  const [selectedSite, setSelectedSite] = useState<NovelSiteType>("kakuyomu");
+  const [selectedSite, setSelectedSiteState] =
+    useState<NovelSiteType>("kakuyomu");
   const [keyword, setKeyword] = useState<string>("");
   const [order, setOrderState] = useState<NovelSearchOrder>("weekly_ranking");
   const [serialStatus, setSerialStatusState] =
@@ -95,6 +96,15 @@ export function useNovelSearch(): UseNovelSearchResult {
 
   const [hasSearched, setHasSearched] = useState<boolean>(false);
   const hasSearchedRef = useRef<boolean>(false);
+
+  // 通信重複ガードおよび非同期競合（Race Condition）防止用 refs
+  const isSearchingRef = useRef<boolean>(false);
+  const searchIdRef = useRef<number>(0);
+
+  const setSelectedSite = useCallback((site: NovelSiteType) => {
+    if (isSearchingRef.current) return;
+    setSelectedSiteState(site);
+  }, []);
 
   // DB内の登録済み作品ID一覧を更新
   const refreshRegisteredIds = useCallback(async () => {
@@ -122,6 +132,10 @@ export function useNovelSearch(): UseNovelSearchResult {
   // 内部検索実行処理
   const executeSearch = useCallback(
     async (params?: ExecuteSearchParams) => {
+      if (isSearchingRef.current) return;
+      isSearchingRef.current = true;
+      const currentSearchId = ++searchIdRef.current;
+
       const targetOrder = params?.order !== undefined ? params.order : order;
       const targetSerial =
         params?.serialStatus !== undefined ? params.serialStatus : serialStatus;
@@ -149,7 +163,10 @@ export function useNovelSearch(): UseNovelSearchResult {
         });
 
         const response = await httpClient.getHtml({ url });
+        if (currentSearchId !== searchIdRef.current) return;
+
         const result = parser.searchNovels(response.html, url);
+        if (currentSearchId !== searchIdRef.current) return;
 
         setItems(result.items);
         setCurrentPage(result.pageInfo.currentPage);
@@ -157,12 +174,16 @@ export function useNovelSearch(): UseNovelSearchResult {
 
         await refreshRegisteredIds();
       } catch (err) {
+        if (currentSearchId !== searchIdRef.current) return;
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
         setItems([]);
         setHasNextPage(false);
       } finally {
-        setIsLoading(false);
+        if (currentSearchId === searchIdRef.current) {
+          isSearchingRef.current = false;
+          setIsLoading(false);
+        }
       }
     },
     [
@@ -178,16 +199,18 @@ export function useNovelSearch(): UseNovelSearchResult {
   );
 
   const search = useCallback(async () => {
+    if (isSearchingRef.current) return;
     await executeSearch();
   }, [executeSearch]);
 
   const loadMore = useCallback(async () => {
-    if (!hasNextPage || isLoadingMore || isLoading) {
+    if (!hasNextPage || isLoadingMore || isLoading || isSearchingRef.current) {
       return;
     }
 
     setIsLoadingMore(true);
     setError(null);
+    const currentSearchId = searchIdRef.current;
 
     try {
       const parser = parserRegistry
@@ -207,12 +230,16 @@ export function useNovelSearch(): UseNovelSearchResult {
       });
 
       const response = await httpClient.getHtml({ url });
+      if (currentSearchId !== searchIdRef.current) return;
+
       const result = parser.searchNovels(response.html, url);
+      if (currentSearchId !== searchIdRef.current) return;
 
       setItems((prev) => [...prev, ...result.items]);
       setCurrentPage(result.pageInfo.currentPage);
       setHasNextPage(result.pageInfo.hasNextPage);
     } catch (err) {
+      if (currentSearchId !== searchIdRef.current) return;
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
     } finally {
@@ -233,11 +260,13 @@ export function useNovelSearch(): UseNovelSearchResult {
   ]);
 
   const retry = useCallback(async () => {
+    if (isSearchingRef.current) return;
     await executeSearch();
   }, [executeSearch]);
 
   const setOrder = useCallback(
     (newOrder: NovelSearchOrder) => {
+      if (isSearchingRef.current) return;
       setOrderState(newOrder);
       if (hasSearchedRef.current) {
         void executeSearch({ order: newOrder });
@@ -248,6 +277,7 @@ export function useNovelSearch(): UseNovelSearchResult {
 
   const setSerialStatus = useCallback(
     (newStatus: NovelSerialStatus) => {
+      if (isSearchingRef.current) return;
       setSerialStatusState(newStatus);
       if (hasSearchedRef.current) {
         void executeSearch({ serialStatus: newStatus });
@@ -258,6 +288,7 @@ export function useNovelSearch(): UseNovelSearchResult {
 
   const setGenre = useCallback(
     (newGenre: string | undefined) => {
+      if (isSearchingRef.current) return;
       setGenreState(newGenre);
       if (hasSearchedRef.current) {
         void executeSearch({ genre: newGenre });

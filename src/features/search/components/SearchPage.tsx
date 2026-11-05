@@ -105,6 +105,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
           <SiteSelector
             selectedSite={selectedSite}
             onSelectSite={onSelectSite}
+            disabled={isLoading}
           />
         </div>
 
@@ -112,6 +113,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
           keyword={keyword}
           onChangeKeyword={onChangeKeyword}
           onSubmitSearch={onSubmitSearch}
+          isLoading={isLoading}
         />
 
         <SearchFilterBar
@@ -121,13 +123,14 @@ export const SearchPage: React.FC<SearchPageProps> = ({
           onSelectSerialStatus={onSelectSerialStatus}
           selectedGenre={selectedGenre}
           onSelectGenre={onSelectGenre}
+          disabled={isLoading}
         />
       </header>
 
       {/* スクロール可能な検索コンテンツ領域 */}
       <div className="flex-1 overflow-y-auto px-4 py-4 min-h-0">
-        {/* エラー表示 */}
-        {error && (
+        {/* 1. エラー表示（最優先） */}
+        {error ? (
           <div
             data-testid="search-error"
             className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 flex flex-col items-center text-center gap-3 my-4"
@@ -145,10 +148,8 @@ export const SearchPage: React.FC<SearchPageProps> = ({
               再試行する
             </button>
           </div>
-        )}
-
-        {/* 初回ローディング（結果がまだない場合） */}
-        {isLoading && items.length === 0 && (
+        ) : isLoading ? (
+          /* 2. 検索中ローディング（件数によらず最優先で置換表示） */
           <div
             data-testid="search-loading"
             className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-slate-400 gap-3"
@@ -156,50 +157,8 @@ export const SearchPage: React.FC<SearchPageProps> = ({
             <div className="w-8 h-8 border-3 border-sky-600 border-t-transparent rounded-full animate-spin" />
             <p className="text-sm font-medium">作品を検索中...</p>
           </div>
-        )}
-
-        {/* 初期未検索状態 */}
-        {!isLoading && !error && !hasSearched && (
-          <div
-            data-testid="search-initial-state"
-            className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-slate-400 gap-3 text-center"
-          >
-            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-3xl">
-              🔍
-            </div>
-            <div className="max-w-xs">
-              <h2 className="text-base font-bold text-slate-800 dark:text-slate-200 mb-1">
-                キーワードを入力して小説を検索
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                カクヨムに投稿された作品名・著者名・キーワードやジャンルからお好みの小説を見つけることができます。
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* 検索結果 0 件空状態 */}
-        {!isLoading && !error && hasSearched && items.length === 0 && (
-          <div
-            data-testid="search-empty-state"
-            className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-slate-400 gap-3 text-center"
-          >
-            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-3xl">
-              📭
-            </div>
-            <div className="max-w-xs">
-              <h2 className="text-base font-bold text-slate-800 dark:text-slate-200 mb-1">
-                作品が見つかりませんでした
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                指定された条件に一致する作品はありませんでした。別のキーワードやジャンルをお試しください。
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* 検索結果カード一覧 */}
-        {items.length > 0 && (
+        ) : items.length > 0 ? (
+          /* 3. 検索結果カード一覧（次ページ読み込み中スピナーを含む） */
           <div
             data-testid="search-results-list"
             className="flex flex-col gap-3 max-w-3xl mx-auto pb-6"
@@ -240,6 +199,42 @@ export const SearchPage: React.FC<SearchPageProps> = ({
                 </button>
               </div>
             )}
+          </div>
+        ) : !hasSearched ? (
+          /* 4. 初期未検索状態 */
+          <div
+            data-testid="search-initial-state"
+            className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-slate-400 gap-3 text-center"
+          >
+            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-3xl">
+              🔍
+            </div>
+            <div className="max-w-xs">
+              <h2 className="text-base font-bold text-slate-800 dark:text-slate-200 mb-1">
+                キーワードを入力して小説を検索
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                カクヨムに投稿された作品名・著者名・キーワードやジャンルからお好みの小説を見つけることができます。
+              </p>
+            </div>
+          </div>
+        ) : (
+          /* 5. 検索結果 0 件空状態 */
+          <div
+            data-testid="search-empty-state"
+            className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-slate-400 gap-3 text-center"
+          >
+            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-3xl">
+              📭
+            </div>
+            <div className="max-w-xs">
+              <h2 className="text-base font-bold text-slate-800 dark:text-slate-200 mb-1">
+                作品が見つかりませんでした
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                指定された条件に一致する作品はありませんでした。別のキーワードやジャンルをお試しください。
+              </p>
+            </div>
           </div>
         )}
       </div>
