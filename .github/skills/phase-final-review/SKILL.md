@@ -27,8 +27,9 @@ description: "Use when orchestrating a cross-deliverable review at the end of a 
 
 ## 2. 横断レビュー実行手順（Step 1）
 
-1. **対象と完了条件・SHA の固定**:
-   - 対象 Milestone（または Phase）の追跡 Issue、含まれる要望 Issue 一覧、および現在の `HEAD` コミット SHA（`git rev-parse HEAD`）を確認し、`git status` がクリーンであることを確認する。
+1. **対象と完了条件・SHA の固定（⚠️ レビュー開始時の既存コメント閲覧禁止）**:
+   - 対象 Milestone（または Phase）の追跡 Issue 本文（`gh issue view <issue-number>` ※ `--comments` は付けない）、含まれる要望 Issue 一覧、および現在の `HEAD` コミット SHA（`git rev-parse HEAD`）を確認し、`git status` がクリーンであることを確認する。
+   - **【重要】開始時コメント閲覧禁止**: 複数のオーケストレーターがほぼ同時に起動されるため、**この段階（レビュー開始時〜ステップ 3 完了前）では絶対に追跡 Issue の既存コメント（`--comments`）を取得・閲覧してはならない**（アンカリング防止、およびレビュー実行中の数分間に他エージェントがコメントを投稿して開始時点の ID が陳腐化・重複するのを防ぐため）。
    - **実施タイミングの鉄則**: 品質分析レポート（`docs/quality/reports/*.md`）を作成する **前** に Round 1 横断レビューおよび Step 2 の指摘是正・Android 実機検証を実施する。これにより、横断レビューおよび実機検証で摘出された不備をすべて `docs/quality/bug-and-handover-log.md` に漏れなく算入した上で、Step 3 にて正確なバグ密度・DRE を一度で算出・アーカイブできる。
 2. **観点の分割と読み取り専用サブエージェントの起動**:
    対象範囲に応じて、以下の 3 観点に分割して読み取り専用サブエージェントを起動する：
@@ -46,23 +47,34 @@ description: "Use when orchestrating a cross-deliverable review at the end of a 
    - 出力形式: docs/guidelines/review-comment-format.md に従い、[P0]〜[P3] の重要度と 4要素（Location, Problem, Impact, Recommendation）で報告すること（指摘なしの場合も確認範囲を報告）。
    ```
 
-3. **メインセッションでの事実検証と品質ゲート実行**:
+3. **メインセッションでの事実検証と品質ゲート実行（仮 ID での下書き整理）**:
    - 全サブエージェントの応答完了後、サブエージェントを明示的に終了（`manage_subagents` の `kill` / `kill_all`）する。
-   - 報告された候補をメインセッションで実際のコード・正本と照合し、誤検知を除外して重複を整理する。
+   - 報告された候補をメインセッションで実際のコード・正本と照合し、誤検知を除外して重複を整理する（この時点ではまだ `R1-xx` の確定番号を振らず、仮番号 `#1, #2...` で指摘内容・Location・Problem・Impact・Recommendation を完成させておく）。
    - メインセッションで一通りの検証コマンド（`npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run test:coverage`, `npm run test:vrt`, `npm run test:it`）を実行し、100% PASS することを確認する。
-4. **追跡 Issue 既存コメントの確認と連番追記（Pre-post Conflict Check）**:
-   - コメント投稿前に、必ず追跡 Issue の既存コメントを確認する：
+4. **投稿直前（Just-in-Time）の既存コメント確認・採番と、投稿直後（Post-Submit）の衝突検知・自動リナンバー**:
+   - **① 投稿直前の最新コメント取得**:
+     ステップ 3 の全検証と指摘下書きが完了し、**いざコメントを投稿する直前** に初めて追跡 Issue の既存コメントを取得する：
      ```bash
      gh issue view <issue-number> --comments
      ```
-   - **既存コメントの存在有無に応じた採番規律**:
-     - **先行コメントが存在しない場合**: `R1-01` から採番して集約コメントを投稿する。
+   - **② 既存コメントの存在有無に応じた直前採番と即座の投稿**:
+     - **先行コメントが存在しない場合**: `R1-01` から採番して直ちに `gh issue comment <issue-number> --body-file ...` で投稿する。
      - **先行コメント（別モデル/別オーケストレーター）が既に存在する場合**:
        1. 先行コメントの最終指摘 ID（例: `R1-16`）を確認する。
-       2. 自身が発見した指摘のうち、先行指摘と同一内容のものは「先行指摘 `R1-xx` を追認・補強」として言及する。
-       3. 自身が独自に発見した新規指摘については、**先行コメントの最終連番に続く連続した ID（例: `R1-17`, `R1-18`...）を付与する（ID の重複を厳禁）**。
-       4. 使用モデル名やレビュー観点を明記した **独立した追記コメント（スレッド）** として投稿し、モデル別の着眼点・レビュー差分が把握できるようにする。
-   - コメントフォーマットは [docs/guidelines/review-comment-format.md](../../../docs/guidelines/review-comment-format.md#5-節目横断レビューphase--ミニmilestone-完了レビューの集約形式) のテンプレートに従う。
+       2. 自身が発見した指摘のうち、先行指摘と同一内容のものは新規 ID を振らず「先行指摘 `R1-xx` を追認・補強」として記載する。
+       3. 自身が独自に発見した新規指摘のみに、**先行コメントの最終連番に続く連続した ID（例: `R1-17`, `R1-18`...）を付与** し、使用モデル名やレビュー観点を明記した独立コメントとして直ちに投稿する（取得から投稿までの間に別作業を挟まない）。
+     - コメントフォーマットは [docs/guidelines/review-comment-format.md](../../../docs/guidelines/review-comment-format.md#5-節目横断レビューphase--ミニmilestone-完了レビューの集約形式) のテンプレートに従う。
+   - **③ 投稿直後の衝突検知と自己コメント即時リナンバー（Race Condition 対策）**:
+     - コメント投稿完了直後に、必ず以下のコマンドで Issue 上の全コメント一覧（コメント ID と本文）を再取得し、自身がステップ①〜②の数秒間に投稿したコメントより一瞬先に別エージェントのコメントが確定して `R1-xx` の ID が重複していないかを確認する：
+       ```bash
+       gh issue view <issue-number> --comments
+       ```
+     - 万一、自分より先に確定した先行コメントと `R1-xx` の番号が重複していた場合は、直ちに先行コメントの最終 ID の次番から自身のコメント内の新規指摘 ID を振り直し、`gh api` で自身のコメントを上書き更新（PATCH）して重複を 100% 解消する：
+       ```bash
+       # 自身の最新コメント ID を取得して PATCH 更新する例
+       COMMENT_ID=$(gh api "repos/{owner}/{repo}/issues/<issue-number>/comments" --jq '.[-1].id')
+       gh api --method PATCH "repos/{owner}/{repo}/issues/comments/${COMMENT_ID}" -F body=@/tmp/renumbered_review_comment.md
+       ```
 
 ---
 
