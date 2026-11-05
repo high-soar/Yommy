@@ -198,6 +198,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   const prefetchAbortControllerRef = useRef<AbortController | null>(null);
   const activePrefetchPromiseRef = useRef<Promise<void> | null>(null);
   const lastGoToChapterIndexRef = useRef<number | null>(null);
+  const isNavigatingChapterRef = useRef<boolean>(false);
 
   useEffect(() => {
     novelRef.current = novel;
@@ -793,6 +794,11 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       targetChapterIndex: number,
       options?: GoToChapterOptions,
     ): Promise<boolean> => {
+      // 多重遷移防止ガード (AC-RD-06)
+      if (isNavigatingChapterRef.current) {
+        return false;
+      }
+
       stopPrefetch();
 
       const currentNovel = novelRef.current;
@@ -805,6 +811,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       }
 
       let isSuccess = false;
+      isNavigatingChapterRef.current = true;
       setIsLoading(true);
       setError(null);
 
@@ -824,6 +831,10 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
 
         // 3. キャッシュ鮮度・オンデマンド本文取得
         if (targetChapter) {
+          // 未キャッシュ話への遷移時は通信開始前に本文をクリアして中央ローディング表示 (AC-RD-06, AC-RD-28)
+          if (targetChapter.bodyHtml === null) {
+            setChapter(null);
+          }
           const resolved = await resolveChapterBody(
             currentNovel.id,
             targetChapterIndex,
@@ -832,6 +843,8 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           if (resolved) {
             targetChapter = resolved;
           }
+        } else {
+          setChapter(null);
         }
 
         // 4. 表示完了時の既読更新
@@ -884,6 +897,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         setError(toErrorMessage(err));
         isSuccess = false;
       } finally {
+        isNavigatingChapterRef.current = false;
         setIsLoading(false);
       }
       return isSuccess;
