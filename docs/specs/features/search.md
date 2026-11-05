@@ -2,18 +2,22 @@
 type: spec-feature
 title: "検索画面仕様書（SCR-06: Novel Search）"
 description: "複数小説サイト（v0.3はカクヨム）のキーワード検索、並び順・ジャンル・連載状態フィルタ、作品カード一覧およびその場での本棚追加を提供する検索画面（SCR-06）の正本仕様。"
-status: "Review (#238)"
+status: "Review (#239)"
 updated: "2026-11-06"
 tags:
   - search
   - scr-06
   - kakuyomu
+  - narou
+  - multi-page-toc
   - filtering
   - sorting
   - ui
   - shell
   - bottom-nav
 related_specs:
+  - docs/specs/changes/issue-239-narou-parser-and-multi-page-toc.md
+  - docs/specs/parsers/narou.md
   - docs/specs/requirements.md
   - docs/specs/architecture.md
   - docs/specs/db-schema.md
@@ -250,7 +254,7 @@ export interface UseNovelSearchResult {
 | **`AC-SE-03`** | 並び順の切り替え                       | フィルタバーの並び順（週間ランキング順、累計ランキング順、更新順、新作順）を選択すると、即座に対応するパラメータ（`order`）で再検索が開始され、旧検索結果一覧が非表示となって `search-loading` が表示され、通信完了後に一覧が更新されること（デフォルトは週間ランキング順）。通信中はフィルタバーおよび検索ボタンが無効化されること（v0.7 Issue #238）。                 | `SYS-REQ-17`               |
 | **`AC-SE-04`** | 連載状態・ジャンル絞り込み             | 連載状態ピル（すべて、連載中、完結済）およびジャンルピル（すべて、異世界ファンタジー、現代ファンタジー等12種）の選択により、旧検索結果一覧が非表示となって `search-loading` が表示され、絞り込み再検索が実行されること。通信中はフィルタバーおよび検索ボタンが無効化されること（v0.7 Issue #238）。                                                                      | `SYS-REQ-17`               |
 | **`AC-SE-05`** | 作品カードメタデータ描画               | 各作品カードに、タイトル、著者名、ジャンルバッジ、連載状態バッジ、あらすじ抜粋、話数、総文字数、★ポイント数、タグラベルが欠損なく描画されること。                                                                                                                                                                                                                        | `SYS-REQ-17`               |
-| **`AC-SE-06`** | カード内「＋ 本棚に追加」その場登録    | カードの「＋ 本棚に追加」ボタンを押下すると、画面遷移せずにボタンがローディング表示となり、バックグラウンドで作品トップ HTML 取得 ＆ 目次パース ＆ SQLite 保存（`upsertNovelWithToc`）が行われ、成功時に「✓ 登録済み」へ切り替わり `syncEngine.notifyChanged()` による自動 Push がトリガーされること（R1-26）。                                                          | `SYS-REQ-19` / `TR-14`     |
+| **`AC-SE-06`** | カード内「＋ 本棚に追加」その場登録    | カードの「＋ 本棚に追加」ボタンを押下すると、画面遷移せずにボタンがローディング表示となり、バックグラウンドで `fetchFullNovelIndex`（`nextTocPageUrl` による複数ページ目次連続取得対応、Issue #239）および SQLite 保存（`upsertNovelWithToc`）が行われ、成功時に「✓ 登録済み」へ切り替わり `syncEngine.notifyChanged()` による自動 Push がトリガーされること（R1-26）。  | `SYS-REQ-19` / `TR-14`     |
 | **`AC-SE-07`** | カード本体タップ時の導線               | 登録済みカードをタップしたときは直ちにその作品の目次画面（`SCR-02`）へ遷移し、未登録カードをタップしたときは自動で「本棚に追加」を実行した上で完了後に目次画面へ遷移すること。                                                                                                                                                                                           | `SYS-REQ-19` / `TR-14`     |
 | **`AC-SE-08`** | 次ページ読み込み                       | 検索結果が20件以上あり `hasNextPage` が true の場合、最下部の「次へ」ボタン押下で次ページの作品が追加読み込み（またはページ切り替え）されること。                                                                                                                                                                                                                        | `SYS-REQ-17`               |
 | **`AC-SE-09`** | 再検索時ローディング表示と操作重複抑止 | キーワード再検索や並び順・連載状態・ジャンル・サイト切替による 1 ページ目再取得中（`isLoading === true`）は、直前の検索結果一覧を画面からクリアし中央にローディングスピナー（`data-testid="search-loading"`）を表示すること。通信中は検索実行ボタン・フィルタバー・サイトセレクタが操作不能となり、テキスト入力はフォーカス・文字入力を維持すること（v0.7 Issue #238）。 | `SYS-REQ-17`               |

@@ -2,8 +2,8 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Approved"
-updated: "2026-11-04"
+status: "Review (#239)"
+updated: "2026-11-06"
 tags:
   - architecture
   - parser
@@ -30,11 +30,17 @@ tags:
   - page-margin
   - volume-key
   - hardware-key
+  - narou
+  - multi-page-toc
   - ho-23
   - ho-24
   - ho-25
   - ho-28
+  - ho-29
 related_specs:
+  - docs/specs/changes/issue-239-narou-parser-and-multi-page-toc.md
+  - docs/specs/parsers/narou.md
+  - docs/specs/changes/archive/issue-238-loading-ux-clarification.md
   - docs/specs/changes/archive/issue-203-volume-key-paging.md
   - docs/specs/changes/archive/issue-202-reader-top-overlay-and-seekbar.md
   - docs/specs/changes/archive/issue-201-reader-page-slide-animation.md
@@ -207,12 +213,13 @@ Yommy/
     ├── parsers/                       # 【1. Parser Layer（スクレイピング・DOM解析層）】
     │   ├── types.ts                   # NovelParser, ParsedNovelMetadata, ParsedChapterContent, ParsedSearchResult, ParsedRankingResult 等の型契約
     │   ├── parserRegistry.ts          # URL から対応サイト（kakuyomu / narou 等）を判定・ディスパッチ
+    │   ├── fetchFullNovelIndex.ts     # 複数ページ目次（nextTocPageUrl）連続取得・結合パイプライン（Issue #239）
     │   ├── sanitizer.ts               # 小説本文 HTML サニタイズ＆正規化（XSS防止・ルビ/傍点保持）
     │   ├── kakuyomu/                  # カクヨム用パーサーとローカル HTML フィクスチャ
     │   │   ├── KakuyomuParser.ts
     │   │   ├── KakuyomuParser.test.ts
     │   │   └── __fixtures__/
-    │   └── narou/                     # 小説家になろう用パーサーとローカル HTML フィクスチャ（v0.6〜予定）
+    │   └── narou/                     # 小説家になろう用パーサーとローカル HTML フィクスチャ（Issue #239）
     │       ├── NarouParser.ts
     │       ├── NarouParser.test.ts
     │       └── __fixtures__/
@@ -715,7 +722,13 @@ export const PREFETCH_COUNT = 5;
    - 3秒以内に取得成功した場合は新本文で DB および画面を更新する。
    - タイムアウト・オフライン・通信エラー等で失敗した場合は、**即座に既存の `bodyHtml` を使用してフォールバック表示** し（一括キャッシュ時は既存キャッシュを維持して次話へ進行）、エラー画面を表示せず読書を継続させる。
 
-### 3.8 クラウド同期（Google Drive appDataFolder）および同期エンジンアーキテクチャ（v0.4 新設）
+5. **複数ページ目次（`nextTocPageUrl`）の連続取得制御（v0.7 Issue #239 新設）**:
+   - 小説家になろう（`ncode.syosetu.com`）の 100 話超作品のように作品目次が `?p=2`, `?p=3`... と複数ページに分割される場合、共通パイプライン `fetchFullNovelIndex`（`src/parsers/fetchFullNovelIndex.ts`）が `nextTocPageUrl` を順次辿って全目次ページを取得・結合する。
+   - ページ間のリクエスト間隔ウェイトは `DEFAULT_TOC_PAGE_INTERVAL_MS`（`500ms`）、最大ページ上限は `MAX_TOC_PAGES`（`100` ページ ＝ 最大 10,000 話）とし、訪問済み URL セットによる無限ループ防止ガードを備える。
+   - 2 ページ目以降の先頭エピソードに章見出し（`partTitle`）がない場合は直前ページ末尾の `partTitle` を引き継ぎ、全エピソードに `chapterIndex: 1..N` の連番を再採番する。
+   - 途中ページの取得に失敗した場合は例外を送出して中断し、不完全な目次で既存 DB を上書きしない。
+
+### 3.8 クラウド同期（Google Drive appDataFolder）および同期エンジンアーキテクチャ（v0.4 新設 / v0.7 マルチサイト拡張）
 
 複数端末間での本棚登録作品・しおり位置・既読状態の同期、および機種変更時の引き継ぎを実現するため、Google Drive のアプリ専用領域（`appDataFolder`）に単一 JSON（`yommy-sync-state.json`）を保存・同期するアーキテクチャを導入します（Issue #120）。
 
@@ -751,7 +764,7 @@ export interface CloudSyncBridge {
   - 受信した JSON に対し、通信前に厳格なランタイムスキーマ検証（`version === 1`、必須フィールド、数値範囲、プロトタイプ汚染防止）を実行する。
   - 作品 ID（`id`）が `${siteType}:${remoteWorkId}` と厳密に一致することを検証する。
   - `deletedNovels` のキーが空文字（`""`）や空白文字でないことを検証し、`novels` と `deletedNovels` の双方に同一キーが存在する場合は、作品の `updatedAt` と `deletedAt` を比較し、`updatedAt >= deletedAt` であれば再登録を優先して `deletedNovels` から除外、`deletedAt > updatedAt` であれば削除を優先して `novels` から該当作品を除去する（R1-28）。
-  - 未登録作品の自動目次取得（`upsertNovelWithToc`）前に、`canonicalUrl` を既存の `parseNovelUrl`（`https://kakuyomu.jp/works/<id>` ホワイトリスト検証）にかけ、不正な URL や未知ドメインへのリクエスト（SSRF）を遮断する。さらに `canonicalUrl` から抽出した `siteType` / `workId` とリモート作品データの整合性を検証し、正規化 URL で通信を行う。
+  - 未登録作品の自動目次取得（`upsertNovelWithToc`）前に、`canonicalUrl` を `parseNovelUrl`（`https://kakuyomu.jp/works/<id>` および `https://ncode.syosetu.com/<ncode>/` のマルチサイトホワイトリスト検証、Issue #239）にかけ、不正な URL や未知ドメイン（`novel18.syosetu.com` 含む）へのリクエスト（SSRF）を遮断する。さらに `canonicalUrl` から抽出した `siteType` / `workId` とリモート作品データの整合性を検証し、正規化 URL および `fetchFullNovelIndex`（複数ページ目次対応）で通信を行う。
   - 401 Unauthorized エラーの判定は、作品 URL や作品 ID に偶然 `401` が含まれている場合の誤爆を防ぐため、HTTP ステータスコード 401、または単語境界を考慮した正規表現（`/\b401\s+Unauthorized\b/i` 等）を用いて厳格に行う（R1-13, R2-14）。
 - **競合解決（マージ）ルール**:
   - 新規作品の自動目次補完: リモートにのみ存在する作品は `canonicalUrl` から目次を自動取得してローカル DB に登録し、リモートのしおり話数・既読状態、および最終読了日時（`lastReadAt`）・お気に入りフラグ（`isFavorite`）を正しく復元・反映する（`novelRepository.updateSyncMetadata`、R1-12）。
