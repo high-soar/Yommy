@@ -22,7 +22,7 @@ related_specs:
   - docs/specs/features/ranking.md
   - docs/specs/features/novel-detail.md
   - docs/specs/parsers/kakuyomu.md
-  - docs/specs/changes/issue-238-loading-ux-clarification.md
+  - docs/specs/changes/archive/issue-238-loading-ux-clarification.md
   - docs/specs/changes/archive/issue-79-four-tabs-search-ranking.md
 related_tests:
   - src/App.test.tsx

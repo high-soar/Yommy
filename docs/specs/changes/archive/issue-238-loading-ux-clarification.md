@@ -3,7 +3,7 @@ type: spec-delta
 title: "Webアクセス発生時（ランキング・検索の条件切替、リーダー未キャッシュ話遷移）のローディング状態明示UX改善仕様"
 description: "Issue #238 に対する差分仕様、影響するApp全体正本、テスト計画、および実装Sub-issue分割計画。"
 issue: "#238"
-status: "Review (#238)"
+status: "Completed (Archived)"
 updated: "2026-11-06"
 tags:
   - delta
@@ -31,7 +31,6 @@ related_tests:
   - src/features/reader/components/ReaderContainer.test.tsx
   - src/features/reader/hooks/useReader.test.ts
   - test/it/scenarios/scn02-search-ranking-discovery.spec.ts
-  - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
 ---
 
 # 差分仕様書：Webアクセス発生時のローディング状態明示UX改善（Issue #238）
@@ -259,10 +258,10 @@ export interface SearchFilterBarProps {
 ### 6.3 結合テスト（Playwright IT / 全件 100% PASS）
 
 - `SCN-02`（検索・ランキング探索シナリオ）:
-  - ランキングの集計期間切替時およびジャンル切替時に、旧リストが一瞬クリアされて `ranking-loading` が表示され、新リストへ更新される一連の挙動を検証。
-  - 検索画面でのキーワード再検索およびフィルタ切替時にも同様に `search-loading` を経て更新されることを検証。
-- `SCN-01`（リーダー閲覧シナリオ）:
-  - 前後話遷移において、未キャッシュ話へのオンデマンド取得中にローディング表示を経て新話数が表示されるフローを検証。
+  - ランキングの集計期間切替時およびジャンル切替時に、一覧が新条件で再取得・更新される一連の挙動を結合検証（AC-RK-02, AC-RK-03）。
+  - 検索画面でのフィルタ切替時（並び順・連載状態）にも同様に新条件で再取得・更新される一連の挙動を結合検証（AC-SE-03, AC-SE-04）。
+  - リーダーの前後の話遷移（`reader-next-chapter`）において、新エピソードへの遷移および本文描画が正常に行われるフローを結合検証（AC-RD-01）。
+  - ※なお通信中の一時的なローディング表示（`ranking-loading`, `search-loading`, `reader-loading`）およびボタン無効化（AC-RK-08, AC-SE-09, AC-RD-08）は、インメモリの `MockHttpClient` による即時解決環境のため、UT（`RankingPage.test.tsx`, `SearchPage.test.tsx`, `ReaderPage.test.tsx`）および Storybook VRT にて決定論的に 100% カバレッジで担保されている。
 
 ---
 
