@@ -10,6 +10,8 @@ import { SqlNovelRepository } from "../../../storage/repositories/novelRepositor
 import { SqlChapterRepository } from "../../../storage/repositories/chapterRepository";
 import { SqlAppSettingsRepository } from "../../../storage/repositories/appSettingsRepository";
 import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.html?raw";
+import narouWorkIndexSerializedHtml from "../../../parsers/narou/__fixtures__/work_index_serialized.html?raw";
+import narouWorkIndexPage2Html from "../../../parsers/narou/__fixtures__/work_index_page2.html?raw";
 import type { YommySyncState } from "../types";
 import {
   SyncEngine,
@@ -529,6 +531,46 @@ describe("syncEngine", () => {
     it("不正な URL 文字列で例外を投げずに null を返すこと", () => {
       expect(parseNovelUrl("not-a-valid-url")).toBeNull();
     });
+
+    it("小説家になろう作品トップの正常 URL を正しく解析すること (Issue #239)", () => {
+      const result = parseNovelUrl("https://ncode.syosetu.com/n9669bk/");
+      expect(result).toEqual({
+        siteType: "narou",
+        workId: "n9669bk",
+        canonicalUrl: "https://ncode.syosetu.com/n9669bk/",
+      });
+    });
+
+    it("小説家になろうの末尾スラッシュなし・大文字 ncode も小文字正規化 URL を返すこと (Issue #239)", () => {
+      const res1 = parseNovelUrl("https://ncode.syosetu.com/n9669bk");
+      expect(res1).toEqual({
+        siteType: "narou",
+        workId: "n9669bk",
+        canonicalUrl: "https://ncode.syosetu.com/n9669bk/",
+      });
+
+      const res2 = parseNovelUrl("https://ncode.syosetu.com/N9669BK/");
+      expect(res2).toEqual({
+        siteType: "narou",
+        workId: "n9669bk",
+        canonicalUrl: "https://ncode.syosetu.com/n9669bk/",
+      });
+    });
+
+    it("小説家になろうの非 HTTPS・18禁サイト・非作品パス・偽ドメインを拒絶して null を返すこと (Issue #239)", () => {
+      expect(parseNovelUrl("http://ncode.syosetu.com/n9669bk/")).toBeNull();
+      expect(parseNovelUrl("https://novel18.syosetu.com/n9669bk/")).toBeNull();
+      expect(
+        parseNovelUrl(
+          "https://ncode.syosetu.com/novelview/infotop/ncode/n9669bk/",
+        ),
+      ).toBeNull();
+      expect(
+        parseNovelUrl("https://ncode.syosetu.com.evil.com/n9669bk/"),
+      ).toBeNull();
+      expect(parseNovelUrl("https://ncode.syosetu.com/")).toBeNull();
+      expect(parseNovelUrl("https://ncode.syosetu.com/abc/")).toBeNull();
+    });
   });
 
   describe("SyncEngine (マージ・競合解決・自動同期)", () => {
@@ -562,6 +604,18 @@ describe("syncEngine", () => {
           html: workIndexHtml,
         }),
       );
+      httpClient.setResponse("https://ncode.syosetu.com/n9669bk/", () => ({
+        status: 200,
+        url: "https://ncode.syosetu.com/n9669bk/",
+        headers: {},
+        html: narouWorkIndexSerializedHtml,
+      }));
+      httpClient.setResponse("https://ncode.syosetu.com/n9669bk/?p=2", () => ({
+        status: 200,
+        url: "https://ncode.syosetu.com/n9669bk/?p=2",
+        headers: {},
+        html: narouWorkIndexPage2Html,
+      }));
 
       engine = new SyncEngine({
         bridge,
@@ -635,6 +689,50 @@ describe("syncEngine", () => {
 
       const lastSynced = await appSettingsRepo.getCloudSyncLastSyncedAt();
       expect(lastSynced).toBeGreaterThan(0);
+    });
+
+    it("pullAndMerge: リモートにのみ存在するなろう複数ページ作品を fetchFullNovelIndex で全話取得・結合しローカル DB へ保存すること (Issue #239)", async () => {
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: "2026-10-31T12:00:00.000Z",
+        novels: {
+          "narou:n9669bk": {
+            id: "narou:n9669bk",
+            siteType: "narou",
+            remoteWorkId: "n9669bk",
+            canonicalUrl: "https://ncode.syosetu.com/n9669bk/",
+            title: "無職転生 - 異世界行ったら本気だす",
+            author: "理不尽な孫の手",
+            synopsis: "あらすじ本文",
+            totalChapters: 5,
+            isFavorite: 1,
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: "2012/11/26 20:00",
+            bookmarkChapterIndex: 4,
+            lastReadAt: "2026-10-31T10:00:00.000Z",
+            readChapterIds: ["4"],
+            createdAt: "2026-10-01T00:00:00.000Z",
+            updatedAt: "2026-10-31T10:00:00.000Z",
+          },
+        },
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      const result = await engine.pullAndMerge();
+      expect(result.pulled).toBe(true);
+      expect(result.mergedNovels).toBe(1);
+
+      const localNovel = await novelRepo.getNovelById("narou:n9669bk");
+      expect(localNovel).not.toBeNull();
+      expect(localNovel?.title).toBe("無職転生 - 異世界行ったら本気だす");
+      expect(localNovel?.totalChapters).toBe(5);
+
+      const chapters = await chapterRepo.listChaptersByNovelId("narou:n9669bk");
+      expect(chapters).toHaveLength(5);
+      expect(chapters.map((c) => c.chapterIndex)).toEqual([1, 2, 3, 4, 5]);
+      expect(chapters[3].partTitle).toBe("第2章 少年期"); // 2ページ目先頭への引き継ぎ確認
+      expect(chapters[3].isRead).toBe(true);
     });
 
     it("pullAndMerge: リモート作品の canonicalUrl がホワイトリストに違反する場合、目次取得をスキップすること (SSRF 防止)", async () => {

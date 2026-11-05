@@ -19,7 +19,7 @@ export interface SyncEngineDependencies {
 }
 
 export interface ParsedNovelUrl {
-  siteType: "kakuyomu";
+  siteType: "kakuyomu" | "narou";
   workId: string;
   canonicalUrl: string;
 }
