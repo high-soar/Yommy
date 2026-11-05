@@ -2,8 +2,8 @@
 type: spec-feature
 title: "本棚画面仕様書（SCR-01: Bookshelf）"
 description: "登録済み小説カード一覧の表示、しおり位置からのワンタップ読書再開、および検索・ランキング画面への誘導を提供する本棚画面（SCR-01）の正本仕様。"
-status: Approved
-updated: "2026-11-04"
+status: "Review (#239)"
+updated: "2026-11-06"
 tags:
   - bookshelf
   - scr-01
@@ -15,7 +15,11 @@ tags:
   - sort
   - cloud-sync
   - google-drive
+  - narou
+  - multi-page-toc
 related_specs:
+  - docs/specs/changes/issue-239-narou-parser-and-multi-page-toc.md
+  - docs/specs/parsers/narou.md
   - docs/specs/changes/archive/issue-120-cloud-sync-google-drive.md
   - docs/specs/requirements.md
   - docs/specs/architecture.md
@@ -250,7 +254,7 @@ export interface UseBookshelfResult {
    - `novelRepository.listNovels(sortOrder)` を呼び出して作品一覧を取得・描画する。
 2. **自動更新チェック（1時間経過判定・レートリミット順次実行）**:
    - 初回ロード完了後、登録作品のうち `lastCheckedAt === null` または `lastCheckedAt` が現在時刻から1時間（3,600,000ms）以上経過している作品を抽出する。
-   - 対象作品が1件以上ある場合、`isCheckingUpdates = true` とし、対象サーバー負荷軽減のため 1.0秒（1000ms）のウェイト間隔を挟みながら順次 `novelRepository` / `parser` 経由で目次を再取得する。
+   - 対象作品が1件以上ある場合、`isCheckingUpdates = true` とし、対象サーバー負荷軽減のため 1.0秒（1000ms）のウェイト間隔を挟みながら順次 `fetchFullNovelIndex`（`nextTocPageUrl` による複数ページ目次連続取得・結合対応、Issue #239）および `novelRepository.upsertNovelWithToc` 経由で目次を再取得する。
    - 既存の `totalChapters` より増加したエピソード、または新規エピソードが検知された作品には `has_new_update = 1` を記録し、`last_checked_at` を現在時刻に更新する。
    - チェック完了後、一覧をリフレッシュして `isCheckingUpdates = false` に戻す（ソート順が `unread_first` の場合は新着作品が最上部へ自動浮上する）。
 3. **手動一括更新チェック（`checkUpdates(true)`）**:

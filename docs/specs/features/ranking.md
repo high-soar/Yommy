@@ -2,18 +2,22 @@
 type: spec-feature
 title: "ランキング画面仕様書（SCR-07: Novel Ranking）"
 description: "複数小説サイト（v0.3はカクヨム）のランキング一覧（期間×総合/主要ジャンル）、順位バッジ表示、作品カード一覧およびその場での本棚追加を提供するランキング画面（SCR-07）の正本仕様。"
-status: "Review (#238)"
+status: "Review (#239)"
 updated: "2026-11-06"
 tags:
   - ranking
   - scr-07
   - kakuyomu
+  - narou
+  - multi-page-toc
   - period
   - genre
   - ui
   - shell
   - bottom-nav
 related_specs:
+  - docs/specs/changes/issue-239-narou-parser-and-multi-page-toc.md
+  - docs/specs/parsers/narou.md
   - docs/specs/requirements.md
   - docs/specs/architecture.md
   - docs/specs/db-schema.md
@@ -213,7 +217,7 @@ export interface UseNovelRankingResult {
 | **`AC-RK-03`** | ジャンルの切り替え                     | ジャンルピル（総合、異世界ファンタジー、現代ファンタジー等12種）の選択により、該当ジャンルのランキング再取得が開始され、旧一覧が非表示となって `ranking-loading` が表示され、通信完了後に一覧が更新されること。通信中はフィルタ操作が無効化されること（v0.7 Issue #238）。                                                                                                                                                    | `SYS-REQ-18`               |
 | **`AC-RK-04`** | 順位バッジ強調表示                     | 1位〜3位の作品カードには特別スタイル（金・銀・銅をモチーフにしたアクセント表示）の順位バッジが付与され、4位以降は識別しやすい数字バッジが表示されること。                                                                                                                                                                                                                                                                     | `SYS-REQ-18`               |
 | **`AC-RK-05`** | ランキングカードメタデータ描画         | 各作品カードに、順位、タイトル、著者名、ジャンルバッジ、連載状態バッジ、あらすじ抜粋、話数、総文字数、★ポイント数、タグラベルが欠損なく描画されること。                                                                                                                                                                                                                                                                       | `SYS-REQ-18`               |
-| **`AC-RK-06`** | カード内「＋ 本棚に追加」その場登録    | カードの「＋ 本棚に追加」ボタンを押下すると、画面遷移せずにボタンがローディング表示となり、バックグラウンドで作品トップ HTML 取得 ＆ 目次パース ＆ SQLite 保存（`upsertNovelWithToc`）が行われ、成功時に「✓ 登録済み」へ切り替わり `syncEngine.notifyChanged()` による自動 Push がトリガーされること（R1-26）。                                                                                                               | `SYS-REQ-19` / `TR-14`     |
+| **`AC-RK-06`** | カード内「＋ 本棚に追加」その場登録    | カードの「＋ 本棚に追加」ボタンを押下すると、画面遷移せずにボタンがローディング表示となり、バックグラウンドで `fetchFullNovelIndex`（`nextTocPageUrl` による複数ページ目次連続取得対応、Issue #239）および SQLite 保存（`upsertNovelWithToc`）が行われ、成功時に「✓ 登録済み」へ切り替わり `syncEngine.notifyChanged()` による自動 Push がトリガーされること（R1-26）。                                                       | `SYS-REQ-19` / `TR-14`     |
 | **`AC-RK-07`** | カード本体タップ時の導線               | 登録済みカードをタップしたときは直ちにその作品の目次画面（`SCR-02`）へ遷移し、未登録カードをタップしたときは自動で「本棚に追加」を実行した上で完了後に目次画面へ遷移すること。                                                                                                                                                                                                                                                | `SYS-REQ-19` / `TR-14`     |
 | **`AC-RK-08`** | 再取得時ローディング表示と操作重複抑止 | ランキング再取得通信中（`isLoading === true`）は、直前のランキングカード一覧を画面からクリアし中央にローディングスピナー（`data-testid="ranking-loading"`）を明示すること。また通信中は期間タブ・ジャンルピル・サイトセレクタが操作不能（`disabled`）となり二重リクエストや非同期競合が抑止されること。通信エラー時はエラー表示（`ranking-error`）および再試行ボタンが提供され、旧データは残留しないこと（v0.7 Issue #238）。 | `SYS-REQ-18`               |
 

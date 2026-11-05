@@ -2,8 +2,8 @@
 type: spec-feature
 title: "作品詳細・目次画面仕様書（SCR-02: Novel Detail & TOC）"
 description: 登録済み作品のヘッダー情報・あらすじ表示、章見出し付きエピソード一覧（キャッシュ済み・既読・しおり状態）、目次更新（再取得）、作品削除、およびリーダー画面への閲覧遷移を提供する作品詳細・目次画面（SCR-02）の正本仕様。
-status: "Approved"
-updated: "2026-11-04"
+status: "Review (#239)"
+updated: "2026-11-06"
 tags:
   [
     novel-detail,
@@ -19,9 +19,14 @@ tags:
     cache-rules,
     cache-management,
     capacity-visualization,
+    narou,
+    multi-page-toc,
     ho-24,
+    ho-29,
   ]
 related_specs:
+  - docs/specs/changes/issue-239-narou-parser-and-multi-page-toc.md
+  - docs/specs/parsers/narou.md
   - docs/specs/changes/archive/issue-170-cache-management-and-capacity-visualization.md
   - docs/specs/requirements.md
   - docs/specs/architecture.md
@@ -423,7 +428,7 @@ export interface UseNovelDetailResult {
    - `isRefreshing = true`, `error = null`, `refreshMessage = null` にセットする。
    - **通信前パーサー解決と正規化**: `parserRegistry.requireParser(novel.canonicalUrl)` および `parser.normalizeWorkUrl(novel.canonicalUrl)` を実行する。
    - **目次 HTML 取得・解析・DB Upsert**:
-     - `httpClient.getHtml({ url: normalizedWorkUrl })` で作品トップ HTML を取得し、`parser.parseNovelIndex(response.html, normalizedWorkUrl)` で最新メタデータ・目次一覧を抽出する。
+     - `fetchFullNovelIndex(httpClient, parser, normalizedWorkUrl)` を用いて作品トップ（および `nextTocPageUrl` が存在する複数ページ目次全ページ、Issue #239）を取得・結合し、最新メタデータ・全話目次一覧を抽出する。
      - 更新前の話数 `prevCount = chapters.length` を保持した上で、`novelRepository.upsertNovelWithToc(novelIndex, new Date().toISOString())` を実行する（`chapters` テーブルの `ON CONFLICT(novel_id, remote_chapter_id) DO UPDATE` により、既存の `body_html` / `byte_size` / `is_read` / `downloaded_at` は破壊されず保持される）。
    - **状態再取得と完了フィードバック**:
      - DB から最新の `novel` と `chapters` を再取得して State を更新する。
