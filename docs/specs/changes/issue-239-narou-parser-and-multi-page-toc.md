@@ -65,10 +65,10 @@ Step 1 の実サイト HTML 構造調査および `/grill-me` インタビュー
    - `https://ncode.syosetu.com/{ncode}/`（および各話 URL `/n9669bk/1/`、目次ページネーション `?p=2`、大文字 ncode `/N9669BK/`）を対象と判定し、小文字 ncode ＋末尾スラッシュ付きの `https://ncode.syosetu.com/{ncode}/` に正規化する。
    - 18 禁サイト（`novel18.syosetu.com`）や非作品パス（`/novelview/` 等）は `false` とする。
 2. **作品トップ・目次抽出（`parseNovelIndex`）**:
-   - 連載作品（`.p-eplist` / `.index_box` あり）: タイトル（`.p-novel__title`）、著者名（`.p-novel__author`、「作者：」接頭辞除去）、あらすじ（`#novel_ex` / `.p-novel__summary`）、章見出し（`.p-eplist__chapter-title`）、各話サブタイトル・URL・初回公開日時（`.p-eplist__update` の先頭 `YYYY/MM/DD HH:mm`）、および次ページ URL（`.c-pager__item--next[href]`）を抽出する。
+   - 連載作品（`.p-eplist` / `.index_box` あり）: タイトル（`.p-novel__title`）、著者名（`.p-novel__author`、「作者：」接頭辞除去）、あらすじ（`#novel_ex` / `.p-novel__summary`）、章見出し（`.p-eplist__chapter-title`）、各話サブタイトル・URL・初回公開日時（`.p-eplist__update` の先頭 `YYYY/MM/DD HH:mm`）、および次ページ URL（`.c-pager__item--next[href]`、`https:` かつ `canParse` かつ `normalizeWorkUrl(nextUrl) === canonicalUrl` を満たす同一作品 URL のみ、不一致時は `null`）を抽出する。
    - 短編作品（`.p-eplist` がなく `.p-novel__body` あり）: `chapterIndex: 1`, `remoteChapterId: "1"`, `partTitle: null`, `title: 作品タイトル`, `url: canonicalUrl`, `publishedAt: .p-novel__date-published の掲載日（YYYY/MM/DD）` の擬似 1 話目次を生成する。あらすじが `#novel_ex` にない場合は `meta[name="description"]`（末尾の `// 無料オンライン小説です` を除去）から補完する。
 3. **各話本文抽出（`parseChapterContent`）**:
-   - サブタイトルはモバイル・PC 双方の現行 DOM（`.p-novel__subtitle-episode`, `.p-novel__title--rensai`）および短編タイトル（`.p-novel__title`）、レガシー（`.novel_subtitle`）の優先順で抽出する。
+   - サブタイトルはモバイル・PC 双方の現行 DOM（`1. .p-novel__subtitle-episode` → `2. .p-novel__title--rensai`）、レガシー（`3. .novel_subtitle`）、および短編タイトル（`4. .p-novel__title` → `5. .novel_title`）の優先順で抽出する。
    - 前書き（`.p-novel__text.p-novel__text--preface`）、本編（`.p-novel__text:not(.p-novel__text--preface):not(.p-novel__text--afterword)`）、後書き（`.p-novel__text.p-novel__text--afterword`）を抽出し、前書き・後書きが存在する場合は既存の `HtmlSanitizer` 許可タグ内の区切り段落 `<p><br></p><p>────────────</p><p><br></p>` を挟んで本編と結合する。
    - `<rt>` 内が傍点記号（`/^[・﹅●]+$/`）のみの `<ruby>` 要素を `<em class="bouten">{基底テキスト}</em>` に正規化した上で、`sanitizeChapterHtml` によりサニタイズする。
    - `.c-pager__item--before[href]` / `.c-pager__item--next[href]` から `prevChapterUrl` / `nextChapterUrl` を絶対 URL として抽出する。
@@ -97,7 +97,8 @@ export async function fetchFullNovelIndex(
 ```
 
 - `parser.normalizeWorkUrl(workUrl)` で正規化した URL から 1 ページ目を取得・パースする。
-- `nextTocPageUrl` が存在する間、`intervalMs`（デフォルト `500ms`）のウェイトを挟みながら最大 `maxPages`（デフォルト `100` ページ）まで順次取得する（`visitedUrls` セットにより同一 URL の無限ループも防止）。
+- `nextTocPageUrl` が存在する間、**`https:` スキームかつ `parser.canParse(nextUrl) === true` かつ `parser.normalizeWorkUrl(nextUrl) === canonicalUrl`（同一作品）** を検証し、満たさない場合（外部ドメイン・非 HTTPS・別作品パス等）は通信せずループを終了する（SSRF・別作品混入防止）。
+- `intervalMs`（デフォルト `500ms`）のウェイトを挟みながら最大 `maxPages`（デフォルト `100` ページ）まで順次取得する（`visitedUrls` セットにより同一 URL の無限ループも防止）。
 - ページ結合時、次ページ先頭の `partTitle === null` のエピソードには前ページ末尾の `partTitle` を引き継ぎ、全エピソードの `chapterIndex` を `1..N` の連番に振り直す。
 - 途中ページで通信エラー等が発生した場合は例外を送出して中断し、不完全な目次による DB 上書きを防止する。
 - 以下の **全 5 箇所の目次取得ポイント** を `fetchFullNovelIndex` 経由に統一する：
@@ -138,12 +139,12 @@ export async function fetchFullNovelIndex(
 1. **`src/parsers/narou/NarouParser.test.ts`（新規・ローカル HTML フィクスチャ検証）**:
    - `src/parsers/narou/__fixtures__/` に実サイト DOM 構造に準拠したローカル HTML フィクスチャ（連載目次 1 ページ目 `work_index_page1.html`、連載目次 2 ページ目 `work_index_page2.html`、短編作品 `short_story.html`、各話本文［前書き・本編・後書き・ルビ・傍点含む］`episode_content.html`）を作成。
    - `canParse` / `normalizeWorkUrl`: 正常系（作品トップ、各話 URL、クエリ付き、大文字 `N9669BK`）、異常系（`novel18.syosetu.com`, `kakuyomu.jp`, `/novelview/`, 非 URL 文字列）の 100% 分岐検証。
-   - `parseNovelIndex`: 連載作品のメタデータ・章見出し `partTitle`・各話サブタイトル・初回公開日時 `publishedAt`・`nextTocPageUrl` 抽出、最終ページの `nextTocPageUrl: null`、短編作品の擬似 1 話生成と `meta[name="description"]` あらすじ補完、レガシー DOM フォールバックの検証。
-   - `parseChapterContent`: モバイル `.p-novel__subtitle-episode` / PC `.p-novel__title--rensai` / 短編 `.p-novel__title` のサブタイトル抽出、前書き・本編・後書きの区切り段落結合、`<rt>` 傍点記号の `<em class="bouten">` 正規化と通常 `<ruby>` 保持、XSS サニタイズ、前後話 URL（`prevChapterUrl` / `nextChapterUrl`）の検証。
+   - `parseNovelIndex`: 連載作品のメタデータ・章見出し `partTitle`・各話サブタイトル・初回公開日時 `publishedAt`・`nextTocPageUrl` 抽出、最終ページや不正外部/別作品リンク時の `nextTocPageUrl: null`、短編作品の擬似 1 話生成と `meta[name="description"]` あらすじ補完、レガシー DOM フォールバックの検証。
+   - `parseChapterContent`: モバイル `.p-novel__subtitle-episode` / PC `.p-novel__title--rensai` / レガシー `.novel_subtitle` / 短編 `.p-novel__title` のサブタイトル抽出、前書き・本編・後書きの区切り段落結合、`<rt>` 傍点記号の `<em class="bouten">` 正規化と通常 `<ruby>` 保持、XSS サニタイズ、前後話 URL（`prevChapterUrl` / `nextChapterUrl`）の検証。
 2. **`src/parsers/fetchFullNovelIndex.test.ts`（新規）**:
    - 単一ページ作品（`nextTocPageUrl === null`）での 1 回取得完了。
    - 複数ページ作品（`?p=1` → `?p=2` → `?p=3`）での `500ms` ウェイト順次取得、ページ跨ぎ時の `partTitle` 引き継ぎ、および `chapterIndex`（`1..N`）連番再採番。
-   - `maxPages` 上限到達時および循環 URL 検出時の安全な停止ガード。
+   - `maxPages` 上限到達時、循環 URL 検出時、および外部ドメイン・非 HTTPS・別作品パス（`normalizeWorkUrl(nextUrl) !== canonicalUrl`）検出時の安全な停止ガード。
    - `AbortSignal` による中断および途中ページ通信失敗時の例外送出（部分データ破棄）。
 3. **既存 Hook / Service 単体テストの拡充**:
    - `useBookshelf.test.ts`, `useNovelDetail.test.ts`, `useNovelSearch.test.ts`, `useNovelRanking.test.ts`: 複数ページ目次を持つ作品の追加・更新チェック・目次再取得時に全ページが結合されて `upsertNovelWithToc` に渡されることを検証。

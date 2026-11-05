@@ -246,6 +246,8 @@ export interface UseBookshelfResult {
   checkUpdates: (forceAll?: boolean) => Promise<void>;
   reloadNovels: () => Promise<void>;
   clearNovelUpdate: (novelId: string) => Promise<void>;
+  deleteNovel?: (novelId: string) => Promise<void>;
+  addNovel?: (url: string) => Promise<void>;
 }
 ```
 
@@ -263,9 +265,9 @@ export interface UseBookshelfResult {
    - ソート順変更時、即時に `appSettingsRepository.setSetting("bookshelf_sort_order", order)` で DB に永続化し、指定順序で `novelRepository.listNovels(order)` を再取得して画面を更新する。
 5. **「NEW（更新あり）」解除（`clearNovelUpdate`）**:
    - 作品カードタップ（`TR-02`）または「続きから読む」タップ（`TR-03`）時に、`novelRepository.clearNewUpdate(novelId)` を呼び出し、対象作品の `has_new_update = 0` に更新してバッジを消去する。
-6. **クラウド同期連携（自動 Pull / 自動 Push / Tombstone 記録: v0.4 Issue #120）**:
-   - アプリ起動時およびバックグラウンド復帰時（休止から5分以上経過時）に、`SyncEngine.pullAndMerge()` がバックグラウンド実行され、リモートの新規作品・更新されたしおり話数が本棚一覧へ自動反映される。未登録作品は `upsertNovelWithToc` により目次が自動取得される。
-   - 作品の追加（検索/ランキングからの登録）および作品の削除時に、`SyncEngine.notifyChanged()` が呼び出され、2〜3秒デバウンス付きで自動 Push される。
+6. **クラウド同期連携（自動 Pull / 自動 Push / Tombstone 記録: v0.4 Issue #120 / v0.7 Issue #239 拡張）**:
+   - アプリ起動時およびバックグラウンド復帰時（休止から5分以上経過時）に、`SyncEngine.pullAndMerge()` がバックグラウンド実行され、リモートの新規作品・更新されたしおり話数が本棚一覧へ自動反映される。未登録作品は `fetchFullNovelIndex`（複数ページ目次連続取得・結合対応）および `upsertNovelWithToc` により目次が自動取得される。
+   - 作品の追加（検索/ランキングからの登録、または `addNovel` 実行時［`fetchFullNovelIndex` 経由で全ページ目次を取得・保存］）および作品の削除（`deleteNovel`）時に、`SyncEngine.notifyChanged()` が呼び出され、2〜3秒デバウンス付きで自動 Push される。
    - 作品削除時（`novelRepository.deleteNovel`）は、カスケード削除と同時に `deleted_novels` テーブルへ該当 ID と削除日時（ミリ秒タイムスタンプ `Date.now()`）を記録し、次回 Push 時にリモート Tombstone へ結合する。
 
 ---

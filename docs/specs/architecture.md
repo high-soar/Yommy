@@ -725,6 +725,7 @@ export const PREFETCH_COUNT = 5;
 5. **複数ページ目次（`nextTocPageUrl`）の連続取得制御（v0.7 Issue #239 新設）**:
    - 小説家になろう（`ncode.syosetu.com`）の 100 話超作品のように作品目次が `?p=2`, `?p=3`... と複数ページに分割される場合、共通パイプライン `fetchFullNovelIndex`（`src/parsers/fetchFullNovelIndex.ts`）が `nextTocPageUrl` を順次辿って全目次ページを取得・結合する。
    - ページ間のリクエスト間隔ウェイトは `DEFAULT_TOC_PAGE_INTERVAL_MS`（`500ms`）、最大ページ上限は `MAX_TOC_PAGES`（`100` ページ ＝ 最大 10,000 話）とし、訪問済み URL セットによる無限ループ防止ガードを備える。
+   - 2 ページ目以降の `nextTocPageUrl` 取得前には、SSRF および別作品混入を防ぐため **`https:` プロトコルかつ `parser.canParse(nextUrl) === true` かつ `parser.normalizeWorkUrl(nextUrl) === canonicalUrl`（同一作品）** を検証し、不一致の場合は通信を行わずループを終了する。
    - 2 ページ目以降の先頭エピソードに章見出し（`partTitle`）がない場合は直前ページ末尾の `partTitle` を引き継ぎ、全エピソードに `chapterIndex: 1..N` の連番を再採番する。
    - 途中ページの取得に失敗した場合は例外を送出して中断し、不完全な目次で既存 DB を上書きしない。
 
