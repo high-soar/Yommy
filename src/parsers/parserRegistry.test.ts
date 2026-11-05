@@ -125,5 +125,17 @@ describe("ParserRegistry", () => {
         ),
       ).toBeDefined();
     });
+
+    it("デフォルトで NarouParser が登録され siteType === 'narou' および なろう URL から取得できること", () => {
+      const defaultRegistry = createDefaultParserRegistry();
+      const all = defaultRegistry.getAll();
+
+      expect(all.some((p) => p.siteType === "narou")).toBe(true);
+      const narouParser = defaultRegistry.getParser(
+        "https://ncode.syosetu.com/n9669bk/",
+      );
+      expect(narouParser).toBeDefined();
+      expect(narouParser?.siteType).toBe("narou");
+    });
   });
 });

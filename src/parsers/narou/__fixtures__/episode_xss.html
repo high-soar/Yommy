@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>XSSテスト話</title>
+  </head>
+  <body>
+    <div class="p-novel">
+      <h1 class="p-novel__title--rensai">XSSテスト話</h1>
+      <script>
+        alert("xss in body");
+      </script>
+      <div class="p-novel__text">
+        <style>
+          body {
+            display: none;
+          }
+        </style>
+        <p id="L1" onclick="alert('malicious')">
+          安全な本文段落<img src="invalid.jpg" onerror="alert('xss')" />
+        </p>
+        <iframe src="https://evil.com"></iframe>
+      </div>
+    </div>
+  </body>
+</html>
