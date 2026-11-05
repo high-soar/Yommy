@@ -884,6 +884,180 @@ describe("useReader", () => {
       expect(dbChapter?.bodyHtml).not.toBeNull();
     });
 
+    it("未キャッシュ話への goToChapter 実行中、旧エピソード本文がクリアされてローディング状態となり、完了後に新本文が描画されること (AC-RD-06, AC-RD-28)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 2,
+        cachedCount: 1, // 第1話のみキャッシュ済み、第2話未キャッシュ
+      });
+
+      let resolveFetch!: (value: {
+        html: string;
+        status: number;
+        headers: Record<string, string>;
+      }) => void;
+      const fetchPromise = new Promise<{
+        html: string;
+        status: number;
+        headers: Record<string, string>;
+      }>((resolve) => {
+        resolveFetch = resolve;
+      });
+      const httpClient = createMockHttpClient();
+      httpClient.getHtml = vi.fn().mockImplementation(() => fetchPromise);
+
+      const { result } = renderHook(
+        () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+        {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+            httpClient,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+      expect(result.current.chapter?.bodyHtml).not.toBeNull();
+
+      // 第2話（未キャッシュ）へ遷移開始
+      let transitionPromise!: Promise<boolean>;
+      act(() => {
+        transitionPromise = result.current.goToChapter(2);
+      });
+
+      // 通信中: isLoading が true であり、直前の本文がクリアされて chapter === null となること
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(true);
+        expect(result.current.chapter).toBeNull();
+      });
+
+      // 通信完了
+      await act(async () => {
+        resolveFetch({
+          html: "<p>第2話本文</p>",
+          status: 200,
+          headers: {},
+        });
+        await transitionPromise;
+      });
+
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.chapterIndex).toBe(2);
+      expect(result.current.chapter?.bodyHtml).not.toBeNull();
+    });
+
+    it("キャッシュ済み話への goToChapter 実行時、本文がクリアされずチラつきなしで即座に切り替わること (AC-RD-06, AC-RD-28)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 2,
+        cachedCount: 2, // 2話ともキャッシュ済み
+      });
+
+      const { result } = renderHook(
+        () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+        {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+      expect(result.current.chapter?.bodyHtml).not.toBeNull();
+
+      let transitionResult = false;
+      await act(async () => {
+        transitionResult = await result.current.goToChapter(2);
+      });
+
+      expect(transitionResult).toBe(true);
+      expect(result.current.chapterIndex).toBe(2);
+      expect(result.current.chapter?.title).toBe("第2話");
+      expect(result.current.chapter?.bodyHtml).not.toBeNull();
+    });
+
+    it("goToChapter の遷移通信中に重複して goToChapter が呼び出された場合、多重実行がガードされて false が返却されること (AC-RD-06)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 3,
+        cachedCount: 1, // 第1話のみキャッシュ済み、第2・3話未キャッシュ
+      });
+
+      let resolveFetch!: (value: {
+        html: string;
+        status: number;
+        headers: Record<string, string>;
+      }) => void;
+      const fetchPromise = new Promise<{
+        html: string;
+        status: number;
+        headers: Record<string, string>;
+      }>((resolve) => {
+        resolveFetch = resolve;
+      });
+      const httpClient = createMockHttpClient();
+      httpClient.getHtml = vi.fn().mockImplementation(() => fetchPromise);
+
+      const { result } = renderHook(
+        () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+        {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+            httpClient,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // 1回目の goToChapter(2) を開始
+      let p1!: Promise<boolean>;
+      act(() => {
+        p1 = result.current.goToChapter(2);
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(true);
+      });
+
+      // 通信中に 2回目の goToChapter(3) を呼び出す
+      let p2Result: boolean | undefined;
+      await act(async () => {
+        p2Result = await result.current.goToChapter(3);
+      });
+
+      // 多重実行防止により 2回目は false が即座に返ること
+      expect(p2Result).toBe(false);
+
+      // 1回目の通信を完了させる
+      await act(async () => {
+        resolveFetch({
+          html: "<p>第2話本文</p>",
+          status: 200,
+          headers: {},
+        });
+        const p1Result = await p1;
+        expect(p1Result).toBe(true);
+      });
+
+      expect(result.current.chapterIndex).toBe(2);
+    });
+
     it("hasPrevChapter と hasNextChapter が第1話・中間話・最終話で正しく判定されること (AC-RD-06)", async () => {
       const db = await resetTestDb();
       const novelRepo = new SqlNovelRepository(db);
