@@ -18,6 +18,7 @@ const {
   OverlayOpenLongTitle,
   HorizontalSepia,
   Loading,
+  TransitionLoading,
   ErrorState,
   Empty,
   Paged,
@@ -191,6 +192,15 @@ describe("ReaderPage", () => {
     it("Loading ストーリーでローディング表示が描画され本文や空状態が非表示となること", () => {
       render(<Loading />);
       expect(screen.getByTestId("reader-loading")).toBeInTheDocument();
+      expect(screen.queryByTestId("reader-view")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("reader-empty")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("reader-error")).not.toBeInTheDocument();
+    });
+
+    it("TransitionLoading ストーリーで話数遷移中ローディング表示が描画され本文や空状態が非表示となること", () => {
+      render(<TransitionLoading />);
+      expect(screen.getByTestId("reader-loading")).toBeInTheDocument();
+      expect(screen.getByText("エピソードを読み込み中...")).toBeInTheDocument();
       expect(screen.queryByTestId("reader-view")).not.toBeInTheDocument();
       expect(screen.queryByTestId("reader-empty")).not.toBeInTheDocument();
       expect(screen.queryByTestId("reader-error")).not.toBeInTheDocument();

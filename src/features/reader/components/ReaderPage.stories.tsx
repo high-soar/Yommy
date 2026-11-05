@@ -151,6 +151,19 @@ export const Loading: Story = {
 };
 
 /**
+ * 話数遷移中ローディング状態（未キャッシュ話のオンデマンド取得中、作品情報は保持）
+ */
+export const TransitionLoading: Story = {
+  name: "話数遷移中ローディング状態",
+  args: {
+    novel: sampleNovel,
+    chapterIndex: 2,
+    chapter: null,
+    isLoading: true,
+  },
+};
+
+/**
  * エラー発生状態（下部オーバーレイ初期展開）
  */
 export const ErrorState: Story = {
