@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
@@ -139,6 +139,10 @@ describe("SearchInputBar コンポーネント", () => {
 
     const input = screen.getByTestId("search-input");
     await user.type(input, "{Enter}");
+    expect(handleSubmit).not.toHaveBeenCalled();
+
+    // フォーム直接送信時も isLoading ガードにより onSubmitSearch が呼ばれないこと
+    fireEvent.submit(screen.getByRole("search"));
     expect(handleSubmit).not.toHaveBeenCalled();
   });
 });

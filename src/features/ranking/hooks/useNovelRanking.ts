@@ -71,7 +71,6 @@ export function useNovelRanking(): UseNovelRankingResult {
 
   // 通信中重複リクエストガードおよび非同期競合（Race Condition）防止用 ref
   const isFetchingRef = useRef<boolean>(false);
-  const fetchIdRef = useRef<number>(0);
 
   // DB内の登録済み作品ID一覧を更新
   const refreshRegisteredIds = useCallback(async () => {
@@ -94,7 +93,6 @@ export function useNovelRanking(): UseNovelRankingResult {
     async (params?: ExecuteFetchParams) => {
       if (isFetchingRef.current) return;
       isFetchingRef.current = true;
-      const currentFetchId = ++fetchIdRef.current;
 
       const targetSite =
         params?.site !== undefined ? params.site : selectedSite;
@@ -121,23 +119,17 @@ export function useNovelRanking(): UseNovelRankingResult {
         });
 
         const response = await httpClient.getHtml({ url });
-        if (currentFetchId !== fetchIdRef.current) return;
-
         const result = parser.getRanking(response.html, url);
-        if (currentFetchId !== fetchIdRef.current) return;
 
         setItems(result.items);
         await refreshRegisteredIds();
       } catch (err) {
-        if (currentFetchId !== fetchIdRef.current) return;
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
         setItems([]);
       } finally {
-        if (currentFetchId === fetchIdRef.current) {
-          isFetchingRef.current = false;
-          setIsLoading(false);
-        }
+        isFetchingRef.current = false;
+        setIsLoading(false);
       }
     },
     [
@@ -190,7 +182,6 @@ export function useNovelRanking(): UseNovelRankingResult {
   );
 
   const retry = useCallback(async () => {
-    if (isFetchingRef.current) return;
     await executeFetch();
   }, [executeFetch]);
 

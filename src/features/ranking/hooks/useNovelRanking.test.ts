@@ -225,8 +225,9 @@ describe("useNovelRanking", () => {
       expect(getHtmlCallCount).toBe(1);
     });
 
-    // isLoading 中に setPeriod / setGenre / retry を呼び出す
+    // isLoading 中に setSelectedSite / setPeriod / setGenre / retry を呼び出す
     act(() => {
+      result.current.setSelectedSite("kakuyomu");
       result.current.setPeriod("monthly");
       result.current.setGenre("fantasy");
       void result.current.retry();

@@ -1067,8 +1067,9 @@ describe("useNovelSearch", () => {
       expect(getHtmlCallCount).toBe(1);
     });
 
-    // isLoading 中に search / loadMore / setOrder / setSerialStatus / setGenre / retry を呼び出す
+    // isLoading 中に setSelectedSite / search / loadMore / setOrder / setSerialStatus / setGenre / retry を呼び出す
     act(() => {
+      result.current.setSelectedSite("kakuyomu");
       void result.current.search();
       void result.current.loadMore();
       result.current.setOrder("popular");
