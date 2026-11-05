@@ -188,7 +188,7 @@ PR を作成しただけで作業完了と報告してはならない。以下�
 3. PR に `Closes #N` を設定（AI による直接の Issue クローズや PR マージは厳禁）
 4. GitHub Actions（CI / VRT / IT）PASS
 5. 独立レビューエージェント（`pr-reviewer`）によるレビュー実施（`docs/review-comment-format.md` 準拠）
-6. 全指摘スレッドの修正・再検証・Resolve 収束
+6. 指摘是正 ＆ 独立レビュアー（`pr-reviewer`）による再レビュー解消確認（Resolve 収束）
 7. 人間による最終承認・マージ待機
 ```
 
