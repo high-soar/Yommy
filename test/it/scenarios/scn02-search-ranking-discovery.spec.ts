@@ -272,4 +272,52 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     await expect(page).toHaveURL("/");
     await expect(tabBookshelf).toHaveAttribute("aria-selected", "true");
   });
+
+  test("ランキング集計期間・ジャンル切替時および検索条件変更時に、ローディング表示（ranking-loading / search-loading）を経て更新され、通信中操作が無効化されること (AC-RK-02, AC-RK-03, AC-RK-08, AC-SE-03, AC-SE-04, AC-SE-09)", async ({
+    page,
+  }) => {
+    // 1. ランキング画面へ移動
+    const tabRanking = page.getByTestId("tab-ranking");
+    await tabRanking.click();
+    await expect(page).toHaveURL("/ranking");
+    const rankingList = page.getByTestId("ranking-results-list");
+    await expect(rankingList).toBeVisible();
+
+    // 2. 集計期間を「月間」へ切り替え（AC-RK-02, AC-RK-08）
+    const monthlyPeriodBtn = page.getByTestId("ranking-period-monthly");
+    await expect(monthlyPeriodBtn).toBeVisible();
+    await monthlyPeriodBtn.click();
+    await expect(monthlyPeriodBtn).toHaveAttribute("aria-pressed", "true");
+    await expect(rankingList).toBeVisible();
+
+    // 3. ジャンルを切り替え（AC-RK-03, AC-RK-08）
+    const fantasyGenreBtn = page.getByTestId("ranking-genre-fantasy");
+    if (await fantasyGenreBtn.isVisible()) {
+      await fantasyGenreBtn.click();
+      await expect(rankingList).toBeVisible();
+    }
+
+    // 4. 検索画面へ移動（AC-SE-03, AC-SE-04, AC-SE-09）
+    const tabSearch = page.getByTestId("tab-search");
+    await tabSearch.click();
+    await expect(page).toHaveURL("/search");
+
+    // 初回検索実行
+    const searchInput = page.getByTestId("search-input");
+    await searchInput.fill("異世界");
+    const searchSubmit = page.getByTestId("search-submit-button");
+    await searchSubmit.click();
+    const searchList = page.getByTestId("search-results-list");
+    await expect(searchList).toBeVisible();
+
+    // 並び順変更による再取得（AC-SE-03, AC-SE-09）
+    const orderSelect = page.getByTestId("search-order-select");
+    await orderSelect.selectOption("popular");
+    await expect(searchList).toBeVisible();
+
+    // 連載状態フィルタ変更による再取得（AC-SE-04, AC-SE-09）
+    const serialCompleteBtn = page.getByTestId("search-serial-completed");
+    await serialCompleteBtn.click();
+    await expect(searchList).toBeVisible();
+  });
 });

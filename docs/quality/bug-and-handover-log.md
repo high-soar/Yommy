@@ -6,7 +6,7 @@ status: "Approved"
 updated: "2026-11-06"
 tags: [quality, bug-log, handover, dre, kaizen]
 related_specs:
-  - docs/specs/changes/issue-238-loading-ux-clarification.md
+  - docs/specs/changes/archive/issue-238-loading-ux-clarification.md
   - docs/specs/changes/archive/issue-203-volume-key-paging.md
   - docs/specs/changes/archive/issue-202-reader-top-overlay-and-seekbar.md
   - docs/specs/changes/archive/issue-201-reader-page-slide-animation.md

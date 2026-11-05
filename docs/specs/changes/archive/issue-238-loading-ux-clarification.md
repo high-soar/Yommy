@@ -3,7 +3,7 @@ type: spec-delta
 title: "Webアクセス発生時（ランキング・検索の条件切替、リーダー未キャッシュ話遷移）のローディング状態明示UX改善仕様"
 description: "Issue #238 に対する差分仕様、影響するApp全体正本、テスト計画、および実装Sub-issue分割計画。"
 issue: "#238"
-status: "Review (#238)"
+status: "Completed (Archived)"
 updated: "2026-11-06"
 tags:
   - delta
