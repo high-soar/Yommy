@@ -41,11 +41,13 @@ export const SiteSelector: React.FC<SiteSelectorProps> = ({
             }}
             className={`px-3 py-1 text-xs sm:text-sm font-medium rounded-md transition-all duration-150 ${
               isSelected
-                ? "bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-400 shadow-xs"
+                ? `bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-400 shadow-xs ${
+                    isDisabled ? "cursor-not-allowed opacity-60" : ""
+                  }`
                 : isDisabled
                   ? "text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-60"
                   : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
-            } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
+            }`}
           >
             {site.label}
             {!site.isAvailable ? " (準備中)" : ""}

@@ -49,11 +49,13 @@ export const RankingFilterBar: React.FC<RankingFilterBarProps> = ({
                 }}
                 className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
                   isSelected
-                    ? "bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-400 shadow-xs"
+                    ? `bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-400 shadow-xs ${
+                        disabled ? "cursor-not-allowed opacity-60" : ""
+                      }`
                     : disabled
                       ? "text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-60"
                       : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-                } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
+                }`}
               >
                 {period.label}
               </button>
@@ -84,11 +86,13 @@ export const RankingFilterBar: React.FC<RankingFilterBarProps> = ({
               }}
               className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap shrink-0 transition-colors border ${
                 isSelected
-                  ? "bg-sky-600 border-sky-600 text-white shadow-xs"
+                  ? `bg-sky-600 border-sky-600 text-white shadow-xs ${
+                      disabled ? "cursor-not-allowed opacity-60" : ""
+                    }`
                   : disabled
                     ? "bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-60"
                     : "bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-              } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
+              }`}
             >
               {genre.label}
             </button>
