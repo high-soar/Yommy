@@ -843,8 +843,6 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           if (resolved) {
             targetChapter = resolved;
           }
-        } else {
-          setChapter(null);
         }
 
         // 4. 表示完了時の既読更新
