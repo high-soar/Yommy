@@ -69,7 +69,7 @@ export function useNovelRanking(): UseNovelRankingResult {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 通信中重複ガードおよび非同期競合防止用ref
+  // 通信中重複リクエストガードおよび非同期競合（Race Condition）防止用 ref
   const isFetchingRef = useRef<boolean>(false);
   const fetchIdRef = useRef<number>(0);
 
