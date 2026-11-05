@@ -178,15 +178,9 @@ export function createDefaultMockHttpClient(): MockHttpClient {
   client.setResponse(
     /^https:\/\/ncode\.syosetu\.com\/n\d+[a-z0-9]*\/?(\?.*)?$/i,
     (options) => {
-      let html = narouIndexSerializedHtml;
-      try {
-        const u = new URL(options.url);
-        if (u.searchParams.get("p") === "2") {
-          html = narouIndexPage2Html;
-        }
-      } catch {
-        // fallback to page 1
-      }
+      const html = options.url.includes("p=2")
+        ? narouIndexPage2Html
+        : narouIndexSerializedHtml;
       return {
         status: 200,
         url: options.url,

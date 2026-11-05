@@ -3,7 +3,7 @@ type: spec-delta
 title: "小説家になろう（narou）パーサー（作品情報・複数ページ目次・本文）および複数ページ目次取得・クラウド同期対応仕様"
 description: "Issue #239 に対する差分仕様、実サイトDOM構造に基づくNarouParser設計、複数ページ目次連続取得パイプライン、SyncEngineマルチサイト対応、テスト計画、およびSub-issue分割計画。"
 issue: "#239"
-status: "Review (#239)"
+status: "Completed (Archived)"
 updated: "2026-11-06"
 tags:
   - delta
@@ -59,7 +59,7 @@ Step 1 の実サイト HTML 構造調査および `/grill-me` インタビュー
 
 ### 2.1 `NarouParser`（`src/parsers/narou/NarouParser.ts`）の新設と `ParserRegistry` 登録
 
-正本仕様書 [docs/specs/parsers/narou.md](../parsers/narou.md) を新設し、以下の契約で `NarouParser` を実装して `createDefaultParserRegistry()` にデフォルト登録します：
+正本仕様書 [docs/specs/parsers/narou.md](../../parsers/narou.md) を新設し、以下の契約で `NarouParser` を実装して `createDefaultParserRegistry()` にデフォルト登録します：
 
 1. **URL 判定・正規化（`canParse` / `normalizeWorkUrl`）**:
    - `https://ncode.syosetu.com/{ncode}/`（および各話 URL `/n9669bk/1/`、目次ページネーション `?p=2`、大文字 ncode `/N9669BK/`）を対象と判定し、小文字 ncode ＋末尾スラッシュ付きの `https://ncode.syosetu.com/{ncode}/` に正規化する。
