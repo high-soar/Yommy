@@ -8,6 +8,7 @@ import {
   PREFETCH_INTERVAL_MS,
 } from "../../../shared/constants/cache";
 import { isChapterFresh, delay } from "../../../shared/utils/cache";
+import { fetchFullNovelIndex } from "../../../parsers/fetchFullNovelIndex";
 
 export type { UseNovelDetailResult } from "../types";
 
@@ -188,12 +189,10 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     let isSuccess = false;
     try {
       const parser = parserRegistry.requireParser(novel.canonicalUrl);
-      const normalizedWorkUrl = parser.normalizeWorkUrl(novel.canonicalUrl);
-
-      const response = await httpClient.getHtml({ url: normalizedWorkUrl });
-      const novelIndex = parser.parseNovelIndex(
-        response.html,
-        normalizedWorkUrl,
+      const novelIndex = await fetchFullNovelIndex(
+        httpClient,
+        parser,
+        novel.canonicalUrl,
       );
 
       await novelRepository.upsertNovelWithToc(

@@ -37,6 +37,9 @@ import workIndexHtml from "../parsers/kakuyomu/__fixtures__/work_index.html?raw"
 import episodeContentHtml from "../parsers/kakuyomu/__fixtures__/episode_content.html?raw";
 import searchApolloHtml from "../parsers/kakuyomu/__fixtures__/search_results_apollo.html?raw";
 import rankingApolloHtml from "../parsers/kakuyomu/__fixtures__/ranking_results_apollo.html?raw";
+import narouIndexSerializedHtml from "../parsers/narou/__fixtures__/work_index_serialized.html?raw";
+import narouIndexPage2Html from "../parsers/narou/__fixtures__/work_index_page2.html?raw";
+import narouEpisodeContentHtml from "../parsers/narou/__fixtures__/episode_content.html?raw";
 
 const STORAGE_KEY = "yommy_sqlite_db_backup";
 
@@ -170,6 +173,35 @@ export function createDefaultMockHttpClient(): MockHttpClient {
       url: options.url,
       headers: {},
       html: episodeContentHtml,
+    }),
+  );
+  client.setResponse(
+    /^https:\/\/ncode\.syosetu\.com\/n\d+[a-z0-9]*\/?(\?.*)?$/i,
+    (options) => {
+      let html = narouIndexSerializedHtml;
+      try {
+        const u = new URL(options.url);
+        if (u.searchParams.get("p") === "2") {
+          html = narouIndexPage2Html;
+        }
+      } catch {
+        // fallback to page 1
+      }
+      return {
+        status: 200,
+        url: options.url,
+        headers: {},
+        html,
+      };
+    },
+  );
+  client.setResponse(
+    /^https:\/\/ncode\.syosetu\.com\/n\d+[a-z0-9]*\/\d+\/?/i,
+    (options) => ({
+      status: 200,
+      url: options.url,
+      headers: {},
+      html: narouEpisodeContentHtml,
     }),
   );
   return client;

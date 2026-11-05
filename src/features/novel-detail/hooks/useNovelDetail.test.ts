@@ -16,6 +16,8 @@ import { MockHttpClient } from "../../../bridges/http/mockHttpClient";
 import type { HttpResponse } from "../../../bridges/http/types";
 import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 import episodeContentHtml from "../../../parsers/kakuyomu/__fixtures__/episode_content.html?raw";
+import narouWorkIndexSerializedHtml from "../../../parsers/narou/__fixtures__/work_index_serialized.html?raw";
+import narouWorkIndexPage2Html from "../../../parsers/narou/__fixtures__/work_index_page2.html?raw";
 import {
   SHORT_TIMEOUT_MS,
   STANDARD_TIMEOUT_MS,
@@ -341,6 +343,90 @@ describe("useNovelDetail", () => {
 
       expect(success).toBe(true);
       expect(result.current.refreshMessage).toBe("最新の状態です");
+      expect(result.current.error).toBeNull();
+    });
+
+    it("refreshToc: 複数ページ目次作品（なろう）の目次更新時に全ページが fetchFullNovelIndex で結合されて差分更新されること (Issue #239)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+
+      // 初期状態として 1 ページ目の 3 話のみ保存しておく
+      await novelRepo.upsertNovelWithToc(
+        {
+          siteType: "narou",
+          remoteWorkId: "n9669bk",
+          canonicalUrl: "https://ncode.syosetu.com/n9669bk/",
+          title: "無職転生 - 異世界行ったら本気だす",
+          author: "理不尽な孫の手",
+          synopsis: "あらすじ本文",
+          chapters: [
+            {
+              chapterIndex: 1,
+              remoteChapterId: "1",
+              partTitle: "第1章 幼年期",
+              title: "プロローグ",
+              url: "https://ncode.syosetu.com/n9669bk/1/",
+              publishedAt: "2012/11/22 17:00",
+            },
+            {
+              chapterIndex: 2,
+              remoteChapterId: "2",
+              partTitle: "第1章 幼年期",
+              title: "第1話 ガキ相手でも本気",
+              url: "https://ncode.syosetu.com/n9669bk/2/",
+              publishedAt: "2012/11/23 18:00",
+            },
+            {
+              chapterIndex: 3,
+              remoteChapterId: "3",
+              partTitle: "第2章 少年期",
+              title: "第2話 魔法の練習",
+              url: "https://ncode.syosetu.com/n9669bk/3/",
+              publishedAt: "2012/11/24 10:00",
+            },
+          ],
+          nextTocPageUrl: "https://ncode.syosetu.com/n9669bk/?p=2",
+        },
+        new Date().toISOString(),
+      );
+
+      const httpClient = new MockHttpClient();
+      httpClient.setResponse("https://ncode.syosetu.com/n9669bk/", () => ({
+        status: 200,
+        url: "https://ncode.syosetu.com/n9669bk/",
+        headers: {},
+        html: narouWorkIndexSerializedHtml,
+      }));
+      httpClient.setResponse("https://ncode.syosetu.com/n9669bk/?p=2", () => ({
+        status: 200,
+        url: "https://ncode.syosetu.com/n9669bk/?p=2",
+        headers: {},
+        html: narouWorkIndexPage2Html,
+      }));
+
+      const { result } = renderHook(() => useNovelDetail("narou:n9669bk"), {
+        wrapper: createWrapper({
+          httpClient,
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+      expect(result.current.chapters).toHaveLength(3);
+
+      let success = false;
+      await act(async () => {
+        success = await result.current.refreshToc();
+      });
+
+      expect(success).toBe(true);
+      expect(result.current.refreshMessage).toBe("目次を更新しました（+2話）");
+      expect(result.current.chapters).toHaveLength(5);
+      expect(result.current.chapters[3].partTitle).toBe("第2章 少年期");
       expect(result.current.error).toBeNull();
     });
 

@@ -7,6 +7,7 @@ import type {
   NovelSerialStatus,
   NovelSiteType,
 } from "../../../parsers/types";
+import { fetchFullNovelIndex } from "../../../parsers/fetchFullNovelIndex";
 
 export interface UseNovelSearchResult {
   /** 選択中小説サイト */
@@ -293,8 +294,11 @@ export function useNovelSearch(): UseNovelSearchResult {
       try {
         const parser = parserRegistry.requireParser(item.workUrl);
 
-        const response = await httpClient.getHtml({ url: item.workUrl });
-        const parsedIndex = parser.parseNovelIndex(response.html, item.workUrl);
+        const parsedIndex = await fetchFullNovelIndex(
+          httpClient,
+          parser,
+          item.workUrl,
+        );
 
         const savedNovel = await novelRepository.upsertNovelWithToc(
           parsedIndex,

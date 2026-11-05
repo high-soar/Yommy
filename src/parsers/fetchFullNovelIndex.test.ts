@@ -442,9 +442,187 @@ describe("fetchFullNovelIndex: 複数ページ目次連続取得パイプライ�
     it("パーサーが canParse false と判定する URL は拒否して終了すること", async () => {
       await testInvalidNextUrl("https://novel18.syosetu.com/n9669bk/?p=2");
     });
+
+    it("normalizeWorkUrl が例外を送出する次ページ URL は拒否して安全に終了すること", async () => {
+      vi.mocked(mockParser.normalizeWorkUrl).mockImplementationOnce(
+        () => canonicalUrl,
+      );
+      vi.mocked(mockParser.normalizeWorkUrl).mockImplementationOnce(() => {
+        throw new Error("normalize error");
+      });
+      await testInvalidNextUrl("https://ncode.syosetu.com/n9669bk/?p=2");
+    });
   });
 
   describe("中断・エラーハンドリング（アトミック性担保）", () => {
+    it("intervalMs > 0 で正常に待機が完了して次ページが取得されること", async () => {
+      const canonicalUrl = "https://ncode.syosetu.com/n9669bk/";
+      const p2Url = "https://ncode.syosetu.com/n9669bk/?p=2";
+
+      mockHttpClient.setResponse(canonicalUrl, () => ({
+        status: 200,
+        url: canonicalUrl,
+        headers: {},
+        html: "p1",
+      }));
+      mockHttpClient.setResponse(p2Url, () => ({
+        status: 200,
+        url: p2Url,
+        headers: {},
+        html: "p2",
+      }));
+
+      vi.mocked(mockParser.parseNovelIndex)
+        .mockReturnValueOnce({
+          siteType: "narou",
+          remoteWorkId: "n9669bk",
+          canonicalUrl,
+          title: "作品",
+          author: "作家",
+          synopsis: "あらすじ",
+          chapters: [
+            {
+              chapterIndex: 1,
+              remoteChapterId: "1",
+              partTitle: null,
+              title: "1",
+              url: `${canonicalUrl}1/`,
+              publishedAt: "2026/01/01",
+            },
+          ],
+          nextTocPageUrl: p2Url,
+        })
+        .mockReturnValueOnce({
+          siteType: "narou",
+          remoteWorkId: "n9669bk",
+          canonicalUrl,
+          title: "作品",
+          author: "作家",
+          synopsis: "あらすじ",
+          chapters: [
+            {
+              chapterIndex: 1,
+              remoteChapterId: "2",
+              partTitle: null,
+              title: "2",
+              url: `${canonicalUrl}2/`,
+              publishedAt: "2026/01/02",
+            },
+          ],
+          nextTocPageUrl: null,
+        });
+
+      const result = await fetchFullNovelIndex(
+        mockHttpClient,
+        mockParser,
+        canonicalUrl,
+        { intervalMs: 5 }, // signal 未指定で intervalMs > 0
+      );
+
+      expect(result.chapters).toHaveLength(2);
+      expect(result.nextTocPageUrl).toBeNull();
+    });
+
+    it("signal を指定して intervalMs > 0 で正常に待機が完了すること", async () => {
+      const canonicalUrl = "https://ncode.syosetu.com/n9669bk/";
+      const p2Url = "https://ncode.syosetu.com/n9669bk/?p=2";
+
+      mockHttpClient.setResponse(canonicalUrl, () => ({
+        status: 200,
+        url: canonicalUrl,
+        headers: {},
+        html: "p1",
+      }));
+      mockHttpClient.setResponse(p2Url, () => ({
+        status: 200,
+        url: p2Url,
+        headers: {},
+        html: "p2",
+      }));
+
+      vi.mocked(mockParser.parseNovelIndex)
+        .mockReturnValueOnce({
+          siteType: "narou",
+          remoteWorkId: "n9669bk",
+          canonicalUrl,
+          title: "作品",
+          author: "作家",
+          synopsis: "あらすじ",
+          chapters: [
+            {
+              chapterIndex: 1,
+              remoteChapterId: "1",
+              partTitle: null,
+              title: "1",
+              url: `${canonicalUrl}1/`,
+              publishedAt: "2026/01/01",
+            },
+          ],
+          nextTocPageUrl: p2Url,
+        })
+        .mockReturnValueOnce({
+          siteType: "narou",
+          remoteWorkId: "n9669bk",
+          canonicalUrl,
+          title: "作品",
+          author: "作家",
+          synopsis: "あらすじ",
+          chapters: [
+            {
+              chapterIndex: 1,
+              remoteChapterId: "2",
+              partTitle: null,
+              title: "2",
+              url: `${canonicalUrl}2/`,
+              publishedAt: "2026/01/02",
+            },
+          ],
+          nextTocPageUrl: null,
+        });
+
+      const controller = new AbortController();
+      const result = await fetchFullNovelIndex(
+        mockHttpClient,
+        mockParser,
+        canonicalUrl,
+        { intervalMs: 5, signal: controller.signal },
+      );
+
+      expect(result.chapters).toHaveLength(2);
+      expect(result.nextTocPageUrl).toBeNull();
+    });
+
+    it("引数なし controller.abort() で理由なしに中断された場合、AbortError が送出されること", async () => {
+      const controller = new AbortController();
+      controller.abort();
+
+      await expect(
+        fetchFullNovelIndex(
+          mockHttpClient,
+          mockParser,
+          "https://ncode.syosetu.com/n9669bk/",
+          { signal: controller.signal },
+        ),
+      ).rejects.toThrow(/operation was aborted/i);
+    });
+
+    it("signal.reason が未設定の aborted signal では既定の DOMException が送出されること", async () => {
+      const mockSignal = {
+        aborted: true,
+        reason: undefined,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      } as unknown as AbortSignal;
+
+      await expect(
+        fetchFullNovelIndex(
+          mockHttpClient,
+          mockParser,
+          "https://ncode.syosetu.com/n9669bk/",
+          { signal: mockSignal },
+        ),
+      ).rejects.toThrow("This operation was aborted");
+    });
     it("開始時点ですでに AbortSignal が abort されている場合、通信を行わずに即時中断すること", async () => {
       const controller = new AbortController();
       controller.abort(new Error("Aborted before start"));

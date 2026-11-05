@@ -337,6 +337,54 @@ describe("ServiceProvider", () => {
       });
     });
 
+    it("createDefaultMockHttpClient が小説家になろう作品トップ・複数ページ目次・各話エピソードにマッチすること (Issue #239)", async () => {
+      let novelPage1Html = "";
+      let novelPage2Html = "";
+      let episodeHtml = "";
+      const TestConsumer: React.FC = () => {
+        const services = useServices();
+        React.useEffect(() => {
+          if (services.isReady) {
+            services.httpClient
+              .getHtml({
+                url: "https://ncode.syosetu.com/n9669bk/",
+              })
+              .then((res) => {
+                novelPage1Html = res.html;
+              });
+            services.httpClient
+              .getHtml({
+                url: "https://ncode.syosetu.com/n9669bk/?p=2",
+              })
+              .then((res) => {
+                novelPage2Html = res.html;
+              });
+            services.httpClient
+              .getHtml({
+                url: "https://ncode.syosetu.com/n9669bk/1/",
+              })
+              .then((res) => {
+                episodeHtml = res.html;
+              });
+          }
+        }, [services]);
+        return <div>なろうモックテスト</div>;
+      };
+
+      render(
+        <ServiceProvider>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(novelPage1Html).toContain("無職転生 - 異世界行ったら本気だす");
+        expect(novelPage1Html).toContain("第1章 幼年期");
+        expect(novelPage2Html).toContain("第3話 家庭教師");
+        expect(episodeHtml).toContain("p-novel__text");
+      });
+    });
+
     it("カスタム databaseAdapter および 各 Repository が渡された場合にそのまま利用されること", async () => {
       const customDb = {
         execute: vi.fn(),

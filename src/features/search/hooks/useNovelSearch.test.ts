@@ -9,7 +9,10 @@ import { MockHttpClient } from "../../../bridges/http/mockHttpClient";
 import searchApolloHtml from "../../../parsers/kakuyomu/__fixtures__/search_results_apollo.html?raw";
 import searchEmptyHtml from "../../../parsers/kakuyomu/__fixtures__/search_results_empty.html?raw";
 import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.html?raw";
+import narouWorkIndexSerializedHtml from "../../../parsers/narou/__fixtures__/work_index_serialized.html?raw";
+import narouWorkIndexPage2Html from "../../../parsers/narou/__fixtures__/work_index_page2.html?raw";
 import type { HttpResponse } from "../../../bridges/http/types";
+import type { NovelSearchResultItem } from "../../../parsers/types";
 import type { SyncEngine } from "../../cloud-sync/services/syncEngine";
 
 describe("useNovelSearch", () => {
@@ -326,6 +329,62 @@ describe("useNovelSearch", () => {
     expect(result.current.registeredWorkIds.has(targetItem.remoteWorkId)).toBe(
       true,
     );
+    expect(result.current.addingWorkId).toBeNull();
+  });
+
+  it("addNovelToBookshelf: 複数ページ目次作品（なろう）の追加時に全ページが fetchFullNovelIndex で結合されて SQLite へ保存されること (Issue #239)", async () => {
+    mockHttpClient.setResponse("https://ncode.syosetu.com/n9669bk/", () => ({
+      status: 200,
+      url: "https://ncode.syosetu.com/n9669bk/",
+      headers: {},
+      html: narouWorkIndexSerializedHtml,
+    }));
+    mockHttpClient.setResponse(
+      "https://ncode.syosetu.com/n9669bk/?p=2",
+      () => ({
+        status: 200,
+        url: "https://ncode.syosetu.com/n9669bk/?p=2",
+        headers: {},
+        html: narouWorkIndexPage2Html,
+      }),
+    );
+
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.setKeyword("異世界");
+    });
+
+    await act(async () => {
+      await result.current.search();
+    });
+
+    const narouItem: NovelSearchResultItem = {
+      remoteWorkId: "n9669bk",
+      workUrl: "https://ncode.syosetu.com/n9669bk/",
+      title: "無職転生 - 異世界行ったら本気だす",
+      author: "理不尽な孫の手",
+      synopsis: "あらすじ本文",
+      genre: "fantasy",
+      genreLabel: "ファンタジー",
+      serialStatus: "running",
+      serialStatusLabel: "連載中",
+      episodeCount: 5,
+      characterCount: 10000,
+      tags: [],
+      reviewPoints: 100,
+      lastEpisodePublishedAt: "2012/11/26 20:00",
+    };
+
+    let savedNovelId: string | null = null;
+    await act(async () => {
+      savedNovelId = await result.current.addNovelToBookshelf(narouItem);
+    });
+
+    expect(savedNovelId).toBe("narou:n9669bk");
+    expect(result.current.registeredWorkIds.has("n9669bk")).toBe(true);
     expect(result.current.addingWorkId).toBeNull();
   });
 

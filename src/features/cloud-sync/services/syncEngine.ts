@@ -1,6 +1,7 @@
 import type { CloudSyncBridge } from "../../../bridges/cloud-sync/types";
 import type { HttpClientBridge } from "../../../bridges/http/types";
 import type { ParserRegistry } from "../../../parsers/parserRegistry";
+import { fetchFullNovelIndex } from "../../../parsers/fetchFullNovelIndex";
 import type {
   AppSettingsRepository,
   ChapterRepository,
@@ -265,21 +266,31 @@ export function parseNovelUrl(url: string): ParsedNovelUrl | null {
     if (parsed.protocol !== "https:") {
       return null;
     }
-    if (
-      parsed.hostname !== "kakuyomu.jp" &&
-      parsed.hostname !== "www.kakuyomu.jp"
-    ) {
-      return null;
+    const hostname = parsed.hostname.toLowerCase();
+    if (hostname === "kakuyomu.jp" || hostname === "www.kakuyomu.jp") {
+      const match = parsed.pathname.match(/^\/works\/(\d+)\/?$/);
+      if (!match) {
+        return null;
+      }
+      return {
+        siteType: "kakuyomu",
+        workId: match[1],
+        canonicalUrl: `https://kakuyomu.jp/works/${match[1]}`,
+      };
     }
-    const match = parsed.pathname.match(/^\/works\/(\d+)\/?$/);
-    if (!match) {
-      return null;
+    if (hostname === "ncode.syosetu.com") {
+      const match = parsed.pathname.match(/^\/(n\d+[a-z0-9]*)\/?$/i);
+      if (!match) {
+        return null;
+      }
+      const lowerNcode = match[1].toLowerCase();
+      return {
+        siteType: "narou",
+        workId: lowerNcode,
+        canonicalUrl: `https://ncode.syosetu.com/${lowerNcode}/`,
+      };
     }
-    return {
-      siteType: "kakuyomu",
-      workId: match[1],
-      canonicalUrl: `https://kakuyomu.jp/works/${match[1]}`,
-    };
+    return null;
   } catch {
     return null;
   }
@@ -418,11 +429,9 @@ export class SyncEngine {
       return;
     }
 
-    const res = await this.deps.httpClient.getHtml({
-      url: parsedUrl.canonicalUrl,
-    });
-    const parsedIndex = parser.parseNovelIndex(
-      res.html,
+    const parsedIndex = await fetchFullNovelIndex(
+      this.deps.httpClient,
+      parser,
       parsedUrl.canonicalUrl,
     );
     await this.deps.novelRepository.upsertNovelWithToc(

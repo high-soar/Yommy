@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServices } from "../../../app/ServiceProvider";
 import type { BookshelfSortOrder, NovelSummary } from "../../../storage/types";
+import { fetchFullNovelIndex } from "../../../parsers/fetchFullNovelIndex";
 
 export interface UseBookshelfOptions {
   /** 更新チェック時のリクエスト間隔ウェイト（ミリ秒、既定値: 1000ms） */
@@ -127,11 +128,9 @@ export function useBookshelf(
           const target = targets[i];
           try {
             const parser = parserRegistry.requireParser(target.canonicalUrl);
-            const response = await httpClient.getHtml({
-              url: target.canonicalUrl,
-            });
-            const parsedIndex = parser.parseNovelIndex(
-              response.html,
+            const parsedIndex = await fetchFullNovelIndex(
+              httpClient,
+              parser,
               target.canonicalUrl,
             );
             await novelRepository.upsertNovelWithToc(
@@ -409,8 +408,7 @@ export function useBookshelf(
     async (url: string): Promise<void> => {
       try {
         const parser = parserRegistry.requireParser(url);
-        const res = await httpClient.getHtml({ url });
-        const parsed = parser.parseNovelIndex(res.html, url);
+        const parsed = await fetchFullNovelIndex(httpClient, parser, url);
         await novelRepository.upsertNovelWithToc(
           parsed,
           new Date().toISOString(),
