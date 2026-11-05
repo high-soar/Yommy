@@ -1319,13 +1319,16 @@ describe("syncEngine", () => {
       await novelRepo.upsertNovelWithToc(index, "2026-10-10T00:00:00.000Z");
 
       // リモート側に該当作品の古い Tombstone が残存している状態をシミュレート
+      const recentTombstoneDate = new Date(
+        Date.now() - 5 * 24 * 60 * 60 * 1000,
+      ).toISOString();
       const remoteState: YommySyncState = {
         version: 1,
-        lastSyncedAt: "2026-10-20T12:00:00.000Z",
+        lastSyncedAt: new Date().toISOString(),
         novels: {},
         deletedNovels: {
-          "kakuyomu:16817330658027210412": "2026-10-05T00:00:00.000Z",
-          "kakuyomu:deleted-other": "2026-10-05T00:00:00.000Z",
+          "kakuyomu:16817330658027210412": recentTombstoneDate,
+          "kakuyomu:deleted-other": recentTombstoneDate,
         },
       };
       await bridge.pushFile(JSON.stringify(remoteState));
