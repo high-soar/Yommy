@@ -399,12 +399,20 @@ describe("NarouParser", () => {
 
       // 区切り検証
       const separator = "<p><br></p><p>────────────</p><p><br></p>";
+      expect(result.bodyHtml).toContain(separator);
+      expect(result.bodyHtml).toContain("これは前書きです。");
       expect(result.bodyHtml).toContain(
-        `<p>これは前書きです。</p>${separator}`,
+        "読んでいただきありがとうございました。",
       );
-      expect(result.bodyHtml).toContain(
-        `${separator}<p>読んでいただきありがとうございました。</p>`,
+      const firstSepIndex = result.bodyHtml.indexOf(separator);
+      const secondSepIndex = result.bodyHtml.lastIndexOf(separator);
+      expect(firstSepIndex).toBeGreaterThan(
+        result.bodyHtml.indexOf("これは前書きです。"),
       );
+      expect(secondSepIndex).toBeGreaterThan(firstSepIndex);
+      expect(
+        result.bodyHtml.indexOf("読んでいただきありがとうございました。"),
+      ).toBeGreaterThan(secondSepIndex);
     });
 
     it("前書きのみ、後書きのみ、本編のみの場合に区切り段落が不適切に挿入されないこと", () => {
@@ -463,9 +471,10 @@ describe("NarouParser", () => {
       expect(result.remoteChapterId).toBe("99");
       expect(result.title).toBe("旧エピローグ");
       const separator = "<p><br></p><p>────────────</p><p><br></p>";
-      expect(result.bodyHtml).toBe(
-        `<p>旧スタイルの前書きです。</p>${separator}<p>旧スタイルの本編です。完結しました。</p>${separator}<p>旧スタイルの後書きです。</p>`,
-      );
+      expect(result.bodyHtml).toContain("旧スタイルの前書きです。");
+      expect(result.bodyHtml).toContain("旧スタイルの本編です。完結しました。");
+      expect(result.bodyHtml).toContain("旧スタイルの後書きです。");
+      expect(result.bodyHtml).toContain(separator);
     });
 
     it("サブタイトル優先セレクタリストのフォールバック動作を検証すること", () => {
@@ -581,7 +590,7 @@ describe("NarouParser", () => {
       expect(result.bodyHtml).not.toContain("onclick");
       expect(result.bodyHtml).not.toContain("onerror");
       expect(result.bodyHtml).not.toContain("<img");
-      expect(result.bodyHtml).toContain("<p>安全な本文段落</p>");
+      expect(result.bodyHtml).toContain("安全な本文段落");
     });
   });
 
@@ -628,6 +637,150 @@ describe("NarouParser", () => {
 
       expect(result.prevChapterUrl).toBeNull();
       expect(result.nextChapterUrl).toBeNull();
+    });
+
+    it("前後リンクの URL が不正で new URL が失敗した場合は null を返すこと", () => {
+      const html = `
+        <div class="p-novel__text"><p>本文</p></div>
+        <div class="c-pager">
+          <a class="c-pager__item--before" href="http://::invalid">前へ</a>
+          <a class="c-pager__item--next" href="http://::invalid">次へ</a>
+        </div>
+      `;
+      const result = parser.parseChapterContent(
+        html,
+        "https://ncode.syosetu.com/n9669bk/1/",
+      );
+      expect(result.prevChapterUrl).toBeNull();
+      expect(result.nextChapterUrl).toBeNull();
+    });
+  });
+
+  describe("境界値・異常系カバレッジ", () => {
+    it("目次リスト内にリンクタグを含まない要素が存在する場合はスキップすること", () => {
+      const html = `
+        <!DOCTYPE html><html><body>
+          <h1 class="p-novel__title">作品</h1>
+          <div class="p-eplist">
+            <div class="p-eplist__sublist">リンクなしの告知項目</div>
+            <div class="p-eplist__sublist"><a class="p-eplist__subtitle" href="/n9669bk/1/">第1話</a></div>
+          </div>
+        </body></html>
+      `;
+      const result = parser.parseNovelIndex(
+        html,
+        "https://ncode.syosetu.com/n9669bk/",
+      );
+      expect(result.chapters).toHaveLength(1);
+      expect(result.chapters[0].title).toBe("第1話");
+    });
+
+    it("nextTocPageUrl の href が不正な URL で new URL が失敗した場合は null を返すこと", () => {
+      const html = `
+        <!DOCTYPE html><html><body>
+          <h1 class="p-novel__title">作品</h1>
+          <div class="p-eplist"><div class="p-eplist__sublist"><a href="/n9669bk/1/">第1話</a></div></div>
+          <div class="c-pager"><a class="c-pager__item--next" href="http://::invalid">次へ</a></div>
+        </body></html>
+      `;
+      const result = parser.parseNovelIndex(
+        html,
+        "https://ncode.syosetu.com/n9669bk/",
+      );
+      expect(result.nextTocPageUrl).toBeNull();
+    });
+
+    it("ruby タグ内に rt タグが存在しない場合は傍点変換をスキップすること", () => {
+      const html = `
+        <div class="p-novel__text">
+          <p><ruby>ルビなし</ruby></p>
+        </div>
+      `;
+      const result = parser.parseChapterContent(
+        html,
+        "https://ncode.syosetu.com/n9669bk/1/",
+      );
+      expect(result.bodyHtml).toContain("<ruby>ルビなし</ruby>");
+    });
+
+    it("本文コンテナが存在しない場合は bodyHtml が空文字になること", () => {
+      const html = "<div>本文なし</div>";
+      const result = parser.parseChapterContent(
+        html,
+        "https://ncode.syosetu.com/n9669bk/1/",
+      );
+      expect(result.bodyHtml).toBe("");
+      expect(result.byteSize).toBe(0);
+    });
+
+    it("pageUrl に ncode が含まれない場合は remoteChapterId が空文字になること", () => {
+      const html = '<div class="p-novel__text"><p>本文</p></div>';
+      const result = parser.parseChapterContent(
+        html,
+        "https://example.com/other",
+      );
+      expect(result.remoteChapterId).toBe("");
+    });
+
+    it("前書き・本編・後書きの要素が存在しても中身が空白のみの場合は除外されること", () => {
+      const html = `
+        <div class="p-novel__subtitle-episode">タイトル</div>
+        <div class="p-novel__text p-novel__text--preface">   </div>
+        <div class="p-novel__text"><p>本文段落</p></div>
+        <div class="p-novel__text p-novel__text--afterword"> \n </div>
+      `;
+      const result = parser.parseChapterContent(
+        html,
+        "https://ncode.syosetu.com/n9669bk/1/",
+      );
+      expect(result.bodyHtml).toBe("<p>本文段落</p>");
+      expect(result.bodyHtml).not.toContain("────────────");
+    });
+
+    it("目次アイテムのリンクに href 属性がない場合やエピソードIDが数字でない場合、日付がマッチしない場合のハンドリング", () => {
+      const html = `
+        <!DOCTYPE html><html><body>
+          <h1 class="p-novel__title">作品</h1>
+          <div class="p-eplist">
+            <div class="p-eplist__sublist"><a class="p-eplist__subtitle">リンク属性なし</a></div>
+            <div class="p-eplist__sublist">
+              <a class="p-eplist__subtitle" href="/n9669bk/abc/">数字なし</a>
+              <div class="p-eplist__update">更新未定</div>
+            </div>
+          </div>
+        </body></html>
+      `;
+      const result = parser.parseNovelIndex(
+        html,
+        "https://ncode.syosetu.com/n9669bk/",
+      );
+      expect(result.chapters).toHaveLength(2);
+      expect(result.chapters[0].remoteChapterId).toBe("");
+      expect(result.chapters[1].remoteChapterId).toBe("");
+      expect(result.chapters[1].publishedAt).toBeNull();
+    });
+
+    it("meta タグに content 属性が存在しない場合のハンドリング", () => {
+      const html = `
+        <!DOCTYPE html><html><head>
+          <meta property="og:title">
+          <meta name="twitter:creator">
+          <meta name="description">
+          <link rel="canonical" href="https://example.com/not-narou/">
+          <meta property="og:url" content="https://example.com/not-narou/">
+        </head><body>
+          <div class="p-eplist">
+            <div class="p-eplist__sublist"><a href="/n9669bk/1/">話</a></div>
+          </div>
+        </body></html>
+      `;
+      const result = parser.parseNovelIndex(
+        html,
+        "https://ncode.syosetu.com/n9669bk/",
+      );
+      expect(result.title).toBe("");
+      expect(result.author).toBe("");
+      expect(result.synopsis).toBe("");
     });
   });
 

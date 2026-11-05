@@ -1,5 +1,6 @@
 import type { NovelParser } from "./types";
 import { KakuyomuParser } from "./kakuyomu/KakuyomuParser";
+import { NarouParser } from "./narou/NarouParser";
 
 /**
  * サイト別小説パーサーの管理・解決を行うレジストリクラス
@@ -66,5 +67,6 @@ export class ParserRegistry {
 export function createDefaultParserRegistry(): ParserRegistry {
   const registry = new ParserRegistry();
   registry.register(new KakuyomuParser());
+  registry.register(new NarouParser());
   return registry;
 }
