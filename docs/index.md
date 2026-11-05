@@ -215,5 +215,5 @@ related_tests: []
 
 ## 4. 実装 Sub-issue 分割計画
 
-## 5. 申し送り事項（Handover Items: `HO-xx`）
+## 5. 申し送り事項（Handover Items: `HO-xx`）・実機検証計画
 ```
