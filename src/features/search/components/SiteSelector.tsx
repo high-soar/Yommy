@@ -5,6 +5,8 @@ import { SEARCH_SITES } from "../types";
 export interface SiteSelectorProps {
   selectedSite: NovelSiteType;
   onSelectSite: (site: NovelSiteType) => void;
+  /** 通信中操作抑止フラグ（省略時は false / v0.7 Issue #238） */
+  disabled?: boolean;
 }
 
 /**

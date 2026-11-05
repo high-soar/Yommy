@@ -4,6 +4,8 @@ export interface SearchInputBarProps {
   keyword: string;
   onChangeKeyword: (keyword: string) => void;
   onSubmitSearch: () => void;
+  /** 検索通信中フラグ（true時は検索ボタン無効化、テキスト入力はフォーカス・入力可能維持 / v0.7 Issue #238） */
+  isLoading?: boolean;
 }
 
 /**

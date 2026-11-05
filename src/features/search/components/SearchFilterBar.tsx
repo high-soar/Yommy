@@ -12,6 +12,8 @@ export interface SearchFilterBarProps {
   onSelectSerialStatus: (status: NovelSerialStatus) => void;
   selectedGenre?: string;
   onSelectGenre: (genre?: string) => void;
+  /** 通信中操作抑止フラグ（省略時は false / v0.7 Issue #238） */
+  disabled?: boolean;
 }
 
 /**
