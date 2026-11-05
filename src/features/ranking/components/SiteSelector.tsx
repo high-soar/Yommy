@@ -15,6 +15,7 @@ export interface SiteSelectorProps {
 export const SiteSelector: React.FC<SiteSelectorProps> = ({
   selectedSite,
   onSelectSite,
+  disabled = false,
 }) => {
   return (
     <div
@@ -24,7 +25,7 @@ export const SiteSelector: React.FC<SiteSelectorProps> = ({
     >
       {RANKING_SITES.map((site) => {
         const isSelected = selectedSite === site.siteType;
-        const isDisabled = !site.isAvailable;
+        const isDisabled = !site.isAvailable || disabled;
 
         return (
           <button
@@ -44,10 +45,10 @@ export const SiteSelector: React.FC<SiteSelectorProps> = ({
                 : isDisabled
                   ? "text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-60"
                   : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
-            }`}
+            } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
           >
             {site.label}
-            {isDisabled ? " (準備中)" : ""}
+            {!site.isAvailable ? " (準備中)" : ""}
           </button>
         );
       })}
