@@ -14,7 +14,7 @@ Use this workflow to author, update, and mechanically validate documentation in 
 1. **Set the scope**:
    - Confirm the user's goal, target screens (`SCR-xx`) or novel sites, constraints, and what is out of scope. Inspect existing Canonical App Specs in `docs/specs/` first.
 2. **Maintain 2-Layer Specifications (`docs/specs/`)**:
-   - **Per-Issue Delta Spec (`docs/specs/changes/issue-XX-<slug>.md`, `type: spec-delta`)**: In Phase 4+, create a Delta Spec for the Feature Request Issue detailing why the change is needed, what changes across the layers, the UT/VRT/IT test plan, Sub-issue breakdown, and Handover items (`HO-xx`).
+   - **Per-Issue Delta Spec (`docs/specs/changes/issue-XX-<slug>.md`, `type: spec-delta`)**: In Phase 4+, create a Delta Spec for the Feature Request Issue detailing why the change is needed, what changes across the layers, the UT/VRT/IT test plan, Sub-issue breakdown, Handover items (`HO-xx`), and the Android physical device verification plan (`親 Issue #XX 完了前` vs. `Milestone v0.X 完了前`).
    - **Canonical App Specs (`docs/specs/*.md`, `features/*.md`, `parsers/*.md`)**: In the **same Design Update PR**, reflect the changes into the Canonical App Specs with `status: Review (#Issue番号)` so the canonical files always represent the complete, up-to-date system specification.
 3. **Apply OKF YAML Frontmatter (No Markdown Metadata Tables)**:
    - Every `.md` file under `docs/` (except the reserved bundle index `docs/index.md`) must begin with an OKF YAML frontmatter block as defined in [docs/index.md §4](../../../docs/index.md#4-okfopen-knowledge-formatyaml-フロントマター規約):
