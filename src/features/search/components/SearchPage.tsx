@@ -64,6 +64,15 @@ export interface SearchPageProps {
  *
  * 検索バー、絞り込み・並び順フィルタ、結果カード一覧、空状態、ローディング、
  * およびエラー再試行UIを統括して描画する。
+ *
+ * 再取得通信中（isLoading === true）は直前の結果一覧を非表示にして中央スピナーを描画し、
+ * 検索ボタン・フィルタバー・サイトセレクタを無効化する（v0.7 Issue #238 / AC-SE-09）。
+ * 描画優先順位:
+ * 1. error !== null -> エラー再試行カード（search-error）
+ * 2. isLoading === true -> リスト置換ローディングスピナー（search-loading）
+ * 3. items.length > 0 -> 検索結果カード一覧（search-results-list）
+ * 4. !hasSearched -> 初期未検索案内（search-initial-state）
+ * 5. hasSearched -> 0件空状態案内（search-empty-state）
  */
 export const SearchPage: React.FC<SearchPageProps> = ({
   selectedSite,

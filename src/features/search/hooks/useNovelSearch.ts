@@ -68,6 +68,7 @@ interface ExecuteSearchParams {
  *
  * キーワード検索、並び順・連載状況・ジャンルフィルタリング、次ページ追加読み込み、
  * 登録済み作品の照合・その場本棚追加、および詳細画面への遷移制御を提供する。
+ * 通信中（isLoading === true）の重複リクエストガードおよび非同期競合（Race Condition）防止を内包する（v0.7 Issue #238 / AC-SE-09）。
  */
 export function useNovelSearch(): UseNovelSearchResult {
   const { httpClient, parserRegistry, novelRepository, syncEngine, isReady } =
