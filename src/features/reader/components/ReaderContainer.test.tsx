@@ -956,7 +956,8 @@ describe("ReaderContainer", () => {
   });
 
   describe("本文スクロール時の進捗率更新 (AC-RD-08)", () => {
-    it("本文スクロール時にスクロール進捗率が更新されること (AC-RD-08)", async () => {
+    it("ReaderPage に渡された onScrollProgressChange が呼ばれた際、スクロール進捗率が更新され updateBookmark が実行されること (AC-RD-08, R1-01, R1-11)", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -975,28 +976,18 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
       });
 
-      const readerView = screen.getByTestId("reader-view");
-      Object.defineProperty(readerView, "scrollWidth", {
-        value: 1000,
-        configurable: true,
-        writable: true,
-      });
-      Object.defineProperty(readerView, "clientWidth", {
-        value: 500,
-        configurable: true,
-        writable: true,
-      });
-      Object.defineProperty(readerView, "scrollLeft", {
-        value: -250,
-        configurable: true,
-        writable: true,
-      });
-
-      act(() => {
-        fireEvent.scroll(readerView);
+      const lastProps = pageSpy.mock.lastCall?.[0];
+      await act(async () => {
+        lastProps?.onScrollProgressChange?.(0.5);
       });
 
       await waitFor(
