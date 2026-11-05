@@ -25,7 +25,7 @@ docs/
 │   │   ├── search.md                  # 検索画面仕様書（SCR-06: SearchPage / SearchNovelCard / useNovelSearch）
 │   │   ├── ranking.md                 # ランキング画面仕様書（SCR-07: RankingPage / RankingNovelCard / useNovelRanking）
 │   │   ├── novel-detail.md            # 作品詳細・目次画面仕様書（SCR-02: NovelDetailPage / EpisodeList / useNovelDetail）
-│   │   ├── reader-view.md             # 小説リーダー画面仕様書（SCR-03: ReaderPage / ReaderView / ReaderBottomOverlay / ReaderChapterNav / useReader）
+│   │   ├── reader-view.md             # 小説リーダー画面仕様書（SCR-03: ReaderPage / ReaderView / ReaderTopOverlay / ReaderBottomOverlay / ReaderChapterNav / useReader / useReaderGestures）
 │   │   └── settings.md                # 設定画面仕様書（SCR-05: SettingsPage / SettingsContainer / SampleTextPreview / useSettings）
 │   ├── parsers/                       # [App全体正本] 小説サイト別の現在スクレイピング・DOM解析仕様書
 │   │   └── kakuyomu.md                # カクヨム パーサー・スクレイピング仕様書（kakuyomu.jp）
@@ -62,14 +62,16 @@ docs/
     │   ├── v0.2-ui-ux-log.md          # Milestone v0.2 UI/UX バグ記録（No. 71〜99）＆ 申し送りアーカイブ
     │   ├── v0.3-search-prefetch-log.md # Milestone v0.3 検索/先読み バグ記録（No. 100〜132）＆ 申し送りアーカイブ
     │   ├── v0.4-cloud-sync-reader-ux-log.md # Milestone v0.4 クラウド同期/リーダーUX バグ記録（No. 133〜168）＆ 申し送りアーカイブ
-    │   └── v0.5-reader-customization-and-cache-log.md # Milestone v0.5 縦書きリーダー組版/設定/キャッシュ バグ記録（No. 169〜180）＆ 申し送りアーカイブ
+    │   ├── v0.5-reader-customization-and-cache-log.md # Milestone v0.5 縦書きリーダー組版/設定/キャッシュ バグ記録（No. 169〜180）＆ 申し送りアーカイブ
+    │   └── v0.6-reader-animation-overlay-and-volume-key-log.md # Milestone v0.6 リーダー水平スライド/上下オーバーレイ＆シークバー/音量キー バグ記録（No. 181〜201）＆ 申し送りアーカイブ
     └── reports/                       # ミニリリース Milestone ごとの品質分析・改善（Kaizen）レポート格納先
         ├── phase3-poc.md              # Phase 3 PoC 品質分析・改善レポート
         ├── v0.1-mvp.md                # Milestone v0.1（カクヨム MVP）品質分析・改善レポート
         ├── v0.2-ui-ux.md              # Milestone v0.2（UI/UX 刷新 ＆ 開発基盤整備）品質分析・改善レポート
         ├── v0.3-search-prefetch.md    # Milestone v0.3（検索/ランキング・先読みキャッシュ・更新チェック ＆ 実機基盤改善）品質分析・改善レポート
         ├── v0.4-cloud-sync-reader-ux.md # Milestone v0.4（クラウド同期・ページめくり・リーダーUI改善）品質分析・改善レポート
-        └── v0.5-reader-customization-and-cache.md # Milestone v0.5（縦書きリーダー組版・設定・キャッシュ管理）品質分析・改善レポート
+        ├── v0.5-reader-customization-and-cache.md # Milestone v0.5（縦書きリーダー組版・設定・キャッシュ管理）品質分析・改善レポート
+        └── v0.6-reader-animation-overlay-and-volume-key.md # Milestone v0.6（リーダーページ送りアニメーション・上下連動オーバーレイ＆シークバー・音量キー送り）品質分析・改善レポート
 ```
 
 > [!NOTE]
@@ -109,10 +111,10 @@ flowchart LR
     Step2 --> Step3 --> Step4
 ```
 
-| 区分                                     | 配置先                                                                       | 役割・記載内容                                                                                                                                                                                                                          | ライフサイクル                                                                                                     |
-| :--------------------------------------- | :--------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------- |
-| **App 全体正本**<br>（Canonical Specs）  | `docs/specs/*.md`<br>`docs/specs/features/*.md`<br>`docs/specs/parsers/*.md` | **「今この瞬間のアプリ全体の仕様」** を表す唯一の正本。<br>タスク分割や一時的な移行手順は書かず、恒久的な仕様（要件、3層契約、DB定義、画面遷移、各機能の `AC-xx` と構成）のみを記載する。                                               | Phase 2 で初期骨格を作成し、Phase 4 以降の各設計 PR で常に最新状態へ更新し続ける。                                 |
-| **差分仕様**<br>（Delta / Change Specs） | `docs/specs/changes/issue-XX-<slug>.md`<br>（完了後: `changes/archive/`）    | **「特定の要望 Issue（`#XX`）で何をどう追加・変更するか」** を定義する設計計画書。<br>変更背景、影響する全体正本ファイル一覧、追加・変更・廃止する仕様の差分、UT/VRT/IT テスト観点、Sub-issue 分割計画、申し送り（`HO-xx`）を記載する。 | 要望 Issue の設計 PR で `changes/` 直下に作成し、親 Issue 完了時（最終 PR）に **`changes/archive/` へ移動** する。 |
+| 区分                                     | 配置先                                                                       | 役割・記載内容                                                                                                                                                                                                                                                | ライフサイクル                                                                                                     |
+| :--------------------------------------- | :--------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :----------------------------------------------------------------------------------------------------------------- |
+| **App 全体正本**<br>（Canonical Specs）  | `docs/specs/*.md`<br>`docs/specs/features/*.md`<br>`docs/specs/parsers/*.md` | **「今この瞬間のアプリ全体の仕様」** を表す唯一の正本。<br>タスク分割や一時的な移行手順は書かず、恒久的な仕様（要件、3層契約、DB定義、画面遷移、各機能の `AC-xx` と構成）のみを記載する。                                                                     | Phase 2 で初期骨格を作成し、Phase 4 以降の各設計 PR で常に最新状態へ更新し続ける。                                 |
+| **差分仕様**<br>（Delta / Change Specs） | `docs/specs/changes/issue-XX-<slug>.md`<br>（完了後: `changes/archive/`）    | **「特定の要望 Issue（`#XX`）で何をどう追加・変更するか」** を定義する設計計画書。<br>変更背景、影響する全体正本ファイル一覧、追加・変更・廃止する仕様の差分、UT/VRT/IT テスト観点、Sub-issue 分割計画、申し送り（`HO-xx`）・Android 実機検証計画を記載する。 | 要望 Issue の設計 PR で `changes/` 直下に作成し、親 Issue 完了時（最終 PR）に **`changes/archive/` へ移動** する。 |
 
 ---
 
@@ -214,5 +216,5 @@ related_tests: []
 
 ## 4. 実装 Sub-issue 分割計画
 
-## 5. 申し送り事項（Handover Items: `HO-xx`）
+## 5. 申し送り事項（Handover Items: `HO-xx`）・実機検証計画
 ```

@@ -3306,8 +3306,252 @@ describe("useReaderGestures", () => {
           firstResult.current.handleScrollProgressChange(0.0);
           firstResult.current.handleVolumeKey("up");
         });
-        expect(onPrevChapter).not.toHaveBeenCalled();
         expect(firstResult.current.boundaryHint).toBeNull();
+      });
+
+      it("scrollイベント未発火の初期表示状態（scrollTop=0 / scrollLeft=0）でもDOMスクロール位置から先頭・末尾境界を同期し、2段階操作で前後話遷移できること (R1-18)", () => {
+        const onPrevChapter = vi.fn();
+        const onNextChapter = vi.fn();
+        const scrollView = document.createElement("div");
+        Object.defineProperty(scrollView, "scrollHeight", {
+          value: 1500,
+          configurable: true,
+        });
+        Object.defineProperty(scrollView, "clientHeight", {
+          value: 500,
+          configurable: true,
+        });
+        Object.defineProperty(scrollView, "scrollTop", {
+          value: 0,
+          writable: true,
+          configurable: true,
+        });
+
+        const { result } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            writingMode: "horizontal-tb",
+            pagingMode: "scroll",
+            chapterIndex: 2,
+            totalChapters: 5,
+            containerRef: { current: scrollView },
+            onPrevChapter,
+            onNextChapter,
+          }),
+        );
+
+        // handleScrollProgressChange を一度も呼ばずに先頭で音量［＋］を2回押下
+        act(() => {
+          result.current.handleVolumeKey("up");
+        });
+        expect(result.current.boundaryHint).toBe("もう一度操作で前の話へ");
+        expect(onPrevChapter).not.toHaveBeenCalled();
+
+        act(() => {
+          result.current.handleVolumeKey("up");
+        });
+        expect(onPrevChapter).toHaveBeenCalledTimes(1);
+        expect(result.current.boundaryHint).toBeNull();
+
+        // 末尾位置（scrollTop = 1000）で scroll イベント未発火のままホイール2回操作
+        scrollView.scrollTop = 1000;
+        act(() => {
+          result.current.handleWheel(
+            createWheelEvent({ deltaX: 0, deltaY: 50 }),
+          );
+        });
+        expect(result.current.boundaryHint).toBe("もう一度スワイプで次の話へ");
+        expect(onNextChapter).not.toHaveBeenCalled();
+
+        act(() => {
+          result.current.handleWheel(
+            createWheelEvent({ deltaX: 0, deltaY: 50 }),
+          );
+        });
+        expect(onNextChapter).toHaveBeenCalledTimes(1);
+      });
+
+      it("1画面に収まる短文エピソード（maxScroll <= 0）ではscrollイベント未発火でも先頭・末尾双方の2段階遷移が可能であること (R1-18)", () => {
+        const onPrevChapter = vi.fn();
+        const onNextChapter = vi.fn();
+        const shortVerticalView = document.createElement("div");
+        Object.defineProperty(shortVerticalView, "scrollWidth", {
+          value: 400,
+          configurable: true,
+        });
+        Object.defineProperty(shortVerticalView, "clientWidth", {
+          value: 400,
+          configurable: true,
+        });
+        Object.defineProperty(shortVerticalView, "scrollLeft", {
+          value: 0,
+          writable: true,
+          configurable: true,
+        });
+
+        const { result } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            writingMode: "vertical-rl",
+            pagingMode: "scroll",
+            chapterIndex: 2,
+            totalChapters: 5,
+            containerRef: { current: shortVerticalView },
+            onPrevChapter,
+            onNextChapter,
+          }),
+        );
+
+        // 音量［ー］2回で次話遷移
+        act(() => {
+          result.current.handleVolumeKey("down");
+        });
+        expect(result.current.boundaryHint).toBe("もう一度操作で次の話へ");
+        act(() => {
+          result.current.handleVolumeKey("down");
+        });
+        expect(onNextChapter).toHaveBeenCalledTimes(1);
+
+        // 音量［＋］2回で前話遷移
+        act(() => {
+          result.current.handleVolumeKey("up");
+        });
+        expect(result.current.boundaryHint).toBe("もう一度操作で前の話へ");
+        act(() => {
+          result.current.handleVolumeKey("up");
+        });
+        expect(onPrevChapter).toHaveBeenCalledTimes(1);
+      });
+
+      it("縦書き連続スクロールでDOMスクロール位置が先頭・末尾・中間の各ケースを同期できること (R1-18)", () => {
+        const onPrevChapter = vi.fn();
+        const onNextChapter = vi.fn();
+        const verticalScrollView = document.createElement("div");
+        Object.defineProperty(verticalScrollView, "scrollWidth", {
+          value: 1200,
+          configurable: true,
+        });
+        Object.defineProperty(verticalScrollView, "clientWidth", {
+          value: 400,
+          configurable: true,
+        });
+        Object.defineProperty(verticalScrollView, "scrollLeft", {
+          value: 0,
+          writable: true,
+          configurable: true,
+        });
+
+        const { result } = renderHook(() =>
+          useReaderGestures({
+            ...defaultOptions,
+            writingMode: "vertical-rl",
+            pagingMode: "scroll",
+            chapterIndex: 2,
+            totalChapters: 5,
+            containerRef: { current: verticalScrollView },
+            onPrevChapter,
+            onNextChapter,
+          }),
+        );
+
+        // 先頭（scrollLeft = 0）で右スワイプ2回 -> 前話遷移
+        act(() => {
+          result.current.handlePointerDown(
+            createPointerEvent("pointerdown", { clientX: 100, clientY: 300 }),
+          );
+          result.current.handlePointerMove(
+            createPointerEvent("pointermove", { clientX: 150, clientY: 300 }),
+          );
+          result.current.handlePointerUp(
+            createPointerEvent("pointerup", { clientX: 150, clientY: 300 }),
+          );
+        });
+        expect(result.current.boundaryHint).toBe("もう一度スワイプで前の話へ");
+
+        // 中間（scrollLeft = -400）では端ではないため通常スクロールとなりヒント更新されない
+        verticalScrollView.scrollLeft = -400;
+        act(() => {
+          result.current.handleTouchStart?.(
+            createTouchEvent("touchstart", [{ clientX: 200, clientY: 300 }]),
+          );
+          result.current.handleTouchMove?.(
+            createTouchEvent("touchmove", [{ clientX: 100, clientY: 300 }]),
+          );
+          result.current.handleTouchEnd?.();
+        });
+        expect(onNextChapter).not.toHaveBeenCalled();
+
+        // 末尾（scrollLeft = -800）で左タッチスワイプ2回 -> 次話遷移
+        verticalScrollView.scrollLeft = -800;
+        act(() => {
+          result.current.handleTouchStart?.(
+            createTouchEvent("touchstart", [{ clientX: 300, clientY: 300 }]),
+          );
+          result.current.handleTouchMove?.(
+            createTouchEvent("touchmove", [{ clientX: 200, clientY: 300 }]),
+          );
+          result.current.handleTouchEnd?.();
+        });
+        expect(result.current.boundaryHint).toBe("もう一度スワイプで次の話へ");
+        act(() => {
+          result.current.handleTouchStart?.(
+            createTouchEvent("touchstart", [{ clientX: 300, clientY: 300 }]),
+          );
+          result.current.handleTouchMove?.(
+            createTouchEvent("touchmove", [{ clientX: 200, clientY: 300 }]),
+          );
+          result.current.handleTouchEnd?.();
+        });
+        expect(onNextChapter).toHaveBeenCalledTimes(1);
+      });
+
+      it("スライドアニメーション進行中にchapterIndexまたはpagingModeが変化した場合、タイマーが破棄され古いonPageChangeが誤発火しないこと (R1-18, R1-19)", () => {
+        const onPageChange = vi.fn();
+        const { result, rerender } = renderHook(
+          (props: { chapterIndex: number; pagingMode: "paged" | "scroll" }) =>
+            useReaderGestures({
+              ...defaultOptions,
+              chapterIndex: props.chapterIndex,
+              pagingMode: props.pagingMode,
+              currentPage: 2,
+              totalPages: 5,
+              onPageChange,
+            }),
+          {
+            initialProps: {
+              chapterIndex: 1,
+              pagingMode: "paged" as "paged" | "scroll",
+            },
+          },
+        );
+
+        // 左端タップで次ページへの200msスライドアニメーション開始
+        act(() => {
+          result.current.handlePointerDown(
+            createPointerEvent("pointerdown", { clientX: 30, clientY: 300 }),
+          );
+          result.current.handlePointerUp(
+            createPointerEvent("pointerup", { clientX: 30, clientY: 300 }),
+          );
+        });
+        expect(result.current.isAnimating).toBe(true);
+        expect(result.current.slideOffsetPx).toBe(300);
+
+        // 200ms経過前にエピソード遷移（chapterIndex: 1 -> 2）
+        rerender({ chapterIndex: 2, pagingMode: "paged" });
+        expect(result.current.isAnimating).toBe(false);
+        expect(result.current.slideOffsetPx).toBe(0);
+
+        // 200ms経過しても前エピソードの onPageChange(3) は発火しないこと
+        act(() => {
+          vi.advanceTimersByTime(250);
+        });
+        expect(onPageChange).not.toHaveBeenCalled();
+
+        // アニメーション非進行時に pagingMode が変化（paged -> scroll）した場合も正常にリセットされること
+        rerender({ chapterIndex: 2, pagingMode: "scroll" });
+        expect(result.current.isAnimating).toBe(false);
+        expect(result.current.boundaryHint).toBeNull();
       });
     });
   });

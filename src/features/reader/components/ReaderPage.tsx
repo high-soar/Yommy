@@ -242,14 +242,14 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
       return;
     }
 
-    void volumeKeyBridge.setVolumeKeyPagingEnabled(true);
     const removeListener = volumeKeyBridge.addVolumeKeyListener((event) => {
       handleVolumeKeyRef.current(event.direction);
     });
+    void volumeKeyBridge.setVolumeKeyPagingEnabled(true).catch(() => {});
 
     return () => {
       removeListener();
-      void volumeKeyBridge.setVolumeKeyPagingEnabled(false);
+      void volumeKeyBridge.setVolumeKeyPagingEnabled(false).catch(() => {});
     };
   }, [enableVolumeKeyPaging, volumeKeyBridge]);
 

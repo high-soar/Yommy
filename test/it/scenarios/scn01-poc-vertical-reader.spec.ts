@@ -432,8 +432,62 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(pageIndicator).toHaveText(`1 / ${totalPagesStr}`);
     await expect(swipeTrack).toHaveCSS("transition-property", "none");
 
-    // 再度左端タップで最終ページ（第2ページ）へ移動
+    // Kindle様式: ドラッグ追従・30%未満スナップバック・30%以上ドラッグ確定遷移の検証（AC-RD-17b, R1-21）
+    const initialSwipeLeft = await swipeTrack.evaluate(
+      (el) => (el as HTMLElement).style.left,
+    );
+
     if (readerBox) {
+      // 1. 30%未満（30px）かつ低速（velocity < 0.5 px/ms）のドラッグ＆リリースでスナップバックしページ1に留まること
+      const startX = readerBox.x + 100;
+      const smallDragX = startX + 30;
+      const dragY = readerBox.y + readerBox.height * 0.4;
+      await page.mouse.move(startX, dragY);
+      await page.mouse.down();
+      await page.mouse.move(smallDragX, dragY, { steps: 5 });
+      const draggingSwipeLeft = await swipeTrack.evaluate(
+        (el) => (el as HTMLElement).style.left,
+      );
+      expect(draggingSwipeLeft).not.toBe(initialSwipeLeft);
+      await page.waitForTimeout(100);
+      await page.mouse.up();
+    }
+    await expect(swipeTrack).toHaveCSS("transition-property", "none");
+    await expect(readerView).toHaveAttribute("data-current-page", "1");
+
+    await page.evaluate(() => window.getSelection()?.removeAllRanges());
+
+    if (readerBox) {
+      // 2. 30%以上（約40%）の右方向ドラッグ＆リリースで次ページ（第2ページ）へ確定遷移すること（AC-RD-17b）
+      const startX = readerBox.x + 100;
+      const largeDragX = startX + readerBox.width * 0.4;
+      const dragY = readerBox.y + readerBox.height * 0.4;
+      await page.mouse.move(startX, dragY);
+      await page.mouse.down();
+      await page.mouse.move(largeDragX, dragY, { steps: 10 });
+      await page.mouse.up();
+    }
+    await expect(readerView).toHaveAttribute("data-current-page", "2");
+    await expect(pageIndicator).toHaveText(`2 / ${totalPagesStr}`);
+    await expect(swipeTrack).toHaveCSS("transition-property", "none");
+
+    // 右端タップで第1ページへ戻す
+    if (readerBox) {
+      await page.mouse.click(
+        readerBox.x + readerBox.width * 0.9,
+        readerBox.y + readerBox.height * 0.4,
+      );
+    }
+    await expect(readerView).toHaveAttribute("data-current-page", "1");
+    await expect(swipeTrack).toHaveCSS("transition-property", "none");
+
+    // Kindle様式: 高速連打（200msアニメーション完了前の連続左端タップ）で進行中ページが即時確定され次操作が取りこぼされないこと（AC-RD-17c, R1-21）
+    const boundaryHint = page.getByTestId("reader-episode-boundary-hint");
+    if (readerBox) {
+      await page.mouse.click(
+        readerBox.x + readerBox.width * 0.1,
+        readerBox.y + readerBox.height * 0.4,
+      );
       await page.mouse.click(
         readerBox.x + readerBox.width * 0.1,
         readerBox.y + readerBox.height * 0.4,
@@ -441,6 +495,8 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     }
     await expect(readerView).toHaveAttribute("data-current-page", "2");
     await expect(pageIndicator).toHaveText(`2 / ${totalPagesStr}`);
+    await expect(boundaryHint).toBeVisible();
+    await expect(boundaryHint).toHaveText("もう一度タップで次の話へ");
     await expect(swipeTrack).toHaveCSS("transition-property", "none");
 
     // paged モードにおけるページ位置復元の検証（R1-18, AC-RD-19, AC-RD-20）
@@ -461,7 +517,6 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
 
     // 最終ページでの端 2 段階タップによる前後話遷移（AC-RD-18, TR-05）
     // 1 回目の左端タップ（幅約 20%）で案内ヒントが表示されることを確認
-    const boundaryHint = page.getByTestId("reader-episode-boundary-hint");
     if (readerBox) {
       await page.mouse.click(
         readerBox.x + readerBox.width * 0.1,
@@ -1236,6 +1291,71 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       );
     }
     await expect(readerView).toHaveAttribute("data-current-page", "1");
+
+    // 6b. 3ページ以上の長文エピソードにおける中間ページ（先頭でも末尾でもない第2ページ）での別画面遷移・再遷移時のページ位置復元検証（R1-26, AC-RD-20）
+    await page.evaluate(async () => {
+      const services = window.__yommyServices!;
+      const longBodyHtml = Array.from(
+        { length: 40 },
+        (_, idx) =>
+          `<p>第${idx + 1}段落：これは複数ページにわたる縦書き長文エピソードの中間ページしおり復元を検証するためのテスト本文です。画面遷移後に再度リーダー画面を開いた際にも、初回0pxスロット計測やマルチパス計測で最終ページや先頭ページに化けることなく、元のページ番号が正確に復元されます。</p>`,
+      ).join("");
+      await services.chapterRepository.saveChapterBody(
+        "kakuyomu:16817330658027210412",
+        2,
+        {
+          remoteChapterId: "16817330658027210414",
+          title: "第1話 見知らぬ空",
+          url: "https://kakuyomu.jp/works/16817330658027210412/episodes/16817330658027210414",
+          bodyHtml: longBodyHtml,
+          byteSize: longBodyHtml.length,
+        },
+        new Date().toISOString(),
+      );
+    });
+
+    await page.goto("/novels/kakuyomu:16817330658027210412/chapters/2");
+    await expect(readerView).toBeVisible();
+    await expect(readerView).toHaveAttribute(
+      "data-total-pages",
+      /^[3-9]\d*|^\d{2,}$/,
+    );
+    const ch2TotalPages = (await readerView.getAttribute("data-total-pages"))!;
+    expect(Number(ch2TotalPages)).toBeGreaterThanOrEqual(3);
+
+    // 左端タップで中間ページ（第2ページ / 全Nページ, 1 < 2 < N）へ移動
+    if (readerBox) {
+      await page.mouse.click(
+        readerBox.x + readerBox.width * 0.1,
+        readerBox.y + readerBox.height * 0.4,
+      );
+    }
+    await expect(readerView).toHaveAttribute("data-current-page", "2");
+    await expect(page.getByTestId("reader-page-indicator")).toHaveText(
+      `2 / ${ch2TotalPages}`,
+    );
+
+    // 中央タップでオーバーレイを開き、「← 目次」で作品詳細（SCR-02）へ移動してから「続きから読む」で再遷移（R1-26）
+    if (readerBox) {
+      await page.mouse.click(
+        readerBox.x + readerBox.width * 0.5,
+        readerBox.y + readerBox.height * 0.4,
+      );
+    }
+    await page.getByTestId("reader-top-back-to-toc").click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
+    );
+    await page.getByTestId("detail-resume-button").click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/2/,
+    );
+    // 最終ページ（ch2TotalPages）や第1ページに化けず、中間ページ（第2ページ）が正確に復元されること
+    await expect(readerView).toHaveAttribute("data-total-pages", ch2TotalPages);
+    await expect(readerView).toHaveAttribute("data-current-page", "2");
+    await expect(page.getByTestId("reader-page-indicator")).toHaveText(
+      `2 / ${ch2TotalPages}`,
+    );
 
     // 7. 横書きスクロール表示時の余白スタイル反映確認
     // 設定画面へ移動して横書きへ切り替え

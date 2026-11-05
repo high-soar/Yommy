@@ -743,6 +743,7 @@ describe("syncEngine", () => {
     });
 
     it("pullAndMerge: リモートの deletedNovels に含まれる作品の削除日時がローカル作品より新しい場合、ローカル DB からカスケード削除されること (Tombstone 伝播)", async () => {
+      const baseNow = Date.now();
       const parser = parserRegistry.requireParser(
         "https://kakuyomu.jp/works/16817330658027210412",
       );
@@ -750,14 +751,19 @@ describe("syncEngine", () => {
         workIndexHtml,
         "https://kakuyomu.jp/works/16817330658027210412",
       );
-      await novelRepo.upsertNovelWithToc(index, "2026-10-10T00:00:00.000Z");
+      await novelRepo.upsertNovelWithToc(
+        index,
+        new Date(baseNow - 10 * 86400000).toISOString(),
+      );
 
       const remoteState: YommySyncState = {
         version: 1,
-        lastSyncedAt: "2026-10-31T12:00:00.000Z",
+        lastSyncedAt: new Date(baseNow - 1 * 86400000).toISOString(),
         novels: {},
         deletedNovels: {
-          "kakuyomu:16817330658027210412": "2026-10-20T00:00:00.000Z",
+          "kakuyomu:16817330658027210412": new Date(
+            baseNow - 5 * 86400000,
+          ).toISOString(),
         },
       };
       await bridge.pushFile(JSON.stringify(remoteState));
@@ -769,6 +775,7 @@ describe("syncEngine", () => {
     });
 
     it("pullAndMerge: リモートの deletedNovels の削除日時がローカル作品の登録/更新日時より古い場合、ローカル作品を削除しないこと", async () => {
+      const baseNow = Date.now();
       const parser = parserRegistry.requireParser(
         "https://kakuyomu.jp/works/16817330658027210412",
       );
@@ -776,14 +783,19 @@ describe("syncEngine", () => {
         workIndexHtml,
         "https://kakuyomu.jp/works/16817330658027210412",
       );
-      await novelRepo.upsertNovelWithToc(index, "2026-10-25T00:00:00.000Z");
+      await novelRepo.upsertNovelWithToc(
+        index,
+        new Date(baseNow - 2 * 86400000).toISOString(),
+      );
 
       const remoteState: YommySyncState = {
         version: 1,
-        lastSyncedAt: "2026-10-31T12:00:00.000Z",
+        lastSyncedAt: new Date(baseNow - 1 * 86400000).toISOString(),
         novels: {},
         deletedNovels: {
-          "kakuyomu:16817330658027210412": "2026-10-20T00:00:00.000Z",
+          "kakuyomu:16817330658027210412": new Date(
+            baseNow - 5 * 86400000,
+          ).toISOString(),
         },
       };
       await bridge.pushFile(JSON.stringify(remoteState));
@@ -1273,12 +1285,15 @@ describe("syncEngine", () => {
     });
 
     it("pushCurrentState: 既存のリモート Tombstone とローカル Tombstone がマージ（和集合）されて Push されること", async () => {
+      const baseNow = Date.now();
       const remoteState: YommySyncState = {
         version: 1,
-        lastSyncedAt: "2026-10-31T12:00:00.000Z",
+        lastSyncedAt: new Date(baseNow - 1 * 86400000).toISOString(),
         novels: {},
         deletedNovels: {
-          "kakuyomu:remote-deleted-1": "2026-10-20T00:00:00.000Z",
+          "kakuyomu:remote-deleted-1": new Date(
+            baseNow - 5 * 86400000,
+          ).toISOString(),
         },
       };
       await bridge.pushFile(JSON.stringify(remoteState));
@@ -1291,7 +1306,10 @@ describe("syncEngine", () => {
         workIndexHtml,
         "https://kakuyomu.jp/works/16817330658027210412",
       );
-      await novelRepo.upsertNovelWithToc(index, "2026-10-10T00:00:00.000Z");
+      await novelRepo.upsertNovelWithToc(
+        index,
+        new Date(baseNow - 10 * 86400000).toISOString(),
+      );
       await novelRepo.deleteNovel("kakuyomu:16817330658027210412");
 
       await engine.pushCurrentState();
@@ -1308,6 +1326,7 @@ describe("syncEngine", () => {
     });
 
     it("pushCurrentState: 本棚に現存する作品の作品 ID が Tombstone に含まれていても除外され、purgeDeletedNovels が実行されること", async () => {
+      const baseNow = Date.now();
       const purgeSpy = vi.spyOn(novelRepo, "purgeDeletedNovels");
       const parser = parserRegistry.requireParser(
         "https://kakuyomu.jp/works/16817330658027210412",
@@ -1316,19 +1335,20 @@ describe("syncEngine", () => {
         workIndexHtml,
         "https://kakuyomu.jp/works/16817330658027210412",
       );
-      await novelRepo.upsertNovelWithToc(index, "2026-10-10T00:00:00.000Z");
+      await novelRepo.upsertNovelWithToc(
+        index,
+        new Date(baseNow - 10 * 86400000).toISOString(),
+      );
 
-      // リモート側に該当作品の古い Tombstone が残存している状態をシミュレート
-      const recentTombstoneDate = new Date(
-        Date.now() - 5 * 24 * 60 * 60 * 1000,
-      ).toISOString();
+      // リモート側に該当作品の古い Tombstone（30日保持期間内）が残存している状態をシミュレート
+      const recentTombstoneIso = new Date(baseNow - 5 * 86400000).toISOString();
       const remoteState: YommySyncState = {
         version: 1,
-        lastSyncedAt: new Date().toISOString(),
+        lastSyncedAt: new Date(baseNow - 2 * 86400000).toISOString(),
         novels: {},
         deletedNovels: {
-          "kakuyomu:16817330658027210412": recentTombstoneDate,
-          "kakuyomu:deleted-other": recentTombstoneDate,
+          "kakuyomu:16817330658027210412": recentTombstoneIso,
+          "kakuyomu:deleted-other": recentTombstoneIso,
         },
       };
       await bridge.pushFile(JSON.stringify(remoteState));
@@ -1984,21 +2004,20 @@ describe("syncEngine", () => {
       const parserRegistry = createDefaultParserRegistry();
       const httpClient = new MockHttpClient();
 
-      // ローカルの Tombstone:
-      // novel-1: 削除日時 2026-01-01T12:00:00Z
-      // novel-3: 削除日時 2026-01-01T12:00:00Z
-      const deletedAtMs = Date.parse("2026-01-01T12:00:00.000Z");
+      // ローカルの Tombstone（30日保持期間内）:
+      const baseNow = Date.now();
+      const deletedAtMs = baseNow - 5 * 86400000;
       await db.execute(
         "INSERT INTO deleted_novels (id, deleted_at) VALUES (?, ?), (?, ?);",
         ["kakuyomu:del1", deletedAtMs, "kakuyomu:del3", deletedAtMs],
       );
 
       // リモートの状態:
-      // del1: createdAt が deletedAt より古い (2026-01-01T10:00:00Z) -> 除外されるべき
-      // del3: createdAt が deletedAt より新しい (2026-01-01T15:00:00Z, 再作成) -> マージされるべき
+      // del1: createdAt が deletedAt より古い -> 除外されるべき
+      // del3: createdAt が deletedAt より新しい (再作成) -> マージされるべき
       const remoteState: YommySyncState = {
         version: 1,
-        lastSyncedAt: new Date().toISOString(),
+        lastSyncedAt: new Date(baseNow).toISOString(),
         novels: {
           "kakuyomu:del1": {
             id: "kakuyomu:del1",
@@ -2015,8 +2034,8 @@ describe("syncEngine", () => {
             bookmarkChapterIndex: null,
             lastReadAt: null,
             readChapterIds: [],
-            createdAt: "2026-01-01T10:00:00.000Z",
-            updatedAt: "2026-01-01T14:00:00.000Z",
+            createdAt: new Date(baseNow - 6 * 86400000).toISOString(),
+            updatedAt: new Date(baseNow - 4 * 86400000).toISOString(),
           },
           "kakuyomu:del3": {
             id: "kakuyomu:del3",
@@ -2033,8 +2052,8 @@ describe("syncEngine", () => {
             bookmarkChapterIndex: null,
             lastReadAt: null,
             readChapterIds: [],
-            createdAt: "2026-01-01T15:00:00.000Z",
-            updatedAt: "2026-01-01T15:00:00.000Z",
+            createdAt: new Date(baseNow - 3 * 86400000).toISOString(),
+            updatedAt: new Date(baseNow - 3 * 86400000).toISOString(),
           },
         },
         deletedNovels: {},

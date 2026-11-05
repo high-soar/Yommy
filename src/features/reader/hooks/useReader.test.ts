@@ -3506,6 +3506,52 @@ describe("useReader", () => {
         expect(result.current.currentPage).toBe(7);
       });
 
+      it("リーダー再遷移時などユーザーがページ操作を行う前に複数回 setTotalPages が呼ばれた場合（初回仮計測後に確定総ページ数が通知された場合）、常に保存済み進捗率に対応する正しいページ番号へ復元され、1ページ目や最終ページに化けないこと (R1-26, AC-RD-20)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          bookmarkChapterIndex: 1,
+          bookmarkScrollProgress: 0.5,
+        });
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        expect(result.current.initialScrollProgress).toBe(0.5);
+
+        // 1. 初期未確定時（例: 総ページ数 1）
+        act(() => {
+          result.current.setTotalPages(1);
+        });
+        expect(result.current.currentPage).toBe(1);
+
+        // 2. スロット幅未確定による過大仮計測時（例: 総ページ数 21 -> 11ページ）
+        act(() => {
+          result.current.setTotalPages(21);
+        });
+        expect(result.current.currentPage).toBe(11);
+
+        // 3. レイアウト・フォント確定後の本来の総ページ数（例: 総ページ数 11）
+        // まだユーザーは goToPage を呼んでいないため、11ページへのクランプ（最終ページ化け）ではなく、
+        // 進捗率 0.5 に対応する 6 ページ目（Math.round(0.5 * 10) + 1 = 6）へ正確に再復元されること
+        act(() => {
+          result.current.setTotalPages(11);
+        });
+        expect(result.current.currentPage).toBe(6);
+      });
+
       it("保存されたしおり進捗率が 0.0 の場合、初回 setTotalPages 時も currentPage = 1 を維持すること", async () => {
         const db = await resetTestDb();
         const novelRepo = new SqlNovelRepository(db);

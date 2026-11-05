@@ -19,8 +19,10 @@ related_specs:
   - docs/specs/changes/archive/issue-120-cloud-sync-google-drive.md
   - docs/quality/archive/v0.4-cloud-sync-reader-ux-log.md
   - docs/quality/archive/v0.5-reader-customization-and-cache-log.md
+  - docs/quality/archive/v0.6-reader-animation-overlay-and-volume-key-log.md
   - docs/quality/reports/v0.4-cloud-sync-reader-ux.md
   - docs/quality/reports/v0.5-reader-customization-and-cache.md
+  - docs/quality/reports/v0.6-reader-animation-overlay-and-volume-key.md
   - docs/index.md
   - docs/guidelines/workflow.md
   - docs/guidelines/testing.md
@@ -50,7 +52,7 @@ related_tests: []
 4. **【重要】原因分類 `D` の設計書即時同期義務**:
    - 原因が **`D`** の場合、**コードのみを修正して設計書を放置することは厳禁**です。必ず対応する `docs/specs/` の設計書（App 全体正本および進行中の差分仕様）も同時修正し、下表の是正内容欄に **コード修正コミットと設計書同期コミットの双方** を記録してください。
 5. **【運用】Milestone 完了時のアーカイブ移動ルール**:
-   - 各ミニリリース Milestone（`v0.1`, `v0.2` 等）や Phase 完了の節目（Step 3：一括 `Approved` 化 PR）において、当該マイルストーンで検出されたバグ記録一覧および解決済み（`Resolved`）の申し送り事項を `docs/quality/archive/<milestone>-log.md`（OKF `type: quality-log`, `status: Completed (Archived)`）へ移動しアーカイブ化します。
+   - 各ミニリリース Milestone（`v0.1`, `v0.2` 等）や Phase 完了の節目（Step 3：品質分析 Kaizen・ログアーカイブ・一括 `Approved` 化 PR）において、当該マイルストーンで検出されたバグ記録一覧および解決済み（`Resolved`）の申し送り事項を `docs/quality/archive/<milestone>-log.md`（OKF `type: quality-log`, `status: Completed (Archived)`）へ移動しアーカイブ化します。
    - 本シート（`docs/quality/bug-and-handover-log.md`）には、平時は「現在作業中マイルストーンのバグ記録」「作業中マイルストーンで解決した申し送り事項」「未解決（`Open`）の申し送り事項」のみを保持し、ドキュメントの肥大化を防止して高い一覧性とメンテナンス性を維持します。
 
 ---
@@ -67,18 +69,13 @@ related_tests: []
 > - **Milestone `v0.3`（検索/ランキング・先読みキャッシュ・更新チェック ＆ 実機基盤改善、No. 100〜132）**: [docs/quality/archive/v0.3-search-prefetch-log.md](archive/v0.3-search-prefetch-log.md)
 > - **Milestone `v0.4`（クラウド同期・ページめくり・リーダーUI改善、No. 133〜168）**: [docs/quality/archive/v0.4-cloud-sync-reader-ux-log.md](archive/v0.4-cloud-sync-reader-ux-log.md)
 > - **Milestone `v0.5`（縦書きリーダー組版・ページめくり抜本改善・カスタマイズUI・キャッシュ管理、No. 169〜180）**: [docs/quality/archive/v0.5-reader-customization-and-cache-log.md](archive/v0.5-reader-customization-and-cache-log.md)
+> - **Milestone `v0.6`（リーダーページ送り水平スライドアニメーション・上下連動オーバーレイ＆シークバー・ハードウェア音量キー操作、No. 181〜201）**: [docs/quality/archive/v0.6-reader-animation-overlay-and-volume-key-log.md](archive/v0.6-reader-animation-overlay-and-volume-key-log.md)
 >
-> 次期作業中の **Milestone `v0.6`（外部小説サイト対応拡張［小説家になろう `narou`］・内蔵 WebView フォールバック・ハードウェアキー操作）** で検出されたバグ記録は、本表へ No. 181 より連番で記入します。
+> 次期作業中の **Milestone `v0.7`（外部小説サイト対応拡張［小説家になろう `narou`］・内蔵 WebView フォールバック ＆ DOM インポート）** で検出されたバグ記録は、本表へ No. 202 より連番で記入します。
 
-| No. | Issue / PR  | 検出フェーズ・手段  | 成果物区分 (`製品コード` / `支援成果物`) | 対象箇所                          | 原因 (`L`/`S`/`D`/`B`/`A`) | 不備の概要と是正内容（原因 `D` は設計書同期コミット併記）                                                                                                                                                                                                                                                                                                                                                                   |
-| :-: | :---------: | :------------------ | :--------------------------------------: | :-------------------------------- | :------------------------: | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 181 |    #205     | TDD実装 (Coverage)  |                支援成果物                | `ReaderPage.test.tsx`             |            `D`             | `useReaderGestures` の水平スライドアニメーション導入（2段階確定）に伴い、既存コンポーネントテストのページめくり検証（左右端タップおよび30%以上ドラッグ離上）が即時確定前提のままで失敗したため、`vi.useFakeTimers()` / `act(() => vi.advanceTimersByTime(200))` を追加して200ms後の確定を検証するよう是正。設計書 `docs/specs/changes/archive/issue-201-reader-page-slide-animation.md` §2.1 / §4 `AC-RD-17a, 17b` と整合。 |
-| 182 |    #205     | CI (Actions)        |                支援成果物                | `ReaderContainer.test.tsx`        |            `L`             | `waitFor` に `{ timeout: 10000 }` を指定した非同期検証テストにおいて、Vitest のテスト自体のタイムアウト（既定 5000ms）の指定が漏れていたため、CI 高負荷実行時に 5000ms でタイムアウト失敗。該当する 5 つのテストに `it(..., 15000)` を明示付与して CI 実行を安定化。                                                                                                                                                        |
-| 183 |    #207     | IT実装 (回帰テスト) |                支援成果物                | `ReaderContainer.test.tsx`        |            `A`             | `popstate` および `unmount` によるしおり自動保存（`flushBookmark`）検証テストにおいて、初期ロードの `updateBookmark` 完了待機を行わずに `updateBookmarkSpy.mockClear()` を実行していたため、高負荷並列実行時に初期ロード処理と検証が競合してタイムアウト失敗することがあった。`waitFor` で初期保存完了（`toHaveBeenCalledWith(sampleNovel.id, 1, 0)`）を確実に待機してから `mockClear()` を行うよう是正。                   |
-| 184 | #224 / #229 | テスト実行          |                支援成果物                | `ReaderContainer.test.tsx`        |            `S`             | `TestWrapper` で `services` プロップ（`settingsRepository ?? createMockSettingsRepo()` 等）がレンダリング毎に新規生成されていたため、`ServiceProvider` の `useEffect([services])` が不要に再発火し内部初期化が走る問題を、`React.useMemo` によるメモ化および `pageSpy.mock.lastCall?.[0]` 参照で是正。                                                                                                                      |
-| 185 | #225 / #230 | カバレッジ検証      |                製品コード                | `useReaderGestures.ts`            |            `S`             | 連続スクロールモードでの音量キー端到達判定において DOM 計算（`el.scrollWidth - el.clientWidth` 等）による冗長分岐が存在し JSDOM 環境下で未評価となっていたため、`handleWheel`/`handleTouchMove` と同様に `handleScrollProgressChange` で更新される `reachedEndRef`/`reachedStartRef` に統一し、未到達分岐を削除して C1 カバレッジ 100% を達成。                                                                             |
-| 186 | #226 / #231 | ITテスト実行        |                支援成果物                | `scn06-volume-key-paging.spec.ts` |            `S`             | リーダー画面復帰時のしおり進捗率復元（前話末尾ページ復元）を考慮し、ページアサーションおよびスクロール位置初期化待機（`sample-text-preview` の縦書き復帰待機および `reader-chapter-title` 安定化）を是正。                                                                                                                                                                                                                  |
-| 187 | #238 / #242 | pre-push検証        |                支援成果物                | `syncEngine.test.ts`              |            `B`             | Tombstone パージ検証テストで固定日時（`2026-10-05`）が実時間の経過により 30 日（`TOMBSTONE_RETENTION_MS`）を超過し自動パージされたため、動的相対日時（`Date.now() - 5 * 24 * 60 * 60 * 1000`）を生成するよう是正。コミット `80f74a3`。                                                                                                                                                                                      |
+| No. | Issue / PR  | 検出フェーズ・手段         | 成果物区分 (`製品コード` / `支援成果物`) | 対象箇所                                                                                                                                                                           | 原因 (`L`/`S`/`D`/`B`/`A`) | 不備の概要と是正内容（原因 `D` は設計書同期コミット併記）                                                                                                                                                                                                                                  |
+| :-: | :---------: | :------------------------- | :--------------------------------------: | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 202 | #236 / #237 | PRレビュー (`pr-reviewer`) |                支援成果物                | `.github/agents/phase-final-reviewer.agent.md`, `docs/guidelines/review-comment-format.md`, `docs/index.md`, `.github/skills/sdd/SKILL.md`, `docs/quality/bug-and-handover-log.md` |            `D`             | PR #237 レビューにて、`phase-final-reviewer.agent.md` および `review-comment-format.md` §4.C に残存していた Milestone Step 2/Step 3 の旧名称記述、および `docs/index.md` §3・`sdd/SKILL.md`・`bug-and-handover-log.md` §1 項5 の実機検証計画・Step 3 表記を正本 `workflow.md` に同期是正。 |
 
 ---
 
@@ -87,23 +84,21 @@ related_tests: []
 設計時や PR 作業中に「現在の PR スコープ外だが、後続の Sub-issue や IT、実機確認で必ず検証・対応すべき事項」が発生した場合は、以下に `HO-xx` として登録し、解決ゲート（親 Issue クローズ前、または Milestone 完了前）までに確実に消化します。
 
 > [!NOTE]
-> **解決済み申し送り事項（`HO-01`〜`HO-14`, `HO-15`, `HO-22`〜`HO-25`）のアーカイブ**:
+> **解決済み申し送り事項（`HO-01`〜`HO-28`）のアーカイブ**:
 >
 > - Phase 3 で解決済みの申し送り（`HO-01`〜`HO-03`）: [docs/quality/archive/phase3-poc-log.md](archive/phase3-poc-log.md)
 > - Milestone `v0.1` で解決済みの申し送り（`HO-04`〜`HO-09`）: [docs/quality/archive/v0.1-mvp-log.md](archive/v0.1-mvp-log.md)
 > - Milestone `v0.2` で解決済みの申し送り（`HO-10`〜`HO-13`）: [docs/quality/archive/v0.2-ui-ux-log.md](archive/v0.2-ui-ux-log.md)
 > - Milestone `v0.3` で解決済みの申し送り（`HO-14`, `HO-16`〜`HO-21`）: [docs/quality/archive/v0.3-search-prefetch-log.md](archive/v0.3-search-prefetch-log.md)
 > - Milestone `v0.5` で解決済みの申し送り（`HO-15`, `HO-22`, `HO-23`, `HO-24`, `HO-25`）: [docs/quality/archive/v0.5-reader-customization-and-cache-log.md](archive/v0.5-reader-customization-and-cache-log.md)
+> - Milestone `v0.6` で解決済みの申し送り（`HO-26`〜`HO-28`）: [docs/quality/archive/v0.6-reader-animation-overlay-and-volume-key-log.md](archive/v0.6-reader-animation-overlay-and-volume-key-log.md)
 
-現在、未解決（`Open`）の申し送り事項は 5 件（`HO-26`, `HO-27`, `HO-28`, `HO-29`, `HO-30`）です。Milestone `v0.7` 作業中に発生した追加の申し送り事項は、本表へ `HO-31` より連番で登録します。
+現在、未解決（`Open`）の申し送り事項は 2 件（`HO-29`, `HO-30`）です。Milestone `v0.7` 作業中に発生した追加の申し送り事項は、本表へ `HO-31` より連番で登録します。
 
-|     ID      | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                                                                           | 解決先（対象 Issue / 成果物）          | 完了ゲート              | 状態 (`Open` / `Resolved`) |
-| :---------: | :---------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------- | :---------------------- | :------------------------: |
-| **`HO-26`** |    Issue #201     | リーダー縦書きページめくりにおける Android 実機での水平スライドアニメーションの滑らかさおよび高速連続タップ時の挙動検証                                                                      | Milestone `v0.6` 実機検証 / Issue #204 | Milestone `v0.6` 完了前 |           `Open`           |
-| **`HO-27`** |    Issue #202     | リーダー上下連動オーバーレイ（上部タイトル省略・目次導線、下部RTLページシークバー）における Android 実機でのスライダー操作感および長文タイトル表示崩れなしの検証                             | Milestone `v0.6` 実機検証 / Issue #204 | Milestone `v0.6` 完了前 |           `Open`           |
-| **`HO-28`** |    Issue #203     | Android 実機におけるハードウェア音量キー（Volume Down/Up）インターセプト（リーダー画面かつ設定ON時のみ OS 音量バー抑止・Webイベント連携、リーダー離脱時や設定OFF時の標準音量復帰）の動作検証 | Milestone `v0.6` 実機検証 / Issue #204 | Milestone `v0.6` 完了前 |           `Open`           |
-| **`HO-29`** | Issue #239, #240  | 小説家になろう（`narou`: `ncode.syosetu.com`）作品の複数ページ目次取得・クラウド同期および検索・ランキング探索の実機検証                                                                     | Milestone `v0.7` 実機検証 / Issue #241 | Milestone `v0.7` 完了前 |           `Open`           |
-| **`HO-30`** |    Issue #238     | Android 実機での低速モバイル回線下におけるランキング・検索の条件切替、およびリーダー未キャッシュ話遷移時のローディング表示 UX の実機体感確認                                                 | Milestone `v0.7` 実機検証 / Issue #241 | Milestone `v0.7` 完了前 |           `Open`           |
+|     ID      | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                           | 解決先（対象 Issue / 成果物）          | 完了ゲート              | 状態 (`Open` / `Resolved`) |
+| :---------: | :---------------: | :------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------- | :---------------------- | :------------------------: |
+| **`HO-29`** | Issue #239, #240  | 小説家になろう（`narou`: `ncode.syosetu.com`）作品の複数ページ目次取得・クラウド同期および検索・ランキング探索の実機検証                     | Milestone `v0.7` 実機検証 / Issue #241 | Milestone `v0.7` 完了前 |           `Open`           |
+| **`HO-30`** |    Issue #238     | Android 実機での低速モバイル回線下におけるランキング・検索の条件切替、およびリーダー未キャッシュ話遷移時のローディング表示 UX の実機体感確認 | Milestone `v0.7` 実機検証 / Issue #241 | Milestone `v0.7` 完了前 |           `Open`           |
 
 ---
 
@@ -187,3 +182,18 @@ related_tests: []
   - **モーダルダイアログのアクセシビリティ・例外保護規律（`R1-02`, `R1-08`, `R1-21` 再発防止）**: `.github/skills/c-ut-workflow/SKILL.md` に、処理中の Escape/背景クリック抑止、`try/finally`、および `isMountedRef` による非同期アンマウント保護を明文化。
   - **モバイル WebView における Pointer / Touch 参照分離規約（`R1-27` 再発防止）**: `.github/skills/c-ut-workflow/SKILL.md` に、連続スクロールの `touch-action: auto` 下でネイティブスクロール発生時の `pointercancel` による Touch 座標誤消去を防止する ref 分離原則を明文化。
   - **右綴じ縦書きリーダーの組版・アニメーション・スワイプラック規律（`R1-28`, `R1-29` 是正）**: `ReaderView` に各スロット内マルチカラム組版（文字切れ根絶）と静的 `translateY`（縦アニメーション排除）、および水平スワイプラック（`writing-mode: horizontal-tb`、左から右スワイプで次ページ）を確立。
+
+### Milestone `v0.6`: リーダーページ送り水平スライドアニメーション・上下連動オーバーレイ＆シークバー・ハードウェア音量キー操作（対象 Issue: #201, #202, #203, #209, #204、記録 No. 181〜201）
+
+- **アーカイブ記録**: [docs/quality/archive/v0.6-reader-animation-overlay-and-volume-key-log.md](archive/v0.6-reader-animation-overlay-and-volume-key-log.md)
+- **詳細分析レポート**: [docs/quality/reports/v0.6-reader-animation-overlay-and-volume-key.md](reports/v0.6-reader-animation-overlay-and-volume-key.md)
+- **製品コード不備件数**: **6 件**（うち MK/UT カバレッジ検証段階検出: 1 件［No. 185］、横断レビュー Round 1 検出: 4 件［No. 192, 193, 194, 195］、実機確認検出: 1 件［No. 201: `R1-26`］、リリース後流出: 0 件 → **マイルストーン完了前 DRE: 100%（6/6）**）
+- **支援成果物不備件数**: **15 件**（TDD/CI/IT/テスト・スクリプト整備 11 件［No. 181, 182, 183, 184, 186, 188, 190, 191, 196, 197, 198］、設計同期・OKF・台帳管理 4 件［No. 187, 189, 199, 200］）
+- **原因分類内訳（Milestone `v0.6` 単体 21 件）**: `A`: 6 件（製品 2 / 支援 4） / `D`: 6 件（製品 2 / 支援 4） / `S`: 5 件（製品 2 / 支援 3） / `L`: 3 件（製品 0 / 支援 3） / `B`: 1 件（製品 0 / 支援 1）（計 21 件、Phase 3 からの累計 201 件：製品 71 件 / 支援 130 件）
+- **プロセス・スキル改善アクション（Kaizen）**:
+  - **中間 PR の AI 自律マージ（Issue #209）の効果実証**: 全 8 本の中間 MK Sub-issue PR（`#211`, `#212`, `#219`, `#220`, `#221`, `#228`, `#229`, `#230`）を完了ゲート 1〜6 通過後にオーケストレーター AI が自律マージし、人間承認待ちタッチポイントを 14 回から 6 回（入口の設計 PR 3 本＋出口の最終 IT PR 3 本）へ **57.1% 削減** しつつ、完了前 DRE 100% を維持。
+  - **テストにおける実時間依存（固定日付 Time-bomb）の排除規律（`R1-01` 再発防止）**: `docs/guidelines/testing.md` §3.4 および `.github/skills/c-ut-workflow/SKILL.md` §2 に、`Date.now()` と比較する保持期限（Tombstone GC・TTL 等）のテストでの固定過去日付ハードコード禁止と `Date.now()` 相対日時計算（または `vi.setSystemTime`）の使用を明文化。
+  - **Capacitor ネイティブプラグインの `static` フラグ解放と契約テスト義務化（`R1-03`, `R1-04`, `R1-08`, `R1-12` 再発防止）**: `docs/guidelines/testing.md` §2.3 および `.github/skills/c-ut-workflow/SKILL.md` §2 に、ネイティブプラグイン `static` 状態の `load()` / `handleOnDestroy()` リセット、`scripts/android-build-config.test.ts` での契約検証、および Web 側での `add*Listener` 先行登録＋Promise `.catch()` 保護を明文化。
+  - **アニメーションタイマーおよびスクロール境界 Ref の話数・モード切替時クリーンアップと操作開始時境界同期（`R1-18`, `R1-19` 再発防止）**: `.github/skills/c-ut-workflow/SKILL.md` §2 に、`chapterIndex` / `isPaged` 変化時の遅延タイマー・境界フラグ破棄および操作開始時の `syncScrollBoundaryState()`（実 DOM 座標・`maxScroll <= 0` 1画面短文判定）によるスクロール端到達判定同期を明文化。
+  - **マルチパス DOM 計測時の初期ページ位置復元維持と中間ページ再遷移テスト（`R1-26` 再発防止）**: `docs/guidelines/testing.md` §3.4 および `.github/skills/c-ut-workflow/SKILL.md` §2 に、初回マウント・rAF・`document.fonts.ready` 等で複数回 `setTotalPages` が呼ばれる組版 UI で単発フラグにより初期復元を打ち切らず、ユーザー操作（`goToPage`）まで `initialScrollProgress` からのページ再復元を維持する規律および 3 ページ超の中間ページ再遷移テストを明文化。
+  - **Container / Page 単体テストの親子分離（`vi.spyOn` / `vi.mock`）と `SCN-01`〜`SCN-06` 正本トレーサビリティ（`R1-05`, `R1-11`, `R1-23` 再発防止）**: `docs/guidelines/testing.md` §1・§3 および `.github/skills/c-ut-workflow/SKILL.md` §2 に、親テストでの直下の子 Props・コールバック検証徹底と新規 `SCN-xx` 追加時の `screen-transitions.md` / `features/*.md` 登録義務を明文化。

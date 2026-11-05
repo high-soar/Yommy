@@ -3,7 +3,7 @@ type: guideline
 title: テスト・実装規律の正本（SSOT）
 description: Yommyの3層テスト体系（Parser/Storage/Viewer）、TDDコミット規約、1対1 Story/UT、親子分離、C0/C1 100%、縦書きVRT、および原因D設計同期ルールの正本。
 status: Approved
-updated: "2026-11-01"
+updated: "2026-11-05"
 tags: [testing, tdd, vrt, storybook, vitest, playwright, coverage]
 related_specs:
   - docs/index.md
@@ -32,8 +32,8 @@ related_tests: []
 5. **例外なしの 1 対 1 対応原則**:
    - 全 `*.tsx` ファイル（ただし §5.2 項4 に定めるブラウザ初期マウントエントリーポイント `src/main.tsx` を除く）に対して、同階層に **`*.stories.tsx`（必須）** と **`*.test.tsx`（Portable Stories `composeStories` 全件実行 ＋ ロジック補完）** を 1 対 1 で作成する。
    - 全 `*.ts` ファイル（型定義専用ファイルを除く）に対して、同階層に **`*.test.ts`（または `.test.tsx`）** を 1 対 1 で作成する。なお、実行時定数定義ファイル（`src/**/constants/*.ts` 等）およびバレルエクスポート（`src/**/index.ts` 等）も型専用ファイルに該当しないため、1 対 1 単体テスト（`*.test.ts`）を必須とする。
-6. **親子コンポーネント分離原則（相乗りテスト禁止）**:
-   親（Page / Container）のテストでは「状態管理・Loading/Error/Ready の切り替え・子への Props 渡し」のみを検証し、子コンポーネントの表示バリエーション・境界値・イベント発火は必ず子自身の `.stories.tsx` / `.test.tsx` で独立して検証する。
+6. **親子コンポーネント分離原則（相乗りテスト禁止・`vi.spyOn` / `vi.mock` による直下の子 Props・コールバック検証徹底）**:
+   親（Page / Container）のテストでは「状態管理・Loading/Error/Ready の切り替え・子への Props 渡し」のみを検証し、子コンポーネントの表示バリエーション・境界値・イベント発火は必ず子自身の `.stories.tsx` / `.test.tsx` で独立して検証する。特に非同期フックや DOM 計測（`ResizeObserver` 等）を持つ子・孫コンポーネント内部の DOM 要素を親の単体テストで重複検証すると保守性の低下や CI 高負荷下での非同期競合（Flakiness）の原因となるため、Container / Page の単体テストでは直下の子コンポーネントに対する `vi.spyOn`（または `vi.mock`）を用いて、渡された Props・コールバック配線のみを決定論的に検証すること（`R1-11`, `R1-23` 再発防止）。
 7. **C0 / C1 / Functions 100% カバレッジ原則**:
    `src/` 配下の全対象ファイルにおいて、ステートメント（C0）・分岐（C1）・関数（Functions）カバレッジ **100%** を必須基準とする。
 8. **日本語組版・縦書き/ルビを含む VRT の UT（Storybook）一本化**:
@@ -94,7 +94,7 @@ flowchart TB
 
 - **Capacitor Bridge の分離**:
   - CORS 回避用のネイティブ HTTP 通信（`CapacitorHttp`）、レートリミット・ダウンロードキュー制御、および内蔵 WebView からの DOM 抽出ブリッジは薄いインターフェースとして分離し、UT / Storybook / IT ではモックまたはフィクスチャ応答を注入可能にする。
-  - **Android ネイティブプラグイン実装・検証規律（原因 `D` / `L` 再発防止）**: Capacitor ネイティブプラグイン（Java）では `startActivityForResult` 等の非推奨/非互換シグネチャを避け `ActivityResultContracts.StartIntentSenderForResult` ＋ `saveCall`/`getSavedCall`/`freeSavedCall` を使用し、401 リトライ時は `clearToken` でローカルキャッシュを破棄してから再取得すること。また `.github/workflows/ci.yml` の `android-compile` ジョブおよび `scripts/android-build-config.test.ts` で検証すること。
+  - **Android ネイティブプラグイン実装・検証規律（原因 `D` / `L` / `S` 再発防止）**: Capacitor ネイティブプラグイン（Java）では `startActivityForResult` 等の非推奨/非互換シグネチャを避け `ActivityResultContracts.StartIntentSenderForResult` ＋ `saveCall`/`getSavedCall`/`freeSavedCall` を使用し、401 リトライ時は `clearToken` でローカルキャッシュを破棄してから再取得すること。また `MainActivity` 等と共有する `static` 状態フラグ（例: `volumeKeyPagingEnabled`）は、Activity 再生成や WebView リロード時の状態残留リークを防ぐため必ずプラグインの `load()` および `handleOnDestroy()` で初期値（`false`）にリセットし、`.github/workflows/ci.yml` の `android-compile` ジョブおよび `scripts/android-build-config.test.ts` の静的契約テストで機械検証すること（`R1-03`, `R1-12` 再発防止）。さらに Web 側でネイティブイベントを購読する際は、イベント取りこぼしと Unhandled Rejection を防ぐため **必ず `add*Listener` を先行登録してから有効化メソッドを呼び出し、Promise には `.catch(() => {})` を付与すること**（`R1-04`, `R1-08` 再発防止）。
 - **小説組版 UI 単体テスト & VRT**:
   - 縦書き（`writing-mode: vertical-rl`）/ 横書き切り替え、ルビ（`<ruby>`）・傍点表示、フォント切り替え（Noto CJK / IPAex / BIZ UD明朝・ゴシック / Klee）、カラーテーマ（白 / セピア / ダーク / 純黒）、しおり位置復元などの UI 状態を Storybook の Story として網羅する。
   - **スクロール・Overflow（直交フロー）検証の必須化**: スクロール・Overflow を伴う表示コンポーネント（特に親 `horizontal-tb` 内で `writing-mode: vertical-rl` となる直交フロー要素）では、`w-full max-w-full`（および親コンテナの `min-w-0`）等の幅制約を明示するとともに、画面外にはみ出す長文データを含めた Story（1280px / 375px 双方で Overflow するケース）を必須とし、VRT と実ブラウザ IT（負の `scrollLeft` 検証）の双方でスクロール可能性を保証すること。
@@ -133,8 +133,9 @@ Git Worktree を用いた並行開発やフォーク環境において、環境�
 - 結合テスト（`test/it/`）のシナリオ（`SCN-01`〜）は、今回追加した機能だけを孤立してテストするのではなく、**これまでに実装した全機能が現在のシステム仕様のもとで一貫して動作することを保証する統合スイート** として維持・進化させる。
 - 過去のテストシナリオを古い仕様のまま放置・スキップ（`.skip`）することは禁止し、常に `test/it/` 全件 100% PASS を維持する。
 - **結合テストにおけるページリロード後の確定的初期化待機（R1-31 / R1-24 再発防止）**: `page.reload()` 実行直後は、DOM 要素探索やアサーションを開始する前に**必ず直後**に `await page.waitForFunction(() => typeof window.__yommyServices !== "undefined" && window.__yommyServices.isReady === true)` を呼び出して DB およびサービスの初期化完了を決定論的に待機し、テストの Flakiness を根絶すること。DOM アサーション実行後に待機を置くような順序逆転は固く禁止する。
+- **結合テスト（`SCN-01`〜`SCN-06`）の正本トレーサビリティ（`R1-05` 再発防止）**: `test/it/scenarios/` 配下に新規シナリオファイル（`SCN-xx`）を追加または検証範囲を拡張した際は、必ず `docs/specs/screen-transitions.md` §4 のシナリオマッピング表および対象機能仕様書（`docs/specs/features/*.md`）の E2E セクションへ対象 `SCR-xx` / `TR-xx` / `AC-xx` を登録し、仕様と E2E テストの双方向トレーサビリティを維持すること。
 
-### 3.4 キャッシュ管理・同期整合性・イベント分離のテスト規約（v0.5 Kaizen）
+### 3.4 キャッシュ管理・同期整合性・イベント分離・時間非依存のテスト規約（v0.5 / v0.6 Kaizen）
 
 1. **ローカルキャッシュ削除と同期タイムスタンプ不変性（R1-01）**:
    - `chapterRepository.deleteCachedBodies` や `deleteAllCachedBodies` 等のローカルキャッシュ削除処理は、ローカルストレージの容量整理に過ぎず作品メタデータ更新ではない。
@@ -148,6 +149,12 @@ Git Worktree を用いた並行開発やフォーク環境において、環境�
 4. **非同期ダイアログのアクセシビリティと Unhandled Rejection 防止（R1-21）**:
    - 削除中・処理中（`isClearing` / `isSubmitting`）は Escape キーや外周クリックによるダイアログ即時閉鎖を抑止（ガード）すること。
    - ダイアログ内の非同期コールバック呼び出しは `try/finally` で囲み、コールバック例外時でも Unhandled Promise Rejection を防止しつつダイアログ閉鎖等の後始末を確実に実行すること。また、Hook 側には `isMountedRef` によるアンマウント保護を徹底すること。
+5. **実時間・固定過去日付依存（Time-bomb）の排除（v0.6 `R1-01` 再発防止）**:
+   - 30日間 Tombstone 保持期限（`TOMBSTONE_RETENTION_MS`）や 7日間キャッシュ鮮度（`CACHE_TTL_MS`）など、実行時の `Date.now()` と比較されるロジックのテストにおいて、固定カレンダー日付（例: `"2026-10-05T00:00:00.000Z"`）をハードコードしてはならない（日数経過後にテストが突然失敗する時限爆弾となるため）。
+   - 必ず `Date.now()` からの相対オフセット計算（例: `new Date(baseNow - 5 * 86_400_000).toISOString()`）または `vi.setSystemTime` を用い、いつ実行しても 100% 決定論的に PASS するよう記述すること。
+6. **マルチパス DOM 計測を伴う初期位置復元の耐性保証（v0.6 `R1-26` 再発防止）**:
+   - ページめくり組版のように初回マウント・コンテナ寸法反映・`requestAnimationFrame`・`document.fonts.ready` 等で総ページ数（`setTotalPages`）が複数回更新される UI では、最初の 1 回の計測コールバックだけで初期復元フラグを消費（`false` 化）してはならない（初回 0px 幅等の仮計測値に引きずられ、確定計測時に中間ページが最終ページや 1 ページ目へ化けるため）。
+   - ユーザーが明示的なページ移動操作（`goToPage` 等）を行うまでの初期レイアウト確定期間中は、総ページ数が更新されるたびに保存済み進捗率（`initialScrollProgress`）から目標ページを再算出して復元し、また 3 ページ以上ある長文の中間ページ（先頭でも最終でもないページ）から別画面へ移動・再遷移するテストを UT および Playwright IT で検証すること。
 
 ---
 

@@ -194,7 +194,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   const currentPageRef = useRef<number>(currentPage);
   const totalPagesRef = useRef<number>(totalPages);
   const initialScrollProgressRef = useRef<number>(initialScrollProgress);
-  const isFirstPageMeasurementRef = useRef<boolean>(true);
+  const hasUserChangedPageRef = useRef<boolean>(false);
   const prefetchAbortControllerRef = useRef<AbortController | null>(null);
   const activePrefetchPromiseRef = useRef<Promise<void> | null>(null);
   const lastGoToChapterIndexRef = useRef<number | null>(null);
@@ -236,7 +236,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       currentPageRef.current = 1;
       setTotalPagesState(1);
       totalPagesRef.current = 1;
-      isFirstPageMeasurementRef.current = true;
+      hasUserChangedPageRef.current = false;
     },
     [],
   );
@@ -690,8 +690,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     setTotalPagesState(validTotal);
     totalPagesRef.current = validTotal;
 
-    if (isFirstPageMeasurementRef.current) {
-      isFirstPageMeasurementRef.current = false;
+    if (!hasUserChangedPageRef.current) {
       if (initialScrollProgressRef.current > 0) {
         const restoredPage = calculatePageFromProgress(
           initialScrollProgressRef.current,
@@ -744,6 +743,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   // 指定ページへの遷移およびしおり自動保存
   const goToPage = useCallback(
     (targetPage: number): void => {
+      hasUserChangedPageRef.current = true;
       const total = totalPagesRef.current;
       const rawTarget = Number.isFinite(targetPage)
         ? Math.round(targetPage)

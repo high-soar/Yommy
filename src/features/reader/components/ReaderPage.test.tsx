@@ -1,9 +1,12 @@
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./ReaderPage.stories";
 import { ReaderPage, type ReaderPageProps } from "./ReaderPage";
+import * as ReaderViewModule from "./ReaderView";
+import * as ReaderTopOverlayModule from "./ReaderTopOverlay";
+import * as ReaderBottomOverlayModule from "./ReaderBottomOverlay";
 import type { NovelRecord, ChapterRecord } from "../../../storage/types";
 import { ServiceProvider } from "../../../app/ServiceProvider";
 import { MockVolumeKeyBridge } from "../../../bridges/volume-key/mockVolumeKeyBridge";
@@ -799,9 +802,10 @@ describe("ReaderPage", () => {
       }
     });
 
-    it("縦書きページ送りタップ時に isAnimating が ReaderView に伝達されスワイプラックの transition が制御されること（AC-RD-17）", () => {
+    it("縦書きページ送りタップ時に isAnimating および slideOffsetPx が ReaderView に伝達されること（AC-RD-17, R1-23）", () => {
       vi.useFakeTimers();
       try {
+        const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
         render(
           <ReaderPage
             {...createDefaultProps({
@@ -815,28 +819,39 @@ describe("ReaderPage", () => {
         const main = screen.getByRole("main");
         setupContainerDimensions(main, 300);
 
-        const swipeTrack = screen.getByTestId("reader-swipe-track");
-        expect(swipeTrack).toHaveStyle({
-          transition: "none",
-        });
+        expect(viewSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isAnimating: false,
+            slideOffsetPx: 0,
+          }),
+          undefined,
+        );
 
         // 画面左端タップ（次ページ送り開始）
         firePointer(main, "pointerdown", { clientX: 30, clientY: 100 });
         firePointer(main, "pointerup", { clientX: 32, clientY: 101 });
 
-        // アニメーション実行中: isAnimating=true が ReaderView に伝達され transition が有効化
-        expect(swipeTrack).toHaveStyle({
-          transition: "left 200ms ease-out",
-        });
+        // アニメーション実行中: isAnimating=true, slideOffsetPx=300 が ReaderView に伝達
+        expect(viewSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isAnimating: true,
+            slideOffsetPx: 300,
+          }),
+          undefined,
+        );
 
-        // 200ms 経過後: アニメーション完了により isAnimating=false にリセット
+        // 200ms 経過後: アニメーション完了により isAnimating=false, slideOffsetPx=0 にリセット
         act(() => {
           vi.advanceTimersByTime(200);
         });
 
-        expect(swipeTrack).toHaveStyle({
-          transition: "none",
-        });
+        expect(viewSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isAnimating: false,
+            slideOffsetPx: 0,
+          }),
+          undefined,
+        );
       } finally {
         vi.useRealTimers();
       }
@@ -1168,7 +1183,16 @@ describe("ReaderPage", () => {
   });
 
   describe("上下連動オーバーレイおよびシークバー・目次復帰の統合検証 (AC-RD-22〜25, TR-06, v0.6 Issue #202)", () => {
-    it("ReaderTopOverlay がレンダリングされ、開閉状態が上下連動すること (AC-RD-22)", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("ReaderTopOverlay と ReaderBottomOverlay に開閉状態 isOpen が上下連動して渡されること (AC-RD-22, R1-23)", () => {
+      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
+      const bottomSpy = vi.spyOn(
+        ReaderBottomOverlayModule,
+        "ReaderBottomOverlay",
+      );
       const { rerender } = render(
         <ReaderPage
           {...createDefaultProps({
@@ -1177,13 +1201,14 @@ describe("ReaderPage", () => {
         />,
       );
 
-      const topOverlay = screen.getByTestId("reader-top-overlay");
-      const bottomOverlay = screen.getByTestId("reader-bottom-overlay");
-
-      expect(topOverlay).toHaveAttribute("aria-hidden", "true");
-      expect(topOverlay).toHaveClass("-translate-y-full");
-      expect(bottomOverlay).toHaveAttribute("aria-hidden", "true");
-      expect(bottomOverlay).toHaveClass("translate-y-full");
+      expect(topSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ isOpen: false }),
+        undefined,
+      );
+      expect(bottomSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ isOpen: false }),
+        undefined,
+      );
 
       rerender(
         <ReaderPage
@@ -1193,13 +1218,18 @@ describe("ReaderPage", () => {
         />,
       );
 
-      expect(topOverlay).toHaveAttribute("aria-hidden", "false");
-      expect(topOverlay).toHaveClass("translate-y-0");
-      expect(bottomOverlay).toHaveAttribute("aria-hidden", "false");
-      expect(bottomOverlay).toHaveClass("translate-y-0");
+      expect(topSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ isOpen: true }),
+        undefined,
+      );
+      expect(bottomSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ isOpen: true }),
+        undefined,
+      );
     });
 
-    it("作品タイトルとエピソードサブタイトルが ReaderTopOverlay に正しく伝播され表示されること (AC-RD-23)", () => {
+    it("作品タイトルとエピソードサブタイトルが ReaderTopOverlay に正しく伝播されること (AC-RD-23, R1-23)", () => {
+      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
       render(
         <ReaderPage
           {...createDefaultProps({
@@ -1216,15 +1246,17 @@ describe("ReaderPage", () => {
         />,
       );
 
-      expect(screen.getByTestId("reader-top-novel-title")).toHaveTextContent(
-        "テスト作品タイトル",
-      );
-      expect(screen.getByTestId("reader-top-chapter-title")).toHaveTextContent(
-        "テストエピソード第1話",
+      expect(topSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          novelTitle: "テスト作品タイトル",
+          chapterTitle: "テストエピソード第1話",
+        }),
+        undefined,
       );
     });
 
-    it("novel または chapter が null の場合でも ReaderTopOverlay がクラッシュせず空文字で表示されること", () => {
+    it("novel または chapter が null の場合でも ReaderTopOverlay に空文字が渡されること (R1-23)", () => {
+      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
       render(
         <ReaderPage
           {...createDefaultProps({
@@ -1235,15 +1267,17 @@ describe("ReaderPage", () => {
         />,
       );
 
-      expect(screen.getByTestId("reader-top-novel-title")).toHaveTextContent(
-        "",
-      );
-      expect(screen.getByTestId("reader-top-chapter-title")).toHaveTextContent(
-        "",
+      expect(topSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          novelTitle: "",
+          chapterTitle: "",
+        }),
+        undefined,
       );
     });
 
-    it("上部オーバーレイ「← 目次」ボタン押下時に onBackToToc コールバックが発火すること (AC-RD-24, TR-06)", () => {
+    it("ReaderTopOverlay に渡された onBackToToc 呼び出し時にコールバックが発火すること (AC-RD-24, TR-06, R1-23)", () => {
+      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
       const onBackToToc = vi.fn();
       render(
         <ReaderPage
@@ -1254,12 +1288,15 @@ describe("ReaderPage", () => {
         />,
       );
 
-      const backBtn = screen.getByTestId("reader-top-back-to-toc");
-      fireEvent.click(backBtn);
+      const lastTopProps = topSpy.mock.calls.at(-1)?.[0];
+      act(() => {
+        lastTopProps?.onBackToToc();
+      });
       expect(onBackToToc).toHaveBeenCalledTimes(1);
     });
 
-    it("onBackToToc 省略時でも「← 目次」ボタンクリックでクラッシュしないこと", () => {
+    it("onBackToToc 省略時でも ReaderTopOverlay の onBackToToc 呼び出しでクラッシュしないこと (R1-23)", () => {
+      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
       render(
         <ReaderPage
           {...createDefaultProps({
@@ -1269,11 +1306,19 @@ describe("ReaderPage", () => {
         />,
       );
 
-      const backBtn = screen.getByTestId("reader-top-back-to-toc");
-      expect(() => fireEvent.click(backBtn)).not.toThrow();
+      const lastTopProps = topSpy.mock.calls.at(-1)?.[0];
+      expect(() => {
+        act(() => {
+          lastTopProps?.onBackToToc();
+        });
+      }).not.toThrow();
     });
 
-    it("縦書き paged モード時、ReaderBottomOverlay にシークバー用 Props が伝播され描画されること (AC-RD-25)", () => {
+    it("縦書き paged モード時、ReaderBottomOverlay に effectivePagingMode='paged' とシークバー用 Props が伝播されること (AC-RD-25, R1-23)", () => {
+      const bottomSpy = vi.spyOn(
+        ReaderBottomOverlayModule,
+        "ReaderBottomOverlay",
+      );
       render(
         <ReaderPage
           {...createDefaultProps({
@@ -1286,18 +1331,21 @@ describe("ReaderPage", () => {
         />,
       );
 
-      const seekbar = screen.getByTestId("reader-page-seekbar");
-      expect(seekbar).toBeInTheDocument();
-      expect(seekbar).toHaveAttribute("dir", "rtl");
-      expect(seekbar).toHaveAttribute("min", "1");
-      expect(seekbar).toHaveAttribute("max", "10");
-      expect(seekbar).toHaveAttribute("value", "3");
-      expect(screen.getByTestId("reader-page-seekbar-label")).toHaveTextContent(
-        "3 / 10 ページ",
+      expect(bottomSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          effectivePagingMode: "paged",
+          currentPage: 3,
+          totalPages: 10,
+        }),
+        undefined,
       );
     });
 
-    it("連続スクロールモード時、シークバー領域が非表示であること (AC-RD-25)", () => {
+    it("連続スクロールモード時、ReaderBottomOverlay に effectivePagingMode='scroll' が伝播されること (AC-RD-25, R1-23)", () => {
+      const bottomSpy = vi.spyOn(
+        ReaderBottomOverlayModule,
+        "ReaderBottomOverlay",
+      );
       render(
         <ReaderPage
           {...createDefaultProps({
@@ -1310,12 +1358,22 @@ describe("ReaderPage", () => {
         />,
       );
 
-      expect(
-        screen.queryByTestId("reader-page-seekbar-section"),
-      ).not.toBeInTheDocument();
+      expect(bottomSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          effectivePagingMode: "scroll",
+          currentPage: 3,
+          totalPages: 10,
+        }),
+        undefined,
+      );
     });
 
-    it("シークバー操作時、onPageChange が発火し、かつオーバーレイが開いたまま維持されること (AC-RD-25, §3.6)", () => {
+    it("ReaderBottomOverlay の onPageChange 呼び出し時、onPageChange が発火し、かつオーバーレイが開いたまま維持されること (AC-RD-25, §3.6, R1-23)", () => {
+      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
+      const bottomSpy = vi.spyOn(
+        ReaderBottomOverlayModule,
+        "ReaderBottomOverlay",
+      );
       const onPageChange = vi.fn();
       render(
         <ReaderPage
@@ -1330,22 +1388,31 @@ describe("ReaderPage", () => {
         />,
       );
 
-      const seekbar = screen.getByTestId("reader-page-seekbar");
-      fireEvent.change(seekbar, { target: { value: "4" } });
+      const lastBottomProps = bottomSpy.mock.calls.at(-1)?.[0];
+      act(() => {
+        lastBottomProps?.onPageChange?.(4);
+      });
 
       expect(onPageChange).toHaveBeenCalledTimes(1);
       expect(onPageChange).toHaveBeenCalledWith(4);
 
       // 操作後も上下オーバーレイが開いたまま維持されること
-      const topOverlay = screen.getByTestId("reader-top-overlay");
-      const bottomOverlay = screen.getByTestId("reader-bottom-overlay");
-      expect(topOverlay).toHaveAttribute("aria-hidden", "false");
-      expect(topOverlay).toHaveClass("translate-y-0");
-      expect(bottomOverlay).toHaveAttribute("aria-hidden", "false");
-      expect(bottomOverlay).toHaveClass("translate-y-0");
+      expect(topSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ isOpen: true }),
+        undefined,
+      );
+      expect(bottomSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ isOpen: true }),
+        undefined,
+      );
     });
 
-    it("onPageChange 省略時にシークバーを操作してもクラッシュせずオーバーレイが開いたまま維持されること", () => {
+    it("onPageChange 省略時に ReaderBottomOverlay の onPageChange を呼び出してもクラッシュせずオーバーレイが開いたまま維持されること (R1-23)", () => {
+      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
+      const bottomSpy = vi.spyOn(
+        ReaderBottomOverlayModule,
+        "ReaderBottomOverlay",
+      );
       render(
         <ReaderPage
           {...createDefaultProps({
@@ -1359,13 +1426,17 @@ describe("ReaderPage", () => {
         />,
       );
 
-      const seekbar = screen.getByTestId("reader-page-seekbar");
+      const lastBottomProps = bottomSpy.mock.calls.at(-1)?.[0];
       expect(() => {
-        fireEvent.change(seekbar, { target: { value: "4" } });
+        act(() => {
+          lastBottomProps?.onPageChange?.(4);
+        });
       }).not.toThrow();
 
-      const topOverlay = screen.getByTestId("reader-top-overlay");
-      expect(topOverlay).toHaveAttribute("aria-hidden", "false");
+      expect(topSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ isOpen: true }),
+        undefined,
+      );
     });
 
     it("画面中央タップで上下オーバーレイが同時に開閉トグルすること (AC-RD-22)", () => {
@@ -1514,7 +1585,7 @@ describe("ReaderPage", () => {
   });
 
   describe("ハードウェア音量キー操作連携（enableVolumeKeyPaging / AC-RD-26, AC-RD-27）", () => {
-    it("enableVolumeKeyPaging=true のとき volumeKeyBridge.setVolumeKeyPagingEnabled(true) が呼び出されリスナーが登録されること", () => {
+    it("enableVolumeKeyPaging=true のとき addVolumeKeyListener が先に登録された後に setVolumeKeyPagingEnabled(true) が呼び出されること (R1-04)", () => {
       const mockBridge = new MockVolumeKeyBridge();
       const setEnabledSpy = vi.spyOn(mockBridge, "setVolumeKeyPagingEnabled");
       const addListenerSpy = vi.spyOn(mockBridge, "addVolumeKeyListener");
@@ -1529,11 +1600,36 @@ describe("ReaderPage", () => {
         </ServiceProvider>,
       );
 
-      expect(setEnabledSpy).toHaveBeenCalledWith(true);
       expect(addListenerSpy).toHaveBeenCalled();
+      expect(setEnabledSpy).toHaveBeenCalledWith(true);
+      expect(addListenerSpy.mock.invocationCallOrder[0]).toBeLessThan(
+        setEnabledSpy.mock.invocationCallOrder[0],
+      );
 
       unmount();
       expect(setEnabledSpy).toHaveBeenCalledWith(false);
+    });
+
+    it("setVolumeKeyPagingEnabled(true) または setVolumeKeyPagingEnabled(false) が reject しても未処理の Promise Rejection が発生しないこと (R1-08)", async () => {
+      const mockBridge = new MockVolumeKeyBridge();
+      vi.spyOn(mockBridge, "setVolumeKeyPagingEnabled").mockRejectedValue(
+        new Error("Native plugin error"),
+      );
+
+      const { unmount } = render(
+        <ServiceProvider services={{ volumeKeyBridge: mockBridge }}>
+          <ReaderPage
+            {...createDefaultProps({
+              enableVolumeKeyPaging: true,
+            })}
+          />
+        </ServiceProvider>,
+      );
+
+      unmount();
+      await act(async () => {
+        await Promise.resolve();
+      });
     });
 
     it("enableVolumeKeyPaging=false のとき volumeKeyBridge.setVolumeKeyPagingEnabled(true) は呼び出されないこと", () => {

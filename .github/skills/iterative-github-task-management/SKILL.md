@@ -21,15 +21,19 @@ description: "Use when breaking down a Feature Request Issue into an iterative m
 2. 要望に曖昧な点（異常系エラー表示、境界値、レートリミット挙動、キャッシュ削除時のしおり扱い等）があれば、推測で決め打ちせず、選択肢を添えて人間に質問する。
 3. 親 Issue 本文のチェックリスト `Step 1: 要望分析・未確定事項（Open Questions）の確認完了` を更新する。
 
-### Step 2: 設計更新 PR（「差分仕様の作成」＋「App 全体正本への反映」）と Sub-issue 分割
+### Step 2: 設計更新 PR（「差分仕様の作成」＋「App 全体正本への反映」＋「実機検証計画の策定」）と Sub-issue 分割
 
 1. [docs/index.md](../../../docs/index.md#3-docsspecs-の-2-層管理ルールapp-全体正本--差分仕様) に従い、以下の **2種類の仕様書（OKF YAML フロントマター形式）を同一設計 PR 内でセットで作成・更新** する（いずれもフロントマター `status: Review (#親Issue番号)`）：
    - **① 差分仕様ファイルの新規作成（`docs/specs/changes/issue-XX-<slug>.md`）**:
-     - 今回の要望の背景・目的、変更対象の App 全体正本ファイル一覧、追加・変更・削除する仕様（`AC-xx`, `TR-xx`, 契約, コンポーネント構成）の差分、UT/VRT/IT のテスト計画、実装 Sub-issue 分割リスト、および申し送り事項（`HO-xx`）を記載する。
+     - 今回の要望の背景・目的、変更対象の App 全体正本ファイル一覧、追加・変更・削除する仕様（`AC-xx`, `TR-xx`, 契約, コンポーネント構成）の差分、UT/VRT/IT のテスト計画、実装 Sub-issue 分割リスト、および申し送り事項（`HO-xx`）・Android 実機検証計画を記載する。
    - **② App 全体正本の同時更新（`docs/specs/*.md`, `features/*.md`, `parsers/*.md`）**:
      - 差分仕様の内容を App 全体正本へ反映し、常に `docs/specs/` の正本群が最新のアプリ全体仕様を表す状態を維持する。
-   - **③ 申し送り事項（`HO-xx`）の登録**:
-     - 後続の MK や IT、実機検証で必ず確認すべき事項を [docs/quality/bug-and-handover-log.md](../../../docs/quality/bug-and-handover-log.md) および差分仕様書に記録する。
+   - **③ Android 実機検証の実施粒度判断と申し送り事項（`HO-xx`）の登録**:
+     - [docs/guidelines/workflow.md §2.2](../../../docs/guidelines/workflow.md#22-android-実機検証の実施判断基準と試験項目表フォーマット) の基準（①Android ネイティブ層の新設・変更、②タッチ/スワイプ/ハードウェアキー等の物理操作やアニメーション・実機レイアウト計算、③実機確認観点が目安 3 項目以上）に従い、当該要望の実機検証を **「親 Issue 単位で実施（完了ゲート: `親 Issue #XX 完了前`）」** するか、**「Milestone 最終レビュー後に一括実施（完了ゲート: `Milestone v0.X 完了前`）」** するかを判断する。
+     - 判断結果と実機検証観点を以下の **3 箇所** に記載する：
+       1. 差分仕様書（`docs/specs/changes/issue-XX-<slug>.md` の「5. 申し送り事項・実機検証計画」）
+       2. 親 Issue 本文の進行チェックリスト（親 Issue 単位で実施する場合は確認項目リストも併記）
+       3. [docs/quality/bug-and-handover-log.md](../../../docs/quality/bug-and-handover-log.md) の `HO-xx` 完了ゲート欄（`親 Issue #XX 完了前` または `Milestone v0.X 完了前`）
 2. 実装（MK）および結合テスト（IT）の **Sub-issue 分割案** を策定する。
    - **推奨分割粒度（1 PR = 200〜400行目安）**:
      - Sub-issue ①: Parser Layer / Storage Layer / Bridge Layer のロジック実装 ＋ 単体テスト（Vitest TDD）
@@ -46,12 +50,15 @@ description: "Use when breaking down a Feature Request Issue into an iterative m
 3. 実装中に原因分類 `D`（設計不備）が見つかった場合は、同一 PR 内で **差分仕様（`docs/specs/changes/issue-XX-*.md`）と App 全体正本の両方を同時修正** し、[docs/quality/bug-and-handover-log.md](../../../docs/quality/bug-and-handover-log.md) にコード修正と設計同期の双方のコミットを記録する。
 4. [docs/guidelines/workflow.md §4.1](../../../docs/guidelines/workflow.md#41-ai-自律マージの停止人間エスカレーション条件) の人間エスカレーション条件（外部仕様 `AC-xx` / `TR-xx` / DB スキーマ変更を伴う原因 `D`、新規依存パッケージ / 権限 / ドメイン追加、小規模要望で `Closes #親Issue` を兼ねる場合等）に該当しないことを確認した上で、**メインエージェントが `gh pr merge --squash --delete-branch` で MK Sub-issue PR を自律マージ** し、`main` を更新して直ちに次の MK Sub-issue（または Step 4）へ連続進行する（エスカレーション条件に該当する場合のみ人間の確認・マージを待つ）。
 
-### Step 4: IT（全体回帰テスト）・申し送り精算・差分仕様アーカイブ・親 Issue 完了（人間マージ）
+### Step 4: IT（全体回帰テスト）・実機検証（対象時）・申し送り精算・差分仕様アーカイブ・親 Issue 完了（人間マージ）
 
 1. Playwright 実ブラウザ結合テスト（`test/it/` の `SCN-01`〜）を最新仕様に合わせて進化・追加し、過去機能を含め全シナリオ 100% PASS を確認する。
-2. 親 Issue に関連する申し送り事項（`HO-xx`）がすべて解決（`Resolved`）されていることを確認する。
-3. 最後の Sub-issue PR（または IT PR）において、完了した差分仕様ファイルの状態を `Completed (Archived)` に更新し、**`git mv docs/specs/changes/issue-XX-<slug>.md docs/specs/changes/archive/issue-XX-<slug>.md` でアーカイブディレクトリへ移動** する。
-4. PR に `Closes #親Issue番号`（および該当する場合は `Closes #IT-Sub-issue番号`）を設定し、Task Completion Gate 条件 1〜6 を完遂した上で人間に報告し、**人間のレビュー・マージ（出口ゲート）によって親 Issue を同期クローズする**（**AI が `gh issue close` 等で直接 Issue を閉じたり、`Closes #親Issue番号` を含む最終 PR を自己マージすることは厳禁**）。
+2. 最後の Sub-issue PR（または IT PR）において、完了した差分仕様ファイルの状態を `Completed (Archived)` に更新し、**`git mv docs/specs/changes/issue-XX-<slug>.md docs/specs/changes/archive/issue-XX-<slug>.md` でアーカイブディレクトリへ移動** する。
+3. PR に `Closes #親Issue番号`（および該当する場合は `Closes #IT-Sub-issue番号`）を設定し、Task Completion Gate 条件 1〜6（CI / 独立 `pr-reviewer` レビュー収束）を完遂する。
+4. **📱 親 Issue 単位で実機検証を実施する対象の場合（Step 2 で `親 Issue #XX 完了前` と判定した場合）**:
+   - 最終 PR が Gate 1〜6 を通過した段階で、[docs/guidelines/workflow.md §2.2](../../../docs/guidelines/workflow.md#22-android-実機検証の実施判断基準と試験項目表フォーマット) に従い **構造化された「Android 実機検証試験項目表」（項番・確認項目・具体的な操作手順・期待される結果・一筆書き確認ルート）** を人間に提示する。
+   - 人間による実機検証で問題がなければ、`HO-xx` を `Resolved` に更新（またはマージ前に反映）して人間が最終 PR をマージする。実機検証で不具合が発見された場合は、当該 PR（または追加 PR）で TDD 修正・設計同期・バグ記録追加・Gate 1〜6 再検証を行い、実機再確認 OK となってから人間がマージする。
+5. **人間のレビュー・マージ（出口ゲート）によって親 Issue を同期クローズする**（**AI が `gh issue close` 等で直接 Issue を閉じたり、`Closes #親Issue番号` を含む最終 PR を自己マージすることは厳禁**）。
 
 ---
 
@@ -81,8 +88,13 @@ AI が Sub-issue を起票する際は以下の形式を使用します。
 ミニリリース Milestone（`v0.1`, `v0.2` 等、または Phase 3 PoC 完了節目）の完了承認 Issue では、[docs/guidelines/workflow.md](../../../docs/guidelines/workflow.md#5-ミニリリース-milestone-と品質改善kaizenループ) および [phase-final-review スキル](../phase-final-review/SKILL.md) に従い以下の 3 段階で進行します。
 
 1. **Step 1（全体横断レビュー）【👤 人間が各モデルでキック】**: Milestone 内の全要望 Issue 完了後、人間が各モデルのセッションで `phase-final-review` スキルによる横断レビューを起動し、Milestone 承認 Issue に Round 1 結果をコメント投稿する（PR は作らない）。全モデルのコメントが出揃った後、人間が Step 2 開始を指示する。
-2. **Step 2（指摘是正・品質分析レポート・Kaizen PR）【🤖 AI 自律マージ】**: Sub-issue を起票し、横断レビュー指摘（`R1-xx`）の是正、`docs/quality/bug-and-handover-log.md` の集計、`docs/quality/reports/` への品質分析レポート（バグ密度・DRE・原因傾向）作成、および再発防止の `SKILL.md` / `docs/guidelines/testing.md` 改善を含む PR（`Closes #Sub-issue`、複数分割可）を作成する。Gate 1〜6 完遂後、**メインエージェントが自律マージ** し、人間のマージ待ちを挟まずに直ちに Round 2 収束確認コメント投稿および Step 3 へ進む。
-3. **Step 3（Milestone 承認・一括 Approved 更新 ＆ 品質記録アーカイブ）【👤 人間承認・マージ】**:
-   - Step 2 の自律マージと Round 2 指摘収束（0件）確認後、`docs/specs/` 配下の正本仕様書のフロントマター `status` を一括で `Approved` に揃える。
-   - 同一 PR 内で、当該 Milestone で完了したバグ記録および解決済み（`Resolved`）申し送り事項を `docs/quality/archive/<milestone>-log.md`（OKF `type: quality-log`, `status: Completed (Archived)`）へ移動し、`docs/quality/bug-and-handover-log.md` を「次期マイルストーンのバグ記録」「未解決（`Open`）申し送り事項」のみが残るクリーンな状態に整理する。
-   - PR（`Closes #Milestone承認Issue`）を作成して Gate 1〜6 を完遂し、**人間の最終確認・マージをもって Milestone を完了** する。
+2. **Step 2（横断レビュー指摘是正 PR ＆ Android 実機検証）【🤖 指摘是正 PR は AI 自律マージ → 📱 人間による実機検証】**:
+   - Sub-issue を起票し、横断レビュー指摘（`R1-xx`）のコード・テスト・設計是正および `docs/quality/bug-and-handover-log.md` への記録を含む PR（`Closes #Sub-issue`、複数分割可）を作成する。Gate 1〜6 完遂後、**メインエージェントが自律マージ** する。
+   - 自律マージ直後、未消化の実機申し送り事項（`HO-xx`）および横断レビュー是正箇所を網羅した **構造化された「Android 実機検証試験項目表」** を人間に提示する。実機検証で不具合が見つかった場合は追加是正 PR を作成・自律マージし、実機確認 OK となるまで収束させる。
+3. **Step 3（品質分析レポート・再発防止 Kaizen・バグ＆申し送りアーカイブ・正本一括 Approved 化：最終承認 PR）【👤 人間承認・マージ】**:
+   - 横断レビュー是正と Android 実機検証が完全収束（Round 2 残存指摘 0 件・未解決 `HO-xx` 0 件）した後、**1 本の最終 PR（`Closes #Milestone承認Issue`）** で以下を一括実施する：
+     1. 確定した全バグ記録に基づく `docs/quality/reports/<milestone>.md`（定量メトリクス・バグ密度・DRE・原因傾向分析）の作成と `bug-and-handover-log.md` §4 サマリーへの追記
+     2. 再発防止策としての `docs/guidelines/testing.md` および `.github/skills/*/SKILL.md` の改善（Kaizen）
+     3. 当該 Milestone で完了したバグ記録および解決済み（`Resolved`）申し送り事項の `docs/quality/archive/<milestone>-log.md`（OKF `type: quality-log`, `status: "Completed (Archived)"`）へのアーカイブ移動と `bug-and-handover-log.md` のクリーンアップ（`docs/index.md` への登録含む）
+     4. `docs/specs/` 配下の正本仕様書および品質レポートのフロントマター `status` の一括 `Approved` 化
+   - PR（`Closes #Milestone承認Issue`）で Gate 1〜6 を完遂し、**人間の最終確認・マージをもって Milestone を完了** する。

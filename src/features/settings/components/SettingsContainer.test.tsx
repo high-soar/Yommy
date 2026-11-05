@@ -1,9 +1,9 @@
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { render, screen, waitFor, act } from "@testing-library/react";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./SettingsContainer.stories";
 import { SettingsContainer } from "./SettingsContainer";
+import * as SettingsPageModule from "./SettingsPage";
 import { ServiceProvider } from "../../../app/ServiceProvider";
 import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
 import type { CloudSyncBridge } from "../../../bridges/cloud-sync/types";
@@ -16,319 +16,258 @@ describe("SettingsContainer", () => {
     await resetTestDb();
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe("Storybook Stories 検証 (composeStories)", () => {
-    it("Default ストーリーで SettingsPage が初期設定値で描画されること (AC-ST-02, AC-ST-03, AC-ST-04, AC-ST-05, AC-ST-17, AC-ST-18)", async () => {
+    it("Default ストーリーで直接の子 SettingsPage に初期設定値とコールバック一式が渡され settings-page が描画されること (AC-ST-02〜05, AC-ST-17〜19, R1-23)", async () => {
+      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
       render(<Default />);
 
       await waitFor(() => {
         expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            writingMode: "vertical-rl",
+            theme: "light",
+            fontSizePx: 18,
+            lineHeight: 1.8,
+            fontFamily: "biz-ud-mincho",
+            pageMarginPx: 20,
+            pagingMode: "auto",
+            enableVolumeKeyPaging: false,
+            isLoading: false,
+            error: null,
+          }),
+          undefined,
+        );
       });
-
-      // 組み方向の初期値: vertical-rl (切替ボタンは「横書き表示に切替」)
-      const toggleBtn = screen.getByTestId("toggle-orientation");
-      expect(toggleBtn).toHaveTextContent("横書き表示に切替");
-
-      // テーマの初期値: light
-      expect(screen.getByTestId("theme-light")).toHaveAttribute(
-        "aria-pressed",
-        "true",
-      );
-
-      // 文字サイズの初期値: 18px
-      expect(screen.getByTestId("font-size-value")).toHaveTextContent("18px");
-
-      // 行間の初期値: 1.8
-      expect(screen.getByTestId("line-height-value")).toHaveTextContent("1.8");
-
-      // フォント種別の初期値: biz-ud-mincho (AC-ST-17)
-      expect(screen.getByTestId("font-family-select")).toHaveValue(
-        "biz-ud-mincho",
-      );
-
-      // 画面余白の初期値: 20px (AC-ST-18)
-      expect(screen.getByTestId("page-margin-value")).toHaveTextContent("20px");
-
-      // 音量キーでページ送りの初期値: false (AC-ST-19)
-      expect(screen.getByTestId("toggle-volume-key-paging")).toHaveAttribute(
-        "aria-pressed",
-        "false",
-      );
-
-      // SettingsPage への初期値 Props 反映 (R1-32)
-      const page = screen.getByTestId("settings-page");
-      expect(page).toHaveAttribute("data-writing-mode", "vertical-rl");
-      expect(page).toHaveAttribute("data-theme", "light");
-      expect(page).toHaveAttribute("data-font-size", "18");
-      expect(page).toHaveAttribute("data-line-height", "1.8");
-      expect(page).toHaveAttribute("data-font-family", "biz-ud-mincho");
-      expect(page).toHaveAttribute("data-page-margin", "20");
-      expect(page).toHaveAttribute("data-paging-mode", "auto");
-      expect(page).toHaveAttribute("data-enable-volume-key-paging", "false");
     });
 
-    it("組み方向切替ボタンを操作したとき、縦書きと横書きが相互に切り替わること (AC-ST-03)", async () => {
-      const user = userEvent.setup();
+    it("SettingsPage に渡された onToggleWritingMode 呼び出し時に writingMode が縦書きと横書きで相互に切り替わること (AC-ST-03, R1-23)", async () => {
+      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
       render(<Default />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            writingMode: "vertical-rl",
+            isLoading: false,
+          }),
+          undefined,
+        );
       });
-
-      const toggleBtn = screen.getByTestId("toggle-orientation");
-      expect(toggleBtn).toHaveTextContent("横書き表示に切替");
 
       // 縦書き -> 横書き
-      await user.click(toggleBtn);
+      await act(async () => {
+        await pageSpy.mock.calls.at(-1)?.[0].onToggleWritingMode();
+      });
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toHaveAttribute(
-          "data-writing-mode",
-          "horizontal-tb",
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ writingMode: "horizontal-tb" }),
+          undefined,
         );
       });
-      expect(toggleBtn).toHaveTextContent("縦書き表示に切替");
 
       // 横書き -> 縦書き
-      await user.click(toggleBtn);
+      await act(async () => {
+        await pageSpy.mock.calls.at(-1)?.[0].onToggleWritingMode();
+      });
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toHaveAttribute(
-          "data-writing-mode",
-          "vertical-rl",
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ writingMode: "vertical-rl" }),
+          undefined,
         );
       });
-      expect(toggleBtn).toHaveTextContent("横書き表示に切替");
     });
 
-    it("カラーテーマボタンを操作したとき、テーマが変更されること (AC-ST-04)", async () => {
-      const user = userEvent.setup();
+    it("SettingsPage に渡された onChangeTheme 呼び出し時に theme が更新されること (AC-ST-04, R1-23)", async () => {
+      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
       render(<Default />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
-      });
-
-      const sepiaBtn = screen.getByTestId("theme-sepia");
-      await user.click(sepiaBtn);
-
-      await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toHaveAttribute(
-          "data-theme",
-          "sepia",
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ theme: "light", isLoading: false }),
+          undefined,
         );
       });
-      expect(sepiaBtn).toHaveAttribute("aria-pressed", "true");
-      expect(screen.getByTestId("theme-light")).toHaveAttribute(
-        "aria-pressed",
-        "false",
-      );
+
+      await act(async () => {
+        await pageSpy.mock.calls.at(-1)?.[0].onChangeTheme("sepia");
+      });
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ theme: "sepia" }),
+          undefined,
+        );
+      });
     });
 
-    it("文字サイズステッパー操作時に文字サイズが更新されること (AC-ST-05)", async () => {
-      const user = userEvent.setup();
+    it("SettingsPage に渡された onChangeFontSize 呼び出し時に fontSizePx が更新されること (AC-ST-05, R1-23)", async () => {
+      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
       render(<Default />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
-      });
-
-      // 拡大ボタン押下: 18 -> 20
-      const increaseBtn = screen.getByTestId("font-size-increase");
-      await user.click(increaseBtn);
-
-      await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toHaveAttribute(
-          "data-font-size",
-          "20",
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ fontSizePx: 18, isLoading: false }),
+          undefined,
         );
       });
 
-      // 縮小ボタン押下: 20 -> 18
-      const decreaseBtn = screen.getByTestId("font-size-decrease");
-      await user.click(decreaseBtn);
+      await act(async () => {
+        await pageSpy.mock.calls.at(-1)?.[0].onChangeFontSize(20);
+      });
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toHaveAttribute(
-          "data-font-size",
-          "18",
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ fontSizePx: 20 }),
+          undefined,
         );
       });
     });
 
-    it("行間ステッパー操作時に行間が更新されること (AC-ST-05)", async () => {
-      const user = userEvent.setup();
+    it("SettingsPage に渡された onChangeLineHeight 呼び出し時に lineHeight が更新されること (AC-ST-05, R1-23)", async () => {
+      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
       render(<Default />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
-      });
-
-      // 拡大ボタン押下: 1.8 -> 2.0
-      const increaseBtn = screen.getByTestId("line-height-increase");
-      await user.click(increaseBtn);
-
-      await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toHaveAttribute(
-          "data-line-height",
-          "2",
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ lineHeight: 1.8, isLoading: false }),
+          undefined,
         );
       });
 
-      // 縮小ボタン押下: 2.0 -> 1.8
-      const decreaseBtn = screen.getByTestId("line-height-decrease");
-      await user.click(decreaseBtn);
+      await act(async () => {
+        await pageSpy.mock.calls.at(-1)?.[0].onChangeLineHeight(2.0);
+      });
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toHaveAttribute(
-          "data-line-height",
-          "1.8",
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ lineHeight: 2.0 }),
+          undefined,
         );
       });
     });
 
-    it("フォント種別セレクターを操作したとき、フォントが変更され永続化されること (AC-ST-17)", async () => {
-      const user = userEvent.setup();
+    it("SettingsPage に渡された onChangeFontFamily 呼び出し時に fontFamily が更新されること (AC-ST-17, R1-23)", async () => {
+      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
       render(<Default />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
-      });
-
-      const fontSelect = screen.getByTestId("font-family-select");
-      await user.selectOptions(fontSelect, "klee");
-
-      await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toHaveAttribute(
-          "data-font-family",
-          "klee",
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            fontFamily: "biz-ud-mincho",
+            isLoading: false,
+          }),
+          undefined,
         );
       });
-      expect(fontSelect).toHaveValue("klee");
+
+      await act(async () => {
+        await pageSpy.mock.calls.at(-1)?.[0].onChangeFontFamily?.("klee");
+      });
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ fontFamily: "klee" }),
+          undefined,
+        );
+      });
     });
 
-    it("画面余白ステッパーを操作したとき、画面余白が変更され永続化されること (AC-ST-18)", async () => {
-      const user = userEvent.setup();
+    it("SettingsPage に渡された onChangePageMargin 呼び出し時に pageMarginPx が更新されること (AC-ST-18, R1-23)", async () => {
+      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
       render(<Default />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
-      });
-
-      const increaseBtn = screen.getByTestId("page-margin-increase");
-      await user.click(increaseBtn);
-
-      await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toHaveAttribute(
-          "data-page-margin",
-          "24",
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ pageMarginPx: 20, isLoading: false }),
+          undefined,
         );
       });
-      expect(screen.getByTestId("page-margin-value")).toHaveTextContent("24px");
 
-      const decreaseBtn = screen.getByTestId("page-margin-decrease");
-      await user.click(decreaseBtn);
+      await act(async () => {
+        await pageSpy.mock.calls.at(-1)?.[0].onChangePageMargin?.(24);
+      });
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toHaveAttribute(
-          "data-page-margin",
-          "20",
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ pageMarginPx: 24 }),
+          undefined,
         );
       });
-      expect(screen.getByTestId("page-margin-value")).toHaveTextContent("20px");
     });
 
-    it("ページ送りモードセレクターを操作したとき、設定が変更・永続化されること (AC-ST-13)", async () => {
-      const user = userEvent.setup();
+    it("SettingsPage に渡された onChangePagingMode 呼び出し時に pagingMode が更新されること (AC-ST-13, R1-23)", async () => {
+      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
       render(<Default />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ pagingMode: "auto", isLoading: false }),
+          undefined,
+        );
       });
 
-      const select = screen.getByTestId("paging-mode-select");
-      // 初期値 auto は 2択化により paged（縦書き時）として選択表示される
-      expect(select).toHaveValue("paged");
-
-      await user.selectOptions(select, "scroll");
-      await waitFor(() => {
-        expect(select).toHaveValue("scroll");
+      await act(async () => {
+        await pageSpy.mock.calls.at(-1)?.[0].onChangePagingMode?.("scroll");
       });
 
-      await user.selectOptions(select, "paged");
       await waitFor(() => {
-        expect(select).toHaveValue("paged");
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ pagingMode: "scroll" }),
+          undefined,
+        );
       });
     });
 
-    it("組み方向を横書きに切り替えたとき、ページ送りセレクターが無効化され注記が表示されること (AC-ST-13, v0.5 Issue #168, #173)", async () => {
-      const user = userEvent.setup();
+    it("SettingsPage に渡された onToggleVolumeKeyPaging 呼び出し時に enableVolumeKeyPaging が切り替わること (AC-ST-19, R1-23)", async () => {
+      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
       render(<Default />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            enableVolumeKeyPaging: false,
+            isLoading: false,
+          }),
+          undefined,
+        );
       });
 
-      const toggleButton = screen.getByTestId("toggle-orientation");
-      const select = screen.getByTestId("paging-mode-select");
-      expect(select).toBeEnabled();
-      expect(screen.queryByTestId("paging-mode-note")).not.toBeInTheDocument();
-
-      // 横書きに切り替え
-      await user.click(toggleButton);
+      await act(async () => {
+        await pageSpy.mock.calls.at(-1)?.[0].onToggleVolumeKeyPaging?.();
+      });
 
       await waitFor(() => {
-        expect(select).toBeDisabled();
-        expect(screen.getByTestId("paging-mode-note")).toBeInTheDocument();
-        expect(screen.getByTestId("paging-mode-note")).toHaveTextContent(
-          "※横書き表示時は連続スクロール固定となります",
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ enableVolumeKeyPaging: true }),
+          undefined,
         );
       });
     });
 
-    it("音量キーでページ送りトグルを操作したとき、設定が切り替わり永続化されること (AC-ST-19)", async () => {
-      const user = userEvent.setup();
-      render(<Default />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
-      });
-
-      const volumeKeyToggle = screen.getByTestId("toggle-volume-key-paging");
-      expect(volumeKeyToggle).toHaveAttribute("aria-pressed", "false");
-
-      // false -> true
-      await user.click(volumeKeyToggle);
-      await waitFor(() => {
-        expect(volumeKeyToggle).toHaveAttribute("aria-pressed", "true");
-        expect(screen.getByTestId("settings-page")).toHaveAttribute(
-          "data-enable-volume-key-paging",
-          "true",
-        );
-      });
-
-      // true -> false
-      await user.click(volumeKeyToggle);
-      await waitFor(() => {
-        expect(volumeKeyToggle).toHaveAttribute("aria-pressed", "false");
-        expect(screen.getByTestId("settings-page")).toHaveAttribute(
-          "data-enable-volume-key-paging",
-          "false",
-        );
-      });
-    });
-
-    it("WithCustomClass ストーリーでカスタムクラスがルート要素に渡されること", async () => {
+    it("WithCustomClass ストーリーで className が SettingsPage に渡されること (R1-23)", async () => {
+      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
       render(<WithCustomClass />);
 
       await waitFor(() => {
         expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            className: "custom-settings-container",
+          }),
+          undefined,
+        );
       });
-      expect(screen.getByTestId("settings-page")).toHaveClass(
-        "custom-settings-container",
-      );
     });
   });
 
   describe("SettingsContainer 単体動作検証", () => {
-    it("className が未指定でもエラーなく正しく描画されること", async () => {
+    it("className が未指定でも SettingsPage に className=undefined が渡されエラーなく描画されること (R1-23)", async () => {
+      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
       render(
         <ServiceProvider
           services={{
@@ -341,14 +280,18 @@ describe("SettingsContainer", () => {
 
       await waitFor(() => {
         expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            className: undefined,
+            isLoading: false,
+          }),
+          undefined,
+        );
       });
-      expect(screen.getByTestId("settings-page")).toHaveClass(
-        "h-full flex flex-col overflow-y-auto",
-      );
     });
 
-    it("設定保存が reject した場合、SettingsPage にエラーが伝播して role='alert' が表示されること（R1-20）", async () => {
-      const user = userEvent.setup();
+    it("設定保存が reject した場合、SettingsPage に error が伝播されること (R1-20, R1-23)", async () => {
+      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
       const mockRepo = stories.createMockSettingsRepository();
       mockRepo.updateReaderSettings = vi
         .fn()
@@ -365,21 +308,30 @@ describe("SettingsContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            isStorageCacheLoading: false,
+            error: null,
+          }),
+          undefined,
+        );
       });
 
-      const toggleBtn = screen.getByTestId("toggle-orientation");
-      await user.click(toggleBtn);
+      await act(async () => {
+        await pageSpy.mock.calls.at(-1)?.[0].onToggleWritingMode();
+      });
 
       await waitFor(() => {
-        const alert = screen.getByRole("alert");
-        expect(alert).toBeInTheDocument();
-        expect(alert).toHaveTextContent("DB保存エラー");
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({ error: "DB保存エラー" }),
+          undefined,
+        );
       });
     });
 
-    it("クラウド同期セクションが描画され、連携および同期操作がコンテナ経由で実行できること (AC-ST-08〜12)", async () => {
-      const user = userEvent.setup();
+    it("useCloudSync の状態とコールバックが SettingsPage に伝播され、onSyncNow 呼び出しで同期が実行されること (AC-ST-08〜12, R1-23)", async () => {
+      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
       const mockBridge = {
         getAuthState: vi.fn().mockResolvedValue({
           status: "connected",
@@ -410,20 +362,25 @@ describe("SettingsContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toHaveAttribute(
-          "data-cloud-sync-status",
-          "connected",
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            cloudSyncAuthState: {
+              status: "connected",
+              email: "container-user@example.com",
+            },
+          }),
+          undefined,
         );
-        expect(screen.getByTestId("cloud-sync-section")).toBeInTheDocument();
       });
 
-      const syncBtn = screen.getByTestId("cloud-sync-now-button");
-      await user.click(syncBtn);
+      await act(async () => {
+        await pageSpy.mock.calls.at(-1)?.[0].onSyncNow?.();
+      });
       expect(mockSyncEngine.sync).toHaveBeenCalled();
     });
 
-    it("ストレージ・キャッシュ管理セクションが描画され、一括キャッシュ削除がコンテナ経由で実行できること (AC-ST-14〜16)", async () => {
-      const user = userEvent.setup();
+    it("useStorageCache の状態とコールバックが SettingsPage に伝播され、onClearStorageCache 呼び出しでキャッシュ削除が実行されること (AC-ST-14〜16, R1-23)", async () => {
+      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
       let summaryData = { totalCachedChapters: 8, totalByteSize: 204800 };
       const deleteAllCachedBodiesMock = vi.fn(async () => {
         summaryData = { totalCachedChapters: 0, totalByteSize: 0 };
@@ -451,32 +408,37 @@ describe("SettingsContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("storage-cache-section")).toBeInTheDocument();
-        expect(screen.getByTestId("storage-cache-summary")).toHaveTextContent(
-          "キャッシュ済み: 全 8 話（合計 200.0 KB）",
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            storageCacheSummary: {
+              totalCachedChapters: 8,
+              totalByteSize: 204800,
+            },
+          }),
+          undefined,
         );
       });
 
-      const openBtn = screen.getByTestId(
-        "open-global-clear-cache-dialog-button",
-      );
-      await user.click(openBtn);
-
-      const clearAllBtn = screen.getByTestId(
-        "confirm-global-clear-all-cache-button",
-      );
-      await user.click(clearAllBtn);
+      await act(async () => {
+        await pageSpy.mock.calls
+          .at(-1)?.[0]
+          .onClearStorageCache?.({ onlyRead: false });
+      });
 
       expect(deleteAllCachedBodiesMock).toHaveBeenCalledWith({
         onlyRead: false,
       });
 
       await waitFor(() => {
-        expect(screen.getByTestId("storage-cache-notice")).toHaveTextContent(
-          "本文キャッシュを一括削除しました（8話）",
-        );
-        expect(screen.getByTestId("storage-cache-summary")).toHaveTextContent(
-          "キャッシュ済み: 全 0 話（合計 0 B）",
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            storageCacheNotice: "本文キャッシュを一括削除しました（8話）",
+            storageCacheSummary: {
+              totalCachedChapters: 0,
+              totalByteSize: 0,
+            },
+          }),
+          undefined,
         );
       });
     });
