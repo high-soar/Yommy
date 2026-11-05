@@ -11,6 +11,7 @@ const {
   GenreFantasy,
   MixedRegistration,
   Loading,
+  LoadingWithItems,
   Empty,
   ErrorState,
 } = composeStories(stories);
@@ -73,6 +74,20 @@ describe("RankingPage コンポーネント", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("LoadingWithItems ストーリー: 既存データが存在してもローディングが最優先で置換表示され、旧一覧が非表示となること (AC-RK-08)", () => {
+    render(<LoadingWithItems />);
+
+    expect(screen.getByTestId("ranking-loading")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("ranking-results-list"),
+    ).not.toBeInTheDocument();
+
+    // フィルタバー・サイトセレクタが操作不能（disabled）になっていること
+    expect(screen.getByTestId("site-selector-kakuyomu")).toBeDisabled();
+    expect(screen.getByTestId("ranking-period-monthly")).toBeDisabled();
+    expect(screen.getByTestId("ranking-genre-all")).toBeDisabled();
+  });
+
   it("Empty ストーリー: ランキング0件時の空状態が表示されること", () => {
     render(<Empty />);
 
@@ -93,6 +108,32 @@ describe("RankingPage コンポーネント", () => {
     await user.click(retryBtn);
 
     expect(handleRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("エラー発生時は items が存在していてもエラーカードのみが表示され、作品一覧が非表示となること (AC-RK-08)", () => {
+    render(
+      <RankingPage
+        selectedSite="kakuyomu"
+        onSelectSite={vi.fn()}
+        selectedPeriod="weekly"
+        onSelectPeriod={vi.fn()}
+        selectedGenre={undefined}
+        onSelectGenre={vi.fn()}
+        items={[sampleRankingItem1]}
+        registeredWorkIds={new Set()}
+        addingWorkId={null}
+        isLoading={false}
+        error="ネットワークエラー"
+        onRetry={vi.fn()}
+        onAddNovel={vi.fn()}
+        onSelectCard={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("ranking-error")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("ranking-results-list"),
+    ).not.toBeInTheDocument();
   });
 
   it("ヘッダーおよびフィルタの変更操作コールバックが伝達されること", async () => {
