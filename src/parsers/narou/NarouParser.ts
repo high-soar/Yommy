@@ -9,6 +9,7 @@ import { sanitizeChapterHtml } from "../sanitizer";
 
 /**
  * なろう DOM セレクタ定数（優先順位リスト）
+ * docs/specs/parsers/narou.md §3.1, §4.1 に準拠
  */
 const SELECTORS = {
   canonicalLink: 'link[rel="canonical"]',
@@ -57,13 +58,20 @@ const SELECTORS = {
   ],
 } as const;
 
+/** 先頭パスが ncode 形式（n + 数字）にマッチする正規表現 */
 const NCODE_PATH_REGEX = /^\/(n\d+[a-z0-9]*)(?:\/|$)/i;
+/** URL やパス内の任意の ncode 形式にマッチする正規表現 */
 const NCODE_ANY_REGEX = /\/(n\d+[a-z0-9]*)(?:\/|$)/i;
+/** エピソード URL パスから話数識別子を抽出する正規表現 */
 const CHAPTER_ID_REGEX = /\/n\d+[a-z0-9]*\/(\d+)(?:\/|$)/i;
+/** 連載エピソードの初回公開日時（YYYY/MM/DD HH:mm または YYYY/MM/DD） */
 const DATE_REGEX = /(\d{4}\/\d{2}\/\d{2}(?:\s+\d{2}:\d{2})?)/;
+/** 短編小説の掲載日（YYYY年MM月DD日 または YYYY/MM/DD） */
 const JP_DATE_REGEX = /(\d{4})[年/](\d{1,2})[月/](\d{1,2})/;
+/** 傍点記号（中黒・丸・ゴマ点等）のみで構成される rt テキスト */
 const BOUTEN_RT_REGEX = /^[・﹅●]+$/;
 
+/** 前書き・本編・後書きの結合区切り段落 */
 const CHAPTER_SEPARATOR = "<p><br></p><p>────────────</p><p><br></p>";
 
 /**
@@ -83,7 +91,7 @@ function queryFirst<T extends Element = Element>(
 }
 
 /**
- * 要素内の <br> を改行文字に置換してテキストを抽出する
+ * 要素内の <br> を改行文字に置換してテキストを抽出する（あらすじ整形用）
  */
 function extractTextWithNewlines(el: Element): string {
   const clone = el.cloneNode(true) as Element;
@@ -95,7 +103,7 @@ function extractTextWithNewlines(el: Element): string {
 }
 
 /**
- * <ruby> 内の傍点記号を <em class="bouten"> に正規化する
+ * <ruby> 内の傍点記号（・、●、﹅）を <em class="bouten"> に正規化する（AC-NR-07）
  */
 function normalizeBouten(container: Element): void {
   const rubies = container.querySelectorAll("ruby");
@@ -136,7 +144,7 @@ function normalizeBouten(container: Element): void {
 }
 
 /**
- * セクション（前書き・本編・後書き）の HTML を抽出・正規化する
+ * セクション（前書き・本編・後書き）の HTML を抽出・傍点正規化する
  */
 function extractSectionHtml(
   doc: Document,
@@ -183,7 +191,10 @@ export class NarouParser implements NovelParser {
   readonly siteType: NovelSiteType = "narou";
 
   /**
-   * 指定された URL が小説家になろう（ncode.syosetu.com）の対象 URL か判定する
+   * 指定された URL が小説家になろう（ncode.syosetu.com）の対象 URL か判定する (AC-NR-01)
+   *
+   * @param url 検証対象の URL 文字列
+   * @returns なろう作品またはエピソード URL の場合 true
    */
   canParse(url: string): boolean {
     try {
@@ -204,7 +215,11 @@ export class NarouParser implements NovelParser {
   }
 
   /**
-   * 作品トップ URL、エピソード URL 等から作品トップの正規化 URL を生成する
+   * 作品トップ URL、エピソード URL 等から小文字 ncode ＋ 末尾スラッシュの正規化 URL を生成する (AC-NR-01)
+   *
+   * @param url 対象 URL
+   * @returns 正規化された作品トップ URL (https://ncode.syosetu.com/{ncode}/)
+   * @throws 対象外 URL の場合に Error("Invalid Narou work URL")
    */
   normalizeWorkUrl(url: string): string {
     if (!this.canParse(url)) {
@@ -217,7 +232,12 @@ export class NarouParser implements NovelParser {
   }
 
   /**
-   * 作品トップ HTML からメタデータおよびエピソード目次リストを抽出する
+   * 作品トップ HTML からメタデータおよびエピソード目次リストを抽出する (AC-NR-02〜05)
+   *
+   * @param html 作品トップの HTML 文字列
+   * @param pageUrl 取得元ページ URL
+   * @returns 作品メタデータ、目次一覧、および次ページ目次 URL
+   * @throws remoteWorkId が特定できない場合のエラー
    */
   parseNovelIndex(html: string, pageUrl: string): ParsedNovelIndex {
     const doc = new DOMParser().parseFromString(html, "text/html");
@@ -257,7 +277,7 @@ export class NarouParser implements NovelParser {
       }
     }
 
-    // 3. 著者名抽出
+    // 3. 著者名抽出（「作者：」プレフィックス除去）
     const authorEl = queryFirst(doc, SELECTORS.author);
     let author = "";
     if (authorEl) {
@@ -268,7 +288,7 @@ export class NarouParser implements NovelParser {
       author = rawAuthor.replace(/^作者[：:]\s*/, "").trim();
     }
 
-    // 4. あらすじ抽出
+    // 4. あらすじ抽出（<br> -> \n 置換、description 末尾の共通文言除去）
     const synopsisEl = queryFirst(doc, SELECTORS.synopsis);
     let synopsis = "";
     if (synopsisEl) {
@@ -282,7 +302,7 @@ export class NarouParser implements NovelParser {
       }
     }
 
-    // 5. 次ページ目次 URL (nextTocPageUrl) 抽出
+    // 5. 次ページ目次 URL (nextTocPageUrl) 抽出と同一作品・プロトコル検証 (AC-NR-04)
     let nextTocPageUrl: string | null = null;
     const resolvedNextUrl = extractAbsoluteUrl(
       doc,
@@ -298,7 +318,7 @@ export class NarouParser implements NovelParser {
       nextTocPageUrl = resolvedNextUrl;
     }
 
-    // 6. 目次エピソードリスト走査
+    // 6. 目次エピソードリスト走査（章見出し PartTitle 紐付け・初回公開日時抽出）
     const chapters: ParsedTocItem[] = [];
     let chapterIndex = 1;
     const tocContainer = doc.querySelector(".p-eplist, .index_box");
@@ -348,7 +368,7 @@ export class NarouParser implements NovelParser {
       }
     }
 
-    // 7. 短編作品（1話完結）判定
+    // 7. 短編作品（1話完結）判定と擬似1話目次生成 (AC-NR-05)
     if (chapters.length === 0) {
       const hasBody = Boolean(
         doc.querySelector(".p-novel__body, #novel_honbun"),
@@ -389,12 +409,16 @@ export class NarouParser implements NovelParser {
   }
 
   /**
-   * 各話 HTML から整形・サニタイズ済み本文および前後の移動リンクを抽出する
+   * 各話 HTML から整形・サニタイズ済み本文および前後の移動リンクを抽出する (AC-NR-06〜09)
+   *
+   * @param html 各話 HTML 文字列
+   * @param pageUrl 取得元ページ URL
+   * @returns サニタイズ済み本文データ
    */
   parseChapterContent(html: string, pageUrl: string): ParsedChapterContent {
     const doc = new DOMParser().parseFromString(html, "text/html");
 
-    // 1. remoteChapterId 抽出
+    // 1. remoteChapterId 抽出（各話エピソード番号または短編トップ "1"）
     let remoteChapterId = "";
     const epMatch = pageUrl.match(CHAPTER_ID_REGEX);
     if (epMatch) {
@@ -410,7 +434,7 @@ export class NarouParser implements NovelParser {
     const titleEl = queryFirst(doc, SELECTORS.chapterTitle);
     const title = titleEl ? titleEl.textContent!.trim() : "";
 
-    // 3. 前書き・本編・後書き抽出と結合
+    // 3. 前書き・本編・後書き抽出と区切り段落結合 (AC-NR-06, 07, 08)
     const parts: string[] = [];
 
     const prefaceHtml = extractSectionHtml(doc, SELECTORS.preface);
@@ -432,7 +456,7 @@ export class NarouParser implements NovelParser {
     const bodyHtml = sanitizeChapterHtml(rawCombinedHtml);
     const byteSize = new TextEncoder().encode(bodyHtml).length;
 
-    // 4. 前後リンク抽出
+    // 4. 前後リンク抽出 (AC-NR-09)
     const prevChapterUrl = extractAbsoluteUrl(
       doc,
       SELECTORS.prevChapter,
