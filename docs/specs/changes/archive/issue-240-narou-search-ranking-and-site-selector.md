@@ -3,7 +3,7 @@ type: spec-delta
 title: "小説家になろう（narou）の検索・ランキング対応と探索画面サイト切替（SiteSelector）仕様"
 description: "Issue #240 に対する差分仕様、なろう小説APIによる検索・ランキング抽出設計、検索/ランキング画面のSiteSelector有効化とサイト別ジャンル連動、テスト計画、およびSub-issue分割計画。"
 issue: "#240"
-status: "Review (#240)"
+status: "Completed (Archived)"
 updated: "2026-11-06"
 tags:
   - delta
@@ -62,7 +62,7 @@ Step 1 の `/grill-me` インタビューおよび公式なろう小説 API 仕�
 
 ### 2.1 `NarouParser` への検索・ランキング機能実装（公式「なろう小説 API」JSON 方式）
 
-[docs/specs/parsers/narou.md](../parsers/narou.md) に検索・ランキング仕様（§5, §6）および受入条件（`AC-NR-11`〜`AC-NR-14`）を追加し、`NarouParser` に以下の 4 メソッドを実装します。
+[docs/specs/parsers/narou.md](../../parsers/narou.md) に検索・ランキング仕様（§5, §6）および受入条件（`AC-NR-11`〜`AC-NR-14`）を追加し、`NarouParser` に以下の 4 メソッドを実装します。
 
 1. **データ取得エンドポイント**:
    - 検索・ランキングとも、なろうデベロッパー公式の **なろう小説 API（`https://api.syosetu.com/novelapi/api/`）** に統一する（`out=json`、非圧縮 UTF-8、1 ページあたり `lim=20` 件）。

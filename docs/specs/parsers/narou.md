@@ -16,7 +16,7 @@ tags:
   - search
   - ranking
 related_specs:
-  - docs/specs/changes/issue-240-narou-search-ranking-and-site-selector.md
+  - docs/specs/changes/archive/issue-240-narou-search-ranking-and-site-selector.md
   - docs/specs/architecture.md
   - docs/specs/requirements.md
   - docs/specs/db-schema.md
