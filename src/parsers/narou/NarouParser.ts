@@ -83,6 +83,13 @@ const BOUTEN_RT_REGEX = /^[・﹅●]+$/;
 /** 前書き・本編・後書きの結合区切り段落 */
 const CHAPTER_SEPARATOR = "<p><br></p><p>────────────</p><p><br></p>";
 
+/** なろう小説 API のベース URL */
+const API_BASE_URL = "https://api.syosetu.com/novelapi/api/";
+/** なろう小説 API の 1 ページあたり取得件数 */
+const API_PAGE_LIMIT = 20;
+/** なろう小説 API の開始位置上限 (st <= 2000) */
+const API_MAX_START_OFFSET = 2000;
+
 /**
  * 優先順位リスト順に DOM を探索し、最初に見つかった要素を返却する
  */
@@ -204,14 +211,14 @@ function parseApiUrlParams(pageUrl: string): {
   let currentPage = 1;
   let order = "weeklypoint";
   try {
-    const url = new URL(pageUrl, "https://api.syosetu.com");
+    const url = new URL(pageUrl, API_BASE_URL);
     order = url.searchParams.get("order") ?? "weeklypoint";
     const stParam = url.searchParams.get("st");
     if (stParam) {
       const parsed = parseInt(stParam, 10);
       if (!Number.isNaN(parsed) && parsed >= 1) {
         st = parsed;
-        currentPage = Math.floor((st - 1) / 20) + 1;
+        currentPage = Math.floor((st - 1) / API_PAGE_LIMIT) + 1;
       }
     } else {
       const pageParam = url.searchParams.get("page");
@@ -219,7 +226,7 @@ function parseApiUrlParams(pageUrl: string): {
         const parsed = parseInt(pageParam, 10);
         if (!Number.isNaN(parsed) && parsed >= 1) {
           currentPage = parsed;
-          st = (currentPage - 1) * 20 + 1;
+          st = (currentPage - 1) * API_PAGE_LIMIT + 1;
         }
       }
     }
@@ -611,9 +618,9 @@ export class NarouParser implements NovelParser {
    * @returns なろう小説 API 検索 URL
    */
   buildSearchUrl(query: string, options?: NovelSearchOptions): string {
-    const url = new URL("https://api.syosetu.com/novelapi/api/");
+    const url = new URL(API_BASE_URL);
     url.searchParams.set("out", "json");
-    url.searchParams.set("lim", "20");
+    url.searchParams.set("lim", String(API_PAGE_LIMIT));
 
     const trimmedQuery = query.trim();
     if (trimmedQuery) {
@@ -641,7 +648,7 @@ export class NarouParser implements NovelParser {
     }
 
     if (options?.page !== undefined && options.page >= 2) {
-      const st = (options.page - 1) * 20 + 1;
+      const st = (options.page - 1) * API_PAGE_LIMIT + 1;
       url.searchParams.set("st", String(st));
     }
 
@@ -697,9 +704,11 @@ export class NarouParser implements NovelParser {
       }
     }
 
-    const nextSt = st + 20;
+    const nextSt = st + API_PAGE_LIMIT;
     const hasNextPage =
-      items.length > 0 && st + items.length - 1 < totalCount && nextSt <= 2000;
+      items.length > 0 &&
+      st + items.length - 1 < totalCount &&
+      nextSt <= API_MAX_START_OFFSET;
 
     return {
       items,
@@ -718,9 +727,9 @@ export class NarouParser implements NovelParser {
    * @returns なろう小説 API ランキング URL
    */
   buildRankingUrl(options?: NovelRankingOptions): string {
-    const url = new URL("https://api.syosetu.com/novelapi/api/");
+    const url = new URL(API_BASE_URL);
     url.searchParams.set("out", "json");
-    url.searchParams.set("lim", "20");
+    url.searchParams.set("lim", String(API_PAGE_LIMIT));
 
     const periodMap: Record<NovelRankingPeriod, string> = {
       daily: "dailypoint",
@@ -737,7 +746,7 @@ export class NarouParser implements NovelParser {
     }
 
     if (options?.page !== undefined && options.page >= 2) {
-      const st = (options.page - 1) * 20 + 1;
+      const st = (options.page - 1) * API_PAGE_LIMIT + 1;
       url.searchParams.set("st", String(st));
     }
 
@@ -795,9 +804,11 @@ export class NarouParser implements NovelParser {
       }
     }
 
-    const nextSt = st + 20;
+    const nextSt = st + API_PAGE_LIMIT;
     const hasNextPage =
-      items.length > 0 && st + items.length - 1 < totalCount && nextSt <= 2000;
+      items.length > 0 &&
+      st + items.length - 1 < totalCount &&
+      nextSt <= API_MAX_START_OFFSET;
 
     return {
       items,
