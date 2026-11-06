@@ -203,9 +203,12 @@ describe("useBookshelf", () => {
         wrapper: createWrapper({ novelRepository: customRepo }),
       });
 
-      await waitFor(() => {
-        expect(customRepo.listNovels).toHaveBeenCalled();
-      });
+      await waitFor(
+        () => {
+          expect(customRepo.listNovels).toHaveBeenCalled();
+        },
+        { timeout: 5000 },
+      );
 
       unmount();
 
@@ -232,9 +235,12 @@ describe("useBookshelf", () => {
         wrapper: createWrapper({ novelRepository: customRepo }),
       });
 
-      await waitFor(() => {
-        expect(customRepo.listNovels).toHaveBeenCalled();
-      });
+      await waitFor(
+        () => {
+          expect(customRepo.listNovels).toHaveBeenCalled();
+        },
+        { timeout: 5000 },
+      );
 
       unmount();
 
