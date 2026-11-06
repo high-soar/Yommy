@@ -81,25 +81,45 @@ export async function fetchFullNovelIndex(
   let pageCount = 1;
   let nextUrl = firstIndex.nextTocPageUrl;
 
-  while (nextUrl !== null && pageCount < maxPages) {
+  while (nextUrl !== null) {
     checkAbort(signal);
+
+    // maxPages 上限ガード
+    if (pageCount >= maxPages) {
+      console.warn(
+        `[fetchFullNovelIndex] Reached maxPages (${maxPages}) limit for ${canonicalUrl}`,
+      );
+      break;
+    }
 
     // 同一URL再訪（循環参照）防止
     if (visitedUrls.has(nextUrl)) {
+      console.warn(
+        `[fetchFullNovelIndex] Circular reference detected for ${nextUrl} in ${canonicalUrl}`,
+      );
       break;
     }
 
     // SSRF・同一作品検証
     if (!nextUrl.startsWith("https:") || !parser.canParse(nextUrl)) {
+      console.warn(
+        `[fetchFullNovelIndex] Invalid nextTocPageUrl scheme or unsupported parser: ${nextUrl}`,
+      );
       break;
     }
     let normalizedNext: string;
     try {
       normalizedNext = parser.normalizeWorkUrl(nextUrl);
     } catch {
+      console.warn(
+        `[fetchFullNovelIndex] Failed to normalize nextTocPageUrl: ${nextUrl}`,
+      );
       break;
     }
     if (normalizedNext !== canonicalUrl) {
+      console.warn(
+        `[fetchFullNovelIndex] nextTocPageUrl points to different work: ${nextUrl} !== ${canonicalUrl}`,
+      );
       break;
     }
 
