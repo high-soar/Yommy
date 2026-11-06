@@ -16,6 +16,7 @@ const {
   LoadingWithItems,
   Empty,
   ErrorState,
+  NarouSelected,
 } = composeStories(stories);
 
 describe("RankingPage コンポーネント", () => {
@@ -110,6 +111,16 @@ describe("RankingPage コンポーネント", () => {
     await user.click(retryBtn);
 
     expect(handleRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("NarouSelected ストーリー: なろう選択時に小ジャンルピルが表示されること (AC-RK-09)", () => {
+    render(<NarouSelected />);
+
+    expect(screen.getByTestId("site-selector-narou")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByTestId("ranking-genre-201")).toBeInTheDocument();
   });
 
   it("エラー発生時は items が存在していてもエラーカードのみが表示され、作品一覧が非表示となること (AC-RK-08)", () => {
@@ -211,11 +222,11 @@ describe("RankingPage コンポーネント", () => {
 
     expect(siteSelectorSpy).toHaveBeenCalledWith(
       expect.objectContaining({ selectedSite: "narou" }),
-      expect.anything(),
+      undefined,
     );
     expect(filterBarSpy).toHaveBeenCalledWith(
       expect.objectContaining({ selectedSite: "narou" }),
-      expect.anything(),
+      undefined,
     );
 
     siteSelectorSpy.mockRestore();

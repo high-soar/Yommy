@@ -16,6 +16,7 @@ const {
   WithResults,
   LoadingMore,
   ErrorState,
+  NarouSelected,
 } = composeStories(stories);
 
 describe("SearchPage コンポーネント", () => {
@@ -104,6 +105,16 @@ describe("SearchPage コンポーネント", () => {
 
     const retryButton = screen.getByTestId("search-error-retry-button");
     expect(retryButton).toBeInTheDocument();
+  });
+
+  it("NarouSelected ストーリー: なろう選択時に小ジャンルピルが表示されること (AC-SE-10)", () => {
+    render(<NarouSelected />);
+
+    expect(screen.getByTestId("site-selector-narou")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByTestId("search-genre-201")).toBeInTheDocument();
   });
 
   it("再試行ボタン押下時に onRetry が呼び出されること", async () => {
@@ -279,11 +290,11 @@ describe("SearchPage コンポーネント", () => {
 
     expect(siteSelectorSpy).toHaveBeenCalledWith(
       expect.objectContaining({ selectedSite: "narou" }),
-      expect.anything(),
+      undefined,
     );
     expect(filterBarSpy).toHaveBeenCalledWith(
       expect.objectContaining({ selectedSite: "narou" }),
-      expect.anything(),
+      undefined,
     );
 
     siteSelectorSpy.mockRestore();

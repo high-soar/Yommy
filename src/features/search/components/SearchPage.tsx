@@ -126,6 +126,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
         />
 
         <SearchFilterBar
+          selectedSite={selectedSite}
           selectedOrder={selectedOrder}
           onSelectOrder={onSelectOrder}
           selectedSerialStatus={selectedSerialStatus}

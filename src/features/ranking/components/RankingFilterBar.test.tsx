@@ -5,7 +5,7 @@ import { composeStories } from "@storybook/react";
 import * as stories from "./RankingFilterBar.stories";
 import { RankingFilterBar } from "./RankingFilterBar";
 
-const { Default, Filtered, Disabled } = composeStories(stories);
+const { Default, Filtered, Disabled, NarouGenres } = composeStories(stories);
 
 describe("RankingFilterBar コンポーネント", () => {
   it("Default ストーリー: デフォルトの集計期間（週間）とジャンル（総合）が選択されていること (AC-RK-01)", () => {
@@ -38,6 +38,17 @@ describe("RankingFilterBar コンポーネント", () => {
 
     const genreAll = screen.getByTestId("ranking-genre-all");
     expect(genreAll).toBeDisabled();
+  });
+
+  it("NarouGenres ストーリー: 小説家になろうの小ジャンル（ハイファンタジー）が選択表示されること", () => {
+    render(<NarouGenres />);
+
+    const highFantasyPill = screen.getByTestId("ranking-genre-201");
+    expect(highFantasyPill).toBeInTheDocument();
+    expect(highFantasyPill).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.queryByTestId("ranking-genre-fantasy"),
+    ).not.toBeInTheDocument();
   });
 
   it("期間ピル押下時に onSelectPeriod が呼び出されること (AC-RK-02)", async () => {

@@ -10,6 +10,7 @@ import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
 import { MockHttpClient } from "../../../bridges/http/mockHttpClient";
 import rankingApolloHtml from "../../../parsers/kakuyomu/__fixtures__/ranking_results_apollo.html?raw";
 import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.html?raw";
+import narouRankingResultsJson from "../../../parsers/narou/__fixtures__/ranking_results.json?raw";
 
 const { Default } = composeStories(stories);
 
@@ -38,6 +39,15 @@ describe("RankingContainer コンポーネント", () => {
         url: options.url,
         headers: {},
         html: workIndexHtml,
+      }),
+    );
+    mockHttpClient.setResponse(
+      /^https:\/\/api\.syosetu\.com\/novelapi\/api\//,
+      (options) => ({
+        status: 200,
+        url: options.url,
+        headers: {},
+        html: narouRankingResultsJson,
       }),
     );
   });
@@ -221,5 +231,25 @@ describe("RankingContainer コンポーネント", () => {
     });
 
     expect(handleSelectNovel).not.toHaveBeenCalled();
+  });
+
+  it("SiteSelector で小説家になろうへ切り替えると、なろうランキング作品および小ジャンルピルが表示されること (AC-RK-09)", async () => {
+    const user = userEvent.setup();
+    renderWithProviders();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("site-selector-narou")).toBeInTheDocument();
+    });
+
+    const narouBtn = screen.getByTestId("site-selector-narou");
+    await user.click(narouBtn);
+
+    await waitFor(() => {
+      expect(narouBtn).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByTestId("ranking-genre-201")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("ranking-novel-card-n1001aa"),
+      ).toBeInTheDocument();
+    });
   });
 });

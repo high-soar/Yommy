@@ -40,6 +40,8 @@ import rankingApolloHtml from "../parsers/kakuyomu/__fixtures__/ranking_results_
 import narouIndexSerializedHtml from "../parsers/narou/__fixtures__/work_index_serialized.html?raw";
 import narouIndexPage2Html from "../parsers/narou/__fixtures__/work_index_page2.html?raw";
 import narouEpisodeContentHtml from "../parsers/narou/__fixtures__/episode_content.html?raw";
+import narouSearchResultsJson from "../parsers/narou/__fixtures__/search_results.json?raw";
+import narouRankingResultsJson from "../parsers/narou/__fixtures__/ranking_results.json?raw";
 
 const STORAGE_KEY = "yommy_sqlite_db_backup";
 
@@ -178,9 +180,14 @@ export function createDefaultMockHttpClient(): MockHttpClient {
   client.setResponse(
     /^https:\/\/ncode\.syosetu\.com\/n\d+[a-z0-9]*\/?(\?.*)?$/i,
     (options) => {
-      const html = options.url.includes("p=2")
+      let html = options.url.includes("p=2")
         ? narouIndexPage2Html
         : narouIndexSerializedHtml;
+      if (options.url.toLowerCase().includes("n1001aa")) {
+        html = html
+          .replaceAll("無職転生 - 異世界行ったら本気だす", "デイリー1位作品")
+          .replaceAll("理不尽な孫の手", "ランキング作家A");
+      }
       return {
         status: 200,
         url: options.url,
@@ -197,6 +204,23 @@ export function createDefaultMockHttpClient(): MockHttpClient {
       headers: {},
       html: narouEpisodeContentHtml,
     }),
+  );
+  client.setResponse(
+    /^https:\/\/api\.syosetu\.com\/novelapi\/api\//,
+    (options) => {
+      const isSearch =
+        options.url.includes("word=") ||
+        options.url.includes("type=") ||
+        options.url.includes("order=new") ||
+        options.url.includes("order=generalfirstup");
+
+      return {
+        status: 200,
+        url: options.url,
+        headers: {},
+        html: isSearch ? narouSearchResultsJson : narouRankingResultsJson,
+      };
+    },
   );
   return client;
 }

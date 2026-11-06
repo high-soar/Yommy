@@ -25,7 +25,7 @@ export interface RankingSiteOption {
 
 export const RANKING_SITES: readonly RankingSiteOption[] = [
   { siteType: "kakuyomu", label: "カクヨム", isAvailable: true },
-  { siteType: "narou", label: "小説家になろう", isAvailable: false },
+  { siteType: "narou", label: "小説家になろう", isAvailable: true },
 ] as const;
 
 /**

@@ -5,7 +5,7 @@ import { composeStories } from "@storybook/react";
 import * as stories from "./SearchFilterBar.stories";
 import { SearchFilterBar } from "./SearchFilterBar";
 
-const { Default, Filtered, Disabled } = composeStories(stories);
+const { Default, Filtered, Disabled, NarouGenres } = composeStories(stories);
 
 describe("SearchFilterBar コンポーネント", () => {
   it("Default ストーリー: デフォルトの並び順・連載状況・ジャンル（すべて）が選択されていること", () => {
@@ -45,6 +45,17 @@ describe("SearchFilterBar コンポーネント", () => {
 
     const genreAll = screen.getByTestId("search-genre-all");
     expect(genreAll).toBeDisabled();
+  });
+
+  it("NarouGenres ストーリー: 小説家になろうの小ジャンル（ハイファンタジー）が選択表示されること", () => {
+    render(<NarouGenres />);
+
+    const highFantasyPill = screen.getByTestId("search-genre-201");
+    expect(highFantasyPill).toBeInTheDocument();
+    expect(highFantasyPill).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.queryByTestId("search-genre-fantasy"),
+    ).not.toBeInTheDocument();
   });
 
   it("並び順変更時に onSelectOrder が呼び出されること", async () => {

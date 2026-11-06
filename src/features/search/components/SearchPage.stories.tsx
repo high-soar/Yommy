@@ -141,3 +141,16 @@ export const ErrorState: Story = {
     error: "検索結果の取得に失敗しました。ネットワーク接続を確認してください。",
   },
 };
+
+/**
+ * 検索画面（小説家になろう選択状態・なろう小ジャンルピル表示 / v0.7 Issue #240）
+ */
+export const NarouSelected: Story = {
+  name: "小説家になろう選択状態",
+  args: {
+    selectedSite: "narou",
+    keyword: "",
+    items: [],
+    isLoading: false,
+  },
+};

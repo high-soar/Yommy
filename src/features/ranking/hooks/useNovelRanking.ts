@@ -74,20 +74,24 @@ export function useNovelRanking(): UseNovelRankingResult {
   const isFetchingRef = useRef<boolean>(false);
 
   // DB内の登録済み作品ID一覧を更新
-  const refreshRegisteredIds = useCallback(async () => {
-    if (!novelRepository) return;
-    try {
-      const novels = await novelRepository.listNovels();
-      const ids = new Set(
-        novels
-          .filter((n) => n.siteType === selectedSite)
-          .map((n) => n.remoteWorkId),
-      );
-      setRegisteredWorkIds(ids);
-    } catch {
-      setRegisteredWorkIds(new Set());
-    }
-  }, [novelRepository, selectedSite]);
+  const refreshRegisteredIds = useCallback(
+    async (targetSite?: NovelSiteType) => {
+      if (!novelRepository) return;
+      const siteToQuery = targetSite ?? selectedSite;
+      try {
+        const novels = await novelRepository.listNovels();
+        const ids = new Set(
+          novels
+            .filter((n) => n.siteType === siteToQuery)
+            .map((n) => n.remoteWorkId),
+        );
+        setRegisteredWorkIds(ids);
+      } catch {
+        setRegisteredWorkIds(new Set());
+      }
+    },
+    [novelRepository, selectedSite],
+  );
 
   // ランキング取得処理
   const executeFetch = useCallback(
@@ -123,7 +127,7 @@ export function useNovelRanking(): UseNovelRankingResult {
         const result = parser.getRanking(response.html, url);
 
         setItems(result.items);
-        await refreshRegisteredIds();
+        await refreshRegisteredIds(targetSite);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
@@ -157,11 +161,13 @@ export function useNovelRanking(): UseNovelRankingResult {
 
   const setSelectedSite = useCallback(
     (newSite: NovelSiteType) => {
-      if (isFetchingRef.current) return;
+      if (isFetchingRef.current || newSite === selectedSite) return;
       setSelectedSiteState(newSite);
-      void executeFetch({ site: newSite });
+      setGenreState(undefined);
+      setError(null);
+      void executeFetch({ site: newSite, genre: undefined });
     },
-    [executeFetch],
+    [selectedSite, executeFetch],
   );
 
   const setPeriod = useCallback(

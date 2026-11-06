@@ -10,7 +10,7 @@ export interface SiteSelectorProps {
 }
 
 /**
- * ランキング対象サイト切替ピル（カクヨム / 将来のなろう）
+ * ランキング対象サイト切替ピル（カクヨム / 小説家になろう）
  */
 export const SiteSelector: React.FC<SiteSelectorProps> = ({
   selectedSite,
@@ -50,7 +50,6 @@ export const SiteSelector: React.FC<SiteSelectorProps> = ({
             }`}
           >
             {site.label}
-            {!site.isAvailable ? " (準備中)" : ""}
           </button>
         );
       })}

@@ -137,3 +137,17 @@ export const ErrorState: Story = {
       "ランキングの取得に失敗しました。ネットワーク接続を確認してください。",
   },
 };
+
+/**
+ * ランキング画面（小説家になろう選択状態・なろう小ジャンルピル表示 / v0.7 Issue #240）
+ */
+export const NarouSelected: Story = {
+  name: "小説家になろう選択状態",
+  args: {
+    selectedSite: "narou",
+    selectedPeriod: "weekly",
+    selectedGenre: undefined,
+    items: [],
+    isLoading: false,
+  },
+};
