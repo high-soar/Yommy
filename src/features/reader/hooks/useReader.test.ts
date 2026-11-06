@@ -34,6 +34,8 @@ import {
 } from "../../../shared/constants/cache";
 import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 import episodeContentHtml from "../../../parsers/kakuyomu/__fixtures__/episode_content.html?raw";
+import narouWorkIndexSerializedHtml from "../../../parsers/narou/__fixtures__/work_index_serialized.html?raw";
+import narouWorkIndexPage2Html from "../../../parsers/narou/__fixtures__/work_index_page2.html?raw";
 
 describe("useReader", () => {
   beforeEach(async () => {
@@ -1291,6 +1293,335 @@ describe("useReader", () => {
       expect(markChapterReadSpy).toHaveBeenCalledWith(seeded.id, 1, true);
       expect(markChapterReadSpy).toHaveBeenCalledWith(seeded.id, 2, true);
     });
+
+    it("goToChapter で未キャッシュ話本文の解決中にアンマウントされた場合、遷移先話の markChapterRead・updateBookmark・startPrefetch が呼ばれないこと (R1-18)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 2,
+        cachedCount: 1, // 第1話のみキャッシュ済み、第2話は未キャッシュ
+        isReadCount: 0,
+      });
+
+      let resolveGetHtml!: (value: {
+        status: number;
+        html: string;
+        finalUrl: string;
+      }) => void;
+      const getHtmlPromise = new Promise<{
+        status: number;
+        html: string;
+        finalUrl: string;
+      }>((resolve) => {
+        resolveGetHtml = resolve;
+      });
+
+      const httpClient = new MockHttpClient();
+      httpClient.setResponse(
+        /kakuyomu\.jp\/works\/.*\/episodes\/.*/,
+        async (req) => {
+          if (req.url.includes("episodes")) {
+            return await getHtmlPromise;
+          }
+          return {
+            status: 200,
+            html: "<html></html>",
+            headers: {},
+            url: req.url,
+          };
+        },
+      );
+
+      const markChapterReadSpy = vi.spyOn(chapterRepo, "markChapterRead");
+      const updateBookmarkSpy = vi.spyOn(novelRepo, "updateBookmark");
+
+      const { result, unmount } = renderHook(
+        () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+        {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+            httpClient,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      let transitionPromise!: Promise<boolean>;
+      act(() => {
+        transitionPromise = result.current.goToChapter(2);
+      });
+
+      // 未キャッシュ話の本文取得待機中にコンポーネントがアンマウント
+      unmount();
+
+      // 本文取得完了
+      resolveGetHtml({
+        status: 200,
+        html: `<p>第2話本文</p>`,
+        finalUrl: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[1]}`,
+      });
+
+      let transitionResult: boolean | undefined;
+      await act(async () => {
+        transitionResult = await transitionPromise;
+      });
+
+      expect(transitionResult).toBe(false);
+      // 遷移前（第1話）の既読化は呼ばれる
+      expect(markChapterReadSpy).toHaveBeenCalledWith(seeded.id, 1, true);
+      // 遷移先（第2話）の既読化はアンマウントにより呼ばれない
+      expect(markChapterReadSpy).not.toHaveBeenCalledWith(seeded.id, 2, true);
+      // 遷移先（第2話）へのしおり更新はアンマウントにより呼ばれない
+      expect(updateBookmarkSpy).not.toHaveBeenCalledWith(
+        seeded.id,
+        2,
+        expect.anything(),
+      );
+    });
+
+    it("goToChapter: 各非同期ステップ完了直後にアンマウントされていた場合、false を返して安全に中断されること (R1-18)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 3,
+        cachedCount: 3,
+        isReadCount: 0,
+      });
+
+      // 1. markPreviousAsRead (L829)
+      {
+        const unmountRef = { current: () => {} };
+        const orig = chapterRepo.markChapterRead.bind(chapterRepo);
+        vi.spyOn(chapterRepo, "markChapterRead").mockImplementation(
+          async (...args) => {
+            unmountRef.current();
+            return orig(...args);
+          },
+        );
+        const { result, unmount } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        unmountRef.current = unmount;
+        let res: boolean | undefined;
+        await act(async () => {
+          res = await result.current.goToChapter(2);
+        });
+        expect(res).toBe(false);
+      }
+
+      // 2. getChapter (L836)
+      {
+        const unmountRef = { current: () => {} };
+        vi.restoreAllMocks();
+        const orig = chapterRepo.getChapter.bind(chapterRepo);
+        vi.spyOn(chapterRepo, "getChapter").mockImplementation(
+          async (...args) => {
+            unmountRef.current();
+            return orig(...args);
+          },
+        );
+        const { result, unmount } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        unmountRef.current = unmount;
+        let res: boolean | undefined;
+        await act(async () => {
+          res = await result.current.goToChapter(2);
+        });
+        expect(res).toBe(false);
+      }
+
+      // 3. resolveChapterBody (L849)
+      {
+        const unmountRef = { current: () => {} };
+        vi.restoreAllMocks();
+        const db3 = await resetTestDb();
+        const novelRepo3 = new SqlNovelRepository(db3);
+        const chapterRepo3 = new SqlChapterRepository(db3);
+        const seeded3 = await seedNovelWithChapters(novelRepo3, chapterRepo3, {
+          chapterCount: 3,
+          cachedCount: 1,
+          isReadCount: 0,
+        });
+
+        const origSave = chapterRepo3.saveChapterBody.bind(chapterRepo3);
+        vi.spyOn(chapterRepo3, "saveChapterBody").mockImplementation(
+          async (...args) => {
+            unmountRef.current();
+            return origSave(...args);
+          },
+        );
+
+        const httpClient = new MockHttpClient();
+        httpClient.setResponse(
+          /kakuyomu\.jp\/works\/.*\/episodes\/.*/,
+          (req) => ({
+            status: 200,
+            html: episodeContentHtml,
+            headers: {},
+            url: req.url,
+          }),
+        );
+
+        const { result, unmount } = renderHook(
+          () => useReader({ novelId: seeded3.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo3,
+              chapterRepository: chapterRepo3,
+              httpClient,
+            }),
+          },
+        );
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        unmountRef.current = unmount;
+        let res: boolean | undefined;
+        await act(async () => {
+          res = await result.current.goToChapter(2);
+        });
+        expect(res).toBe(false);
+      }
+
+      // 4. 表示完了時 markChapterRead (L866)
+      {
+        const unmountRef = { current: () => {} };
+        vi.restoreAllMocks();
+        const db4 = await resetTestDb();
+        const novelRepo4 = new SqlNovelRepository(db4);
+        const chapterRepo4 = new SqlChapterRepository(db4);
+        const seeded4 = await seedNovelWithChapters(novelRepo4, chapterRepo4, {
+          chapterCount: 3,
+          cachedCount: 3,
+          isReadCount: 0,
+        });
+
+        const origMark = chapterRepo4.markChapterRead.bind(chapterRepo4);
+        vi.spyOn(chapterRepo4, "markChapterRead").mockImplementation(
+          async (...args) => {
+            if (args[1] === 2) {
+              unmountRef.current();
+            }
+            return origMark(...args);
+          },
+        );
+        const { result, unmount } = renderHook(
+          () => useReader({ novelId: seeded4.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo4,
+              chapterRepository: chapterRepo4,
+            }),
+          },
+        );
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        unmountRef.current = unmount;
+        let res: boolean | undefined;
+        await act(async () => {
+          res = await result.current.goToChapter(2);
+        });
+        expect(res).toBe(false);
+      }
+
+      // 5. updateBookmark (L877)
+      {
+        const unmountRef = { current: () => {} };
+        vi.restoreAllMocks();
+        const db5 = await resetTestDb();
+        const novelRepo5 = new SqlNovelRepository(db5);
+        const chapterRepo5 = new SqlChapterRepository(db5);
+        const seeded5 = await seedNovelWithChapters(novelRepo5, chapterRepo5, {
+          chapterCount: 3,
+          cachedCount: 3,
+          isReadCount: 0,
+        });
+
+        const origUpdate = novelRepo5.updateBookmark.bind(novelRepo5);
+        vi.spyOn(novelRepo5, "updateBookmark").mockImplementation(
+          async (...args) => {
+            unmountRef.current();
+            return origUpdate(...args);
+          },
+        );
+        const { result, unmount } = renderHook(
+          () => useReader({ novelId: seeded5.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo5,
+              chapterRepository: chapterRepo5,
+            }),
+          },
+        );
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        unmountRef.current = unmount;
+        let res: boolean | undefined;
+        await act(async () => {
+          res = await result.current.goToChapter(2);
+        });
+        expect(res).toBe(false);
+      }
+
+      // 6. getNovelById (L882)
+      {
+        const unmountRef = { current: () => {} };
+        vi.restoreAllMocks();
+        const db6 = await resetTestDb();
+        const novelRepo6 = new SqlNovelRepository(db6);
+        const chapterRepo6 = new SqlChapterRepository(db6);
+        const seeded6 = await seedNovelWithChapters(novelRepo6, chapterRepo6, {
+          chapterCount: 3,
+          cachedCount: 3,
+          isReadCount: 0,
+        });
+
+        const origGetNovel = novelRepo6.getNovelById.bind(novelRepo6);
+        let called = 0;
+        vi.spyOn(novelRepo6, "getNovelById").mockImplementation(
+          async (...args) => {
+            called++;
+            if (called > 1) {
+              unmountRef.current();
+            }
+            return origGetNovel(...args);
+          },
+        );
+        const { result, unmount } = renderHook(
+          () => useReader({ novelId: seeded6.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo6,
+              chapterRepository: chapterRepo6,
+            }),
+          },
+        );
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        unmountRef.current = unmount;
+        let res: boolean | undefined;
+        await act(async () => {
+          res = await result.current.goToChapter(2);
+        });
+        expect(res).toBe(false);
+      }
+    });
   });
 
   describe("しおり話数・スクロール進捗率の復元・自動保存 (AC-RD-08)", () => {
@@ -1767,6 +2098,322 @@ describe("useReader", () => {
       expect(result.current.novel).not.toBeNull();
       expect(result.current.chapter).toBeNull();
       expect(result.current.error).toBeNull();
+    });
+
+    it("fetchNovelFromUrl: 複数ページ目次作品（なろう）を取得した場合に fetchFullNovelIndex を介して全話が保存されること (R1-19)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+
+      const httpClient = new MockHttpClient();
+      httpClient.setResponse("https://ncode.syosetu.com/n9669bk/", () => ({
+        status: 200,
+        url: "https://ncode.syosetu.com/n9669bk/",
+        headers: {},
+        html: narouWorkIndexSerializedHtml,
+      }));
+      httpClient.setResponse("https://ncode.syosetu.com/n9669bk/?p=2", () => ({
+        status: 200,
+        url: "https://ncode.syosetu.com/n9669bk/?p=2",
+        headers: {},
+        html: narouWorkIndexPage2Html,
+      }));
+      httpClient.setResponse("https://ncode.syosetu.com/n9669bk/1/", () => ({
+        status: 200,
+        url: "https://ncode.syosetu.com/n9669bk/1/",
+        headers: {},
+        html: `<div id="novel_honbun"><p>第1話本文</p></div>`,
+      }));
+
+      const { result } = renderHook(
+        () =>
+          useReader({
+            initialWorkUrl: "https://ncode.syosetu.com/n9669bk/",
+          }),
+        {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+            httpClient,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.fetchNovelFromUrl();
+      });
+
+      expect(result.current.novel).not.toBeNull();
+      // 1ページ目 (3話) + 2ページ目 (2話) = 合計 5話
+      expect(result.current.novel?.totalChapters).toBe(5);
+      expect(result.current.chapter).not.toBeNull();
+      expect(result.current.chapter?.chapterIndex).toBe(1);
+    });
+
+    it("fetchNovelFromUrl: 本文取得中にアンマウントされた場合、後続の DB 更新および状態更新が安全にスキップされること (R1-18)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+
+      let resolveChapter!: (value: unknown) => void;
+      const chapterPromise = new Promise((resolve) => {
+        resolveChapter = resolve;
+      });
+
+      const httpClient = new MockHttpClient();
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/1177354054881162325",
+        () => ({
+          status: 200,
+          url: "https://kakuyomu.jp/works/1177354054881162325",
+          headers: {},
+          html: workIndexHtml,
+        }),
+      );
+      httpClient.setResponse(
+        `https://kakuyomu.jp/works/1177354054881162325/episodes/1177354054881162327`,
+        async () => {
+          await chapterPromise;
+          return {
+            status: 200,
+            url: `https://kakuyomu.jp/works/1177354054881162325/episodes/1177354054881162327`,
+            headers: {},
+            html: episodeContentHtml,
+          };
+        },
+      );
+
+      const updateBookmarkSpy = vi.spyOn(novelRepo, "updateBookmark");
+
+      const { result, unmount } = renderHook(
+        () =>
+          useReader({
+            initialWorkUrl: "https://kakuyomu.jp/works/1177354054881162325",
+          }),
+        {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+            httpClient,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      let fetchPromise!: Promise<void>;
+      act(() => {
+        fetchPromise = result.current.fetchNovelFromUrl();
+      });
+
+      // エピソード本文取得待ちの間にアンマウント
+      unmount();
+
+      resolveChapter(null);
+
+      await act(async () => {
+        await fetchPromise;
+      });
+
+      // アンマウントされたため、後続のしおり更新は行われない
+      expect(updateBookmarkSpy).not.toHaveBeenCalled();
+    });
+
+    it("fetchNovelFromUrl: 各非同期実行中（upsertNovelWithToc, saveChapterBody, markChapterRead, updateBookmark, getNovelById）にアンマウントされた場合、安全に中断されること (R1-18)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+
+      const targetUrl = "https://kakuyomu.jp/works/1177354054881162325";
+      const httpClient = new MockHttpClient();
+      httpClient.setResponse(targetUrl, () => ({
+        status: 200,
+        url: targetUrl,
+        headers: {},
+        html: workIndexHtml,
+      }));
+      httpClient.setResponse(
+        /kakuyomu\.jp\/works\/.*\/episodes\/.*/,
+        (req) => ({
+          status: 200,
+          url: req.url,
+          headers: {},
+          html: episodeContentHtml,
+        }),
+      );
+
+      // 1. upsertNovelWithToc (L964)
+      {
+        const unmountRef = { current: () => {} };
+        vi.restoreAllMocks();
+        const orig = novelRepo.upsertNovelWithToc.bind(novelRepo);
+        vi.spyOn(novelRepo, "upsertNovelWithToc").mockImplementation(
+          async (...args) => {
+            unmountRef.current();
+            return orig(...args);
+          },
+        );
+        const { result, unmount } = renderHook(
+          () => useReader({ initialWorkUrl: targetUrl }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              httpClient,
+            }),
+          },
+        );
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        unmountRef.current = unmount;
+        await act(async () => {
+          await result.current.fetchNovelFromUrl();
+        });
+      }
+
+      // 2. saveChapterBody (L978)
+      {
+        const unmountRef = { current: () => {} };
+        vi.restoreAllMocks();
+        const db2 = await resetTestDb();
+        const novelRepo2 = new SqlNovelRepository(db2);
+        const chapterRepo2 = new SqlChapterRepository(db2);
+
+        const orig = chapterRepo2.saveChapterBody.bind(chapterRepo2);
+        vi.spyOn(chapterRepo2, "saveChapterBody").mockImplementation(
+          async (...args) => {
+            unmountRef.current();
+            return orig(...args);
+          },
+        );
+        const { result, unmount } = renderHook(
+          () => useReader({ initialWorkUrl: targetUrl }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo2,
+              chapterRepository: chapterRepo2,
+              httpClient,
+            }),
+          },
+        );
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        unmountRef.current = unmount;
+        await act(async () => {
+          await result.current.fetchNovelFromUrl();
+        });
+      }
+
+      // 3. markChapterRead (L986)
+      {
+        const unmountRef = { current: () => {} };
+        vi.restoreAllMocks();
+        const db3 = await resetTestDb();
+        const novelRepo3 = new SqlNovelRepository(db3);
+        const chapterRepo3 = new SqlChapterRepository(db3);
+
+        const orig = chapterRepo3.markChapterRead.bind(chapterRepo3);
+        vi.spyOn(chapterRepo3, "markChapterRead").mockImplementation(
+          async (...args) => {
+            unmountRef.current();
+            return orig(...args);
+          },
+        );
+        const { result, unmount } = renderHook(
+          () => useReader({ initialWorkUrl: targetUrl }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo3,
+              chapterRepository: chapterRepo3,
+              httpClient,
+            }),
+          },
+        );
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        unmountRef.current = unmount;
+        await act(async () => {
+          await result.current.fetchNovelFromUrl();
+        });
+      }
+
+      // 4. updateBookmark (L993)
+      {
+        const unmountRef = { current: () => {} };
+        vi.restoreAllMocks();
+        const db4 = await resetTestDb();
+        const novelRepo4 = new SqlNovelRepository(db4);
+        const chapterRepo4 = new SqlChapterRepository(db4);
+
+        const orig = novelRepo4.updateBookmark.bind(novelRepo4);
+        vi.spyOn(novelRepo4, "updateBookmark").mockImplementation(
+          async (...args) => {
+            unmountRef.current();
+            return orig(...args);
+          },
+        );
+        const { result, unmount } = renderHook(
+          () => useReader({ initialWorkUrl: targetUrl }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo4,
+              chapterRepository: chapterRepo4,
+              httpClient,
+            }),
+          },
+        );
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        unmountRef.current = unmount;
+        await act(async () => {
+          await result.current.fetchNovelFromUrl();
+        });
+      }
+
+      // 5. getNovelById (L996)
+      {
+        const unmountRef = { current: () => {} };
+        vi.restoreAllMocks();
+        const db5 = await resetTestDb();
+        const novelRepo5 = new SqlNovelRepository(db5);
+        const chapterRepo5 = new SqlChapterRepository(db5);
+
+        let bookmarkUpdated = false;
+        const origUpdate = novelRepo5.updateBookmark.bind(novelRepo5);
+        vi.spyOn(novelRepo5, "updateBookmark").mockImplementation(
+          async (...args) => {
+            bookmarkUpdated = true;
+            return origUpdate(...args);
+          },
+        );
+
+        const orig = novelRepo5.getNovelById.bind(novelRepo5);
+        vi.spyOn(novelRepo5, "getNovelById").mockImplementation(
+          async (...args) => {
+            if (bookmarkUpdated) {
+              unmountRef.current();
+            }
+            return orig(...args);
+          },
+        );
+        const { result, unmount } = renderHook(
+          () => useReader({ initialWorkUrl: targetUrl }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo5,
+              chapterRepository: chapterRepo5,
+              httpClient,
+            }),
+          },
+        );
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        unmountRef.current = unmount;
+        await act(async () => {
+          await result.current.fetchNovelFromUrl();
+        });
+      }
     });
   });
 

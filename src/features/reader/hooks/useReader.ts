@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useServices } from "../../../app/ServiceProvider";
+import { fetchFullNovelIndex } from "../../../parsers/fetchFullNovelIndex";
 import type {
   NovelRecord,
   ChapterRecord,
@@ -199,6 +200,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   const activePrefetchPromiseRef = useRef<Promise<void> | null>(null);
   const lastGoToChapterIndexRef = useRef<number | null>(null);
   const isNavigatingChapterRef = useRef<boolean>(false);
+  const isMountedRef = useRef<boolean>(true);
 
   useEffect(() => {
     novelRef.current = novel;
@@ -253,7 +255,9 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   }, []);
 
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       stopPrefetch();
     };
   }, [stopPrefetch]);
@@ -822,12 +826,14 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           currentChapterIndexRef.current,
           true,
         );
+        if (!isMountedRef.current) return false;
 
         // 2. 対象話エピソード取得
         let targetChapter = await chapterRepository.getChapter(
           currentNovel.id,
           targetChapterIndex,
         );
+        if (!isMountedRef.current) return false;
 
         // 3. キャッシュ鮮度・オンデマンド本文取得
         if (targetChapter) {
@@ -840,6 +846,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             targetChapterIndex,
             targetChapter,
           );
+          if (!isMountedRef.current) return false;
           if (resolved) {
             targetChapter = resolved;
           }
@@ -856,6 +863,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             targetChapterIndex,
             true,
           );
+          if (!isMountedRef.current) return false;
           targetChapter = { ...targetChapter, isRead: true };
         }
 
@@ -866,9 +874,12 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           targetChapterIndex,
           nextProgress,
         );
+        if (!isMountedRef.current) return false;
+
         const reloadedNovel = await novelRepository.getNovelById(
           currentNovel.id,
         );
+        if (!isMountedRef.current) return false;
 
         if (syncEngine) {
           syncEngine.notifyChanged().catch(() => {});
@@ -892,11 +903,15 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           );
         }
       } catch (err: unknown) {
-        setError(toErrorMessage(err));
+        if (isMountedRef.current) {
+          setError(toErrorMessage(err));
+        }
         isSuccess = false;
       } finally {
         isNavigatingChapterRef.current = false;
-        setIsLoading(false);
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
       }
       return isSuccess;
     },
@@ -935,15 +950,18 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     setError(null);
 
     try {
-      const indexRes = await httpClient.getHtml({ url: normalizedWorkUrl });
-      const novelIndex = parser.parseNovelIndex(
-        indexRes.html,
+      const novelIndex = await fetchFullNovelIndex(
+        httpClient,
+        parser,
         normalizedWorkUrl,
       );
+      if (!isMountedRef.current) return;
+
       const savedNovel = await novelRepository.upsertNovelWithToc(
         novelIndex,
         new Date().toISOString(),
       );
+      if (!isMountedRef.current) return;
 
       if (novelIndex.chapters.length > 0) {
         const targetIdx = currentChapterIndexRef.current;
@@ -957,20 +975,25 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           targetChapterIdx,
           targetEpisodeToc.url,
         );
+        if (!isMountedRef.current) return;
+
         if (savedChapter) {
           await chapterRepository.markChapterRead(
             savedNovel.id,
             targetChapterIdx,
             true,
           );
+          if (!isMountedRef.current) return;
         }
         await novelRepository.updateBookmark(
           savedNovel.id,
           targetChapterIdx,
           0,
         );
+        if (!isMountedRef.current) return;
 
         const reloadedNovel = await novelRepository.getNovelById(savedNovel.id);
+        if (!isMountedRef.current) return;
 
         setNovel(reloadedNovel);
         setChapter(savedChapter ? { ...savedChapter, isRead: true } : null);
@@ -990,9 +1013,13 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         resetPaginationState(0, 0);
       }
     } catch (err: unknown) {
-      setError(toErrorMessage(err));
+      if (isMountedRef.current) {
+        setError(toErrorMessage(err));
+      }
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [
     initialWorkUrl,
