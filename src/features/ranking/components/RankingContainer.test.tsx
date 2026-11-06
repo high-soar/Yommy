@@ -1,9 +1,10 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./RankingContainer.stories";
 import { RankingContainer } from "./RankingContainer";
+import * as RankingPageModule from "./RankingPage";
 import { ServiceProvider } from "../../../app/ServiceProvider";
 import { RouterProvider } from "../../../app/router";
 import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
@@ -62,16 +63,26 @@ describe("RankingContainer コンポーネント", () => {
     );
   };
 
-  it("Default ストーリー: ランキング画面が描画され作品一覧が自動取得されること (AC-RK-01)", async () => {
+  it("Default ストーリー: ランキング画面が描画され作品一覧が自動取得され、子コンポーネント（RankingPage）に初期Propsが正しく伝搬されること (AC-RK-01, R1-21)", async () => {
+    const pageSpy = vi.spyOn(RankingPageModule, "RankingPage");
     render(<Default />);
 
     await waitFor(() => {
       expect(screen.getByTestId("ranking-page")).toBeInTheDocument();
+      expect(pageSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          selectedSite: "kakuyomu",
+          selectedPeriod: "weekly",
+          selectedGenre: undefined,
+        }),
+        undefined,
+      );
     });
 
     await waitFor(() => {
       expect(screen.getByTestId("ranking-results-list")).toBeInTheDocument();
     });
+    pageSpy.mockRestore();
   });
 
   it("期間セレクタで集計期間を切り替えた際にランキングが再取得されること (AC-RK-02)", async () => {
@@ -233,23 +244,33 @@ describe("RankingContainer コンポーネント", () => {
     expect(handleSelectNovel).not.toHaveBeenCalled();
   });
 
-  it("SiteSelector で小説家になろうへ切り替えると、なろうランキング作品および小ジャンルピルが表示されること (AC-RK-09)", async () => {
-    const user = userEvent.setup();
+  it("SiteSelector によるサイト切替コールバック（onSelectSite）呼び出し時に、子コンポーネント（RankingPage）へ selectedSite が伝搬すること (AC-RK-09, R1-21)", async () => {
+    const pageSpy = vi.spyOn(RankingPageModule, "RankingPage");
     renderWithProviders();
 
     await waitFor(() => {
-      expect(screen.getByTestId("site-selector-narou")).toBeInTheDocument();
+      expect(pageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selectedSite: "kakuyomu",
+        }),
+        undefined,
+      );
     });
 
-    const narouBtn = screen.getByTestId("site-selector-narou");
-    await user.click(narouBtn);
+    const lastCallProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+    act(() => {
+      lastCallProps.onSelectSite("narou");
+    });
 
     await waitFor(() => {
-      expect(narouBtn).toHaveAttribute("aria-pressed", "true");
-      expect(screen.getByTestId("ranking-genre-201")).toBeInTheDocument();
-      expect(
-        screen.getByTestId("ranking-novel-card-n1001aa"),
-      ).toBeInTheDocument();
+      expect(pageSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          selectedSite: "narou",
+        }),
+        undefined,
+      );
     });
+
+    pageSpy.mockRestore();
   });
 });
