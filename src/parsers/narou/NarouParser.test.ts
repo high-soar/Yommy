@@ -790,6 +790,398 @@ describe("NarouParser", () => {
       expect(typeof parser.normalizeWorkUrl).toBe("function");
       expect(typeof parser.parseNovelIndex).toBe("function");
       expect(typeof parser.parseChapterContent).toBe("function");
+      expect(typeof parser.buildSearchUrl).toBe("function");
+      expect(typeof parser.searchNovels).toBe("function");
+      expect(typeof parser.buildRankingUrl).toBe("function");
+      expect(typeof parser.getRanking).toBe("function");
+    });
+  });
+
+  describe("AC-NR-11: 検索 API URL 生成 (buildSearchUrl)", () => {
+    it("キーワードのみ指定時になろう小説 API 形式の検索 URL が生成されること", () => {
+      const url = parser.buildSearchUrl("無職転生");
+      expect(url).toBe(
+        "https://api.syosetu.com/novelapi/api/?out=json&lim=20&word=%E7%84%A1%E8%81%B7%E8%BB%A2%E7%94%9F&order=weeklypoint",
+      );
+    });
+
+    it("キーワード前後の空白がトリムされ、空文字・空白のみの場合は word パラメータが付与されないこと", () => {
+      const trimmedUrl = parser.buildSearchUrl("  スライム  ");
+      const parsedTrimmed = new URL(trimmedUrl);
+      expect(parsedTrimmed.searchParams.get("word")).toBe("スライム");
+
+      const emptyUrl = parser.buildSearchUrl("   ");
+      const parsedEmpty = new URL(emptyUrl);
+      expect(parsedEmpty.searchParams.has("word")).toBe(false);
+    });
+
+    it("並び順オプション (order) の4種類が正しくマッピングされること", () => {
+      // 1. 週間ランキング順 (weekly_ranking)
+      const weekly = new URL(
+        parser.buildSearchUrl("テスト", { order: "weekly_ranking" }),
+      );
+      expect(weekly.searchParams.get("order")).toBe("weeklypoint");
+
+      // 2. 累計ポイント順 (popular)
+      const popular = new URL(
+        parser.buildSearchUrl("テスト", { order: "popular" }),
+      );
+      expect(popular.searchParams.get("order")).toBe("hyoka");
+
+      // 3. 更新順 (last_episode_published_at)
+      const lastUp = new URL(
+        parser.buildSearchUrl("テスト", {
+          order: "last_episode_published_at",
+        }),
+      );
+      expect(lastUp.searchParams.get("order")).toBe("new");
+
+      // 4. 新作順 (published_at)
+      const published = new URL(
+        parser.buildSearchUrl("テスト", { order: "published_at" }),
+      );
+      expect(published.searchParams.get("order")).toBe("generalfirstup");
+    });
+
+    it("連載状態オプション (serialStatus) が正しくマッピングされること", () => {
+      // 1. すべて (all または未指定) -> type 省略
+      const allUrl = new URL(
+        parser.buildSearchUrl("テスト", { serialStatus: "all" }),
+      );
+      expect(allUrl.searchParams.has("type")).toBe(false);
+
+      // 2. 連載中 (running) -> type=r
+      const runningUrl = new URL(
+        parser.buildSearchUrl("テスト", { serialStatus: "running" }),
+      );
+      expect(runningUrl.searchParams.get("type")).toBe("r");
+
+      // 3. 完結済 (completed) -> type=ter
+      const completedUrl = new URL(
+        parser.buildSearchUrl("テスト", { serialStatus: "completed" }),
+      );
+      expect(completedUrl.searchParams.get("type")).toBe("ter");
+    });
+
+    it("小ジャンルオプション (genre) が指定された場合に付与されること", () => {
+      const genreUrl = new URL(
+        parser.buildSearchUrl("テスト", { genre: "201" }),
+      );
+      expect(genreUrl.searchParams.get("genre")).toBe("201");
+
+      const emptyGenreUrl = new URL(
+        parser.buildSearchUrl("テスト", { genre: "  " }),
+      );
+      expect(emptyGenreUrl.searchParams.has("genre")).toBe(false);
+    });
+
+    it("ページ番号 (page) に応じて開始位置 st が算出されること", () => {
+      // 1ページ目または未指定 -> st 省略
+      const page1 = new URL(parser.buildSearchUrl("テスト", { page: 1 }));
+      expect(page1.searchParams.has("st")).toBe(false);
+
+      // 2ページ目 -> st=21
+      const page2 = new URL(parser.buildSearchUrl("テスト", { page: 2 }));
+      expect(page2.searchParams.get("st")).toBe("21");
+
+      // 5ページ目 -> st=81
+      const page5 = new URL(parser.buildSearchUrl("テスト", { page: 5 }));
+      expect(page5.searchParams.get("st")).toBe("81");
+    });
+  });
+
+  describe("AC-NR-12: 検索 API 結果 JSON パース (searchNovels)", () => {
+    it("ローカル JSON フィクスチャから検索結果一覧および作品詳細を正しく抽出すること", () => {
+      const json = loadFixture("search_results.json");
+      const result = parser.searchNovels(
+        json,
+        "https://api.syosetu.com/novelapi/api/?out=json&lim=20&word=test",
+      );
+
+      expect(result.items).toHaveLength(4);
+      expect(result.pageInfo.totalCount).toBe(105);
+      expect(result.pageInfo.currentPage).toBe(1);
+      expect(result.pageInfo.hasNextPage).toBe(true);
+
+      // 作品1: 大文字 ncode の小文字正規化、完結済連載、小ジャンルラベル、タグ分割
+      const item1 = result.items[0];
+      expect(item1.remoteWorkId).toBe("n9669bk");
+      expect(item1.title).toBe("無職転生 - 異世界行ったら本気だす -");
+      expect(item1.author).toBe("理不尽な孫の手");
+      expect(item1.synopsis).toBe(
+        "３４歳無職童貞のニートはトラックに轢かれ、中世風の異世界へ転生する。",
+      );
+      expect(item1.genre).toBe("201");
+      expect(item1.genreLabel).toBe("ハイファンタジー");
+      expect(item1.serialStatus).toBe("completed");
+      expect(item1.serialStatusLabel).toBe("完結済");
+      expect(item1.episodeCount).toBe(286);
+      expect(item1.characterCount).toBe(2824967);
+      expect(item1.tags).toEqual([
+        "R15",
+        "残酷な描写あり",
+        "異世界転生",
+        "冒険",
+      ]);
+      expect(item1.reviewPoints).toBe(500000);
+      expect(item1.lastEpisodePublishedAt).toBe("2015-04-03 23:00:00");
+      expect(item1.workUrl).toBe("https://ncode.syosetu.com/n9669bk/");
+
+      // 作品2: 連載中 (end === 1)
+      const item2 = result.items[1];
+      expect(item2.remoteWorkId).toBe("n1234ab");
+      expect(item2.genre).toBe("101");
+      expect(item2.genreLabel).toBe("異世界〔恋愛〕");
+      expect(item2.serialStatus).toBe("running");
+      expect(item2.serialStatusLabel).toBe("連載中");
+
+      // 作品3: 短編 (end === 0 && novel_type === 2)
+      const item3 = result.items[2];
+      expect(item3.remoteWorkId).toBe("n9999zz");
+      expect(item3.genre).toBe("301");
+      expect(item3.genreLabel).toBe("純文学");
+      expect(item3.serialStatus).toBe("completed");
+      expect(item3.serialStatusLabel).toBe("短編");
+      expect(item3.tags).toEqual([]);
+      expect(item3.lastEpisodePublishedAt).toBeNull();
+
+      // 作品4: 未知ジャンルコード (777) -> "その他"
+      const item4 = result.items[3];
+      expect(item4.remoteWorkId).toBe("n7777xx");
+      expect(item4.genreLabel).toBe("その他");
+    });
+
+    it("空結果 JSON フィクスチャから空の検索結果を安全に返却すること", () => {
+      const json = loadFixture("search_results_empty.json");
+      const result = parser.searchNovels(
+        json,
+        "https://api.syosetu.com/novelapi/api/?out=json&lim=20&word=notfound",
+      );
+
+      expect(result.items).toEqual([]);
+      expect(result.pageInfo.totalCount).toBe(0);
+      expect(result.pageInfo.currentPage).toBe(1);
+      expect(result.pageInfo.hasNextPage).toBe(false);
+    });
+
+    it("st または page パラメータに基づいて currentPage と hasNextPage を正しく判定すること", () => {
+      const json = loadFixture("search_results.json"); // totalCount: 105, 4 items
+
+      // st=21 -> currentPage=2, hasNextPage=true (21 + 4 - 1 = 24 < 105)
+      const resSt21 = parser.searchNovels(
+        json,
+        "https://api.syosetu.com/novelapi/api/?out=json&st=21",
+      );
+      expect(resSt21.pageInfo.currentPage).toBe(2);
+      expect(resSt21.pageInfo.hasNextPage).toBe(true);
+
+      // page=3 -> currentPage=3, hasNextPage=true
+      const resPage3 = parser.searchNovels(
+        json,
+        "https://api.syosetu.com/novelapi/api/?out=json&page=3",
+      );
+      expect(resPage3.pageInfo.currentPage).toBe(3);
+      expect(resPage3.pageInfo.hasNextPage).toBe(true);
+
+      // 最終ページ付近: st=103 (103 + 4 - 1 = 106 >= 105) -> hasNextPage=false
+      const resLastPage = parser.searchNovels(
+        json,
+        "https://api.syosetu.com/novelapi/api/?out=json&st=103",
+      );
+      expect(resLastPage.pageInfo.currentPage).toBe(6);
+      expect(resLastPage.pageInfo.hasNextPage).toBe(false);
+
+      // なろう API の st 上限 2000 超境界面: st=1981 -> nextSt=2001 > 2000 -> hasNextPage=false
+      const resStLimit = parser.searchNovels(
+        json,
+        "https://api.syosetu.com/novelapi/api/?out=json&st=1981",
+      );
+      expect(resStLimit.pageInfo.hasNextPage).toBe(false);
+    });
+  });
+
+  describe("AC-NR-13: ランキング API URL 生成 (buildRankingUrl)", () => {
+    it("デフォルトオプション時になろう小説 API 形式のランキング URL が生成されること", () => {
+      const url = parser.buildRankingUrl();
+      expect(url).toBe(
+        "https://api.syosetu.com/novelapi/api/?out=json&lim=20&order=weeklypoint",
+      );
+    });
+
+    it("集計期間オプション (period) の4種類が正しくマッピングされること", () => {
+      // 1. 日間 (daily) -> dailypoint
+      const daily = new URL(parser.buildRankingUrl({ period: "daily" }));
+      expect(daily.searchParams.get("order")).toBe("dailypoint");
+
+      // 2. 週間 (weekly) -> weeklypoint
+      const weekly = new URL(parser.buildRankingUrl({ period: "weekly" }));
+      expect(weekly.searchParams.get("order")).toBe("weeklypoint");
+
+      // 3. 月間 (monthly) -> monthlypoint
+      const monthly = new URL(parser.buildRankingUrl({ period: "monthly" }));
+      expect(monthly.searchParams.get("order")).toBe("monthlypoint");
+
+      // 4. 累計 (entire) -> hyoka
+      const entire = new URL(parser.buildRankingUrl({ period: "entire" }));
+      expect(entire.searchParams.get("order")).toBe("hyoka");
+    });
+
+    it("ジャンルオプション (genre) が指定された場合に付与され、all時は省略されること", () => {
+      const genreUrl = new URL(parser.buildRankingUrl({ genre: "201" }));
+      expect(genreUrl.searchParams.get("genre")).toBe("201");
+
+      const allGenreUrl = new URL(parser.buildRankingUrl({ genre: "all" }));
+      expect(allGenreUrl.searchParams.has("genre")).toBe(false);
+    });
+
+    it("ページ番号 (page) に応じて開始位置 st が付与されること", () => {
+      const page1 = new URL(parser.buildRankingUrl({ page: 1 }));
+      expect(page1.searchParams.has("st")).toBe(false);
+
+      const page3 = new URL(parser.buildRankingUrl({ page: 3 }));
+      expect(page3.searchParams.get("st")).toBe("41");
+    });
+  });
+
+  describe("AC-NR-14: ランキング API 結果 JSON パース (getRanking)", () => {
+    it("ローカル JSON フィクスチャから順位 (rank) および選択期間ポイントを正しく抽出すること", () => {
+      const json = loadFixture("ranking_results.json");
+
+      // 日間ランキング (order=dailypoint)
+      const dailyResult = parser.getRanking(
+        json,
+        "https://api.syosetu.com/novelapi/api/?out=json&lim=20&order=dailypoint",
+      );
+
+      expect(dailyResult.items).toHaveLength(3);
+      expect(dailyResult.pageInfo.currentPage).toBe(1);
+
+      // 1位
+      expect(dailyResult.items[0].rank).toBe(1);
+      expect(dailyResult.items[0].title).toBe("デイリー1位作品");
+      expect(dailyResult.items[0].reviewPoints).toBe(5000); // daily_point
+
+      // 2位
+      expect(dailyResult.items[1].rank).toBe(2);
+      expect(dailyResult.items[1].title).toBe("デイリー2位作品");
+      expect(dailyResult.items[1].reviewPoints).toBe(4200); // daily_point
+
+      // 3位: daily_point が null のため global_point にフォールバック
+      expect(dailyResult.items[2].rank).toBe(3);
+      expect(dailyResult.items[2].title).toBe("ポイントフォールバック作品");
+      expect(dailyResult.items[2].reviewPoints).toBe(45000); // global_point
+
+      // 週間ランキング (order=weeklypoint)
+      const weeklyResult = parser.getRanking(
+        json,
+        "https://api.syosetu.com/novelapi/api/?out=json&lim=20&order=weeklypoint",
+      );
+      expect(weeklyResult.items[0].reviewPoints).toBe(25000); // weekly_point
+
+      // 月間ランキング (order=monthlypoint)
+      const monthlyResult = parser.getRanking(
+        json,
+        "https://api.syosetu.com/novelapi/api/?out=json&lim=20&order=monthlypoint",
+      );
+      expect(monthlyResult.items[0].reviewPoints).toBe(80000); // monthly_point
+
+      // 累計ランキング (order=hyoka)
+      const entireResult = parser.getRanking(
+        json,
+        "https://api.syosetu.com/novelapi/api/?out=json&lim=20&order=hyoka",
+      );
+      expect(entireResult.items[0].reviewPoints).toBe(100000); // global_point
+    });
+
+    it("2ページ目以降 (st=21) の場合、順位 rank が 21 始まりとなること", () => {
+      const json = loadFixture("ranking_results.json");
+      const result = parser.getRanking(
+        json,
+        "https://api.syosetu.com/novelapi/api/?out=json&lim=20&order=weeklypoint&st=21",
+      );
+
+      expect(result.pageInfo.currentPage).toBe(2);
+      expect(result.items[0].rank).toBe(21);
+      expect(result.items[1].rank).toBe(22);
+      expect(result.items[2].rank).toBe(23);
+    });
+  });
+
+  describe("検索・ランキング 境界値・異常系カバレッジ", () => {
+    it("不正な JSON 文字列を受け取った場合に例外を送出せず安全に空結果を返すこと", () => {
+      const badJson =
+        "<html><head><title>500 Internal Server Error</title></head></html>";
+      const searchRes = parser.searchNovels(
+        badJson,
+        "https://api.syosetu.com/novelapi/api/",
+      );
+      expect(searchRes.items).toEqual([]);
+      expect(searchRes.pageInfo.totalCount).toBe(0);
+      expect(searchRes.pageInfo.hasNextPage).toBe(false);
+
+      const rankingRes = parser.getRanking(
+        badJson,
+        "https://api.syosetu.com/novelapi/api/",
+      );
+      expect(rankingRes.items).toEqual([]);
+      expect(rankingRes.pageInfo.hasNextPage).toBe(false);
+    });
+
+    it("JSON が空配列または配列以外のオブジェクトの場合に安全に空結果を返すこと", () => {
+      const emptyArr = "[]";
+      expect(
+        parser.searchNovels(emptyArr, "https://api.syosetu.com/").items,
+      ).toEqual([]);
+      expect(
+        parser.getRanking(emptyArr, "https://api.syosetu.com/").items,
+      ).toEqual([]);
+
+      const notArr = '{"error": "invalid"}';
+      expect(
+        parser.searchNovels(notArr, "https://api.syosetu.com/").items,
+      ).toEqual([]);
+      expect(
+        parser.getRanking(notArr, "https://api.syosetu.com/").items,
+      ).toEqual([]);
+    });
+
+    it("ヘッダーに allcount が存在しない場合、totalCount が 0 になること", () => {
+      const noAllcount = JSON.stringify([{}]);
+      const res = parser.searchNovels(noAllcount, "https://api.syosetu.com/");
+      expect(res.pageInfo.totalCount).toBe(0);
+    });
+
+    it("作品エントリに ncode が存在しない・空文字の場合やエントリが null の場合にスキップされること", () => {
+      const jsonWithInvalidEntries = JSON.stringify([
+        { allcount: 10 },
+        null,
+        {},
+        { ncode: "   " },
+        { ncode: "n1111aa", title: "有効作品" },
+      ]);
+      const searchRes = parser.searchNovels(
+        jsonWithInvalidEntries,
+        "https://api.syosetu.com/",
+      );
+      expect(searchRes.items).toHaveLength(1);
+      expect(searchRes.items[0].remoteWorkId).toBe("n1111aa");
+
+      const rankingRes = parser.getRanking(
+        jsonWithInvalidEntries,
+        "https://api.syosetu.com/",
+      );
+      expect(rankingRes.items).toHaveLength(1);
+      expect(rankingRes.items[0].remoteWorkId).toBe("n1111aa");
+    });
+
+    it("pageUrl が相対パスや不正な文字列の場合でもデフォルト値で安全に動作すること", () => {
+      const json = JSON.stringify([{ allcount: 1 }, { ncode: "n1111aa" }]);
+      const res = parser.searchNovels(json, "invalid-url");
+      expect(res.pageInfo.currentPage).toBe(1);
+
+      const rankRes = parser.getRanking(json, "invalid-url");
+      expect(rankRes.pageInfo.currentPage).toBe(1);
+      expect(rankRes.items[0].rank).toBe(1);
     });
   });
 });

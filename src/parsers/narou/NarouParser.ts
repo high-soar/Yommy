@@ -1,8 +1,12 @@
 import type {
   NovelParser,
+  NovelRankingOptions,
+  NovelSearchOptions,
   NovelSiteType,
   ParsedChapterContent,
   ParsedNovelIndex,
+  ParsedRankingResult,
+  ParsedSearchResult,
   ParsedTocItem,
 } from "../types";
 import { sanitizeChapterHtml } from "../sanitizer";
@@ -476,5 +480,33 @@ export class NarouParser implements NovelParser {
       prevChapterUrl,
       nextChapterUrl,
     };
+  }
+
+  /**
+   * 検索 URL を構築する（TDD Red用スタブ）
+   */
+  buildSearchUrl(_query: string, _options?: NovelSearchOptions): string {
+    throw new Error("Not implemented");
+  }
+
+  /**
+   * 検索結果 JSON を解析する（TDD Red用スタブ）
+   */
+  searchNovels(_html: string, _pageUrl: string): ParsedSearchResult {
+    throw new Error("Not implemented");
+  }
+
+  /**
+   * ランキング URL を構築する（TDD Red用スタブ）
+   */
+  buildRankingUrl(_options?: NovelRankingOptions): string {
+    throw new Error("Not implemented");
+  }
+
+  /**
+   * ランキング結果 JSON を解析する（TDD Red用スタブ）
+   */
+  getRanking(_html: string, _pageUrl: string): ParsedRankingResult {
+    throw new Error("Not implemented");
   }
 }
