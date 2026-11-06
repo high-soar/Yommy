@@ -11,9 +11,11 @@ import searchEmptyHtml from "../../../parsers/kakuyomu/__fixtures__/search_resul
 import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 import narouWorkIndexSerializedHtml from "../../../parsers/narou/__fixtures__/work_index_serialized.html?raw";
 import narouWorkIndexPage2Html from "../../../parsers/narou/__fixtures__/work_index_page2.html?raw";
+import narouSearchResultsJson from "../../../parsers/narou/__fixtures__/search_results.json?raw";
 import type { HttpResponse } from "../../../bridges/http/types";
 import type { NovelSearchResultItem } from "../../../parsers/types";
 import type { SyncEngine } from "../../cloud-sync/services/syncEngine";
+import { createDefaultParserRegistry } from "../../../parsers/parserRegistry";
 
 describe("useNovelSearch", () => {
   let mockHttpClient: MockHttpClient;
@@ -61,14 +63,23 @@ describe("useNovelSearch", () => {
         html: workIndexHtml,
       }),
     );
+    mockHttpClient.setResponse(
+      /^https:\/\/api\.syosetu\.com\/novelapi\/api\//,
+      (options) => ({
+        status: 200,
+        url: options.url,
+        headers: {},
+        html: narouSearchResultsJson,
+      }),
+    );
   });
 
   const createWrapper =
-    (initialPath = "/search") =>
+    (initialPath = "/search", customServices = {}) =>
     ({ children }: { children: React.ReactNode }) =>
       React.createElement(
         ServiceProvider,
-        { services: { httpClient: mockHttpClient } },
+        { services: { httpClient: mockHttpClient, ...customServices } },
         React.createElement(RouterProvider, { initialPath }, children),
       );
 
@@ -881,8 +892,9 @@ describe("useNovelSearch", () => {
   });
 
   it("loadMore でパーサーが未実装サイトの場合はエラーメッセージが設定されること", async () => {
+    const dummyRegistry = createDefaultParserRegistry();
     const { result } = renderHook(() => useNovelSearch(), {
-      wrapper: createWrapper(),
+      wrapper: createWrapper("/search", { parserRegistry: dummyRegistry }),
     });
 
     act(() => {
@@ -893,15 +905,16 @@ describe("useNovelSearch", () => {
       await result.current.search();
     });
 
-    act(() => {
-      result.current.setSelectedSite("generic");
-    });
+    expect(result.current.hasNextPage).toBe(true);
+
+    const getAllSpy = vi.spyOn(dummyRegistry, "getAll").mockReturnValue([]);
 
     await act(async () => {
       await result.current.loadMore();
     });
 
     expect(result.current.error).toContain("検索機能が未実装のサイトです");
+    getAllSpy.mockRestore();
   });
 
   it("addNovelToBookshelf で非Error例外がスローされた場合も error ステートが設定されること", async () => {
@@ -1221,6 +1234,147 @@ describe("useNovelSearch", () => {
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
       expect(result.current.items).toEqual([]);
+    });
+  });
+
+  describe("サイト切替（setSelectedSite）と自動連動 (AC-SE-10)", () => {
+    it("未検索時（hasSearched === false）にサイトを narou へ切り替えた場合、通信を行わず genre を undefined にリセットし registeredWorkIds を再照合すること", async () => {
+      const getHtmlSpy = vi.spyOn(mockHttpClient, "getHtml");
+
+      const { result } = renderHook(() => useNovelSearch(), {
+        wrapper: createWrapper(),
+      });
+
+      // カクヨム側でジャンルを設定しておく
+      act(() => {
+        result.current.setGenre("fantasy");
+      });
+      expect(result.current.genre).toBe("fantasy");
+      expect(result.current.hasSearched).toBe(false);
+
+      getHtmlSpy.mockClear();
+
+      // narou に切り替え
+      act(() => {
+        result.current.setSelectedSite("narou");
+      });
+
+      expect(result.current.selectedSite).toBe("narou");
+      expect(result.current.genre).toBeUndefined();
+      expect(result.current.error).toBeNull();
+      // 未検索のため通信は行われないこと
+      expect(getHtmlSpy).not.toHaveBeenCalled();
+      expect(result.current.hasSearched).toBe(false);
+      expect(result.current.items).toEqual([]);
+    });
+
+    it("検索済み時（hasSearched === true）にサイトを narou へ切り替えた場合、genre をリセットし即座に新サイト（api.syosetu.com）で自動再検索を実行すること", async () => {
+      const { result } = renderHook(() => useNovelSearch(), {
+        wrapper: createWrapper(),
+      });
+
+      act(() => {
+        result.current.setKeyword("転生");
+        result.current.setGenre("fantasy");
+      });
+
+      // 初回検索を実行
+      await act(async () => {
+        await result.current.search();
+      });
+
+      expect(result.current.hasSearched).toBe(true);
+      expect(result.current.items.length).toBeGreaterThan(0);
+      expect(result.current.selectedSite).toBe("kakuyomu");
+
+      const getHtmlSpy = vi.spyOn(mockHttpClient, "getHtml");
+
+      // narou へサイト切り替え
+      await act(async () => {
+        result.current.setSelectedSite("narou");
+      });
+
+      // 自動再検索が走ること
+      expect(getHtmlSpy).toHaveBeenCalled();
+      const calledUrl = getHtmlSpy.mock.calls[0][0].url;
+      expect(calledUrl).toContain("api.syosetu.com");
+      expect(calledUrl).toContain("word=%E8%BB%A2%E7%94%9F");
+      // genre はリセットされていること
+      expect(calledUrl).not.toContain("genre=");
+
+      expect(result.current.selectedSite).toBe("narou");
+      expect(result.current.genre).toBeUndefined();
+      expect(result.current.error).toBeNull();
+      expect(result.current.items[0].workUrl).toContain("syosetu.com");
+    });
+
+    it("同一サイト（kakuyomu -> kakuyomu）への切り替え操作は何もしないこと（no-op）", async () => {
+      const { result } = renderHook(() => useNovelSearch(), {
+        wrapper: createWrapper(),
+      });
+
+      act(() => {
+        result.current.setKeyword("テスト");
+      });
+      await act(async () => {
+        await result.current.search();
+      });
+
+      const getHtmlSpy = vi.spyOn(mockHttpClient, "getHtml");
+
+      act(() => {
+        result.current.setSelectedSite("kakuyomu");
+      });
+
+      expect(getHtmlSpy).not.toHaveBeenCalled();
+    });
+
+    it("検索通信中（isLoading === true）のサイト切り替え操作は無視（ガード）されること", async () => {
+      let resolveSearch: (res: HttpResponse) => void = () => {};
+      mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/search/, () => {
+        return new Promise<HttpResponse>((resolve) => {
+          resolveSearch = resolve;
+        });
+      });
+
+      const { result } = renderHook(() => useNovelSearch(), {
+        wrapper: createWrapper(),
+      });
+
+      act(() => {
+        result.current.setKeyword("通信中テスト");
+      });
+
+      let searchPromise: Promise<void>;
+      act(() => {
+        searchPromise = result.current.search();
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(true);
+      });
+
+      // 通信中に setSelectedSite を呼び出し
+      act(() => {
+        result.current.setSelectedSite("narou");
+      });
+
+      // サイトは変わらないこと
+      expect(result.current.selectedSite).toBe("kakuyomu");
+
+      // 検索を解決
+      await act(async () => {
+        resolveSearch({
+          status: 200,
+          url: "https://kakuyomu.jp/search",
+          headers: {},
+          html: searchApolloHtml,
+        });
+        await searchPromise!;
+      });
+
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.selectedSite).toBe("kakuyomu");
     });
   });
 });

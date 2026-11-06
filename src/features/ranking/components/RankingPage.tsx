@@ -81,6 +81,7 @@ export const RankingPage: React.FC<RankingPageProps> = ({
         </div>
 
         <RankingFilterBar
+          selectedSite={selectedSite}
           selectedPeriod={selectedPeriod}
           onSelectPeriod={onSelectPeriod}
           selectedGenre={selectedGenre}

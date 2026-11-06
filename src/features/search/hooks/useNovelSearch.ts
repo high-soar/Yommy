@@ -59,6 +59,7 @@ export interface UseNovelSearchResult {
 }
 
 interface ExecuteSearchParams {
+  site?: NovelSiteType;
   order?: NovelSearchOrder;
   serialStatus?: NovelSerialStatus;
   genre?: string | undefined;
@@ -102,27 +103,28 @@ export function useNovelSearch(): UseNovelSearchResult {
   // 通信重複ガードおよび非同期競合（Race Condition）防止用 ref
   const isSearchingRef = useRef<boolean>(false);
 
-  const setSelectedSite = useCallback((site: NovelSiteType) => {
-    if (isSearchingRef.current) return;
-    setSelectedSiteState(site);
-  }, []);
-
-  // DB内の登録済み作品ID一覧を更新
-  const refreshRegisteredIds = useCallback(async () => {
-    if (!novelRepository) return;
-    try {
-      const novels = await novelRepository.listNovels();
-      const ids = new Set(
-        novels
-          .filter((n) => n.siteType === selectedSite)
-          .map((n) => n.remoteWorkId),
-      );
-      setRegisteredWorkIds(ids);
-    } catch {
-      // 登録済みID取得の失敗時は空セットにフォールバック
-      setRegisteredWorkIds(new Set());
-    }
-  }, [novelRepository, selectedSite]);
+  /**
+   * DB内の登録済み作品ID一覧を更新（サイト切替時は targetSite を明示して照合）
+   */
+  const refreshRegisteredIds = useCallback(
+    async (targetSite?: NovelSiteType) => {
+      if (!novelRepository) return;
+      const siteToQuery = targetSite ?? selectedSite;
+      try {
+        const novels = await novelRepository.listNovels();
+        const ids = new Set(
+          novels
+            .filter((n) => n.siteType === siteToQuery)
+            .map((n) => n.remoteWorkId),
+        );
+        setRegisteredWorkIds(ids);
+      } catch {
+        // 登録済みID取得の失敗時は空セットにフォールバック
+        setRegisteredWorkIds(new Set());
+      }
+    },
+    [novelRepository, selectedSite],
+  );
 
   useEffect(() => {
     if (isReady) {
@@ -136,6 +138,8 @@ export function useNovelSearch(): UseNovelSearchResult {
       if (isSearchingRef.current) return;
       isSearchingRef.current = true;
 
+      const targetSite =
+        params?.site !== undefined ? params.site : selectedSite;
       const targetOrder = params?.order !== undefined ? params.order : order;
       const targetSerial =
         params?.serialStatus !== undefined ? params.serialStatus : serialStatus;
@@ -149,10 +153,10 @@ export function useNovelSearch(): UseNovelSearchResult {
       try {
         const parser = parserRegistry
           .getAll()
-          .find((p) => p.siteType === selectedSite);
+          .find((p) => p.siteType === targetSite);
 
         if (!parser || !parser.buildSearchUrl || !parser.searchNovels) {
-          throw new Error(`検索機能が未実装のサイトです: ${selectedSite}`);
+          throw new Error(`検索機能が未実装のサイトです: ${targetSite}`);
         }
 
         const url = parser.buildSearchUrl(keyword, {
@@ -169,7 +173,7 @@ export function useNovelSearch(): UseNovelSearchResult {
         setCurrentPage(result.pageInfo.currentPage);
         setHasNextPage(result.pageInfo.hasNextPage);
 
-        await refreshRegisteredIds();
+        await refreshRegisteredIds(targetSite);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
@@ -190,6 +194,21 @@ export function useNovelSearch(): UseNovelSearchResult {
       httpClient,
       refreshRegisteredIds,
     ],
+  );
+
+  const setSelectedSite = useCallback(
+    (newSite: NovelSiteType) => {
+      if (isSearchingRef.current || newSite === selectedSite) return;
+      setSelectedSiteState(newSite);
+      setGenreState(undefined);
+      setError(null);
+      if (hasSearchedRef.current) {
+        void executeSearch({ site: newSite, genre: undefined });
+      } else {
+        void refreshRegisteredIds(newSite);
+      }
+    },
+    [selectedSite, executeSearch, refreshRegisteredIds],
   );
 
   const search = useCallback(async () => {

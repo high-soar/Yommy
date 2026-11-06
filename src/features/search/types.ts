@@ -23,7 +23,7 @@ export interface SearchSiteOption {
 
 export const SEARCH_SITES: readonly SearchSiteOption[] = [
   { siteType: "kakuyomu", label: "カクヨム", isAvailable: true },
-  { siteType: "narou", label: "小説家になろう", isAvailable: false },
+  { siteType: "narou", label: "小説家になろう", isAvailable: true },
 ] as const;
 
 /**

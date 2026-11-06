@@ -2,10 +2,14 @@ import React from "react";
 import type {
   NovelSearchOrder,
   NovelSerialStatus,
+  NovelSiteType,
 } from "../../../parsers/types";
 import { SEARCH_GENRES, SEARCH_ORDERS, SEARCH_SERIAL_STATUSES } from "../types";
+import { NAROU_SEARCH_GENRES } from "../../../parsers/narou/genres";
 
 export interface SearchFilterBarProps {
+  /** 選択中サイト識別子（サイト別ジャンルピル切替用、省略時は "kakuyomu"、v0.7 Issue #240） */
+  selectedSite?: NovelSiteType;
   selectedOrder: NovelSearchOrder;
   onSelectOrder: (order: NovelSearchOrder) => void;
   selectedSerialStatus: NovelSerialStatus;
@@ -20,6 +24,7 @@ export interface SearchFilterBarProps {
  * 検索フィルタ・並び順バー（並び順セレクタ、連載状況ピル、ジャンル横スクロールピル）
  */
 export const SearchFilterBar: React.FC<SearchFilterBarProps> = ({
+  selectedSite = "kakuyomu",
   selectedOrder,
   onSelectOrder,
   selectedSerialStatus,
@@ -28,6 +33,8 @@ export const SearchFilterBar: React.FC<SearchFilterBarProps> = ({
   onSelectGenre,
   disabled = false,
 }) => {
+  const genres = selectedSite === "narou" ? NAROU_SEARCH_GENRES : SEARCH_GENRES;
+
   return (
     <div
       data-testid="search-filter-bar"
@@ -111,7 +118,7 @@ export const SearchFilterBar: React.FC<SearchFilterBarProps> = ({
         aria-label="ジャンル"
         className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-1 px-1"
       >
-        {SEARCH_GENRES.map((opt) => {
+        {genres.map((opt) => {
           const isSelected = selectedGenre === opt.id;
           return (
             <button

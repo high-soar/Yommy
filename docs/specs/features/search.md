@@ -17,7 +17,7 @@ tags:
   - shell
   - bottom-nav
 related_specs:
-  - docs/specs/changes/issue-240-narou-search-ranking-and-site-selector.md
+  - docs/specs/changes/archive/issue-240-narou-search-ranking-and-site-selector.md
   - docs/specs/changes/archive/issue-239-narou-parser-and-multi-page-toc.md
   - docs/specs/parsers/narou.md
   - docs/specs/requirements.md

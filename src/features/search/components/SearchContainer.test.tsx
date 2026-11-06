@@ -10,6 +10,7 @@ import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
 import { MockHttpClient } from "../../../bridges/http/mockHttpClient";
 import searchApolloHtml from "../../../parsers/kakuyomu/__fixtures__/search_results_apollo.html?raw";
 import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.html?raw";
+import narouSearchResultsJson from "../../../parsers/narou/__fixtures__/search_results.json?raw";
 
 const { Default } = composeStories(stories);
 
@@ -38,6 +39,15 @@ describe("SearchContainer コンポーネント", () => {
         url: options.url,
         headers: {},
         html: workIndexHtml,
+      }),
+    );
+    mockHttpClient.setResponse(
+      /^https:\/\/api\.syosetu\.com\/novelapi\/api\//,
+      (options) => ({
+        status: 200,
+        url: options.url,
+        headers: {},
+        html: narouSearchResultsJson,
       }),
     );
   });
@@ -234,5 +244,22 @@ describe("SearchContainer コンポーネント", () => {
     await user.click(cards[0]);
 
     expect(handleSelectNovel).not.toHaveBeenCalled();
+  });
+
+  it("SiteSelector で小説家になろうへ切り替えると、なろう小ジャンルピルが表示されること (AC-SE-10)", async () => {
+    const user = userEvent.setup();
+    renderWithProviders();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("site-selector-narou")).toBeInTheDocument();
+    });
+
+    const narouBtn = screen.getByTestId("site-selector-narou");
+    await user.click(narouBtn);
+
+    await waitFor(() => {
+      expect(narouBtn).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByTestId("search-genre-201")).toBeInTheDocument();
+    });
   });
 });

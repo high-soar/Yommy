@@ -5,6 +5,8 @@ import { composeStories } from "@storybook/react";
 import * as stories from "./RankingPage.stories";
 import { RankingPage } from "./RankingPage";
 import { sampleRankingItem1 } from "../types";
+import * as siteSelectorModule from "./SiteSelector";
+import * as rankingFilterBarModule from "./RankingFilterBar";
 
 const {
   WeeklyOverall,
@@ -14,6 +16,7 @@ const {
   LoadingWithItems,
   Empty,
   ErrorState,
+  NarouSelected,
 } = composeStories(stories);
 
 describe("RankingPage コンポーネント", () => {
@@ -110,6 +113,16 @@ describe("RankingPage コンポーネント", () => {
     expect(handleRetry).toHaveBeenCalledTimes(1);
   });
 
+  it("NarouSelected ストーリー: なろう選択時に小ジャンルピルが表示されること (AC-RK-09)", () => {
+    render(<NarouSelected />);
+
+    expect(screen.getByTestId("site-selector-narou")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByTestId("ranking-genre-201")).toBeInTheDocument();
+  });
+
   it("エラー発生時は items が存在していてもエラーカードのみが表示され、作品一覧が非表示となること (AC-RK-08)", () => {
     render(
       <RankingPage
@@ -182,5 +195,41 @@ describe("RankingPage コンポーネント", () => {
     const card = screen.getByTestId("ranking-novel-card-16817330658027210412");
     await user.click(card);
     expect(handleSelectCard).toHaveBeenCalledWith(sampleRankingItem1);
+  });
+
+  it("親子分離: selectedSite が SiteSelector および RankingFilterBar へ正しく伝播すること (AC-RK-09)", () => {
+    const siteSelectorSpy = vi.spyOn(siteSelectorModule, "SiteSelector");
+    const filterBarSpy = vi.spyOn(rankingFilterBarModule, "RankingFilterBar");
+
+    render(
+      <RankingPage
+        selectedSite="narou"
+        onSelectSite={vi.fn()}
+        selectedPeriod="weekly"
+        onSelectPeriod={vi.fn()}
+        selectedGenre={undefined}
+        onSelectGenre={vi.fn()}
+        items={[]}
+        registeredWorkIds={new Set()}
+        addingWorkId={null}
+        isLoading={false}
+        error={null}
+        onRetry={vi.fn()}
+        onAddNovel={vi.fn()}
+        onSelectCard={vi.fn()}
+      />,
+    );
+
+    expect(siteSelectorSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedSite: "narou" }),
+      undefined,
+    );
+    expect(filterBarSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedSite: "narou" }),
+      undefined,
+    );
+
+    siteSelectorSpy.mockRestore();
+    filterBarSpy.mockRestore();
   });
 });

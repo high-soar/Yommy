@@ -10,7 +10,7 @@ export interface SiteSelectorProps {
 }
 
 /**
- * 検索対象サイト切替ピル（カクヨム / 将来のなろう）
+ * 検索対象サイト切替ピル（カクヨム / 小説家になろう）
  *
  * 通信中（disabled === true）は利用可能なサイトを含めすべてのボタンが操作不能となる。
  */
@@ -52,7 +52,6 @@ export const SiteSelector: React.FC<SiteSelectorProps> = ({
             }`}
           >
             {site.label}
-            {!site.isAvailable ? " (準備中)" : ""}
           </button>
         );
       })}

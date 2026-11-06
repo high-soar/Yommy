@@ -52,3 +52,15 @@ export const Disabled: Story = {
     disabled: true,
   },
 };
+
+/**
+ * ランキング絞り込みバー（小説家になろう選択・小ジャンル21種表示 / v0.7 Issue #240）
+ */
+export const NarouGenres: Story = {
+  name: "なろう小ジャンル表示（ハイファンタジー選択）",
+  args: {
+    selectedSite: "narou",
+    selectedPeriod: "weekly",
+    selectedGenre: "201",
+  },
+};

@@ -5,6 +5,8 @@ import { composeStories } from "@storybook/react";
 import * as stories from "./SearchPage.stories";
 import { SearchPage } from "./SearchPage";
 import { sampleSearchItem } from "../types";
+import * as siteSelectorModule from "./SiteSelector";
+import * as searchFilterBarModule from "./SearchFilterBar";
 
 const {
   Initial,
@@ -14,6 +16,7 @@ const {
   WithResults,
   LoadingMore,
   ErrorState,
+  NarouSelected,
 } = composeStories(stories);
 
 describe("SearchPage コンポーネント", () => {
@@ -102,6 +105,16 @@ describe("SearchPage コンポーネント", () => {
 
     const retryButton = screen.getByTestId("search-error-retry-button");
     expect(retryButton).toBeInTheDocument();
+  });
+
+  it("NarouSelected ストーリー: なろう選択時に小ジャンルピルが表示されること (AC-SE-10)", () => {
+    render(<NarouSelected />);
+
+    expect(screen.getByTestId("site-selector-narou")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByTestId("search-genre-201")).toBeInTheDocument();
   });
 
   it("再試行ボタン押下時に onRetry が呼び出されること", async () => {
@@ -242,5 +255,49 @@ describe("SearchPage コンポーネント", () => {
 
     expect(screen.getByTestId("search-error")).toBeInTheDocument();
     expect(screen.queryByTestId("search-results-list")).not.toBeInTheDocument();
+  });
+
+  it("親子分離: selectedSite が SiteSelector および SearchFilterBar へ正しく伝播すること (AC-SE-10)", () => {
+    const siteSelectorSpy = vi.spyOn(siteSelectorModule, "SiteSelector");
+    const filterBarSpy = vi.spyOn(searchFilterBarModule, "SearchFilterBar");
+
+    render(
+      <SearchPage
+        selectedSite="narou"
+        onSelectSite={vi.fn()}
+        keyword=""
+        onChangeKeyword={vi.fn()}
+        onSubmitSearch={vi.fn()}
+        selectedOrder="weekly_ranking"
+        onSelectOrder={vi.fn()}
+        selectedSerialStatus="all"
+        onSelectSerialStatus={vi.fn()}
+        selectedGenre={undefined}
+        onSelectGenre={vi.fn()}
+        items={[]}
+        registeredWorkIds={new Set()}
+        addingWorkId={null}
+        isLoading={false}
+        isLoadingMore={false}
+        hasNextPage={false}
+        onLoadMore={vi.fn()}
+        error={null}
+        onRetry={vi.fn()}
+        onAddNovel={vi.fn()}
+        onSelectCard={vi.fn()}
+      />,
+    );
+
+    expect(siteSelectorSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedSite: "narou" }),
+      undefined,
+    );
+    expect(filterBarSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedSite: "narou" }),
+      undefined,
+    );
+
+    siteSelectorSpy.mockRestore();
+    filterBarSpy.mockRestore();
   });
 });

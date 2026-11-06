@@ -6,7 +6,7 @@ status: "Approved"
 updated: "2026-11-06"
 tags: [quality, bug-log, handover, dre, kaizen]
 related_specs:
-  - docs/specs/changes/issue-240-narou-search-ranking-and-site-selector.md
+  - docs/specs/changes/archive/issue-240-narou-search-ranking-and-site-selector.md
   - docs/specs/changes/archive/issue-239-narou-parser-and-multi-page-toc.md
   - docs/specs/parsers/narou.md
   - docs/specs/changes/archive/issue-238-loading-ux-clarification.md

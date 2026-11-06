@@ -325,4 +325,151 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     await serialCompleteBtn.click();
     await expect(searchList).toBeVisible();
   });
+
+  test("小説家になろうへのサイト切替・小ジャンル連動・検索・ランキング探索・その場追加・リーダー読書・本棚反映が正常に機能すること (AC-RK-09, AC-SE-10)", async ({
+    page,
+  }) => {
+    const tabRanking = page.getByTestId("tab-ranking");
+    const tabSearch = page.getByTestId("tab-search");
+    const tabBookshelf = page.getByTestId("tab-bookshelf");
+
+    // 1. 初期表示（/）から「検索」画面（/search）へ移動
+    await tabSearch.click();
+    await expect(page).toHaveURL("/search");
+    const searchPage = page.getByTestId("search-page");
+    await expect(searchPage).toBeVisible();
+
+    // 2. 検索画面のサイト切替: 初期カクヨム -> 「小説家になろう」を選択 (AC-SE-10)
+    const siteNarouSearch = searchPage.getByTestId("site-selector-narou");
+    await expect(siteNarouSearch).toBeVisible();
+    await expect(siteNarouSearch).toHaveAttribute("aria-pressed", "false");
+    await siteNarouSearch.click();
+    await expect(siteNarouSearch).toHaveAttribute("aria-pressed", "true");
+
+    // なろう小ジャンルピルが表示されること（カクヨムジャンルは非表示）
+    const searchGenreIsekaiRomance = page.getByTestId("search-genre-101");
+    await expect(searchGenreIsekaiRomance).toBeVisible();
+    await expect(page.getByTestId("search-genre-fantasy")).toHaveCount(0);
+
+    // 3. キーワード検索（"無職転生"）を実行し、なろう検索結果一覧を表示
+    const searchInput = page.getByTestId("search-input");
+    await searchInput.fill("無職転生");
+    const searchSubmit = page.getByTestId("search-submit-button");
+    await searchSubmit.click();
+
+    const searchList = page.getByTestId("search-results-list");
+    await expect(searchList).toBeVisible();
+
+    // なろう検索結果カード（n9669bk: 無職転生 - 異世界行ったら本気だす -）の確認
+    const narouSearchCard = page.getByTestId("search-novel-card-n9669bk");
+    await expect(narouSearchCard).toBeVisible();
+    await expect(narouSearchCard.getByTestId("search-card-title")).toHaveText(
+      "無職転生 - 異世界行ったら本気だす -",
+    );
+
+    // 4. 検索結果カードの「＋ 本棚に追加」を押下し、「✓ 登録済み」へ切り替わることを確認（その場登録）
+    const searchAddBtn = narouSearchCard.getByTestId("search-card-add-button");
+    await expect(searchAddBtn).toBeVisible();
+    await searchAddBtn.click();
+    const searchRegisteredBtn = narouSearchCard.getByTestId(
+      "search-card-registered-button",
+    );
+    await expect(searchRegisteredBtn).toBeVisible();
+    await expect(searchRegisteredBtn).toHaveText("✓ 登録済み");
+
+    // 5. 下部タブから「ランキング」画面（/ranking）へ移動
+    await tabRanking.click();
+    await expect(page).toHaveURL("/ranking");
+    const rankingPage = page.getByTestId("ranking-page");
+    await expect(rankingPage).toBeVisible();
+
+    // 6. ランキング画面のサイト切替: 初期カクヨム -> 「小説家になろう」を選択 (AC-RK-09)
+    const siteNarouRanking = rankingPage.getByTestId("site-selector-narou");
+    await expect(siteNarouRanking).toBeVisible();
+    await expect(siteNarouRanking).toHaveAttribute("aria-pressed", "false");
+    await siteNarouRanking.click();
+    await expect(siteNarouRanking).toHaveAttribute("aria-pressed", "true");
+
+    // 7. なろうランキング一覧が表示され、小ジャンルピル（101, 201等）が表示されること
+    const rankingList = page.getByTestId("ranking-results-list");
+    await expect(rankingList).toBeVisible();
+
+    const genreHighFantasy = page.getByTestId("ranking-genre-201");
+    await expect(genreHighFantasy).toBeVisible();
+    await expect(page.getByTestId("ranking-genre-fantasy")).toHaveCount(0); // カクヨムジャンルは非表示
+
+    // なろうランキング1位作品カードの確認（未登録状態）
+    const narouRankCard1 = page.getByTestId("ranking-novel-card-n1001aa");
+    await expect(narouRankCard1).toBeVisible();
+    await expect(narouRankCard1.getByTestId("ranking-card-title")).toHaveText(
+      "デイリー1位作品",
+    );
+    const narouRankAddBtn = narouRankCard1.getByTestId(
+      "ranking-card-add-button",
+    );
+    await expect(narouRankAddBtn).toBeVisible();
+
+    // 8. ジャンルピル「ハイファンタジー (201)」を選択し、一覧が再取得されること
+    await genreHighFantasy.click();
+    await expect(genreHighFantasy).toHaveAttribute("aria-pressed", "true");
+    await expect(rankingList).toBeVisible();
+
+    // 9. なろうランキングから作品カードをタップして作品詳細・目次（SCR-02）へ遷移（未登録からの自動追加＆シームレス遷移: TR-14）
+    await narouRankCard1.click();
+    await expect(page).toHaveURL(/\/novels\/narou(%3A|:)n1001aa$/);
+    const novelDetailPage = page.getByTestId("novel-detail-page");
+    await expect(novelDetailPage).toBeVisible();
+    await expect(page.getByTestId("novel-detail-title")).toHaveText(
+      "デイリー1位作品",
+    );
+
+    // 探索元「ランキング」タブがアクティブであること
+    await expect(tabRanking).toHaveAttribute("aria-selected", "true");
+
+    // 10. 第1話を選択してリーダー（SCR-03）へ移動し本文読書
+    const episodeItems = page.getByTestId("episode-item");
+    await expect(episodeItems.first()).toBeVisible();
+    await episodeItems.first().click();
+
+    await expect(page).toHaveURL(/\/novels\/narou(%3A|:)n1001aa\/chapters\/1$/);
+    const readerPage = page.getByTestId("reader-page");
+    await expect(readerPage).toBeVisible();
+    await expect(page.getByTestId("reader-body")).toBeVisible();
+
+    // 11. OSバックキーで目次画面へ復帰、さらにOSバックキーでランキング画面へ復帰 (TR-06, TR-07)
+    await triggerBackButton(page);
+    await expect(page).toHaveURL(/\/novels\/narou(%3A|:)n1001aa$/);
+    await expect(novelDetailPage).toBeVisible();
+
+    await triggerBackButton(page);
+    await expect(page).toHaveURL("/ranking");
+    await expect(rankingPage).toBeVisible();
+    await expect(tabRanking).toHaveAttribute("aria-selected", "true");
+
+    // 再マウントされたランキング画面でなろうを選択し、自動追加された作品カードが「✓ 登録済み」に更新されていることを確認
+    await siteNarouRanking.click();
+    await expect(siteNarouRanking).toHaveAttribute("aria-pressed", "true");
+    const narouRankRegBtn = narouRankCard1.getByTestId(
+      "ranking-card-registered-button",
+    );
+    await expect(narouRankRegBtn).toBeVisible();
+    await expect(narouRankRegBtn).toHaveText("✓ 登録済み");
+
+    // 12. 「本棚」タブへ移動し、検索からその場追加した作品とランキングから自動追加された作品の2件が反映されていることを確認
+    await tabBookshelf.click();
+    await expect(page).toHaveURL("/");
+    await expect(tabBookshelf).toHaveAttribute("aria-selected", "true");
+
+    const bookshelfPage = page.getByTestId("bookshelf-page");
+    await expect(bookshelfPage).toBeVisible();
+
+    const novelCards = page.getByTestId("novel-card");
+    await expect(novelCards).toHaveCount(2);
+
+    const novelTitles = await page
+      .getByTestId("novel-card-title")
+      .allTextContents();
+    expect(novelTitles).toContain("デイリー1位作品");
+    expect(novelTitles).toContain("無職転生 - 異世界行ったら本気だす");
+  });
 });

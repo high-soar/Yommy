@@ -1,8 +1,11 @@
 import React from "react";
-import type { NovelRankingPeriod } from "../../../parsers/types";
+import type { NovelRankingPeriod, NovelSiteType } from "../../../parsers/types";
 import { RANKING_GENRES, RANKING_PERIODS } from "../types";
+import { NAROU_RANKING_GENRES } from "../../../parsers/narou/genres";
 
 export interface RankingFilterBarProps {
+  /** 選択中サイト識別子（サイト別ジャンルピル切替用、省略時は "kakuyomu"、v0.7 Issue #240） */
+  selectedSite?: NovelSiteType;
   selectedPeriod: NovelRankingPeriod;
   onSelectPeriod: (period: NovelRankingPeriod) => void;
   selectedGenre?: string;
@@ -15,12 +18,16 @@ export interface RankingFilterBarProps {
  * ランキング集計期間・ジャンル切替バー（期間ピル、ジャンル横スクロールピル）
  */
 export const RankingFilterBar: React.FC<RankingFilterBarProps> = ({
+  selectedSite = "kakuyomu",
   selectedPeriod,
   onSelectPeriod,
   selectedGenre,
   onSelectGenre,
   disabled = false,
 }) => {
+  const genres =
+    selectedSite === "narou" ? NAROU_RANKING_GENRES : RANKING_GENRES;
+
   return (
     <div
       data-testid="ranking-filter-bar"
@@ -64,13 +71,13 @@ export const RankingFilterBar: React.FC<RankingFilterBarProps> = ({
         </div>
       </div>
 
-      {/* 下段: ジャンル横スクロールピル（総合 ＋ 主要12ジャンル） */}
+      {/* 下段: ジャンル横スクロールピル（総合 ＋ 主要12ジャンル / なろう小ジャンル21種） */}
       <div
         role="group"
         aria-label="ジャンル"
         className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-1 px-1"
       >
-        {RANKING_GENRES.map((genre) => {
+        {genres.map((genre) => {
           const isSelected = selectedGenre === genre.id;
           return (
             <button

@@ -41,7 +41,7 @@ tags:
   - ho-28
   - ho-29
 related_specs:
-  - docs/specs/changes/issue-240-narou-search-ranking-and-site-selector.md
+  - docs/specs/changes/archive/issue-240-narou-search-ranking-and-site-selector.md
   - docs/specs/changes/archive/issue-239-narou-parser-and-multi-page-toc.md
   - docs/specs/changes/archive/issue-238-loading-ux-clarification.md
   - docs/specs/parsers/narou.md
