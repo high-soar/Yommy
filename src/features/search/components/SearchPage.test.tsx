@@ -7,6 +7,7 @@ import { SearchPage } from "./SearchPage";
 import { sampleSearchItem } from "../types";
 import * as siteSelectorModule from "./SiteSelector";
 import * as searchFilterBarModule from "./SearchFilterBar";
+import * as searchInputBarModule from "./SearchInputBar";
 
 const {
   Initial,
@@ -299,5 +300,99 @@ describe("SearchPage コンポーネント", () => {
 
     siteSelectorSpy.mockRestore();
     filterBarSpy.mockRestore();
+  });
+
+  it("isLoadingMore が true の場合、SiteSelector, SearchInputBar, SearchFilterBar が非活性化されること (R1-01)", () => {
+    const siteSelectorSpy = vi.spyOn(siteSelectorModule, "SiteSelector");
+    const inputBarSpy = vi.spyOn(searchInputBarModule, "SearchInputBar");
+    const filterBarSpy = vi.spyOn(searchFilterBarModule, "SearchFilterBar");
+
+    render(
+      <SearchPage
+        selectedSite="kakuyomu"
+        onSelectSite={vi.fn()}
+        keyword="異世界"
+        onChangeKeyword={vi.fn()}
+        onSubmitSearch={vi.fn()}
+        selectedOrder="weekly_ranking"
+        onSelectOrder={vi.fn()}
+        selectedSerialStatus="all"
+        onSelectSerialStatus={vi.fn()}
+        selectedGenre={undefined}
+        onSelectGenre={vi.fn()}
+        items={[]}
+        registeredWorkIds={new Set()}
+        addingWorkId={null}
+        isLoading={false}
+        isLoadingMore={true}
+        hasNextPage={true}
+        onLoadMore={vi.fn()}
+        error={null}
+        onRetry={vi.fn()}
+        onAddNovel={vi.fn()}
+        onSelectCard={vi.fn()}
+      />,
+    );
+
+    expect(siteSelectorSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ disabled: true }),
+      undefined,
+    );
+    expect(inputBarSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ isLoading: true }),
+      undefined,
+    );
+    expect(filterBarSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ disabled: true }),
+      undefined,
+    );
+
+    siteSelectorSpy.mockRestore();
+    inputBarSpy.mockRestore();
+    filterBarSpy.mockRestore();
+  });
+
+  it("カード本体および本棚に追加ボタンを押下した際、onSelectCard および onAddNovel が正しく呼び出されること", async () => {
+    const user = userEvent.setup();
+    const handleAddNovel = vi.fn();
+    const handleSelectCard = vi.fn();
+
+    render(
+      <SearchPage
+        selectedSite="kakuyomu"
+        onSelectSite={vi.fn()}
+        keyword="異世界"
+        onChangeKeyword={vi.fn()}
+        onSubmitSearch={vi.fn()}
+        selectedOrder="weekly_ranking"
+        onSelectOrder={vi.fn()}
+        selectedSerialStatus="all"
+        onSelectSerialStatus={vi.fn()}
+        selectedGenre={undefined}
+        onSelectGenre={vi.fn()}
+        items={[sampleSearchItem]}
+        registeredWorkIds={new Set()}
+        addingWorkId={null}
+        isLoading={false}
+        isLoadingMore={false}
+        hasNextPage={false}
+        onLoadMore={vi.fn()}
+        error={null}
+        onRetry={vi.fn()}
+        onAddNovel={handleAddNovel}
+        onSelectCard={handleSelectCard}
+        hasSearched={true}
+      />,
+    );
+
+    const card = screen.getByTestId(
+      `search-novel-card-${sampleSearchItem.remoteWorkId}`,
+    );
+    await user.click(card);
+    expect(handleSelectCard).toHaveBeenCalledWith(sampleSearchItem);
+
+    const addBtn = screen.getByTestId("search-card-add-button");
+    await user.click(addBtn);
+    expect(handleAddNovel).toHaveBeenCalledWith(sampleSearchItem);
   });
 });

@@ -15,6 +15,7 @@ import narouSearchResultsJson from "../../../parsers/narou/__fixtures__/search_r
 import type { HttpResponse } from "../../../bridges/http/types";
 import type { NovelSearchResultItem } from "../../../parsers/types";
 import type { SyncEngine } from "../../cloud-sync/services/syncEngine";
+import type { NovelRepository } from "../../../storage/types";
 import { createDefaultParserRegistry } from "../../../parsers/parserRegistry";
 
 describe("useNovelSearch", () => {
@@ -1196,6 +1197,14 @@ describe("useNovelSearch", () => {
       expect(resolvers.length).toBe(1);
     });
 
+    // 1回目の解決前に 2回目の条件変更を呼び出す
+    act(() => {
+      result.current.setOrder("popular");
+    });
+
+    // 通信中ガードにより多重リクエストは抑止され、resolvers.length は 1 のまま維持されること (R1-20)
+    expect(resolvers.length).toBe(1);
+
     // 1回目を解決
     await act(async () => {
       resolvers[0]({
@@ -1210,31 +1219,288 @@ describe("useNovelSearch", () => {
       expect(result.current.isLoading).toBe(false);
       expect(result.current.items.length).toBeGreaterThan(0);
     });
+  });
 
-    // 2回目のリクエストを開始
+  it("loadMore 実行中にサイト切替または条件変更を呼び出してもガードされ、古い結果で一覧が汚染されないこと (R1-01)", async () => {
+    let resolveLoadMore!: (val: HttpResponse) => void;
+    const loadMorePromise = new Promise<HttpResponse>((resolve) => {
+      resolveLoadMore = resolve;
+    });
+
+    mockHttpClient.setResponse(
+      "https://kakuyomu.jp/search?q=%E3%83%86%E3%82%B9%E3%83%88",
+      () => ({
+        status: 200,
+        url: "https://kakuyomu.jp/search?q=%E3%83%86%E3%82%B9%E3%83%88",
+        headers: {},
+        html: searchApolloHtml,
+      }),
+    );
+
+    mockHttpClient.setResponse(
+      "https://kakuyomu.jp/search?page=2&q=%E3%83%86%E3%82%B9%E3%83%88",
+      () => loadMorePromise,
+    );
+
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: createWrapper(),
+    });
+
     act(() => {
-      result.current.setOrder("popular");
+      result.current.setKeyword("テスト");
+    });
+
+    await act(async () => {
+      await result.current.search();
+    });
+
+    expect(result.current.hasNextPage).toBe(true);
+    expect(result.current.items.length).toBeGreaterThan(0);
+    const initialItemCount = result.current.items.length;
+
+    // loadMore 開始
+    act(() => {
+      void result.current.loadMore();
     });
 
     await waitFor(() => {
-      expect(result.current.isLoading).toBe(true);
-      expect(resolvers.length).toBe(2);
+      expect(result.current.isLoadingMore).toBe(true);
     });
 
-    // 2回目を解決（空データ）
+    // loadMore 通信中に setSelectedSite を呼び出してもガードされて無視されること
+    act(() => {
+      result.current.setSelectedSite("narou");
+      result.current.setOrder("popular");
+      result.current.setGenre("1");
+      result.current.setSerialStatus("completed");
+    });
+    expect(result.current.selectedSite).toBe("kakuyomu");
+    expect(result.current.order).toBe("weekly_ranking");
+    expect(result.current.genre).toBeUndefined();
+    expect(result.current.serialStatus).toBe("all");
+
+    // loadMore 完了
     await act(async () => {
-      resolvers[1]({
+      resolveLoadMore({
         status: 200,
-        url: "https://kakuyomu.jp/search?order=popular&q=%E3%83%86%E3%82%B9%E3%83%88",
+        url: "https://kakuyomu.jp/search?page=2&q=%E3%83%86%E3%82%B9%E3%83%88",
         headers: {},
-        html: searchEmptyHtml,
+        html: searchApolloHtml,
       });
     });
 
     await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-      expect(result.current.items).toEqual([]);
+      expect(result.current.isLoadingMore).toBe(false);
     });
+    expect(result.current.items.length).toBeGreaterThan(initialItemCount);
+  });
+
+  it("loadMore 通信中に新たな検索が実行され世代が進んだ場合、loadMore の解決結果が破棄されること (R1-01)", async () => {
+    mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/search/, () => ({
+      status: 200,
+      url: "https://kakuyomu.jp/search?page=1",
+      headers: {},
+      html: searchApolloHtml,
+    }));
+
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: createWrapper(),
+    });
+
+    // 1回目検索
+    act(() => {
+      result.current.setKeyword("テスト");
+    });
+    await act(async () => {
+      await result.current.search();
+    });
+
+    const initialItemCount = result.current.items.length;
+    expect(initialItemCount).toBeGreaterThan(0);
+
+    let resolveLoadMore!: (val: HttpResponse) => void;
+    mockHttpClient.setResponse(
+      /^https:\/\/kakuyomu\.jp\/search.*page=2/,
+      () => {
+        return new Promise<HttpResponse>((resolve) => {
+          resolveLoadMore = resolve;
+        });
+      },
+    );
+
+    // loadMore 開始
+    act(() => {
+      void result.current.loadMore();
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoadingMore).toBe(true);
+    });
+
+    // loadMore 通信中に新たな検索（search）を実行して世代を進める
+    act(() => {
+      result.current.setKeyword("新テスト");
+    });
+    await act(async () => {
+      await result.current.search();
+    });
+
+    // loadMore が遅れて解決
+    await act(async () => {
+      resolveLoadMore({
+        status: 200,
+        url: "https://kakuyomu.jp/search?page=2",
+        headers: {},
+        html: searchApolloHtml,
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoadingMore).toBe(false);
+    });
+
+    // loadMore の追加データが破棄され、新検索結果が維持されること
+    expect(result.current.keyword).toBe("新テスト");
+  });
+
+  it("loadMore 通信中に新たな検索が実行され世代が進んだ場合、loadMore のエラー結果が破棄されること (R1-01)", async () => {
+    mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/search/, () => ({
+      status: 200,
+      url: "https://kakuyomu.jp/search?page=1",
+      headers: {},
+      html: searchApolloHtml,
+    }));
+
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: createWrapper(),
+    });
+
+    // 1回目検索
+    act(() => {
+      result.current.setKeyword("テスト");
+    });
+    await act(async () => {
+      await result.current.search();
+    });
+
+    let rejectLoadMore!: (err: Error) => void;
+    mockHttpClient.setResponse(
+      /^https:\/\/kakuyomu\.jp\/search.*page=2/,
+      () => {
+        return new Promise<HttpResponse>((_, reject) => {
+          rejectLoadMore = reject;
+        });
+      },
+    );
+
+    // loadMore 開始
+    act(() => {
+      void result.current.loadMore();
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoadingMore).toBe(true);
+    });
+
+    // loadMore 通信中に新たな検索（search）を実行して世代を進める
+    act(() => {
+      result.current.setKeyword("新テスト");
+    });
+    await act(async () => {
+      await result.current.search();
+    });
+
+    // loadMore が遅れてエラー終了
+    await act(async () => {
+      rejectLoadMore(new Error("ネットワーク切断"));
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoadingMore).toBe(false);
+    });
+
+    // エラーが反映されず、error は null のままであること
+    expect(result.current.error).toBeNull();
+  });
+
+  it("addNovelToBookshelf 実行中にサイト切替された場合、registeredWorkIds が旧サイトのまま追加されないこと (R1-01)", async () => {
+    let resolveUpsert!: (novel: unknown) => void;
+    const upsertPromise = new Promise((resolve) => {
+      resolveUpsert = resolve;
+    });
+
+    const mockNovelRepo = {
+      listNovels: vi.fn().mockResolvedValue([]),
+      upsertNovelWithToc: vi.fn().mockImplementation(() => upsertPromise),
+    };
+
+    mockHttpClient.setResponse(/.*/, (req) => ({
+      status: 200,
+      url: req.url,
+      headers: {},
+      html: searchApolloHtml,
+    }));
+
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: createWrapper("/search", {
+        novelRepository: mockNovelRepo as unknown as NovelRepository,
+      }),
+    });
+
+    act(() => {
+      result.current.setKeyword("テスト");
+    });
+
+    await act(async () => {
+      await result.current.search();
+    });
+
+    expect(result.current.items.length).toBeGreaterThan(0);
+    const targetItem = result.current.items[0];
+
+    // addNovelToBookshelf 開始
+    let addPromise!: Promise<string | null>;
+    act(() => {
+      addPromise = result.current.addNovelToBookshelf(targetItem);
+    });
+
+    await waitFor(() => {
+      expect(result.current.addingWorkId).toBe(targetItem.remoteWorkId);
+    });
+
+    // DB 保存待ちの間にサイトをなろうに切り替える
+    act(() => {
+      result.current.setSelectedSite("narou");
+    });
+    expect(result.current.selectedSite).toBe("narou");
+
+    // upsert 完了
+    await act(async () => {
+      resolveUpsert({
+        id: `kakuyomu:${targetItem.remoteWorkId}`,
+        siteType: "kakuyomu",
+        remoteWorkId: targetItem.remoteWorkId,
+        canonicalUrl: targetItem.workUrl,
+        title: targetItem.title,
+        author: targetItem.author,
+        synopsis: targetItem.synopsis,
+        totalChapters: 1,
+        cachedChapters: 0,
+        bookmarkChapterIndex: null,
+        bookmarkScrollProgress: 0,
+        hasNewUpdate: false,
+        lastCheckedAt: null,
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-01T00:00:00Z",
+        deletedAt: null,
+      });
+      await addPromise;
+    });
+
+    // なろうサイト表示中のため、カクヨム作品の remoteWorkId は registeredWorkIds に追加されないこと
+    expect(result.current.registeredWorkIds.has(targetItem.remoteWorkId)).toBe(
+      false,
+    );
   });
 
   describe("サイト切替（setSelectedSite）と自動連動 (AC-SE-10)", () => {
