@@ -73,7 +73,9 @@ export function useNovelRanking(): UseNovelRankingResult {
   // 通信中重複リクエストガードおよび非同期競合（Race Condition）防止用 ref
   const isFetchingRef = useRef<boolean>(false);
 
-  // DB内の登録済み作品ID一覧を更新
+  /**
+   * DB内の登録済み作品ID一覧を更新（サイト切替時は targetSite を明示して照合）
+   */
   const refreshRegisteredIds = useCallback(
     async (targetSite?: NovelSiteType) => {
       if (!novelRepository) return;
