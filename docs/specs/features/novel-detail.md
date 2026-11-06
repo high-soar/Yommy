@@ -95,7 +95,7 @@ related_tests:
   - `TR-19`（作品詳細ヘッダーの「本文キャッシュ整理」アクションによる本文キャッシュ削除［既読のみ／全話］・容量即時再計算、`v0.5` Issue #170）
 - **対象外スコープ（後続 Issue / Milestone）**:
   - エピソード閲覧に伴うしおり位置（`bookmarkChapterIndex`, `bookmarkScrollProgress`）および既読フラグ（`isRead`）の自動更新ロジック本体（Issue #14 の `SCR-03` リーダー画面拡張で一括実装）
-  - 内蔵 WebView（`SCR-04`）での手動インポート連携（Milestone `v0.7〜`：`SYS-REQ-13, 14`, `TR-09`）
+  - 内蔵 WebView（`SCR-04`）での手動インポート連携（Milestone `v0.8〜予定`：`SYS-REQ-13, 14`, `TR-09`）
 
 ---
 

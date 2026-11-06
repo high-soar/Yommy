@@ -34,7 +34,9 @@ related_tests:
   - src/App.test.tsx
   - src/app/router.test.tsx
   - src/features/search/components/SiteSelector.test.tsx
+  - src/features/search/components/SearchInputBar.test.tsx
   - src/features/search/components/SearchFilterBar.test.tsx
+  - src/features/search/components/SearchNovelCard.test.tsx
   - src/features/search/components/SearchPage.test.tsx
   - src/features/search/components/SearchContainer.test.tsx
   - src/features/search/hooks/useNovelSearch.test.ts
@@ -271,7 +273,7 @@ export interface UseNovelSearchResult {
 
 ## 6. テスト責務・カバレッジ計画
 
-- **単体テスト (`SearchPage.test.tsx`, `SearchNovelCard.test.tsx`, `useNovelSearch.test.ts`)**:
+- **単体テスト (`SearchInputBar.test.tsx`, `SearchFilterBar.test.tsx`, `SiteSelector.test.tsx`, `SearchNovelCard.test.tsx`, `SearchPage.test.tsx`, `SearchContainer.test.tsx`, `useNovelSearch.test.ts`)**:
   - `docs/guidelines/testing.md` に従い、全分岐（C0/C1 100%）およびアクセシビリティ（role, aria 属性）を検証。
   - SQLite リポジトリとの連携テストは `resetTestDb()` を使用して決定論的に実行。
 - **Storybook ＆ VRT (1280px / 375px)**:

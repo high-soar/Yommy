@@ -101,7 +101,7 @@ Step 1 の `/grill-me` インタビューを通じて合意された確定仕様
 - **判定**: **`B. Milestone 最終レビュー後に一括で実機検証を実施`**
   - **理由**:
     - 本 Issue は純粋な React UI コンポーネントおよびカスタムフック（状態管理）の変更であり、ネイティブ Java コードや Capacitor プラグイン、ハードウェアキー等の変更を含まない。
-    - Vitest（C0/C1/Functions 100%）、Storybook VRT（1280px / 375px）、および Playwright 実ブラウザ IT（`SCN-01`, `SCN-02`）によって回帰・状態遷移を 100% 自動担保可能である。
+    - Vitest（C0/C1/Functions 100%）、Storybook VRT（1280px / 375px）、および Playwright 実ブラウザ IT（`SCN-02` 更新・`SCN-01` 回帰確認）によって回帰・状態遷移を 100% 自動担保可能である。
     - 低速モバイル回線下での実際の操作体感確認（`HO-30`）は、Milestone `v0.7` の Step 2 指摘是正 PR マージ直後に、なろう対応（`HO-29`）とあわせて **「Android 実機検証試験項目表」** に基づき一括実施する。
   - **`HO-30` 完了ゲート**: `Milestone v0.7 完了前`
 
@@ -261,7 +261,9 @@ export interface SearchFilterBarProps {
   - ランキングの集計期間切替時およびジャンル切替時に、一覧が新条件で再取得・更新される一連の挙動を結合検証（AC-RK-02, AC-RK-03）。
   - 検索画面でのフィルタ切替時（並び順・連載状態）にも同様に新条件で再取得・更新される一連の挙動を結合検証（AC-SE-03, AC-SE-04）。
   - リーダーの前後の話遷移（`reader-next-chapter`）において、新エピソードへの遷移および本文描画が正常に行われるフローを結合検証（AC-RD-01）。
-  - ※なお通信中の一時的なローディング表示（`ranking-loading`, `search-loading`, `reader-loading`）およびボタン無効化（AC-RK-08, AC-SE-09, AC-RD-08）は、インメモリの `MockHttpClient` による即時解決環境のため、UT（`RankingPage.test.tsx`, `SearchPage.test.tsx`, `ReaderPage.test.tsx`）および Storybook VRT にて決定論的に 100% カバレッジで担保されている。
+- `SCN-01`（リーダー組版・基本閲覧シナリオ）:
+  - リーダーの基本前後話遷移および組版表示の回帰確認で充分であることを確認し、シナリオ本体の更新は不要と判断。
+- ※なお通信中の一時的なローディング表示（`ranking-loading`, `search-loading`, `reader-loading`）およびボタン無効化（AC-RK-08, AC-SE-09, AC-RD-28）は、インメモリの `MockHttpClient` による即時解決環境のため、UT（`RankingPage.test.tsx`, `SearchPage.test.tsx`, `ReaderPage.test.tsx`）および Storybook VRT にて決定論的に 100% カバレッジで担保されている。
 
 ---
 
@@ -269,11 +271,11 @@ export interface SearchFilterBarProps {
 
 合意された 2 分割構成に基づき、以下の Sub-issue を起票して順次 TDD 実装を進めます。
 
-| Sub-issue | 種別 | 対象コンポーネント・モジュール                                                                     | 完了ゲート / マージ方針                  |
-| :-------- | :--- | :------------------------------------------------------------------------------------------------- | :--------------------------------------- |
-| **MK1**   | 実装 | ランキング画面（`SCR-07`）・検索画面（`SCR-06`）のローディング表示 ＆ 操作重複抑止改善             | Task Completion Gate 1〜6 → AI自律マージ |
-| **MK2**   | 実装 | 小説リーダー画面（`SCR-03`）の未キャッシュ話遷移時ローディング表示改善                             | Task Completion Gate 1〜6 → AI自律マージ |
-| **IT**    | 結合 | Playwright 結合テスト（`SCN-01`, `SCN-02`）の回帰更新 ＆ 差分仕様アーカイブ（親 Issue クローズPR） | Task Completion Gate 1〜6 → 人間マージ   |
+| Sub-issue | 種別 | 対象コンポーネント・モジュール                                                                         | 完了ゲート / マージ方針                  |
+| :-------- | :--- | :----------------------------------------------------------------------------------------------------- | :--------------------------------------- |
+| **MK1**   | 実装 | ランキング画面（`SCR-07`）・検索画面（`SCR-06`）のローディング表示 ＆ 操作重複抑止改善                 | Task Completion Gate 1〜6 → AI自律マージ |
+| **MK2**   | 実装 | 小説リーダー画面（`SCR-03`）の未キャッシュ話遷移時ローディング表示改善                                 | Task Completion Gate 1〜6 → AI自律マージ |
+| **IT**    | 結合 | Playwright 結合テスト（`SCN-02` 更新・`SCN-01` 回帰確認） ＆ 差分仕様アーカイブ（親 Issue クローズPR） | Task Completion Gate 1〜6 → 人間マージ   |
 
 ---
 

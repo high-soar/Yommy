@@ -38,6 +38,7 @@ tags:
   - ho-25
   - ho-28
   - ho-29
+  - ho-30
   - ho-31
 related_specs:
   - docs/specs/changes/archive/issue-240-narou-search-ranking-and-site-selector.md
@@ -81,6 +82,7 @@ related_tests:
   - src/app/router.test.tsx
   - src/App.test.tsx
   - src/parsers/narou/NarouParser.test.ts
+  - src/parsers/narou/genres.test.ts
   - src/parsers/fetchFullNovelIndex.test.ts
   - src/shared/ui/BottomTabBar.test.tsx
   - src/storage/schema.test.ts
@@ -134,7 +136,7 @@ flowchart TB
     end
 
     subgraph StorageLayer ["2. Storage Layer (src/storage/*)"]
-        Repos["Repositories<br>(NovelRepository, ChapterRepository, SettingsRepository, AppSettingsRepository, QueueRepository［v0.6〜］)"]
+        Repos["Repositories<br>(NovelRepository, ChapterRepository, SettingsRepository, AppSettingsRepository, QueueRepository［v0.8〜予定］)"]
         DbAdapter["DatabaseAdapter Interface"]
         SqliteImpl["CapacitorSqliteAdapter<br>(Android 実機用)"]
         MemImpl["InMemoryDatabaseAdapter<br>(UT / Storybook / Playwright IT 用・resetTestDb())"]
@@ -202,7 +204,7 @@ Yommy/
     │   │   ├── types.ts               # HttpClientBridge インターフェース定義
     │   │   ├── capacitorHttpClient.ts # CapacitorHttp 実装（CORS回避・User-Agent・タイムアウト制御）
     │   │   └── mockHttpClient.ts      # UT / Storybook / IT 用フィクスチャ応答クライアント
-    │   └── webview/                   # 【WebViewDomBridge】内蔵WebView DOMキャプチャ（v0.6〜予定）
+    │   └── webview/                   # 【WebViewDomBridge】内蔵WebView DOMキャプチャ（v0.8〜予定）
     │       ├── types.ts
     │       └── webviewDomBridge.ts
     ├── features/                      # 【3. Viewer & UI Layer（画面・機能別モジュール）】
@@ -227,6 +229,7 @@ Yommy/
     │   └── narou/                     # 小説家になろう用パーサーとローカル HTML/JSON フィクスチャ（Issue #239, #240）
     │       ├── NarouParser.ts
     │       ├── NarouParser.test.ts
+    │       ├── genres.ts
     │       └── __fixtures__/
     ├── storage/                       # 【2. Storage Layer（ローカルDB・キャッシュ管理層）】
     │   ├── types.ts                   # エンティティ型および各 Repository インターフェース契約
@@ -241,7 +244,7 @@ Yommy/
     │       ├── chapterRepository.ts   # chapters テーブル操作（本文キャッシュ保存・削除・容量集計）
     │       ├── settingsRepository.ts  # reader_settings 操作
     │       ├── appSettingsRepository.ts # app_settings 操作（ソート順等永続化）
-    │       └── queueRepository.ts     # download_queue テーブル操作（v0.6〜予定）
+    │       └── queueRepository.ts     # download_queue テーブル操作（v0.8〜予定）
     └── shared/                        # 複数機能で共有する汎用 UI コンポーネント・ユーティリティ
         ├── constants/                 # キャッシュ・レートリミット・タイポグラフィ等の共有定数（cache.ts, typography.ts）
         ├── utils/                     # キャッシュ判定・容量フォーマット等の共有ユーティリティ（cache.ts, formatByteSize.ts）

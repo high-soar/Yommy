@@ -46,6 +46,8 @@ tags:
   - ho-28
   - ho-30
 related_specs:
+  - docs/specs/parsers/narou.md
+  - docs/specs/changes/archive/issue-239-narou-parser-and-multi-page-toc.md
   - docs/specs/changes/archive/issue-238-loading-ux-clarification.md
   - docs/specs/changes/archive/issue-203-volume-key-paging.md
   - docs/specs/changes/archive/issue-202-reader-top-overlay-and-seekbar.md
@@ -125,7 +127,7 @@ related_tests:
   - `TR-06`（OS バックキーまたは上部オーバーレイ「← 目次」ボタン押下、または下部オーバーレイの4タブ遷移によりスクロール進捗率を保存して `SCR-02` `/novels/:novelId`、または各タブへ遷移）
 - **対象外スコープ（後続 Milestone）**:
   - 3D カール等の過剰な描画エフェクト（2D 横スライドアニメーションを採用）
-  - 取得失敗時の内蔵 WebView フォールバック遷移 `TR-10`（Milestone `v0.7〜`：`SYS-REQ-13`）
+  - 取得失敗時の内蔵 WebView フォールバック遷移 `TR-10`（Milestone `v0.8〜予定`：`SYS-REQ-13`）
 
 ---
 

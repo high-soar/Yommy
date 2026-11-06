@@ -36,6 +36,7 @@ related_specs:
   - docs/specs/requirements.md
   - docs/specs/architecture.md
   - docs/specs/parsers/kakuyomu.md
+  - docs/specs/parsers/narou.md
   - docs/specs/features/bookshelf.md
   - docs/specs/features/novel-detail.md
   - docs/specs/features/reader-view.md
