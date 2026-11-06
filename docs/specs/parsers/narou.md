@@ -1,8 +1,8 @@
 ---
 type: spec-parser
-title: "小説家になろう パーサー・スクレイピング仕様書（ncode.syosetu.com）"
-description: "小説家になろう（ncode.syosetu.com）の作品トップ・複数ページ目次抽出、短編作品対応、各話本文（前書き・本編・後書き）抽出、ルビ・傍点正規化、およびURL正規化ルールの正本仕様。"
-status: "Review (#239)"
+title: "小説家になろう パーサー・スクレイピング仕様書（ncode.syosetu.com / api.syosetu.com）"
+description: "小説家になろう（ncode.syosetu.com / api.syosetu.com）の作品トップ・複数ページ目次抽出、短編作品対応、各話本文（前書き・本編・後書き）抽出、ルビ・傍点正規化、検索・ランキング（なろう小説API JSON）解析、およびURL正規化ルールの正本仕様。"
+status: "Review (#240)"
 updated: "2026-11-06"
 tags:
   - parser
@@ -13,7 +13,10 @@ tags:
   - bouten
   - multi-page-toc
   - short-story
+  - search
+  - ranking
 related_specs:
+  - docs/specs/changes/issue-240-narou-search-ranking-and-site-selector.md
   - docs/specs/architecture.md
   - docs/specs/requirements.md
   - docs/specs/db-schema.md
@@ -26,25 +29,30 @@ related_specs:
   - docs/specs/changes/archive/issue-239-narou-parser-and-multi-page-toc.md
   - docs/guidelines/testing.md
 related_tests:
+  - src/parsers/narou/NarouParser.test.ts
   - src/parsers/parserRegistry.test.ts
   - src/parsers/sanitizer.test.ts
 ---
 
-# 小説家になろう パーサー・スクレイピング仕様書（ncode.syosetu.com）
+# 小説家になろう パーサー・スクレイピング仕様書（ncode.syosetu.com / api.syosetu.com）
 
-本ドキュメントは、小説家になろう（一般作品サイト：`https://ncode.syosetu.com`）の作品メタデータ、エピソード目次（100 話超の複数ページ目次および 1 話完結の短編作品を含む）、各話本文 HTML（前書き・本編・後書き結合、ルビ `<ruby>`・傍点 `<em class="bouten">` 正規化）の抽出・サニタイズ仕様を定める正本（Single Source of Truth）です。
+本ドキュメントは、小説家になろう（一般作品サイト：`https://ncode.syosetu.com` および公式なろう小説 API：`https://api.syosetu.com/novelapi/api/`）の作品メタデータ、エピソード目次（100 話超の複数ページ目次および 1 話完結の短編作品を含む）、各話本文 HTML（前書き・本編・後書き結合、ルビ `<ruby>`・傍点 `<em class="bouten">` 正規化）、ならびに検索・ランキング結果の抽出・サニタイズ仕様を定める正本（Single Source of Truth）です。
 
 ---
 
 ## 1. 概要・対象ドメイン
 
-- **対象サイト**: 小説家になろう 一般作品（`https://ncode.syosetu.com`）
+- **対象サイト**:
+  - 作品トップ・目次・本文: 小説家になろう 一般作品（`https://ncode.syosetu.com`）
+  - 検索・ランキング: 小説家になろう 公式「なろう小説 API」（`https://api.syosetu.com/novelapi/api/`、JSON 形式 `out=json`）
   - ※18 禁サイト（`novel18.syosetu.com` 等、年齢確認 Cookie 必須領域）は対象外。
 - **サイト識別子 (`NovelSiteType`)**: `'narou'`
 - **取得方式**:
   - Android 実機環境: `CapacitorHttp`（`HttpClientBridge` 経由）によるネイティブ CORS 回避通信
-  - UT / テスト環境: ローカル HTML フィクスチャ（`src/parsers/narou/__fixtures__/*.html`）を用いた決定論的解析
-- **解析基盤**: `DOMParser`（ブラウザ標準 / Vitest `jsdom`）を用いた純粋な DOM トラバーサル処理（外部ネットワーク通信なし）
+  - UT / テスト環境: ローカル HTML / JSON フィクスチャ（`src/parsers/narou/__fixtures__/*.html`, `*.json`）を用いた決定論的解析
+- **解析基盤**:
+  - 作品目次・各話本文: `DOMParser`（ブラウザ標準 / Vitest `jsdom`）を用いた純粋な DOM トラバーサル処理（外部ネットワーク通信なし）
+  - 検索・ランキング: `JSON.parse` を用いたなろう小説 API レスポンス JSON の純粋解析処理（外部ネットワーク通信なし）
 
 ---
 
@@ -52,11 +60,13 @@ related_tests:
 
 ### 2.1 URL パターン
 
-| 種類                             | URL 形式                                      | 例                                       |
-| :------------------------------- | :-------------------------------------------- | :--------------------------------------- |
-| **作品トップ（目次・短編）**     | `https://ncode.syosetu.com/{ncode}/`          | `https://ncode.syosetu.com/n9669bk/`     |
-| **作品トップ（複数ページ目次）** | `https://ncode.syosetu.com/{ncode}/?p={page}` | `https://ncode.syosetu.com/n9669bk/?p=2` |
-| **各話エピソード（連載）**       | `https://ncode.syosetu.com/{ncode}/{epNo}/`   | `https://ncode.syosetu.com/n9669bk/1/`   |
+| 種類                             | URL 形式                                                          | 例                                                                                  |
+| :------------------------------- | :---------------------------------------------------------------- | :---------------------------------------------------------------------------------- |
+| **作品トップ（目次・短編）**     | `https://ncode.syosetu.com/{ncode}/`                              | `https://ncode.syosetu.com/n9669bk/`                                                |
+| **作品トップ（複数ページ目次）** | `https://ncode.syosetu.com/{ncode}/?p={page}`                     | `https://ncode.syosetu.com/n9669bk/?p=2`                                            |
+| **各話エピソード（連載）**       | `https://ncode.syosetu.com/{ncode}/{epNo}/`                       | `https://ncode.syosetu.com/n9669bk/1/`                                              |
+| **作品検索（公式 API）**         | `https://api.syosetu.com/novelapi/api/?out=json&lim=20&word=...`  | `https://api.syosetu.com/novelapi/api/?out=json&lim=20&word=無職転生&order=hyoka`   |
+| **ランキング（公式 API）**       | `https://api.syosetu.com/novelapi/api/?out=json&lim=20&order=...` | `https://api.syosetu.com/novelapi/api/?out=json&lim=20&order=weeklypoint&genre=201` |
 
 - `{ncode}` は先頭が `n`（または `N`）で始まる英数字識別子（正規表現: `/^n[0-9a-z]+$/i`）。Yommy 内では常に **小文字**（例: `n9669bk`）へ正規化し、末尾スラッシュ `/` を付与した `https://ncode.syosetu.com/{ncode}/` を正規化作品トップ URL（`canonicalUrl`）とする。
 
@@ -171,7 +181,116 @@ DOM 要素の抽出は文書順ではなく、以下の優先順位リストに�
 
 ---
 
-## 5. 受け入れ条件一覧（Acceptance Criteria: `AC-NR-xx`）
+## 5. 検索結果抽出仕様（`searchNovels` / `buildSearchUrl`）
+
+### 5.1 URL 生成（`buildSearchUrl`）
+
+- **ベース URL**: `https://api.syosetu.com/novelapi/api/`
+- **引数**: `query: string`, `options?: NovelSearchOptions`
+- **クエリパラメータ組み立て**:
+  - `out`: `"json"`（固定、非圧縮 UTF-8 JSON 出力）
+  - `lim`: `"20"`（1 ページあたり 20 件取得固定）
+  - `word`: `query.trim()` が非空の場合のみ付与（`URLSearchParams` または `encodeURIComponent` でエンコード）
+  - `order`: `options?.order`（未指定時は `"weekly_ranking"`）に応じて以下の値を指定：
+    - `"weekly_ranking"`（週間ランキング順）→ `"weeklypoint"`
+    - `"popular"`（累計ランキング順）→ `"hyoka"`
+    - `"last_episode_published_at"`（更新順）→ `"new"`
+    - `"published_at"`（新作順）→ `"generalfirstup"`
+  - `type`: `options?.serialStatus` に応じて以下の値を指定：
+    - `"all"` または未指定 → 省略（連載中・完結済連載・短編のすべてを含む）
+    - `"running"`（連載中）→ `"r"`（連載中の作品のみ）
+    - `"completed"`（完結済）→ `"ter"`（短編および完結済連載小説の双方を含む）
+  - `genre`: `options?.genre`（なろう公式小ジャンルコード文字列、例: `"201"`。未指定・空文字時は省略）
+  - `st`: `options?.page` が 2 以上の整数の場合のみ、開始位置 `st = (page - 1) * 20 + 1` を付与（1 または未指定時は省略。なお API 仕様上の上限は `st <= 2000`）
+
+### 5.2 なろう公式小ジャンル定義（全 21 種）
+
+検索・ランキングのジャンル絞り込みパラメータ（`genre`）および API 出力の数値 `genre` フィールドと日本語ラベルの対応は以下の通りです：
+
+| ジャンルコード (`genre`) | 日本語ラベル (`genreLabel`) | 大ジャンル分類 |
+| :----------------------- | :-------------------------- | :------------- |
+| `"201"`                  | ハイファンタジー            | ファンタジー   |
+| `"202"`                  | ローファンタジー            | ファンタジー   |
+| `"101"`                  | 異世界〔恋愛〕              | 恋愛           |
+| `"102"`                  | 現実世界〔恋愛〕            | 恋愛           |
+| `"301"`                  | 純文学                      | 文芸           |
+| `"302"`                  | ヒューマンドラマ            | 文芸           |
+| `"303"`                  | 歴史                        | 文芸           |
+| `"304"`                  | 推理                        | 文芸           |
+| `"305"`                  | ホラー                      | 文芸           |
+| `"306"`                  | アクション                  | 文芸           |
+| `"307"`                  | コメディー                  | 文芸           |
+| `"401"`                  | VRゲーム                    | SF             |
+| `"402"`                  | 宇宙                        | SF             |
+| `"403"`                  | 空想科学                    | SF             |
+| `"404"`                  | パニック                    | SF             |
+| `"9901"`                 | 童話                        | その他         |
+| `"9902"`                 | 詩                          | その他         |
+| `"9903"`                 | エッセイ                    | その他         |
+| `"9904"`                 | リプレイ                    | その他         |
+| `"9999"`                 | その他                      | その他         |
+| `"9801"`                 | ノンジャンル                | ノンジャンル   |
+
+### 5.3 解析処理（`searchNovels`）
+
+1. **JSON パースと異常系ガード**:
+   - 引数 `html`（なろう小説 API の JSON レスポンス文字列）を `JSON.parse` でパースする。
+   - 空文字列、不正 JSON、またはパース結果が配列でない場合は、例外を送出せず安全に空結果 `{ items: [], pageInfo: { currentPage, hasNextPage: false, totalCount: 0 } }` を返却する。
+2. **件数ヘッダと作品要素の走査**:
+   - 先頭要素 `data[0]` から `allcount`（数値、存在しない場合は `0`）を `totalCount` として抽出する。
+   - 2 番目以降の要素 `data.slice(1)` を順に走査し、有効な `ncode` 文字列を持つオブジェクトから `NovelSearchResultItem` を構築する：
+     - `remoteWorkId`: `String(entry.ncode).trim().toLowerCase()`（例: `"N9669BK"` → `"n9669bk"`）
+     - `title`: `String(entry.title ?? "").trim()`
+     - `author`: `String(entry.writer ?? "").trim()`
+     - `synopsis`: `String(entry.story ?? "").trim()`
+     - `genre`: `String(entry.genre ?? "")`
+     - `genreLabel`: §5.2 のジャンルマップから逆引きした日本語ラベル（未知コード時は `"その他"`）
+     - `serialStatus` / `serialStatusLabel`:
+       - `entry.end === 1` のとき: `serialStatus: "running"`, `serialStatusLabel: "連載中"`
+       - `entry.end === 0 && entry.novel_type === 2`（短編）のとき: `serialStatus: "completed"`, `serialStatusLabel: "短編"`
+       - それ以外（完結済連載 `entry.end === 0 && entry.novel_type === 1` 等）のとき: `serialStatus: "completed"`, `serialStatusLabel: "完結済"`
+     - `episodeCount`: `Number(entry.general_all_no) || 1`
+     - `characterCount`: `Number(entry.length) || 0`
+     - `tags`: `String(entry.keyword ?? "").trim()` を空白文字（`/\s+/`）で分割した非空文字列配列
+     - `reviewPoints`: `Number(entry.global_point) || 0`（検索結果では総合評価ポイントを採用）
+     - `lastEpisodePublishedAt`: `typeof entry.general_lastup === "string" && entry.general_lastup.trim() ? entry.general_lastup.trim() : null`
+     - `workUrl`: `https://ncode.syosetu.com/${remoteWorkId}/`
+3. **ページネーション判定（`pageInfo`）**:
+   - `pageUrl` のクエリパラメータ `st`（未指定時は `1`）から現在ページ `currentPage = Math.floor((st - 1) / 20) + 1`（または `page` パラメータが存在する場合はその値）を算出する。
+   - 次ページの開始位置 `nextSt = st + 20` について、`items.length > 0 && st + items.length - 1 < totalCount && nextSt <= 2000` を満たす場合に `hasNextPage: true`、それ以外は `false` とする。
+
+---
+
+## 6. ランキング抽出仕様（`getRanking` / `buildRankingUrl`）
+
+### 6.1 URL 生成（`buildRankingUrl`）
+
+- **ベース URL**: `https://api.syosetu.com/novelapi/api/`
+- **引数**: `options?: NovelRankingOptions`
+- **クエリパラメータ組み立て**:
+  - `out`: `"json"`（固定）
+  - `lim`: `"20"`（固定）
+  - `order`: `options?.period`（未指定時は `"weekly"`）に応じて以下の値を指定：
+    - `"daily"`（日間）→ `"dailypoint"`
+    - `"weekly"`（週間）→ `"weeklypoint"`
+    - `"monthly"`（月間）→ `"monthlypoint"`
+    - `"entire"`（累計）→ `"hyoka"`
+  - `genre`: `options?.genre` が非空かつ `"all"` 以外の場合のみ付与（なろう小ジャンルコード、例: `"201"`。総合時は省略）
+  - `st`: `options?.page` が 2 以上の整数の場合のみ `st = (page - 1) * 20 + 1` を付与
+
+### 6.2 解析処理（`getRanking`）
+
+- §5.3 と同一の JSON 配列解析基盤を使用しつつ、以下のランキング固有フィールドを付与して `ParsedRankingResult` を返却する：
+  - `rank`: 開始位置 `st`（1 ページ目は `1`）を基準に `st + index`（1 位〜）を付与。
+  - `reviewPoints`: `pageUrl` の `order` クエリパラメータに対応する期間ポイントを設定する：
+    - `order=dailypoint`: `Number(entry.daily_point ?? entry.global_point) || 0`
+    - `order=weeklypoint`: `Number(entry.weekly_point ?? entry.global_point) || 0`
+    - `order=monthlypoint`: `Number(entry.monthly_point ?? entry.global_point) || 0`
+    - `order=hyoka`（またはその他）: `Number(entry.global_point) || 0`
+
+---
+
+## 7. 受け入れ条件一覧（Acceptance Criteria: `AC-NR-xx`）
 
 | AC ID          | 対象機能                                    | 検証条件                                                                                                                                                                                                                                                                | 関連要件 ID      |
 | :------------- | :------------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------- |
@@ -184,4 +303,8 @@ DOM 要素の抽出は文書順ではなく、以下の優先順位リストに�
 | **`AC-NR-07`** | ルビ保持と傍点 `<em class="bouten">` 正規化 | 通常ルビ `<ruby>` を保持しつつ、`<rt>` が傍点記号（`・` / `﹅` / `●`）のみの `<ruby>` を `<em class="bouten">` に正規化して抽出できること。                                                                                                                             | `SYS-REQ-07`     |
 | **`AC-NR-08`** | XSS 防止サニタイズ                          | 本文中の `<script>`, `onerror`, `id="L1"` 等のタグ・属性が `HtmlSanitizer` により完全に無害化・除去されること。                                                                                                                                                         | `SYS-REQ-07`     |
 | **`AC-NR-09`** | 前後話ナビゲーション URL 抽出               | `.c-pager__item--before` / `.c-pager__item--next` から `prevChapterUrl` / `nextChapterUrl` が絶対 URL または `null` として正しく抽出されること。                                                                                                                        | `SYS-REQ-02, 11` |
-| **`AC-NR-10`** | 決定論的単体テスト                          | 外部ネットワーク通信を一切行わず、ローカル HTML フィクスチャ（`src/parsers/narou/__fixtures__/*.html`）により Vitest で C0/C1/Functions 100% 検証できること。                                                                                                           | `SYS-REQ-01`     |
+| **`AC-NR-10`** | 決定論的単体テスト                          | 外部ネットワーク通信を一切行わず、ローカル HTML / JSON フィクスチャ（`src/parsers/narou/__fixtures__/*`）により Vitest で C0/C1/Functions 100% 検証できること。                                                                                                         | `SYS-REQ-01`     |
+| **`AC-NR-11`** | 検索 API URL 生成                           | `buildSearchUrl` により、キーワード（`word`）、4種の並び順（`weeklypoint`, `hyoka`, `new`, `generalfirstup`）、連載状態（省略, `r`, `ter`）、小ジャンル（`genre`）、開始位置（`st`）がなろう小説 API 形式の URL として正しく生成されること。                            | `SYS-REQ-17`     |
+| **`AC-NR-12`** | 検索 API 結果 JSON パース                   | `searchNovels` により、なろう小説 API の JSON から小文字 `remoteWorkId`、小ジャンル日本語ラベル、連載/完結/短編ラベル、話数、文字数、スペース区切りタグ、総合ポイント、正規化 `workUrl`、および `hasNextPage` / `totalCount` が正確に抽出されること。                   | `SYS-REQ-17`     |
+| **`AC-NR-13`** | ランキング API URL 生成                     | `buildRankingUrl` により、集計期間（日間 `dailypoint` / 週間 `weeklypoint` / 月間 `monthlypoint` / 累計 `hyoka`）およびジャンル（総合時は省略、個別時は `genre`）に応じた API URL が正しく生成されること。                                                              | `SYS-REQ-18`     |
+| **`AC-NR-14`** | ランキング API 結果 JSON パース             | `getRanking` により、1位からの連番 `rank` および選択集計期間に応じた期間ポイント（`daily_point` / `weekly_point` / `monthly_point` / `global_point`）を持つ作品一覧が正確に抽出されること。                                                                             | `SYS-REQ-18`     |

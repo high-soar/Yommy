@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Review (#239)"
+status: "Review (#240)"
 updated: "2026-11-06"
 tags:
   - architecture
@@ -15,6 +15,7 @@ tags:
   - shell
   - search
   - ranking
+  - site-selector
   - four-tabs
   - prefetch
   - batch-cache
@@ -37,7 +38,9 @@ tags:
   - ho-25
   - ho-28
   - ho-29
+  - ho-31
 related_specs:
+  - docs/specs/changes/issue-240-narou-search-ranking-and-site-selector.md
   - docs/specs/changes/archive/issue-239-narou-parser-and-multi-page-toc.md
   - docs/specs/parsers/narou.md
   - docs/specs/changes/archive/issue-238-loading-ux-clarification.md
@@ -77,6 +80,8 @@ related_tests:
   - src/app/ServiceProvider.test.tsx
   - src/app/router.test.tsx
   - src/App.test.tsx
+  - src/parsers/narou/NarouParser.test.ts
+  - src/parsers/fetchFullNovelIndex.test.ts
   - src/shared/ui/BottomTabBar.test.tsx
   - src/storage/schema.test.ts
   - src/bridges/app/capacitorAppBridge.test.ts
@@ -120,7 +125,7 @@ flowchart TB
     subgraph ParserLayer ["1. Parser Layer (src/parsers/*)"]
         Registry["ParserRegistry<br>(URL から適切な NovelParser を解決)"]
         Kakuyomu["KakuyomuParser<br>(kakuyomu.jp: 目次・本文・検索・ランキング解析)"]
-        Narou["NarouParser<br>(syosetu.com)"]
+        Narou["NarouParser<br>(syosetu.com: 目次・本文・検索・ランキング解析)"]
         Sanitizer["HtmlSanitizer / Formatter<br>(許可タグ <p>,<br>,<ruby>,<rb>,<rt>,<rp>,<em> のみ保持)"]
         Registry --> Kakuyomu
         Registry --> Narou
@@ -204,8 +209,8 @@ Yommy/
     │   ├── bookshelf/                 # SCR-01: 本棚一覧（空状態での検索/ランキング誘導・更新チェック・ソート）
     │   ├── novel-detail/              # SCR-02: 作品詳細・目次一覧・取得操作・一括キャッシュ
     │   ├── reader/                    # SCR-03: 小説リーダー（全画面100dvh・上下連動オーバーレイ＆RTLシークバー・縦書きCSSマルチカラム組版・2段階水平スライドアニメーション・音量キー送り・ルビ・しおり保存）
-    │   ├── search/                    # SCR-06: 検索画面（カクヨム作品検索・カードから本棚追加・SCR-02遷移）
-    │   ├── ranking/                   # SCR-07: ランキング画面（期間/ジャンル別ランキング・カードから本棚追加・SCR-02遷移）
+    │   ├── search/                    # SCR-06: 検索画面（カクヨム・小説家になろうサイト切替・作品検索・カードから本棚追加・SCR-02遷移）
+    │   ├── ranking/                   # SCR-07: ランキング画面（カクヨム・小説家になろうサイト切替・期間/ジャンル別ランキング・カードから本棚追加・SCR-02遷移）
     │   ├── settings/                  # SCR-05: 設定画面（組版・テーマ・フォント・余白・音量キー送り設定・サンプル文章プレビュー・クラウド同期・キャッシュ管理）
     │   └── cloud-sync/                # クラウド同期（Google Drive appDataFolder・SyncEngine）（Issue #120）
     │       ├── types.ts               # YommySyncState, SyncNovelData 等の同期データ型定義
@@ -219,7 +224,7 @@ Yommy/
     │   │   ├── KakuyomuParser.ts
     │   │   ├── KakuyomuParser.test.ts
     │   │   └── __fixtures__/
-    │   └── narou/                     # 小説家になろう用パーサーとローカル HTML フィクスチャ（Issue #239）
+    │   └── narou/                     # 小説家になろう用パーサーとローカル HTML/JSON フィクスチャ（Issue #239, #240）
     │       ├── NarouParser.ts
     │       ├── NarouParser.test.ts
     │       └── __fixtures__/
