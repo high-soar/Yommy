@@ -1,14 +1,15 @@
 ---
 type: spec-feature
 title: "ランキング画面仕様書（SCR-07: Novel Ranking）"
-description: "複数小説サイト（v0.3はカクヨム）のランキング一覧（期間×総合/主要ジャンル）、順位バッジ表示、作品カード一覧およびその場での本棚追加を提供するランキング画面（SCR-07）の正本仕様。"
-status: "Review (#239)"
+description: "複数小説サイト（カクヨム・小説家になろう）のサイト切替、ランキング一覧（期間×総合/サイト別主要ジャンル）、順位バッジ表示、作品カード一覧およびその場での本棚追加を提供するランキング画面（SCR-07）の正本仕様。"
+status: "Review (#240)"
 updated: "2026-11-06"
 tags:
   - ranking
   - scr-07
   - kakuyomu
   - narou
+  - site-selector
   - multi-page-toc
   - period
   - genre
@@ -16,6 +17,7 @@ tags:
   - shell
   - bottom-nav
 related_specs:
+  - docs/specs/changes/issue-240-narou-search-ranking-and-site-selector.md
   - docs/specs/changes/archive/issue-239-narou-parser-and-multi-page-toc.md
   - docs/specs/parsers/narou.md
   - docs/specs/requirements.md
@@ -31,6 +33,8 @@ related_specs:
 related_tests:
   - src/App.test.tsx
   - src/app/router.test.tsx
+  - src/features/ranking/components/SiteSelector.test.tsx
+  - src/features/ranking/components/RankingFilterBar.test.tsx
   - src/features/ranking/components/RankingPage.test.tsx
   - src/features/ranking/components/RankingContainer.test.tsx
   - src/features/ranking/hooks/useNovelRanking.test.ts
@@ -48,16 +52,15 @@ related_tests:
 
 - **対象画面**: ランキング画面（`SCR-07`、ルートパス `/ranking`）
 - **対応要件**:
-  - `SYS-REQ-18`（カクヨムランキング機能：期間4種 × 総合/主要12ジャンル、長編ランキング、順位バッジ表示）
+  - `SYS-REQ-18`（マルチサイトランキング機能：カクヨム・小説家になろうのサイト切替、期間4種 × 総合/サイト別ジャンル、順位バッジ表示、期間ポイント表示）
   - `SYS-REQ-19`（ランキング結果カードからの本棚ワンタップ即時登録および作品詳細遷移）
   - `SYS-REQ-20`（下部4タブナビゲーションおよびOSバックキー論理階層遷移）
 - **関連画面遷移**:
   - `TR-01`（下部タブバーによる 4 画面「本棚 `/`」「検索 `/search`」「ランキング `/ranking`」「設定 `/settings`」相互切替）
   - `TR-12`（ランキング画面上での OS バックキー操作によるホーム「本棚 `SCR-01` `/`」への復帰）
   - `TR-14`（ランキング結果カード本体タップによる作品詳細・目次画面 `SCR-02` `/novels/:novelId` への遷移）
-- **対象外スコープ（Milestone `v0.6〜`）**:
-  - 小説家になろう（`narou`）のランキング実装
-  - 短編ランキング（`work_variation=short`）への明示的切替UI（v0.3 ではカクヨム標準の長編 `long` 固定）
+- **対象外スコープ（Milestone `v0.8〜`）**:
+  - カクヨムにおける短編ランキング（`work_variation=short`）への明示的切替UI（カクヨムは長編 `long` 固定、小説家になろうは全作品対象）
 
 ---
 
@@ -68,10 +71,10 @@ related_tests:
 ```text
 src/features/ranking/
 ├── components/
-│   ├── SiteSelector.tsx              # 対象サイト切替ピル（カクヨム / 将来のなろう）
+│   ├── SiteSelector.tsx              # 対象サイト切替ピル（カクヨム / 小説家になろう）
 │   ├── SiteSelector.stories.tsx
 │   ├── SiteSelector.test.tsx
-│   ├── RankingFilterBar.tsx          # 集計期間切替（4種）およびジャンル切替横スクロールピル（総合＋主要12ジャンル）
+│   ├── RankingFilterBar.tsx          # 集計期間切替（4種）およびサイト別ジャンル切替横スクロールピル
 │   ├── RankingFilterBar.stories.tsx
 │   ├── RankingFilterBar.test.tsx
 │   ├── RankingNovelCard.tsx          # 順位バッジ付き作品カード（「＋ 本棚に追加」ボタン配置）
@@ -148,6 +151,8 @@ export interface RankingNovelCardProps {
 
 ```typescript
 export interface RankingFilterBarProps {
+  /** 選択中サイト識別子（サイト別ジャンルピル切替用、省略時は "kakuyomu"、v0.7 Issue #240） */
+  selectedSite?: NovelSiteType;
   /** 選択中集計期間 */
   selectedPeriod: NovelRankingPeriod;
   /** 集計期間変更コールバック */
@@ -212,14 +217,15 @@ export interface UseNovelRankingResult {
 
 | 受入条件 ID    | 対象項目                               | 仕様・期待動作                                                                                                                                                                                                                                                                                                                                                                                                                | 関連要件 / 遷移            |
 | :------------- | :------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------- |
-| **`AC-RK-01`** | 初期表示とデフォルト状態               | `/ranking` への初回アクセス時、上部に「ランキング」タイトルと「カクヨム」ピルが表示され、デフォルトで「週間」「総合（長編）」のランキングが自動取得・描画されること。                                                                                                                                                                                                                                                         | `SYS-REQ-18, 20` / `TR-01` |
+| **`AC-RK-01`** | 初期表示とデフォルト状態               | `/ranking` への初回アクセス時、上部に「ランキング」タイトルと対象サイトピル（「カクヨム」「小説家になろう」、双方選択可能、デフォルトは「カクヨム」）が表示され、デフォルトで「週間」「総合」のランキングが自動取得・描画されること。                                                                                                                                                                                         | `SYS-REQ-18, 20` / `TR-01` |
 | **`AC-RK-02`** | 集計期間の切り替え                     | 期間タブ（日間、週間、月間、累計）の切り替えにより、即座に対応するパラメータ（`period`）でランキング再取得が開始され、旧一覧が非表示となって `ranking-loading` が表示され、通信完了後に一覧が更新されること。通信中はフィルタ操作（タブ・ピル・サイト）が無効化されること（v0.7 Issue #238）。                                                                                                                                | `SYS-REQ-18`               |
-| **`AC-RK-03`** | ジャンルの切り替え                     | ジャンルピル（総合、異世界ファンタジー、現代ファンタジー等12種）の選択により、該当ジャンルのランキング再取得が開始され、旧一覧が非表示となって `ranking-loading` が表示され、通信完了後に一覧が更新されること。通信中はフィルタ操作が無効化されること（v0.7 Issue #238）。                                                                                                                                                    | `SYS-REQ-18`               |
+| **`AC-RK-03`** | サイト別ジャンルの切り替え             | サイト別ジャンルピル（総合、およびカクヨム選択時は主要12種／なろう選択時は公式小ジャンル21種）の選択により、該当ジャンルのランキング再取得が開始され、旧一覧が非表示となって `ranking-loading` が表示され、通信完了後に一覧が更新されること。通信中はフィルタ操作が無効化されること（v0.7 Issue #238, #240）。                                                                                                                | `SYS-REQ-18`               |
 | **`AC-RK-04`** | 順位バッジ強調表示                     | 1位〜3位の作品カードには特別スタイル（金・銀・銅をモチーフにしたアクセント表示）の順位バッジが付与され、4位以降は識別しやすい数字バッジが表示されること。                                                                                                                                                                                                                                                                     | `SYS-REQ-18`               |
-| **`AC-RK-05`** | ランキングカードメタデータ描画         | 各作品カードに、順位、タイトル、著者名、ジャンルバッジ、連載状態バッジ、あらすじ抜粋、話数、総文字数、★ポイント数、タグラベルが欠損なく描画されること。                                                                                                                                                                                                                                                                       | `SYS-REQ-18`               |
+| **`AC-RK-05`** | ランキングカードメタデータ描画         | 各作品カードに、順位、タイトル、著者名、ジャンルバッジ、連載状態バッジ（連載中 / 完結済 / 短編）、あらすじ抜粋、話数、総文字数、★ポイント数（なろうは選択期間に応じた期間ポイント）、タグラベルが欠損なく描画されること。                                                                                                                                                                                                     | `SYS-REQ-18`               |
 | **`AC-RK-06`** | カード内「＋ 本棚に追加」その場登録    | カードの「＋ 本棚に追加」ボタンを押下すると、画面遷移せずにボタンがローディング表示となり、バックグラウンドで `fetchFullNovelIndex`（`nextTocPageUrl` による複数ページ目次連続取得対応、Issue #239）および SQLite 保存（`upsertNovelWithToc`）が行われ、成功時に「✓ 登録済み」へ切り替わり `syncEngine.notifyChanged()` による自動 Push がトリガーされること（R1-26）。                                                       | `SYS-REQ-19` / `TR-14`     |
 | **`AC-RK-07`** | カード本体タップ時の導線               | 登録済みカードをタップしたときは直ちにその作品の目次画面（`SCR-02`）へ遷移し、未登録カードをタップしたときは自動で「本棚に追加」を実行した上で完了後に目次画面へ遷移すること。                                                                                                                                                                                                                                                | `SYS-REQ-19` / `TR-14`     |
 | **`AC-RK-08`** | 再取得時ローディング表示と操作重複抑止 | ランキング再取得通信中（`isLoading === true`）は、直前のランキングカード一覧を画面からクリアし中央にローディングスピナー（`data-testid="ranking-loading"`）を明示すること。また通信中は期間タブ・ジャンルピル・サイトセレクタが操作不能（`disabled`）となり二重リクエストや非同期競合が抑止されること。通信エラー時はエラー表示（`ranking-error`）および再試行ボタンが提供され、旧データは残留しないこと（v0.7 Issue #238）。 | `SYS-REQ-18`               |
+| **`AC-RK-09`** | サイト切替と条件・登録済み状態連動     | `SiteSelector` で「カクヨム ⇔ 小説家になろう」を切り替えた際、集計期間（`period`）は保持しつつサイト固有のジャンル選択のみ「総合（`undefined`）」にリセットされ、ジャンルピル一覧が切替後サイトの定義に切り替わり、直ちに新サイト（`KakuyomuParser` または `NarouParser`）でランキング自動再取得が走るとともに `registeredWorkIds` が切替後サイトの登録済み作品セットへ更新されること（v0.7 Issue #240）。                    | `SYS-REQ-18, 19`           |
 
 ---
 

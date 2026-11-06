@@ -6,6 +6,7 @@ status: "Approved"
 updated: "2026-11-06"
 tags: [quality, bug-log, handover, dre, kaizen]
 related_specs:
+  - docs/specs/changes/issue-240-narou-search-ranking-and-site-selector.md
   - docs/specs/changes/archive/issue-239-narou-parser-and-multi-page-toc.md
   - docs/specs/parsers/narou.md
   - docs/specs/changes/archive/issue-238-loading-ux-clarification.md
@@ -97,12 +98,13 @@ related_tests: []
 > - Milestone `v0.5` で解決済みの申し送り（`HO-15`, `HO-22`, `HO-23`, `HO-24`, `HO-25`）: [docs/quality/archive/v0.5-reader-customization-and-cache-log.md](archive/v0.5-reader-customization-and-cache-log.md)
 > - Milestone `v0.6` で解決済みの申し送り（`HO-26`〜`HO-28`）: [docs/quality/archive/v0.6-reader-animation-overlay-and-volume-key-log.md](archive/v0.6-reader-animation-overlay-and-volume-key-log.md)
 
-現在、未解決（`Open`）の申し送り事項は 2 件（`HO-29`, `HO-30`）です。Milestone `v0.7` 作業中に発生した追加の申し送り事項は、本表へ `HO-31` より連番で登録します。
+現在、未解決（`Open`）の申し送り事項は 3 件（`HO-29`, `HO-30`, `HO-31`）です。Milestone `v0.7` 作業中に発生した追加の申し送り事項は、本表へ `HO-32` より連番で登録します。
 
 |     ID      | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                           | 解決先（対象 Issue / 成果物）          | 完了ゲート              | 状態 (`Open` / `Resolved`) |
 | :---------: | :---------------: | :------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------- | :---------------------- | :------------------------: |
 | **`HO-29`** | Issue #239, #240  | 小説家になろう（`narou`: `ncode.syosetu.com`）作品の複数ページ目次取得・クラウド同期および検索・ランキング探索の実機検証                     | Milestone `v0.7` 実機検証 / Issue #241 | Milestone `v0.7` 完了前 |           `Open`           |
 | **`HO-30`** |    Issue #238     | Android 実機での低速モバイル回線下におけるランキング・検索の条件切替、およびリーダー未キャッシュ話遷移時のローディング表示 UX の実機体感確認 | Milestone `v0.7` 実機検証 / Issue #241 | Milestone `v0.7` 完了前 |           `Open`           |
+| **`HO-31`** |    Issue #240     | 除外キーワード指定や複数ジャンル AND/OR モーダル等の高度な検索フィルタ機能の検討・実装（Issue #240 §3 対象外スコープ）                       | 将来 Milestone（`v0.8〜`）             | Milestone `v0.8` 以降   |           `Open`           |
 
 ---
 
