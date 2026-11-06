@@ -15,6 +15,7 @@ import narouSearchResultsJson from "../../../parsers/narou/__fixtures__/search_r
 import type { HttpResponse } from "../../../bridges/http/types";
 import type { NovelSearchResultItem } from "../../../parsers/types";
 import type { SyncEngine } from "../../cloud-sync/services/syncEngine";
+import { createDefaultParserRegistry } from "../../../parsers/parserRegistry";
 
 describe("useNovelSearch", () => {
   let mockHttpClient: MockHttpClient;
@@ -74,11 +75,11 @@ describe("useNovelSearch", () => {
   });
 
   const createWrapper =
-    (initialPath = "/search") =>
+    (initialPath = "/search", customServices = {}) =>
     ({ children }: { children: React.ReactNode }) =>
       React.createElement(
         ServiceProvider,
-        { services: { httpClient: mockHttpClient } },
+        { services: { httpClient: mockHttpClient, ...customServices } },
         React.createElement(RouterProvider, { initialPath }, children),
       );
 
@@ -891,8 +892,9 @@ describe("useNovelSearch", () => {
   });
 
   it("loadMore でパーサーが未実装サイトの場合はエラーメッセージが設定されること", async () => {
+    const dummyRegistry = createDefaultParserRegistry();
     const { result } = renderHook(() => useNovelSearch(), {
-      wrapper: createWrapper(),
+      wrapper: createWrapper("/search", { parserRegistry: dummyRegistry }),
     });
 
     act(() => {
@@ -903,15 +905,16 @@ describe("useNovelSearch", () => {
       await result.current.search();
     });
 
-    act(() => {
-      result.current.setSelectedSite("generic");
-    });
+    expect(result.current.hasNextPage).toBe(true);
+
+    const getAllSpy = vi.spyOn(dummyRegistry, "getAll").mockReturnValue([]);
 
     await act(async () => {
       await result.current.loadMore();
     });
 
     expect(result.current.error).toContain("検索機能が未実装のサイトです");
+    getAllSpy.mockRestore();
   });
 
   it("addNovelToBookshelf で非Error例外がスローされた場合も error ステートが設定されること", async () => {
