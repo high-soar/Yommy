@@ -385,6 +385,55 @@ describe("ServiceProvider", () => {
       });
     });
 
+    it("createDefaultMockHttpClient が小説家になろうAPI検索URLおよびランキングURLにマッチすること (Issue #240)", async () => {
+      let searchJson = "";
+      let rankingJson = "";
+      let rankingNovelIndexHtml = "";
+
+      const TestConsumer: React.FC = () => {
+        const services = useServices();
+        React.useEffect(() => {
+          if (services.isReady) {
+            services.httpClient
+              .getHtml({
+                url: "https://api.syosetu.com/novelapi/api/?out=json&lim=20&word=%E7%95%B0%E4%B8%96%E7%95%8C",
+              })
+              .then((res) => {
+                searchJson = res.html;
+              });
+            services.httpClient
+              .getHtml({
+                url: "https://api.syosetu.com/novelapi/api/?out=json&lim=20&order=weeklypoint",
+              })
+              .then((res) => {
+                rankingJson = res.html;
+              });
+            services.httpClient
+              .getHtml({
+                url: "https://ncode.syosetu.com/n1001aa/",
+              })
+              .then((res) => {
+                rankingNovelIndexHtml = res.html;
+              });
+          }
+        }, [services]);
+        return <div>なろうAPIモックテスト</div>;
+      };
+
+      render(
+        <ServiceProvider>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(searchJson).toContain("無職転生 - 異世界行ったら本気だす -");
+        expect(rankingJson).toContain("デイリー1位作品");
+        expect(rankingNovelIndexHtml).toContain("デイリー1位作品");
+        expect(rankingNovelIndexHtml).toContain("ランキング作家A");
+      });
+    });
+
     it("カスタム databaseAdapter および 各 Repository が渡された場合にそのまま利用されること", async () => {
       const customDb = {
         execute: vi.fn(),

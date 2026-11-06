@@ -12,6 +12,7 @@ import rankingEmptyHtml from "../../../parsers/kakuyomu/__fixtures__/ranking_res
 import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 import narouWorkIndexSerializedHtml from "../../../parsers/narou/__fixtures__/work_index_serialized.html?raw";
 import narouWorkIndexPage2Html from "../../../parsers/narou/__fixtures__/work_index_page2.html?raw";
+import narouRankingResultsJson from "../../../parsers/narou/__fixtures__/ranking_results.json?raw";
 import { sampleRankingItem1, sampleRankingItem2 } from "../types";
 import type { HttpResponse } from "../../../bridges/http/types";
 import type { NovelRankingResultItem } from "../../../parsers/types";
@@ -53,6 +54,15 @@ describe("useNovelRanking", () => {
         url: options.url,
         headers: {},
         html: workIndexHtml,
+      }),
+    );
+    mockHttpClient.setResponse(
+      /^https:\/\/api\.syosetu\.com\/novelapi\/api\//,
+      (options) => ({
+        status: 200,
+        url: options.url,
+        headers: {},
+        html: narouRankingResultsJson,
       }),
     );
   });
@@ -994,5 +1004,120 @@ describe("useNovelRanking", () => {
     });
 
     expect(result.current.registeredWorkIds.size).toBe(0);
+  });
+
+  describe("サイト切替（setSelectedSite）と自動連動 (AC-RK-09)", () => {
+    it("サイトを narou へ切り替えた場合、period を維持し genre を undefined にリセットして即時自動再取得が走ること", async () => {
+      const { result } = renderHook(() => useNovelRanking(), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+        expect(result.current.items.length).toBeGreaterThan(0);
+      });
+
+      // 期間とジャンルを変更
+      await act(async () => {
+        result.current.setPeriod("monthly");
+      });
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        result.current.setGenre("fantasy");
+      });
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+        expect(result.current.genre).toBe("fantasy");
+      });
+
+      const getHtmlSpy = vi.spyOn(mockHttpClient, "getHtml");
+
+      // narou へ切り替え
+      await act(async () => {
+        result.current.setSelectedSite("narou");
+      });
+
+      await waitFor(() => {
+        expect(result.current.selectedSite).toBe("narou");
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // period が維持され、genre が undefined（総合）にリセットされていること
+      expect(result.current.period).toBe("monthly");
+      expect(result.current.genre).toBeUndefined();
+      expect(result.current.error).toBeNull();
+
+      // api.syosetu.com へのリクエストが monthlypoint で行われていること
+      expect(getHtmlSpy).toHaveBeenCalled();
+      const calledUrl = getHtmlSpy.mock.calls[0][0].url;
+      expect(calledUrl).toContain("api.syosetu.com");
+      expect(calledUrl).toContain("order=monthlypoint");
+      expect(calledUrl).not.toContain("genre=");
+
+      // 取得結果がなろう作品（n1001aa）であること
+      expect(result.current.items[0].remoteWorkId).toBe("n1001aa");
+      expect(result.current.items[0].workUrl).toContain("syosetu.com");
+    });
+
+    it("同一サイト（kakuyomu -> kakuyomu）への切り替えは何もしないこと（no-op）", async () => {
+      const { result } = renderHook(() => useNovelRanking(), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      const getHtmlSpy = vi.spyOn(mockHttpClient, "getHtml");
+
+      act(() => {
+        result.current.setSelectedSite("kakuyomu");
+      });
+
+      expect(getHtmlSpy).not.toHaveBeenCalled();
+    });
+
+    it("通信中（isLoading === true）のサイト切り替え操作は無視（ガード）されること", async () => {
+      let resolveRanking: (res: HttpResponse) => void = () => {};
+      mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/rankings\//, () => {
+        return new Promise<HttpResponse>((resolve) => {
+          resolveRanking = resolve;
+        });
+      });
+
+      const { result } = renderHook(() => useNovelRanking(), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(true);
+      });
+
+      // 通信中に setSelectedSite を呼び出し
+      act(() => {
+        result.current.setSelectedSite("narou");
+      });
+
+      // サイトは変わらないこと
+      expect(result.current.selectedSite).toBe("kakuyomu");
+
+      // 解決
+      await act(async () => {
+        resolveRanking({
+          status: 200,
+          url: "https://kakuyomu.jp/rankings/weekly",
+          headers: {},
+          html: rankingApolloHtml,
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+      expect(result.current.selectedSite).toBe("kakuyomu");
+    });
   });
 });

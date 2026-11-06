@@ -5,6 +5,8 @@ import { composeStories } from "@storybook/react";
 import * as stories from "./RankingPage.stories";
 import { RankingPage } from "./RankingPage";
 import { sampleRankingItem1 } from "../types";
+import * as siteSelectorModule from "./SiteSelector";
+import * as rankingFilterBarModule from "./RankingFilterBar";
 
 const {
   WeeklyOverall,
@@ -182,5 +184,41 @@ describe("RankingPage コンポーネント", () => {
     const card = screen.getByTestId("ranking-novel-card-16817330658027210412");
     await user.click(card);
     expect(handleSelectCard).toHaveBeenCalledWith(sampleRankingItem1);
+  });
+
+  it("親子分離: selectedSite が SiteSelector および RankingFilterBar へ正しく伝播すること (AC-RK-09)", () => {
+    const siteSelectorSpy = vi.spyOn(siteSelectorModule, "SiteSelector");
+    const filterBarSpy = vi.spyOn(rankingFilterBarModule, "RankingFilterBar");
+
+    render(
+      <RankingPage
+        selectedSite="narou"
+        onSelectSite={vi.fn()}
+        selectedPeriod="weekly"
+        onSelectPeriod={vi.fn()}
+        selectedGenre={undefined}
+        onSelectGenre={vi.fn()}
+        items={[]}
+        registeredWorkIds={new Set()}
+        addingWorkId={null}
+        isLoading={false}
+        error={null}
+        onRetry={vi.fn()}
+        onAddNovel={vi.fn()}
+        onSelectCard={vi.fn()}
+      />,
+    );
+
+    expect(siteSelectorSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedSite: "narou" }),
+      expect.anything(),
+    );
+    expect(filterBarSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedSite: "narou" }),
+      expect.anything(),
+    );
+
+    siteSelectorSpy.mockRestore();
+    filterBarSpy.mockRestore();
   });
 });

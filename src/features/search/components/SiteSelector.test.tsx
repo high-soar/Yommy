@@ -7,18 +7,22 @@ import { SiteSelector } from "./SiteSelector";
 
 const { Default, NarouSelected, Disabled } = composeStories(stories);
 
-describe("SiteSelector コンポーネント", () => {
-  it("Default ストーリー: カクヨムがアクティブな状態でレンダリングされること", () => {
+describe("SiteSelector コンポーネント (Search)", () => {
+  it("Default ストーリー: カクヨムがアクティブで、なろうも有効（isAvailable: true）であること (AC-SE-01, AC-SE-10)", () => {
     render(<Default />);
 
     const kakuyomuButton = screen.getByTestId("site-selector-kakuyomu");
     expect(kakuyomuButton).toBeInTheDocument();
     expect(kakuyomuButton).toHaveAttribute("aria-pressed", "true");
     expect(kakuyomuButton).toHaveTextContent("カクヨム");
+    expect(kakuyomuButton).toBeEnabled();
 
     const narouButton = screen.getByTestId("site-selector-narou");
     expect(narouButton).toBeInTheDocument();
-    expect(narouButton).toBeDisabled();
+    expect(narouButton).toHaveAttribute("aria-pressed", "false");
+    expect(narouButton).toBeEnabled();
+    expect(narouButton).toHaveTextContent("小説家になろう");
+    expect(narouButton).not.toHaveTextContent("準備中");
   });
 
   it("NarouSelected ストーリー: なろうが選択された状態でも適切にレンダリングされること", () => {
@@ -26,6 +30,9 @@ describe("SiteSelector コンポーネント", () => {
 
     const kakuyomuButton = screen.getByTestId("site-selector-kakuyomu");
     expect(kakuyomuButton).toHaveAttribute("aria-pressed", "false");
+
+    const narouButton = screen.getByTestId("site-selector-narou");
+    expect(narouButton).toHaveAttribute("aria-pressed", "true");
   });
 
   it("Disabled ストーリー: disabled が真のとき、全ボタンが無効化されていること (AC-SE-09)", () => {
@@ -52,7 +59,21 @@ describe("SiteSelector コンポーネント", () => {
     expect(handleSelectSite).toHaveBeenCalledWith("kakuyomu");
   });
 
-  it("disabled が true のとき、利用可能なサイトボタンをクリックしても onSelectSite が呼ばれないこと (AC-SE-09)", async () => {
+  it("なろうボタンをクリックしたときに onSelectSite が呼び出されること (AC-SE-10)", async () => {
+    const user = userEvent.setup();
+    const handleSelectSite = vi.fn();
+
+    render(
+      <SiteSelector selectedSite="kakuyomu" onSelectSite={handleSelectSite} />,
+    );
+
+    const narouButton = screen.getByTestId("site-selector-narou");
+    await user.click(narouButton);
+
+    expect(handleSelectSite).toHaveBeenCalledWith("narou");
+  });
+
+  it("disabled が true のとき、ボタンをクリックしても onSelectSite が呼ばれないこと (AC-SE-09)", async () => {
     const user = userEvent.setup();
     const handleSelectSite = vi.fn();
 
@@ -66,6 +87,9 @@ describe("SiteSelector コンポーネント", () => {
 
     const kakuyomuBtn = screen.getByTestId("site-selector-kakuyomu");
     await user.click(kakuyomuBtn);
+
+    const narouBtn = screen.getByTestId("site-selector-narou");
+    await user.click(narouBtn);
 
     expect(handleSelectSite).not.toHaveBeenCalled();
   });

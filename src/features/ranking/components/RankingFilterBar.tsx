@@ -1,8 +1,10 @@
 import React from "react";
-import type { NovelRankingPeriod } from "../../../parsers/types";
+import type { NovelRankingPeriod, NovelSiteType } from "../../../parsers/types";
 import { RANKING_GENRES, RANKING_PERIODS } from "../types";
 
 export interface RankingFilterBarProps {
+  /** 選択中サイト識別子（サイト別ジャンルピル切替用、省略時は "kakuyomu"、v0.7 Issue #240） */
+  selectedSite?: NovelSiteType;
   selectedPeriod: NovelRankingPeriod;
   onSelectPeriod: (period: NovelRankingPeriod) => void;
   selectedGenre?: string;

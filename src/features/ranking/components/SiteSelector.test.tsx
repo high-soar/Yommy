@@ -8,7 +8,7 @@ import { SiteSelector } from "./SiteSelector";
 const { Default, NarouSelected, Disabled } = composeStories(stories);
 
 describe("SiteSelector コンポーネント (Ranking)", () => {
-  it("Default ストーリー: カクヨムがアクティブでなろうが非活性（準備中）であること", () => {
+  it("Default ストーリー: カクヨムがアクティブで、なろうも有効（isAvailable: true）であること (AC-RK-01, AC-RK-09)", () => {
     render(<Default />);
 
     const kakuyomuBtn = screen.getByTestId("site-selector-kakuyomu");
@@ -19,12 +19,16 @@ describe("SiteSelector コンポーネント (Ranking)", () => {
     const narouBtn = screen.getByTestId("site-selector-narou");
     expect(narouBtn).toBeInTheDocument();
     expect(narouBtn).toHaveAttribute("aria-pressed", "false");
-    expect(narouBtn).toBeDisabled();
-    expect(narouBtn).toHaveTextContent("小説家になろう (準備中)");
+    expect(narouBtn).toBeEnabled();
+    expect(narouBtn).toHaveTextContent("小説家になろう");
+    expect(narouBtn).not.toHaveTextContent("準備中");
   });
 
   it("NarouSelected ストーリー: narou 選択中状態のスタイル属性が反映されること", () => {
     render(<NarouSelected />);
+
+    const kakuyomuBtn = screen.getByTestId("site-selector-kakuyomu");
+    expect(kakuyomuBtn).toHaveAttribute("aria-pressed", "false");
 
     const narouBtn = screen.getByTestId("site-selector-narou");
     expect(narouBtn).toHaveAttribute("aria-pressed", "true");
@@ -40,7 +44,7 @@ describe("SiteSelector コンポーネント (Ranking)", () => {
     expect(narouBtn).toBeDisabled();
   });
 
-  it("利用可能なサイトボタンをクリックした際に onSelectSite が呼ばれること", async () => {
+  it("カクヨムボタンをクリックした際に onSelectSite が呼ばれること", async () => {
     const user = userEvent.setup();
     const handleSelect = vi.fn();
 
@@ -53,7 +57,7 @@ describe("SiteSelector コンポーネント (Ranking)", () => {
     expect(handleSelect).toHaveBeenCalledWith("kakuyomu");
   });
 
-  it("非活性（準備中）のサイトボタンをクリックしても onSelectSite が呼ばれないこと", async () => {
+  it("なろうボタンをクリックした際に onSelectSite が呼ばれること (AC-RK-09)", async () => {
     const user = userEvent.setup();
     const handleSelect = vi.fn();
 
@@ -64,10 +68,11 @@ describe("SiteSelector コンポーネント (Ranking)", () => {
     const narouBtn = screen.getByTestId("site-selector-narou");
     await user.click(narouBtn);
 
-    expect(handleSelect).not.toHaveBeenCalled();
+    expect(handleSelect).toHaveBeenCalledTimes(1);
+    expect(handleSelect).toHaveBeenCalledWith("narou");
   });
 
-  it("disabled が true のとき、利用可能なサイトボタンをクリックしても onSelectSite が呼ばれないこと (AC-RK-08)", async () => {
+  it("disabled が true のとき、ボタンをクリックしても onSelectSite が呼ばれないこと (AC-RK-08)", async () => {
     const user = userEvent.setup();
     const handleSelect = vi.fn();
 
@@ -81,6 +86,9 @@ describe("SiteSelector コンポーネント (Ranking)", () => {
 
     const kakuyomuBtn = screen.getByTestId("site-selector-kakuyomu");
     await user.click(kakuyomuBtn);
+
+    const narouBtn = screen.getByTestId("site-selector-narou");
+    await user.click(narouBtn);
 
     expect(handleSelect).not.toHaveBeenCalled();
   });

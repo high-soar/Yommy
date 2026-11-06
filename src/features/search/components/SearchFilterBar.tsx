@@ -2,10 +2,13 @@ import React from "react";
 import type {
   NovelSearchOrder,
   NovelSerialStatus,
+  NovelSiteType,
 } from "../../../parsers/types";
 import { SEARCH_GENRES, SEARCH_ORDERS, SEARCH_SERIAL_STATUSES } from "../types";
 
 export interface SearchFilterBarProps {
+  /** 選択中サイト識別子（サイト別ジャンルピル切替用、省略時は "kakuyomu"、v0.7 Issue #240） */
+  selectedSite?: NovelSiteType;
   selectedOrder: NovelSearchOrder;
   onSelectOrder: (order: NovelSearchOrder) => void;
   selectedSerialStatus: NovelSerialStatus;
