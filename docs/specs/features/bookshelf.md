@@ -18,7 +18,7 @@ tags:
   - narou
   - multi-page-toc
 related_specs:
-  - docs/specs/changes/issue-239-narou-parser-and-multi-page-toc.md
+  - docs/specs/changes/archive/issue-239-narou-parser-and-multi-page-toc.md
   - docs/specs/parsers/narou.md
   - docs/specs/changes/archive/issue-120-cloud-sync-google-drive.md
   - docs/specs/requirements.md

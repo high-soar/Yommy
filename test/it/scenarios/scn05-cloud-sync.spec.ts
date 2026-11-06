@@ -65,6 +65,7 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     );
     await page.evaluate(async () => {
       const services = window.__yommyServices!;
+      // カクヨム作品のシード登録
       const sampleUrl = "https://kakuyomu.jp/works/16817330658027210412";
       const response = await services.httpClient.getHtml({ url: sampleUrl });
       const parser = services.parserRegistry.requireParser(sampleUrl);
@@ -72,6 +73,41 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
       await services.novelRepository.upsertNovelWithToc(
         parsedIndex,
         new Date().toISOString(),
+      );
+
+      // 小説家になろう作品のシード登録（複数ページ目次取得・クラウド同期検証, Issue #239）
+      const narouUrl = "https://ncode.syosetu.com/n9669bk/";
+      const narouParser = services.parserRegistry.requireParser(narouUrl);
+      const p1Res = await services.httpClient.getHtml({ url: narouUrl });
+      const p1Index = narouParser.parseNovelIndex(p1Res.html, narouUrl);
+      const p2Res = await services.httpClient.getHtml({
+        url: p1Index.nextTocPageUrl!,
+      });
+      const p2Index = narouParser.parseNovelIndex(
+        p2Res.html,
+        p1Index.nextTocPageUrl!,
+      );
+      const combinedChapters = [...p1Index.chapters, ...p2Index.chapters].map(
+        (ch, idx) => ({
+          ...ch,
+          chapterIndex: idx + 1,
+          partTitle: ch.partTitle ?? (idx >= 3 ? "第2章 少年期" : null),
+        }),
+      );
+      await services.novelRepository.upsertNovelWithToc(
+        {
+          ...p1Index,
+          chapters: combinedChapters,
+          nextTocPageUrl: null,
+        },
+        new Date().toISOString(),
+      );
+      // なろう作品の第4話しおり・既読設定
+      await services.novelRepository.updateBookmark("narou:n9669bk", 4, 0.0);
+      await services.chapterRepository.markChapterRead(
+        "narou:n9669bk",
+        4,
+        true,
       );
     });
     await page.reload();
@@ -81,16 +117,21 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
         window.__yommyServices.isReady === true,
     );
 
-    // 3. 本棚に作品カードが表示されていることを確認
-    const novelCard = page.getByTestId("novel-card");
-    await expect(novelCard).toBeVisible();
-    await expect(page.getByTestId("novel-card-title")).toHaveText(
-      "境界迷宮と異界の魔術師",
-    );
+    // 3. 本棚にカクヨムおよびなろうの2作品カードが表示されていることを確認
+    const novelCards = page.getByTestId("novel-card");
+    await expect(novelCards).toHaveCount(2);
+    await expect(page.getByText("境界迷宮と異界の魔術師")).toBeVisible();
+    await expect(
+      page.getByText("無職転生 - 異世界行ったら本気だす"),
+    ).toBeVisible();
 
-    // 4. 作品カードをクリックして作品詳細（SCR-02）へ遷移
-    const novelCardSelect = page.getByTestId("novel-card-select");
-    await novelCardSelect.click();
+    // 4. カクヨム作品カードをクリックして作品詳細（SCR-02）へ遷移
+    const kakuyomuCardSelect = page
+      .locator('[data-testid="novel-card"]', {
+        hasText: "境界迷宮と異界の魔術師",
+      })
+      .getByTestId("novel-card-select");
+    await kakuyomuCardSelect.click();
     await expect(page).toHaveURL(
       /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
     );
@@ -128,18 +169,23 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     await expect(resumeButton).toBeVisible();
     await expect(resumeButton).toContainText("続きから読む（第2話）");
 
-    // 8. 2.5秒のデバウンス auto-push が発火し、モック Drive のリモートデータに作品情報・第2話しおり（bookmarkChapterIndex: 2）が記録されるのを待機
+    // 8. 2.5秒のデバウンス auto-push が発火し、モック Drive のリモートデータにカクヨムおよびなろう作品（第4話しおり含む）が記録されるのを待機
     await page.waitForFunction(
       () => {
         const raw = localStorage.getItem("yommy_mock_gdrive_file");
         if (!raw) return false;
         try {
           const parsed = JSON.parse(raw);
-          const novel = parsed?.novels?.["kakuyomu:16817330658027210412"];
+          const kakuyomuNovel =
+            parsed?.novels?.["kakuyomu:16817330658027210412"];
+          const narouNovel = parsed?.novels?.["narou:n9669bk"];
           return (
-            Boolean(novel) &&
-            novel.bookmarkChapterIndex === 2 &&
-            novel.title === "境界迷宮と異界の魔術師"
+            Boolean(kakuyomuNovel) &&
+            kakuyomuNovel.bookmarkChapterIndex === 2 &&
+            kakuyomuNovel.title === "境界迷宮と異界の魔術師" &&
+            Boolean(narouNovel) &&
+            narouNovel.bookmarkChapterIndex === 4 &&
+            narouNovel.title === "無職転生 - 異世界行ったら本気だす"
           );
         } catch {
           return false;
@@ -149,7 +195,7 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     );
 
     // =========================================================================
-    // ステップ3: 端末 B（DB リセット状態）での起動時自動 Pull、作品自動取得、第2話しおり復帰・既読同期確認
+    // ステップ3: 端末 B（DB リセット状態）での起動時自動 Pull、複数ページ目次を含むなろう作品およびカクヨム作品の自動取得、しおり復帰・既読同期確認
     // =========================================================================
     // 1. 直前の DB 永続化（onUpdate -> backup）の完了を確実に待機してからバックアップを退避（R1-19, R2-08 偽陽性防止）
     await expect
@@ -174,36 +220,81 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     // 偽陽性防止（R1-19）: 端末 B が最初は空本棚から開始することを確認
     await expect(page.getByTestId("bookshelf-page")).toBeVisible();
 
-    // 4. SyncEngine がリモートの作品を検知し、HttpClient 経由で目次を取得してローカル DB に登録し、
-    //    本棚画面に当該作品カードが表示されることを確認
-    const novelCardB = page.getByTestId("novel-card");
-    await expect(novelCardB).toBeVisible({ timeout: 15000 });
-    await expect(page.getByTestId("novel-card-title")).toHaveText(
-      "境界迷宮と異界の魔術師",
-    );
+    // 4. SyncEngine がリモートの作品を検知し、HttpClient 経由で目次（なろうは2ページ分全5話）を取得してローカル DB に登録し、
+    //    本棚画面に2作品カードが表示されることを確認
+    const novelCardsB = page.getByTestId("novel-card");
+    await expect(novelCardsB).toHaveCount(2, { timeout: 15000 });
+
+    const kakuyomuCardB = page.locator('[data-testid="novel-card"]', {
+      hasText: "境界迷宮と異界の魔術師",
+    });
+    const narouCardB = page.locator('[data-testid="novel-card"]', {
+      hasText: "無職転生 - 異世界行ったら本気だす",
+    });
+    await expect(kakuyomuCardB).toBeVisible();
+    await expect(narouCardB).toBeVisible();
+
     // 厳密なしおり表記完全一致アサーション（R1-25(9)）
-    await expect(page.getByTestId("novel-card-bookmark")).toHaveText(
+    await expect(kakuyomuCardB.getByTestId("novel-card-bookmark")).toHaveText(
       "しおり: 第2話",
     );
+    await expect(narouCardB.getByTestId("novel-card-bookmark")).toHaveText(
+      "しおり: 第4話",
+    );
 
-    // 5. 作品カードをクリックして作品詳細へ遷移
-    await page.getByTestId("novel-card-select").click();
+    // 5. なろう作品カードをクリックして作品詳細へ遷移（複数ページ目次の全話復元および既読同期を検証）
+    await narouCardB.getByTestId("novel-card-select").click();
+    await expect(page).toHaveURL(/\/novels\/narou(%3A|:)n9669bk$/);
+
+    // 複数ページ目次連続取得により全5話が登録されていることを確認
+    const epItemsNarou = page.getByTestId("episode-item");
+    await expect(epItemsNarou).toHaveCount(5);
+
+    // 端末 A で同期された第4話（0-indexed で 3番目）に既読バッジが表示されていることを確認
+    await expect(
+      epItemsNarou.nth(3).getByTestId("episode-read-badge"),
+    ).toBeVisible();
+
+    // 「続きから読む（第4話）」ボタンが表示され、第4話から再開できることを確認
+    const resumeButtonNarou = page.getByTestId("detail-resume-button");
+    await expect(resumeButtonNarou).toBeVisible();
+    await expect(resumeButtonNarou).toContainText("続きから読む（第4話）");
+    await resumeButtonNarou.click();
+
+    await expect(page).toHaveURL(/\/novels\/narou(%3A|:)n9669bk\/chapters\/4/);
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "第3話 家庭教師",
+    );
+
+    // リーダーから作品詳細へ戻り、さらに本棚へ戻る
+    await page.goBack();
+    await expect(page).toHaveURL(/\/novels\/narou(%3A|:)n9669bk$/);
+    await page.goBack();
+    await expect(page).toHaveURL("/");
+
+    // 6. カクヨム作品カードをクリックして作品詳細へ遷移（カクヨム側の検証）
+    const kakuyomuCardSelectB = page
+      .locator('[data-testid="novel-card"]', {
+        hasText: "境界迷宮と異界の魔術師",
+      })
+      .getByTestId("novel-card-select");
+    await kakuyomuCardSelectB.click();
     await expect(page).toHaveURL(
       /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
     );
 
-    // 6. 既読バッジ同期復元の検証（R1-31, AC-RD-11）: 端末 A で閲覧した第2話に既読バッジが表示されていることを確認
-    const epItemsB = page.getByTestId("episode-item");
-    await expect(epItemsB).toHaveCount(4);
+    // 既読バッジ同期復元の検証（R1-31, AC-RD-11）: 端末 A で閲覧した第2話に既読バッジが表示されていることを確認
+    const epItemsKakuyomu = page.getByTestId("episode-item");
+    await expect(epItemsKakuyomu).toHaveCount(4);
     await expect(
-      epItemsB.nth(1).getByTestId("episode-read-badge"),
+      epItemsKakuyomu.nth(1).getByTestId("episode-read-badge"),
     ).toBeVisible();
 
-    // 7. 「続きから読む（第2話）」ボタンが表示され、第2話から再開できることを確認
-    const resumeButtonB = page.getByTestId("detail-resume-button");
-    await expect(resumeButtonB).toBeVisible();
-    await expect(resumeButtonB).toContainText("続きから読む（第2話）");
-    await resumeButtonB.click();
+    // 「続きから読む（第2話）」ボタンが表示され、第2話から再開できることを確認
+    const resumeButtonKakuyomu = page.getByTestId("detail-resume-button");
+    await expect(resumeButtonKakuyomu).toBeVisible();
+    await expect(resumeButtonKakuyomu).toContainText("続きから読む（第2話）");
+    await resumeButtonKakuyomu.click();
 
     await expect(page).toHaveURL(
       /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/2/,
@@ -213,7 +304,7 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     );
 
     // =========================================================================
-    // ステップ4: 端末 B での作品削除と端末 A への Tombstone 削除伝播確認
+    // ステップ4: 端末 B でのカクヨム作品削除と端末 A への Tombstone 削除伝播確認（なろう作品は維持）
     // =========================================================================
     // 1. 作品詳細画面に戻る
     await page.goBack();
@@ -221,7 +312,7 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
       /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
     );
 
-    // 2. 端末 B で作品を削除（作品詳細画面の「作品を削除」ダイアログ経由）
+    // 2. 端末 B でカクヨム作品を削除（作品詳細画面の「作品を削除」ダイアログ経由）
     const deleteButton = page.getByTestId("open-delete-dialog-button");
     await expect(deleteButton).toBeVisible();
     await deleteButton.click();
@@ -232,11 +323,17 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     const confirmDeleteBtn = page.getByTestId("confirm-delete-button");
     await confirmDeleteBtn.click();
 
-    // 3. 削除完了後、本棚画面（/）へ戻り、空状態（bookshelf-empty）になることを確認
+    // 3. 削除完了後、本棚画面（/）へ戻り、カクヨム作品のみ削除され、なろう作品カードが残っていることを確認
     await expect(page).toHaveURL("/");
-    await expect(page.getByTestId("bookshelf-empty")).toBeVisible();
+    const remainingCardsB = page.getByTestId("novel-card");
+    await expect(remainingCardsB).toHaveCount(1);
+    await expect(
+      page.getByText("無職転生 - 異世界行ったら本気だす"),
+    ).toBeVisible();
+    await expect(page.getByText("境界迷宮と異界の魔術師")).not.toBeVisible();
 
-    // 4. 自動 Push によりリモートデータの deletedNovels に当該作品 ID が記録されるのを待機
+    // 4. 自動 Push によりリモートデータの deletedNovels にカクヨム作品 ID が記録され、
+    //    novels になろう作品が残存しているのを待機
     await page.waitForFunction(
       () => {
         const raw = localStorage.getItem("yommy_mock_gdrive_file");
@@ -245,7 +342,8 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
           const parsed = JSON.parse(raw);
           return (
             Boolean(parsed?.deletedNovels?.["kakuyomu:16817330658027210412"]) &&
-            !parsed?.novels?.["kakuyomu:16817330658027210412"]
+            !parsed?.novels?.["kakuyomu:16817330658027210412"] &&
+            Boolean(parsed?.novels?.["narou:n9669bk"])
           );
         } catch {
           return false;
@@ -268,10 +366,13 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     );
 
     // 起動時自動 Pull によりリモートの Tombstone を検知し、
-    // 端末 A のローカル DB からも作品が削除され、本棚が空状態になることを確認
-    await expect(page.getByTestId("bookshelf-empty")).toBeVisible({
-      timeout: 15000,
-    });
+    // 端末 A のローカル DB からもカクヨム作品が削除され、なろう作品のみが残存することを確認
+    const remainingCardsA = page.getByTestId("novel-card");
+    await expect(remainingCardsA).toHaveCount(1, { timeout: 15000 });
+    await expect(
+      page.getByText("無職転生 - 異世界行ったら本気だす"),
+    ).toBeVisible();
+    await expect(page.getByText("境界迷宮と異界の魔術師")).not.toBeVisible();
 
     // =========================================================================
     // ステップ5: 401 遠隔認可解除検知時の安全な未連携復帰確認
@@ -346,10 +447,11 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     // 7. 本棚タブへ戻り、ローカルの作品データが削除されず保持されていることを確認（AC-ST-10）
     await page.getByTestId("tab-bookshelf").click();
     await expect(page).toHaveURL("/");
-    const retainedNovelCard = page.getByTestId("novel-card");
-    await expect(retainedNovelCard).toBeVisible();
-    await expect(page.getByTestId("novel-card-title")).toHaveText(
-      "境界迷宮と異界の魔術師",
-    );
+    const retainedNovelCards = page.getByTestId("novel-card");
+    await expect(retainedNovelCards).toHaveCount(2);
+    await expect(page.getByText("境界迷宮と異界の魔術師")).toBeVisible();
+    await expect(
+      page.getByText("無職転生 - 異世界行ったら本気だす"),
+    ).toBeVisible();
   });
 });

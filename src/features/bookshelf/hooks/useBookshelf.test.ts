@@ -9,6 +9,8 @@ import { MockHttpClient } from "../../../bridges/http/mockHttpClient";
 import type { NovelRepository, NovelSummary } from "../../../storage/types";
 import type { SyncEngine } from "../../cloud-sync/services/syncEngine";
 import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.html?raw";
+import narouWorkIndexSerializedHtml from "../../../parsers/narou/__fixtures__/work_index_serialized.html?raw";
+import narouWorkIndexPage2Html from "../../../parsers/narou/__fixtures__/work_index_page2.html?raw";
 
 describe("useBookshelf", () => {
   beforeEach(async () => {
@@ -1721,6 +1723,56 @@ describe("useBookshelf", () => {
         await result.current.addNovel?.("https://kakuyomu.jp/works/123");
       });
       expect(result.current.error).toBe("追加文字列エラー");
+    });
+
+    it("addNovel: 複数ページ目次作品（なろう）の追加時に全ページが fetchFullNovelIndex で結合されて upsertNovelWithToc に保存されること (Issue #239)", async () => {
+      const httpClient = new MockHttpClient();
+      httpClient.setResponse("https://ncode.syosetu.com/n9669bk/", () => ({
+        status: 200,
+        url: "https://ncode.syosetu.com/n9669bk/",
+        headers: {},
+        html: narouWorkIndexSerializedHtml,
+      }));
+      httpClient.setResponse("https://ncode.syosetu.com/n9669bk/?p=2", () => ({
+        status: 200,
+        url: "https://ncode.syosetu.com/n9669bk/?p=2",
+        headers: {},
+        html: narouWorkIndexPage2Html,
+      }));
+
+      const customNovelRepo = {
+        listNovels: vi.fn().mockResolvedValue([]),
+        upsertNovelWithToc: vi.fn().mockResolvedValue({ id: "narou:n9669bk" }),
+        updateBookmark: vi.fn(),
+        deleteNovel: vi.fn(),
+        clearNewUpdate: vi.fn(),
+        updateLastCheckedAt: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          httpClient,
+          novelRepository: customNovelRepo as unknown as NovelRepository,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.addNovel?.("https://ncode.syosetu.com/n9669bk/");
+      });
+
+      expect(customNovelRepo.upsertNovelWithToc).toHaveBeenCalledTimes(1);
+      const passedIndex = customNovelRepo.upsertNovelWithToc.mock.calls[0][0];
+      expect(passedIndex.chapters).toHaveLength(5);
+      expect(
+        passedIndex.chapters.map(
+          (c: { chapterIndex: number }) => c.chapterIndex,
+        ),
+      ).toEqual([1, 2, 3, 4, 5]);
+      expect(passedIndex.chapters[3].partTitle).toBe("第2章 少年期"); // 2ページ目先頭への引き継ぎ
     });
   });
 });

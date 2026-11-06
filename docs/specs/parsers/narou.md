@@ -23,7 +23,7 @@ related_specs:
   - docs/specs/features/novel-detail.md
   - docs/specs/features/reader-view.md
   - docs/specs/parsers/kakuyomu.md
-  - docs/specs/changes/issue-239-narou-parser-and-multi-page-toc.md
+  - docs/specs/changes/archive/issue-239-narou-parser-and-multi-page-toc.md
   - docs/guidelines/testing.md
 related_tests:
   - src/parsers/parserRegistry.test.ts
