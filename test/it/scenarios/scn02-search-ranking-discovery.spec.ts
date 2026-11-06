@@ -315,14 +315,22 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     const searchList = page.getByTestId("search-results-list");
     await expect(searchList).toBeVisible();
 
-    // 並び順変更による再取得（AC-SE-03, AC-SE-09）
+    // 並び順変更による再取得（AC-SE-03, AC-SE-09, R1-24）
     const orderSelect = page.getByTestId("search-order-select");
     await orderSelect.selectOption("popular");
+    await expect(orderSelect).toHaveValue("popular");
     await expect(searchList).toBeVisible();
 
-    // 連載状態フィルタ変更による再取得（AC-SE-04, AC-SE-09）
+    // 連載状態フィルタ変更による再取得（AC-SE-04, AC-SE-09, R1-24）
     const serialCompleteBtn = page.getByTestId("search-serial-completed");
     await serialCompleteBtn.click();
+    await expect(serialCompleteBtn).toHaveAttribute("aria-pressed", "true");
+    await expect(searchList).toBeVisible();
+
+    // ジャンルピル変更による再取得（AC-SE-05, AC-SE-09, R1-24）
+    const fantasyPill = page.getByTestId("search-genre-fantasy");
+    await fantasyPill.click();
+    await expect(fantasyPill).toHaveAttribute("aria-pressed", "true");
     await expect(searchList).toBeVisible();
   });
 
@@ -428,6 +436,8 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
 
     // 10. 第1話を選択してリーダー（SCR-03）へ移動し本文読書
     const episodeItems = page.getByTestId("episode-item");
+    // 探索画面からの自動登録により 2 ページ分の目次（全5話）が結合保存されていることを確認 (R1-02)
+    await expect(episodeItems).toHaveCount(5);
     await expect(episodeItems.first()).toBeVisible();
     await episodeItems.first().click();
 
@@ -435,6 +445,20 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     const readerPage = page.getByTestId("reader-page");
     await expect(readerPage).toBeVisible();
     await expect(page.getByTestId("reader-body")).toBeVisible();
+
+    // 縦書き組版属性、前書き・区切り線・後書き、ルビ、傍点の描画確認 (R1-02, AC-NR-06, AC-NR-07)
+    await expect(
+      page.locator('[data-writing-mode="vertical-rl"]'),
+    ).toBeVisible();
+    const readerContent = page.getByTestId("reader-content");
+    await expect(readerContent).toBeVisible();
+    await expect(readerContent).toContainText("これは前書きです。");
+    await expect(readerContent).toContainText("────────────");
+    await expect(readerContent).toContainText(
+      "読んでいただきありがとうございました。",
+    );
+    await expect(page.locator("ruby rt", { hasText: "まほう" })).toBeVisible();
+    await expect(page.locator("em.bouten")).toHaveCount(3);
 
     // 11. OSバックキーで目次画面へ復帰、さらにOSバックキーでランキング画面へ復帰 (TR-06, TR-07)
     await triggerBackButton(page);

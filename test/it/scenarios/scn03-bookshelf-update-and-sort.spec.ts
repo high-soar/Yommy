@@ -163,7 +163,7 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
       novelCardWork1AfterDetail.getByTestId("novel-card-new-badge"),
     ).toHaveCount(0);
 
-    // 5. リーダー閲覧による NEW バッジ解除検証 (HO-18, AC-BS-09, TR-03, AC-RD-11)
+    // 5. リーダー閲覧による NEW バッジ解除検証 (HO-18, AC-BS-09, TR-03, AC-RD-03 / AC-RD-07)
     // 作品2に NEW フラグ（has_new_update = 1）を直接設定
     await page.evaluate(async () => {
       const services = window.__yommyServices!;

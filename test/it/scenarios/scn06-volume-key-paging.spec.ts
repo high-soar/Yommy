@@ -60,10 +60,19 @@ test.describe("SCN-06: ハードウェア音量キーによるページ送り・
     await expect(readerView).toBeVisible();
     await expect(readerView).toHaveAttribute("data-current-page", "1");
 
+    // 音量キー設定が無効であることを確認（状態検証, R1-08）
+    const isBridgeEnabledInitial = await page.evaluate(() =>
+      (
+        window as unknown as {
+          __yommyVolumeKeyBridge?: { isVolumeKeyPagingEnabled(): boolean };
+        }
+      ).__yommyVolumeKeyBridge?.isVolumeKeyPagingEnabled(),
+    );
+    expect(isBridgeEnabledInitial).toBe(false);
+
     // 音量［ー］（次ページ）を押下
     await page.keyboard.press("AudioVolumeDown");
-    // 100ms 待機後もページ1のままであること
-    await page.waitForTimeout(200);
+    // 設定OFFのためページ1のままであること
     await expect(readerView).toHaveAttribute("data-current-page", "1");
 
     // 3. 設定画面（/settings）へ戻り、「音量キーでページ送り」トグルを ON に変更・永続化確認（AC-ST-19）
@@ -279,9 +288,18 @@ test.describe("SCN-06: ハードウェア音量キーによるページ送り・
     const currentPageBefore =
       (await readerView.getAttribute("data-current-page"))!;
 
+    // 音量キー設定が無効であることを確認（状態検証, R1-08）
+    const isBridgeEnabledFinal = await page.evaluate(() =>
+      (
+        window as unknown as {
+          __yommyVolumeKeyBridge?: { isVolumeKeyPagingEnabled(): boolean };
+        }
+      ).__yommyVolumeKeyBridge?.isVolumeKeyPagingEnabled(),
+    );
+    expect(isBridgeEnabledFinal).toBe(false);
+
     // 音量［ー］を押下してもページめくりが発生しないこと（設定OFFのため無効）
     await page.keyboard.press("AudioVolumeDown");
-    await page.waitForTimeout(200);
     await expect(readerView).toHaveAttribute(
       "data-current-page",
       currentPageBefore,
@@ -289,7 +307,6 @@ test.describe("SCN-06: ハードウェア音量キーによるページ送り・
 
     // 音量［＋］を押下してもページめくりが発生しないこと（設定OFFのため無効）
     await page.keyboard.press("AudioVolumeUp");
-    await page.waitForTimeout(200);
     await expect(readerView).toHaveAttribute(
       "data-current-page",
       currentPageBefore,

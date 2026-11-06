@@ -33,6 +33,7 @@ import type { VolumeKeyBridge } from "../bridges/volume-key/types";
 import { MockVolumeKeyBridge } from "../bridges/volume-key/mockVolumeKeyBridge";
 import { CapacitorVolumeKeyBridge } from "../bridges/volume-key/capacitorVolumeKeyBridge";
 import { SyncEngine } from "../features/cloud-sync/services/syncEngine";
+import { fetchFullNovelIndex } from "../parsers/fetchFullNovelIndex";
 import workIndexHtml from "../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 import episodeContentHtml from "../parsers/kakuyomu/__fixtures__/episode_content.html?raw";
 import searchApolloHtml from "../parsers/kakuyomu/__fixtures__/search_results_apollo.html?raw";
@@ -60,6 +61,7 @@ export interface ServiceContextValue {
   cloudSyncBridge: CloudSyncBridge;
   volumeKeyBridge: VolumeKeyBridge;
   syncEngine?: SyncEngine;
+  fetchFullNovelIndex?: typeof fetchFullNovelIndex;
   isReady: boolean;
   error: Error | null;
 }
@@ -186,7 +188,8 @@ export function createDefaultMockHttpClient(): MockHttpClient {
       if (options.url.toLowerCase().includes("n1001aa")) {
         html = html
           .replaceAll("無職転生 - 異世界行ったら本気だす", "デイリー1位作品")
-          .replaceAll("理不尽な孫の手", "ランキング作家A");
+          .replaceAll("理不尽な孫の手", "ランキング作家A")
+          .replaceAll("n9669bk", "n1001aa");
       }
       return {
         status: 200,
@@ -336,6 +339,8 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           cloudSyncBridge,
           volumeKeyBridge,
           syncEngine,
+          fetchFullNovelIndex:
+            services?.fetchFullNovelIndex ?? fetchFullNovelIndex,
           isReady: true,
           error: null,
         };
@@ -365,6 +370,8 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
             volumeKeyBridge:
               services?.volumeKeyBridge ?? new MockVolumeKeyBridge(),
             syncEngine: undefined,
+            fetchFullNovelIndex:
+              services?.fetchFullNovelIndex ?? fetchFullNovelIndex,
             isReady: false,
             error,
           };
@@ -412,6 +419,8 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           volumeKeyBridge:
             services?.volumeKeyBridge ?? new MockVolumeKeyBridge(),
           syncEngine: services?.syncEngine,
+          fetchFullNovelIndex:
+            services?.fetchFullNovelIndex ?? fetchFullNovelIndex,
           isReady: false,
           error: null,
         }

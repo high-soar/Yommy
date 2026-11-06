@@ -75,31 +75,16 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
         new Date().toISOString(),
       );
 
-      // 小説家になろう作品のシード登録（複数ページ目次取得・クラウド同期検証, Issue #239）
+      // 小説家になろう作品のシード登録（複数ページ目次取得・クラウド同期検証, Issue #239, R1-06）
       const narouUrl = "https://ncode.syosetu.com/n9669bk/";
       const narouParser = services.parserRegistry.requireParser(narouUrl);
-      const p1Res = await services.httpClient.getHtml({ url: narouUrl });
-      const p1Index = narouParser.parseNovelIndex(p1Res.html, narouUrl);
-      const p2Res = await services.httpClient.getHtml({
-        url: p1Index.nextTocPageUrl!,
-      });
-      const p2Index = narouParser.parseNovelIndex(
-        p2Res.html,
-        p1Index.nextTocPageUrl!,
-      );
-      const combinedChapters = [...p1Index.chapters, ...p2Index.chapters].map(
-        (ch, idx) => ({
-          ...ch,
-          chapterIndex: idx + 1,
-          partTitle: ch.partTitle ?? (idx >= 3 ? "第2章 少年期" : null),
-        }),
+      const parsedIndexNarou = await services.fetchFullNovelIndex!(
+        services.httpClient,
+        narouParser,
+        narouUrl,
       );
       await services.novelRepository.upsertNovelWithToc(
-        {
-          ...p1Index,
-          chapters: combinedChapters,
-          nextTocPageUrl: null,
-        },
+        parsedIndexNarou,
         new Date().toISOString(),
       );
       // なろう作品の第4話しおり・既読設定
@@ -266,6 +251,20 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
       "第3話 家庭教師",
     );
 
+    // なろう作品の縦書き組版・前書き・後書き・ルビ・傍点の描画確認 (R1-02, AC-NR-06, AC-NR-07)
+    await expect(
+      page.locator('[data-writing-mode="vertical-rl"]'),
+    ).toBeVisible();
+    const readerContentNarou = page.getByTestId("reader-content");
+    await expect(readerContentNarou).toBeVisible();
+    await expect(readerContentNarou).toContainText("これは前書きです。");
+    await expect(readerContentNarou).toContainText("────────────");
+    await expect(readerContentNarou).toContainText(
+      "読んでいただきありがとうございました。",
+    );
+    await expect(page.locator("ruby rt", { hasText: "まほう" })).toBeVisible();
+    await expect(page.locator("em.bouten")).toHaveCount(3);
+
     // リーダーから作品詳細へ戻り、さらに本棚へ戻る
     await page.goBack();
     await expect(page).toHaveURL(/\/novels\/narou(%3A|:)n9669bk$/);
@@ -283,7 +282,7 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
       /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
     );
 
-    // 既読バッジ同期復元の検証（R1-31, AC-RD-11）: 端末 A で閲覧した第2話に既読バッジが表示されていることを確認
+    // 既読バッジ同期復元の検証（R1-31, AC-RD-03 / AC-RD-07）: 端末 A で閲覧した第2話に既読バッジが表示されていることを確認
     const epItemsKakuyomu = page.getByTestId("episode-item");
     await expect(epItemsKakuyomu).toHaveCount(4);
     await expect(

@@ -449,7 +449,6 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
         (el) => (el as HTMLElement).style.left,
       );
       expect(draggingSwipeLeft).not.toBe(initialSwipeLeft);
-      await page.waitForTimeout(100);
       await page.mouse.up();
     }
     await expect(swipeTrack).toHaveCSS("transition-property", "none");
