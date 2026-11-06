@@ -822,13 +822,13 @@ describe("useNovelSearch", () => {
     expect(getHtmlSpy).toHaveBeenCalled();
   });
 
-  it("未対応サイト（narou等）を選択して検索した場合はエラーメッセージが設定されること", async () => {
+  it("未対応サイト（generic等）を選択して検索した場合はエラーメッセージが設定されること", async () => {
     const { result } = renderHook(() => useNovelSearch(), {
       wrapper: createWrapper(),
     });
 
     act(() => {
-      result.current.setSelectedSite("narou");
+      result.current.setSelectedSite("generic");
     });
 
     await act(async () => {
@@ -894,7 +894,7 @@ describe("useNovelSearch", () => {
     });
 
     act(() => {
-      result.current.setSelectedSite("narou");
+      result.current.setSelectedSite("generic");
     });
 
     await act(async () => {

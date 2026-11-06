@@ -199,7 +199,7 @@ describe("useNovelRanking", () => {
     });
 
     await act(async () => {
-      result.current.setSelectedSite("narou");
+      result.current.setSelectedSite("generic");
     });
 
     await waitFor(() => {

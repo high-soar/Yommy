@@ -1,7 +1,11 @@
 import type {
   NovelParser,
   NovelRankingOptions,
+  NovelRankingPeriod,
+  NovelRankingResultItem,
   NovelSearchOptions,
+  NovelSearchOrder,
+  NovelSearchResultItem,
   NovelSiteType,
   ParsedChapterContent,
   ParsedNovelIndex,
@@ -10,6 +14,7 @@ import type {
   ParsedTocItem,
 } from "../types";
 import { sanitizeChapterHtml } from "../sanitizer";
+import { getNarouGenreLabel } from "./genres";
 
 /**
  * なろう DOM セレクタ定数（優先順位リスト）
@@ -185,6 +190,122 @@ function extractAbsoluteUrl(
   } catch {
     return null;
   }
+}
+
+/**
+ * pageUrl から開始位置 st、現在ページ番号 currentPage、および order を算出する
+ */
+function parseApiUrlParams(pageUrl: string): {
+  st: number;
+  currentPage: number;
+  order: string;
+} {
+  let st = 1;
+  let currentPage = 1;
+  let order = "weeklypoint";
+  try {
+    const url = new URL(pageUrl, "https://api.syosetu.com");
+    order = url.searchParams.get("order") ?? "weeklypoint";
+    const stParam = url.searchParams.get("st");
+    if (stParam) {
+      const parsed = parseInt(stParam, 10);
+      if (!Number.isNaN(parsed) && parsed >= 1) {
+        st = parsed;
+        currentPage = Math.floor((st - 1) / 20) + 1;
+      }
+    } else {
+      const pageParam = url.searchParams.get("page");
+      if (pageParam) {
+        const parsed = parseInt(pageParam, 10);
+        if (!Number.isNaN(parsed) && parsed >= 1) {
+          currentPage = parsed;
+          st = (currentPage - 1) * 20 + 1;
+        }
+      }
+    }
+  } catch {
+    // fallback to default
+  }
+  return { st, currentPage, order };
+}
+
+/**
+ * なろう小説 API の1作品エントリを共通オブジェクトに変換する
+ */
+function parseNovelEntry(
+  entry: unknown,
+  order?: string,
+): NovelSearchResultItem | null {
+  if (!entry || typeof entry !== "object" || !("ncode" in entry)) {
+    return null;
+  }
+  const rec = entry as Record<string, unknown>;
+  if (typeof rec.ncode !== "string" && typeof rec.ncode !== "number") {
+    return null;
+  }
+  const rawNcode = String(rec.ncode).trim();
+  if (!rawNcode) {
+    return null;
+  }
+
+  const remoteWorkId = rawNcode.toLowerCase();
+  const title = String(rec.title ?? "").trim();
+  const author = String(rec.writer ?? "").trim();
+  const synopsis = String(rec.story ?? "").trim();
+  const genre = String(rec.genre ?? "");
+  const genreLabel = getNarouGenreLabel(genre);
+
+  let serialStatus: "running" | "completed";
+  let serialStatusLabel: string;
+  if (rec.end === 1) {
+    serialStatus = "running";
+    serialStatusLabel = "連載中";
+  } else if (rec.end === 0 && rec.novel_type === 2) {
+    serialStatus = "completed";
+    serialStatusLabel = "短編";
+  } else {
+    serialStatus = "completed";
+    serialStatusLabel = "完結済";
+  }
+
+  const episodeCount = Number(rec.general_all_no) || 1;
+  const characterCount = Number(rec.length) || 0;
+  const rawKeyword = String(rec.keyword ?? "").trim();
+  const tags = rawKeyword ? rawKeyword.split(/\s+/).filter(Boolean) : [];
+
+  let periodPoint: unknown;
+  if (order === "dailypoint") {
+    periodPoint = rec.daily_point;
+  } else if (order === "weeklypoint") {
+    periodPoint = rec.weekly_point;
+  } else if (order === "monthlypoint") {
+    periodPoint = rec.monthly_point;
+  }
+
+  const reviewPoints = Number(periodPoint ?? rec.global_point) || 0;
+
+  const lastEpisodePublishedAt =
+    typeof rec.general_lastup === "string" && rec.general_lastup.trim()
+      ? rec.general_lastup.trim()
+      : null;
+  const workUrl = `https://ncode.syosetu.com/${remoteWorkId}/`;
+
+  return {
+    remoteWorkId,
+    title,
+    author,
+    synopsis,
+    genre,
+    genreLabel,
+    serialStatus,
+    serialStatusLabel,
+    episodeCount,
+    characterCount,
+    tags,
+    reviewPoints,
+    lastEpisodePublishedAt,
+    workUrl,
+  };
 }
 
 /**
@@ -483,30 +604,207 @@ export class NarouParser implements NovelParser {
   }
 
   /**
-   * 検索 URL を構築する（TDD Red用スタブ）
+   * 検索 URL を構築する (AC-NR-11)
+   *
+   * @param query 検索キーワード
+   * @param options 検索オプション
+   * @returns なろう小説 API 検索 URL
    */
-  buildSearchUrl(_query: string, _options?: NovelSearchOptions): string {
-    throw new Error("Not implemented");
+  buildSearchUrl(query: string, options?: NovelSearchOptions): string {
+    const url = new URL("https://api.syosetu.com/novelapi/api/");
+    url.searchParams.set("out", "json");
+    url.searchParams.set("lim", "20");
+
+    const trimmedQuery = query.trim();
+    if (trimmedQuery) {
+      url.searchParams.set("word", trimmedQuery);
+    }
+
+    const orderMap: Record<NovelSearchOrder, string> = {
+      weekly_ranking: "weeklypoint",
+      popular: "hyoka",
+      last_episode_published_at: "new",
+      published_at: "generalfirstup",
+    };
+    const order = options?.order ?? "weekly_ranking";
+    const orderParam = orderMap[order];
+    url.searchParams.set("order", orderParam);
+
+    if (options?.serialStatus === "running") {
+      url.searchParams.set("type", "r");
+    } else if (options?.serialStatus === "completed") {
+      url.searchParams.set("type", "ter");
+    }
+
+    if (options?.genre && options.genre.trim()) {
+      url.searchParams.set("genre", options.genre.trim());
+    }
+
+    if (options?.page !== undefined && options.page >= 2) {
+      const st = (options.page - 1) * 20 + 1;
+      url.searchParams.set("st", String(st));
+    }
+
+    return url.toString();
   }
 
   /**
-   * 検索結果 JSON を解析する（TDD Red用スタブ）
+   * 検索結果 JSON を解析する (AC-NR-12)
+   *
+   * @param html なろう小説 API の JSON 文字列
+   * @param pageUrl 取得元ページ URL
+   * @returns 検索結果一覧およびページ情報
    */
-  searchNovels(_html: string, _pageUrl: string): ParsedSearchResult {
-    throw new Error("Not implemented");
+  searchNovels(html: string, pageUrl: string): ParsedSearchResult {
+    const { st, currentPage } = parseApiUrlParams(pageUrl);
+
+    let data: unknown;
+    try {
+      data = JSON.parse(html);
+    } catch {
+      return {
+        items: [],
+        pageInfo: {
+          currentPage,
+          hasNextPage: false,
+          totalCount: 0,
+        },
+      };
+    }
+
+    if (!Array.isArray(data) || data.length === 0) {
+      return {
+        items: [],
+        pageInfo: {
+          currentPage,
+          hasNextPage: false,
+          totalCount: 0,
+        },
+      };
+    }
+
+    const header = data[0] as Record<string, unknown> | undefined;
+    const totalCount =
+      typeof header?.allcount === "number" ? header.allcount : 0;
+
+    const items: NovelSearchResultItem[] = [];
+    const entries = data.slice(1);
+
+    for (const entry of entries) {
+      const item = parseNovelEntry(entry);
+      if (item) {
+        items.push(item);
+      }
+    }
+
+    const nextSt = st + 20;
+    const hasNextPage =
+      items.length > 0 && st + items.length - 1 < totalCount && nextSt <= 2000;
+
+    return {
+      items,
+      pageInfo: {
+        currentPage,
+        hasNextPage,
+        totalCount,
+      },
+    };
   }
 
   /**
-   * ランキング URL を構築する（TDD Red用スタブ）
+   * ランキング URL を構築する (AC-NR-13)
+   *
+   * @param options ランキングオプション
+   * @returns なろう小説 API ランキング URL
    */
-  buildRankingUrl(_options?: NovelRankingOptions): string {
-    throw new Error("Not implemented");
+  buildRankingUrl(options?: NovelRankingOptions): string {
+    const url = new URL("https://api.syosetu.com/novelapi/api/");
+    url.searchParams.set("out", "json");
+    url.searchParams.set("lim", "20");
+
+    const periodMap: Record<NovelRankingPeriod, string> = {
+      daily: "dailypoint",
+      weekly: "weeklypoint",
+      monthly: "monthlypoint",
+      entire: "hyoka",
+    };
+    const period = options?.period ?? "weekly";
+    const orderParam = periodMap[period];
+    url.searchParams.set("order", orderParam);
+
+    if (options?.genre && options.genre !== "all" && options.genre.trim()) {
+      url.searchParams.set("genre", options.genre.trim());
+    }
+
+    if (options?.page !== undefined && options.page >= 2) {
+      const st = (options.page - 1) * 20 + 1;
+      url.searchParams.set("st", String(st));
+    }
+
+    return url.toString();
   }
 
   /**
-   * ランキング結果 JSON を解析する（TDD Red用スタブ）
+   * ランキング結果 JSON を解析する (AC-NR-14)
+   *
+   * @param html なろう小説 API の JSON 文字列
+   * @param pageUrl 取得元ページ URL
+   * @returns ランキング結果一覧およびページ情報
    */
-  getRanking(_html: string, _pageUrl: string): ParsedRankingResult {
-    throw new Error("Not implemented");
+  getRanking(html: string, pageUrl: string): ParsedRankingResult {
+    const { st, currentPage, order } = parseApiUrlParams(pageUrl);
+
+    let data: unknown;
+    try {
+      data = JSON.parse(html);
+    } catch {
+      return {
+        items: [],
+        pageInfo: {
+          currentPage,
+          hasNextPage: false,
+        },
+      };
+    }
+
+    if (!Array.isArray(data) || data.length === 0) {
+      return {
+        items: [],
+        pageInfo: {
+          currentPage,
+          hasNextPage: false,
+        },
+      };
+    }
+
+    const header = data[0] as Record<string, unknown> | undefined;
+    const totalCount =
+      typeof header?.allcount === "number" ? header.allcount : 0;
+
+    const items: NovelRankingResultItem[] = [];
+    const entries = data.slice(1);
+
+    for (const entry of entries) {
+      const item = parseNovelEntry(entry, order);
+      if (item) {
+        const rank = st + items.length;
+        items.push({
+          ...item,
+          rank,
+        });
+      }
+    }
+
+    const nextSt = st + 20;
+    const hasNextPage =
+      items.length > 0 && st + items.length - 1 < totalCount && nextSt <= 2000;
+
+    return {
+      items,
+      pageInfo: {
+        currentPage,
+        hasNextPage,
+      },
+    };
   }
 }

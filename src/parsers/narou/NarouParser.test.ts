@@ -1149,6 +1149,9 @@ describe("NarouParser", () => {
       const noAllcount = JSON.stringify([{}]);
       const res = parser.searchNovels(noAllcount, "https://api.syosetu.com/");
       expect(res.pageInfo.totalCount).toBe(0);
+
+      const rankRes = parser.getRanking(noAllcount, "https://api.syosetu.com/");
+      expect(rankRes.pageInfo.hasNextPage).toBe(false);
     });
 
     it("作品エントリに ncode が存在しない・空文字の場合やエントリが null の場合にスキップされること", () => {
@@ -1156,6 +1159,7 @@ describe("NarouParser", () => {
         { allcount: 10 },
         null,
         {},
+        { ncode: null },
         { ncode: "   " },
         { ncode: "n1111aa", title: "有効作品" },
       ]);
@@ -1182,6 +1186,29 @@ describe("NarouParser", () => {
       const rankRes = parser.getRanking(json, "invalid-url");
       expect(rankRes.pageInfo.currentPage).toBe(1);
       expect(rankRes.items[0].rank).toBe(1);
+
+      // new URL が throw する不正 URL (http://[invalid]) の catch 分岐検証
+      const resBad = parser.searchNovels(json, "http://[invalid]");
+      expect(resBad.pageInfo.currentPage).toBe(1);
+
+      const rankBad = parser.getRanking(json, "http://[invalid]");
+      expect(rankBad.pageInfo.currentPage).toBe(1);
+      expect(rankBad.items[0].rank).toBe(1);
+    });
+
+    it("ランキング結果に短編作品（end: 0, novel_type: 2）が含まれる場合、serialStatusLabel が短編となること", () => {
+      const json = JSON.stringify([
+        { allcount: 1 },
+        {
+          ncode: "n5555ss",
+          title: "短編ランキング作品",
+          end: 0,
+          novel_type: 2,
+        },
+      ]);
+      const res = parser.getRanking(json, "https://api.syosetu.com/");
+      expect(res.items[0].serialStatus).toBe("completed");
+      expect(res.items[0].serialStatusLabel).toBe("短編");
     });
   });
 });
