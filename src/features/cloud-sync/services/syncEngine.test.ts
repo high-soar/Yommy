@@ -1277,6 +1277,208 @@ describe("syncEngine", () => {
       );
     });
 
+    it("pullAndMerge: 同一作品が存在する場合、リモートの updatedAt が新しければリモートの isFavorite (1 -> 0 / 0 -> 1) および updatedAt をローカル DB へ反映すること (Issue #266 / LWW)", async () => {
+      const parser = parserRegistry.requireParser(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      const index = parser.parseNovelIndex(
+        workIndexHtml,
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      await novelRepo.upsertNovelWithToc(index, "2026-10-10T00:00:00.000Z");
+
+      // 1. ローカル isFavorite = false, リモート isFavorite = 1, remoteUpdatedAt > localUpdatedAt -> isFavorite: true に更新
+      const remoteStateFav: YommySyncState = {
+        version: 1,
+        lastSyncedAt: "2026-10-31T12:00:00.000Z",
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            id: "kakuyomu:16817330658027210412",
+            siteType: "kakuyomu",
+            remoteWorkId: "16817330658027210412",
+            canonicalUrl: "https://kakuyomu.jp/works/16817330658027210412",
+            title: "境界迷宮と異界の魔術師",
+            author: "小野崎",
+            synopsis: "あらすじ本文",
+            totalChapters: 3,
+            isFavorite: 1,
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: "2026-10-10T10:00:00.000Z",
+            bookmarkChapterIndex: 1,
+            lastReadAt: "2026-10-10T10:00:00.000Z",
+            readChapterIds: [],
+            createdAt: "2026-10-10T00:00:00.000Z",
+            updatedAt: "2026-10-20T10:00:00.000Z",
+          },
+        },
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(remoteStateFav));
+
+      await engine.pullAndMerge();
+      let local = await novelRepo.getNovelById("kakuyomu:16817330658027210412");
+      expect(local?.isFavorite).toBe(true);
+      expect(local?.updatedAt).toBe("2026-10-20T10:00:00.000Z");
+
+      // 2. リモート側でさらにお気に入り解除 (isFavorite = 0) され、updatedAt が進んだ場合 -> isFavorite: false に更新
+      const remoteStateUnfav: YommySyncState = {
+        version: 1,
+        lastSyncedAt: "2026-10-31T12:00:00.000Z",
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            id: "kakuyomu:16817330658027210412",
+            siteType: "kakuyomu",
+            remoteWorkId: "16817330658027210412",
+            canonicalUrl: "https://kakuyomu.jp/works/16817330658027210412",
+            title: "境界迷宮と異界の魔術師",
+            author: "小野崎",
+            synopsis: "あらすじ本文",
+            totalChapters: 3,
+            isFavorite: 0,
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: "2026-10-10T10:00:00.000Z",
+            bookmarkChapterIndex: 1,
+            lastReadAt: "2026-10-10T10:00:00.000Z",
+            readChapterIds: [],
+            createdAt: "2026-10-10T00:00:00.000Z",
+            updatedAt: "2026-10-25T10:00:00.000Z",
+          },
+        },
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(remoteStateUnfav));
+
+      await engine.pullAndMerge();
+      local = await novelRepo.getNovelById("kakuyomu:16817330658027210412");
+      expect(local?.isFavorite).toBe(false);
+      expect(local?.updatedAt).toBe("2026-10-25T10:00:00.000Z");
+    });
+
+    it("pullAndMerge: 同一作品でローカルの updatedAt が新しいか同値の場合、ローカルの isFavorite および updatedAt が維持されること (Issue #266 / LWW)", async () => {
+      const parser = parserRegistry.requireParser(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      const index = parser.parseNovelIndex(
+        workIndexHtml,
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      await novelRepo.upsertNovelWithToc(index, "2026-10-20T00:00:00.000Z");
+      await (
+        novelRepo as unknown as {
+          updateSyncMetadata?: (
+            id: string,
+            metadata: { isFavorite?: boolean; updatedAt?: string },
+          ) => Promise<void>;
+        }
+      ).updateSyncMetadata?.("kakuyomu:16817330658027210412", {
+        isFavorite: true,
+        updatedAt: "2026-10-25T00:00:00.000Z",
+      });
+
+      // 1. リモートの updatedAt が古い場合
+      const remoteStateOld: YommySyncState = {
+        version: 1,
+        lastSyncedAt: "2026-10-31T12:00:00.000Z",
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            id: "kakuyomu:16817330658027210412",
+            siteType: "kakuyomu",
+            remoteWorkId: "16817330658027210412",
+            canonicalUrl: "https://kakuyomu.jp/works/16817330658027210412",
+            title: "境界迷宮と異界の魔術師",
+            author: "小野崎",
+            synopsis: "あらすじ本文",
+            totalChapters: 3,
+            isFavorite: 0, // リモートは未登録だが古い
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: "2026-10-10T10:00:00.000Z",
+            bookmarkChapterIndex: 1,
+            lastReadAt: "2026-10-10T10:00:00.000Z",
+            readChapterIds: [],
+            createdAt: "2026-10-10T00:00:00.000Z",
+            updatedAt: "2026-10-24T00:00:00.000Z", // ローカル(10-25)より古い
+          },
+        },
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(remoteStateOld));
+
+      await engine.pullAndMerge();
+      let local = await novelRepo.getNovelById("kakuyomu:16817330658027210412");
+      expect(local?.isFavorite).toBe(true);
+      expect(local?.updatedAt).toBe("2026-10-25T00:00:00.000Z");
+
+      // 2. リモートの updatedAt が同値の場合
+      const remoteStateSame: YommySyncState = {
+        version: 1,
+        lastSyncedAt: "2026-10-31T12:00:00.000Z",
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            ...remoteStateOld.novels["kakuyomu:16817330658027210412"],
+            updatedAt: "2026-10-25T00:00:00.000Z", // 同値
+          },
+        },
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(remoteStateSame));
+
+      await engine.pullAndMerge();
+      local = await novelRepo.getNovelById("kakuyomu:16817330658027210412");
+      expect(local?.isFavorite).toBe(true);
+      expect(local?.updatedAt).toBe("2026-10-25T00:00:00.000Z");
+    });
+
+    it("pullAndMerge: リモートのしおり更新（lastReadAt）とお気に入り更新（updatedAt）が同時に発生した場合、両方が反映され最終的にリモートの updatedAt が保持されること (Issue #266)", async () => {
+      const parser = parserRegistry.requireParser(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      const index = parser.parseNovelIndex(
+        workIndexHtml,
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      await novelRepo.upsertNovelWithToc(index, "2026-10-10T00:00:00.000Z");
+      await db.execute(
+        "UPDATE novels SET bookmark_chapter_index = 1, bookmark_scroll_progress = 0.2, last_read_at = '2026-10-20T00:00:00.000Z', updated_at = '2026-10-20T00:00:00.000Z' WHERE id = ?;",
+        ["kakuyomu:16817330658027210412"],
+      );
+
+      const targetRemoteUpdatedAt = "2026-10-28T15:00:00.000Z";
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: "2026-10-31T12:00:00.000Z",
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            id: "kakuyomu:16817330658027210412",
+            siteType: "kakuyomu",
+            remoteWorkId: "16817330658027210412",
+            canonicalUrl: "https://kakuyomu.jp/works/16817330658027210412",
+            title: "境界迷宮と異界の魔術師",
+            author: "小野崎",
+            synopsis: "あらすじ本文",
+            totalChapters: 3,
+            isFavorite: 1,
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: "2026-10-10T10:00:00.000Z",
+            bookmarkChapterIndex: 2,
+            lastReadAt: "2026-10-28T12:00:00.000Z", // 新しい読了
+            readChapterIds: [],
+            createdAt: "2026-10-10T00:00:00.000Z",
+            updatedAt: targetRemoteUpdatedAt, // 新しい更新日時
+          },
+        },
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      await engine.pullAndMerge();
+      const local = await novelRepo.getNovelById(
+        "kakuyomu:16817330658027210412",
+      );
+      expect(local?.bookmarkChapterIndex).toBe(2);
+      expect(local?.isFavorite).toBe(true);
+      expect(local?.updatedAt).toBe(targetRemoteUpdatedAt);
+    });
+
     it("pullAndMerge: 既存作品でリモート・ローカル共に lastReadAt が null の場合、しおり更新を行わないこと", async () => {
       const parser = parserRegistry.requireParser(
         "https://kakuyomu.jp/works/16817330658027210412",

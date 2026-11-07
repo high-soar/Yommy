@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import {
+  APP_SETTING_KEYS,
   DDL_STATEMENTS,
   initializeDatabaseSchema,
   migrateDatabaseSchema,
@@ -53,6 +54,16 @@ describe("storage/schema", () => {
     expect(DDL_STATEMENTS).toContain("value TEXT NOT NULL");
     expect(DDL_STATEMENTS).toContain("updated_at TEXT NOT NULL");
     expect(DDL_STATEMENTS).toContain("'bookshelf_sort_order', 'unread_first'");
+    expect(DDL_STATEMENTS).toContain(
+      "'bookshelf_favorite_only', 'false', '2026-01-01T00:00:00.000Z'",
+    );
+  });
+
+  it("APP_SETTING_KEYS に BOOKSHELF_FAVORITE_ONLY が定義されていること (db-schema / Issue #266)", () => {
+    expect(
+      (APP_SETTING_KEYS as unknown as Record<string, string>)
+        .BOOKSHELF_FAVORITE_ONLY,
+    ).toBe("bookshelf_favorite_only");
   });
 
   it("reader_settings テーブルに paging_mode カラム（CHECK制約付き）および初期行投入が定義されていること (AC-ST-13 / db-schema)", () => {
@@ -163,6 +174,12 @@ describe("storage/schema", () => {
     );
     expect(settings).toHaveLength(1);
     expect(settings[0].value).toBe("unread_first");
+
+    const favFilterSetting = await db.query<{ key: string; value: string }>(
+      "SELECT key, value FROM app_settings WHERE key = 'bookshelf_favorite_only';",
+    );
+    expect(favFilterSetting).toHaveLength(1);
+    expect(favFilterSetting[0].value).toBe("false");
 
     // reader_settings テーブル初期行および paging_mode カラム検証 (AC-ST-13)
     const readerSettingsColumns = await db.query<{ name: string }>(
