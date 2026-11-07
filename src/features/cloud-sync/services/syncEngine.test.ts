@@ -1363,16 +1363,10 @@ describe("syncEngine", () => {
         "https://kakuyomu.jp/works/16817330658027210412",
       );
       await novelRepo.upsertNovelWithToc(index, "2026-10-20T00:00:00.000Z");
-      await (
-        novelRepo as unknown as {
-          updateSyncMetadata?: (
-            id: string,
-            metadata: { isFavorite?: boolean; updatedAt?: string },
-          ) => Promise<void>;
-        }
-      ).updateSyncMetadata?.("kakuyomu:16817330658027210412", {
+      await novelRepo.updateSyncMetadata?.("kakuyomu:16817330658027210412", {
         isFavorite: true,
         updatedAt: "2026-10-25T00:00:00.000Z",
+        lastReadAt: "2026-10-25T00:00:00.000Z",
       });
 
       // 1. リモートの updatedAt が古い場合

@@ -125,6 +125,14 @@ function createMockNovelRepo(initialNovel: NovelRecord | null = sampleNovel): {
     upsertNovelWithToc: async () =>
       currentNovel ?? ({} as unknown as NovelRecord),
     updateBookmark: updateBookmarkSpy,
+    setFavorite: async (_id: string, isFav: boolean) => {
+      if (currentNovel) {
+        currentNovel = {
+          ...currentNovel,
+          isFavorite: isFav,
+        };
+      }
+    },
     deleteNovel: async () => {},
     clearNewUpdate: async () => {},
     updateLastCheckedAt: async () => {},

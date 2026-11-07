@@ -475,7 +475,11 @@ export class SyncEngine {
     remoteNovel: SyncNovelData,
     localNovel: NovelRecord,
   ): Promise<void> {
-    // 既存作品のしおりマージ
+    // 1. お気に入りおよび更新日時の LWW 判定（updateBookmark によるローカル updated_at 書き換え前に比較）
+    const isRemoteUpdatedNewer =
+      Date.parse(remoteNovel.updatedAt) > Date.parse(localNovel.updatedAt);
+
+    // 2. 既存作品のしおりマージ
     const remoteLastRead = remoteNovel.lastReadAt
       ? Date.parse(remoteNovel.lastReadAt)
       : 0;
@@ -496,7 +500,15 @@ export class SyncEngine {
       }
     }
 
-    // 既読エピソードの和集合マージ
+    // 3. リモートの updatedAt が新しい場合（LWW）、isFavorite と updatedAt を反映
+    if (isRemoteUpdatedNewer) {
+      await this.deps.novelRepository.updateSyncMetadata?.(novelId, {
+        isFavorite: remoteNovel.isFavorite === 1,
+        updatedAt: remoteNovel.updatedAt,
+      });
+    }
+
+    // 4. 既読エピソードの和集合マージ
     const chapters =
       await this.deps.chapterRepository.listChaptersByNovelId(novelId);
     const remoteReadSet = new Set(remoteNovel.readChapterIds);

@@ -72,6 +72,12 @@ function createMockNovelRepository(
       };
     },
     updateBookmark: async () => {},
+    setFavorite: async (id: string, isFav: boolean) => {
+      const target = novels.find((n) => n.id === id);
+      if (target) {
+        target.isFavorite = isFav;
+      }
+    },
     deleteNovel: async (id: string) => {
       novels = novels.filter((n) => n.id !== id);
     },

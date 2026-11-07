@@ -367,11 +367,7 @@ describe("SqlNovelRepository", () => {
       expect(created.updatedAt).toBe("2026-01-01T00:00:00.000Z");
 
       const beforeTime = Date.now();
-      await (
-        repository as unknown as {
-          setFavorite: (id: string, fav: boolean) => Promise<void>;
-        }
-      ).setFavorite(created.id, true);
+      await repository.setFavorite(created.id, true);
 
       const updated = await repository.getNovelById(created.id);
       expect(updated?.isFavorite).toBe(true);
@@ -383,20 +379,12 @@ describe("SqlNovelRepository", () => {
         sampleParsedIndex,
         "2026-01-01T00:00:00.000Z",
       );
-      await (
-        repository as unknown as {
-          setFavorite: (id: string, fav: boolean) => Promise<void>;
-        }
-      ).setFavorite(created.id, true);
+      await repository.setFavorite(created.id, true);
       const fav = await repository.getNovelById(created.id);
       expect(fav?.isFavorite).toBe(true);
 
       const beforeTime = Date.now();
-      await (
-        repository as unknown as {
-          setFavorite: (id: string, fav: boolean) => Promise<void>;
-        }
-      ).setFavorite(created.id, false);
+      await repository.setFavorite(created.id, false);
 
       const unfav = await repository.getNovelById(created.id);
       expect(unfav?.isFavorite).toBe(false);
@@ -890,14 +878,7 @@ describe("SqlNovelRepository", () => {
 
       // updatedAt の更新
       const targetUpdatedAt = "2026-11-05T18:00:00.000Z";
-      await (
-        repository as unknown as {
-          updateSyncMetadata?: (
-            id: string,
-            metadata: { updatedAt?: string; isFavorite?: boolean },
-          ) => Promise<void>;
-        }
-      ).updateSyncMetadata?.(created.id, {
+      await repository.updateSyncMetadata?.(created.id, {
         updatedAt: targetUpdatedAt,
         isFavorite: true,
       });

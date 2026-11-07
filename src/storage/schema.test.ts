@@ -60,10 +60,9 @@ describe("storage/schema", () => {
   });
 
   it("APP_SETTING_KEYS に BOOKSHELF_FAVORITE_ONLY が定義されていること (db-schema / Issue #266)", () => {
-    expect(
-      (APP_SETTING_KEYS as unknown as Record<string, string>)
-        .BOOKSHELF_FAVORITE_ONLY,
-    ).toBe("bookshelf_favorite_only");
+    expect(APP_SETTING_KEYS.BOOKSHELF_FAVORITE_ONLY).toBe(
+      "bookshelf_favorite_only",
+    );
   });
 
   it("reader_settings テーブルに paging_mode カラム（CHECK制約付き）および初期行投入が定義されていること (AC-ST-13 / db-schema)", () => {
