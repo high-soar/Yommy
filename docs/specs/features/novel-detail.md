@@ -1,8 +1,8 @@
 ---
 type: spec-feature
 title: "作品詳細・目次画面仕様書（SCR-02: Novel Detail & TOC）"
-description: 登録済み作品のヘッダー情報・あらすじ表示、章見出し付きエピソード一覧（キャッシュ済み・既読・しおり状態）、目次更新（再取得）、作品削除、およびリーダー画面への閲覧遷移を提供する作品詳細・目次画面（SCR-02）の正本仕様。
-status: "Approved"
+description: 登録済み作品のヘッダー情報・あらすじ表示、お気に入り（★）登録・解除、章見出し付きエピソード一覧（キャッシュ済み・既読・しおり状態）、目次更新（再取得）、作品削除、およびリーダー画面への閲覧遷移を提供する作品詳細・目次画面（SCR-02）の正本仕様。
+status: "Review (#266)"
 updated: "2026-11-07"
 tags:
   [
@@ -19,12 +19,15 @@ tags:
     cache-rules,
     cache-management,
     capacity-visualization,
+    favorite,
     narou,
     multi-page-toc,
     ho-24,
     ho-29,
+    ho-32,
   ]
 related_specs:
+  - docs/specs/changes/issue-266-bookshelf-favorite-and-sync.md
   - docs/specs/changes/archive/issue-239-narou-parser-and-multi-page-toc.md
   - docs/specs/parsers/narou.md
   - docs/specs/changes/archive/issue-170-cache-management-and-capacity-visualization.md
@@ -76,9 +79,9 @@ related_tests:
   - `SYS-REQ-01`（作品登録・目次取得：作品メタデータ・あらすじ・章見出し付きエピソード一覧の表示および目次再取得）
   - `SYS-REQ-02`（本文取得・オフライン閲覧：エピソード選択または読書開始ボタンによるリーダー遷移と、未キャッシュ話のオンデマンド本文取得・キャッシュ状態反映、および未取得話の一括キャッシュ）
   - `SYS-REQ-03`（レートリミット・バックグラウンド取得：未取得話一括キャッシュ時の 1.5秒間隔ウェイト制御および中断制御）
-  - `SYS-REQ-04`（更新チェック・差分取得：作品詳細画面表示時の本棚「NEW」バッジ自動解除、手動目次再取得と新着話数フィードバック表示）
+  - `SYS-REQ-04`（更新チェック・差分取得・お気に入り管理：作品詳細画面表示時の本棚「NEW」バッジ自動解除、手動目次再取得と新着話数フィードバック表示、作品詳細ヘッダーからのお気に入り［★］登録・解除、`v0.8` Issue #266）
   - `SYS-REQ-05`（キャッシュ管理・容量整理：未取得話の一括キャッシュ、確認ダイアログ付き作品削除と `chapters` カスケード削除、作品別キャッシュデータ容量可視化、確認ダイアログ付き本文キャッシュ削除［既読話のみ／全話］、`v0.5` Issue #170）
-  - `SYS-REQ-06`（クラウド同期・バックアップ：Google Drive クラウド同期による他端末からの作品追加・しおり位置・既読状態の反映、および作品削除時の同期反映）
+  - `SYS-REQ-06`（クラウド同期・バックアップ：Google Drive クラウド同期による他端末からの作品追加・しおり位置・既読状態・お気に入り状態の反映、および作品削除・お気に入り変更時の同期反映）
   - `SYS-REQ-12`（しおり・スクロール位置自動保存に基づくしおり位置マーク・既読バッジ表示および「続きから読む」導線）
   - `SYS-REQ-16`（全画面シェル・下部タブ・論理階層遷移：100dvh 全画面シェル内配置、固定ヘッダー＋内部スクロール目次、下部タブバー連携）
   - `SYS-REQ-19`（探索一覧からの作品即時登録・遷移：検索・ランキングからの遷移元導線）
@@ -161,6 +164,7 @@ src/features/novel-detail/
 | `onCancelBatchCache`     | `() => void`                                 | 必須 | 一括キャッシュ「中断」ボタン押下時 (`v0.3`)            |
 | `onOpenDeleteDialog`     | `() => void`                                 | 必須 | 「作品を削除」ボタン押下時のコールバック               |
 | `onOpenClearCacheDialog` | `() => void`                                 | 任意 | 「本文キャッシュ整理」ボタン押下時 (`v0.5` Issue #170) |
+| `onToggleFavorite`       | `() => void \| Promise<void>`                | 任意 | お気に入り（★）トグルボタン押下時 (`v0.8` Issue #266)  |
 
 #### 表示項目・セマンティック属性・活性制御ルール
 
@@ -187,6 +191,10 @@ src/features/novel-detail/
     - プライマリボタン `data-testid="detail-resume-button"`（ラベル: `続きから読む（第{novel.bookmarkChapterIndex}話）`、クリック時に `onResumeBookmark(novel.bookmarkChapterIndex)` を呼び出す）と、セカンダリボタン `data-testid="detail-read-first-button"`（ラベル: `最初から読む（第1話）`、クリック時に `onStartFromBeginning()` を呼び出す）の **2 ボタンを並べて表示** する。
   - ※`novel.totalChapters === 0` または `isBatchCaching === true` の場合は読書開始ボタンを `disabled` とする。
 - **管理アクションボタン（右寄せ）**:
+  - **お気に入り（★）トグルボタン（`v0.8` Issue #266）**: `data-testid="detail-favorite-toggle-button"`
+    - セマンティック属性: `aria-pressed={novel.isFavorite}`。
+    - ラベル: `novel.isFavorite === true` のときは `★ お気に入り済み`（アンバー色強調スタイル）、`false` のときは `☆ お気に入り`（通常枠線スタイル）。
+    - クリック時に `onToggleFavorite?.()` を呼び出す。`isRefreshing === true` または `isBatchCaching === true` の間は `disabled` とする。
   - **未取得話一括キャッシュボタン（`v0.3`）**: `data-testid="batch-cache-button"`
     - `novel.totalChapters === 0`（または `chapters.length === 0`）の場合: ラベル `未取得話を一括キャッシュ`、`disabled` 化（対象話が存在しないため）。
     - `isAllCached === true`（エピソードが存在し `novel.cachedChapters === novel.totalChapters` かつ全話有効キャッシュ）の場合: ラベル `全話キャッシュ済み`、`disabled` 化。
@@ -350,6 +358,7 @@ src/features/novel-detail/
 | `onOpenClearCacheDialog`  | `() => void`                                                          | 任意 | 「本文キャッシュ整理」押下時 (`v0.5`)              |
 | `onCloseClearCacheDialog` | `() => void`                                                          | 任意 | キャッシュ削除ダイアログキャンセル時 (`v0.5`)      |
 | `onConfirmClearCache`     | `(options: { onlyRead: boolean }) => void \| Promise<void \| number>` | 任意 | キャッシュ削除確定時 (`v0.5`)                      |
+| `onToggleFavorite`        | `() => void \| Promise<void>`                                         | 任意 | お気に入り（★）トグル押下時 (`v0.8` Issue #266)    |
 
 #### セマンティック属性とレイアウト・排他描画ルール
 
@@ -413,6 +422,7 @@ export interface UseNovelDetailResult {
   openClearCacheDialog: () => void;
   closeClearCacheDialog: () => void;
   confirmClearCache: (options: { onlyRead: boolean }) => Promise<number>;
+  toggleFavorite: () => Promise<boolean>;
   reloadDetail: () => Promise<void>;
 }
 ```
@@ -468,6 +478,11 @@ export interface UseNovelDetailResult {
    - 削除完了後、親作品レコード（`cached_chapters`, `total_byte_size`）および各話一覧（`ChapterSummary[]`）を再取得して State を即時更新する。
    - ダイアログを閉じ（`isClearCacheDialogOpen = false`）、通知メッセージ `refreshMessage = "本文キャッシュを削除しました（${deletedCount}話）"` をセットし、`isClearingCache = false` として削除話数を返却する。
    - 削除失敗時はダイアログを閉じずに `error` をセットし、`isClearingCache = false` に戻す。
+7. **作品のお気に入り登録・解除パイプライン（`toggleFavorite`、`v0.8` Issue #266）**:
+   - `novel === null` または他処理実行中（`isRefreshing` / `isBatchCaching` / `isDeleting` / `isClearingCache`）の場合は何もせず `false` を返す。
+   - `nextIsFavorite = !novel.isFavorite` を算出し、`novelRepository.setFavorite(novelId, nextIsFavorite)` を実行して SQLite の `novels.is_favorite` と `novels.updated_at`（現在時刻 ISO 8601）を更新する。
+   - 成功時は `novel` State の `isFavorite` および `updatedAt` を即時更新し、`syncEngine` が注入されている場合は `syncEngine.notifyChanged()` を呼び出してクラウド同期の自動 Push をスケジュールし、`true` を返す。
+   - 失敗時は `error` にエラーメッセージを設定し、`false` を返す。
 
 ---
 
@@ -491,6 +506,7 @@ export interface UseNovelDetailResult {
 | **`AC-ND-20`** | 作品ヘッダーでのキャッシュ容量表示                       | 作品詳細ヘッダー（`data-testid="novel-detail-stats"`）において、`全 {novel.totalChapters} 話（取得済み {novel.cachedChapters} 話 / {formatByteSize(novel.totalByteSize)}）` の形式でキャッシュ容量がフォーマット表示されること。                                                                                                                                                                                                                                        | `SYS-REQ-05` / `TR-02`                        |
 | **`AC-ND-21`** | 本文キャッシュ整理ボタンと確認ダイアログ                 | 作品詳細ヘッダーの「本文キャッシュ整理」（`data-testid="open-clear-cache-dialog-button"`）から確認ダイアログ（`data-testid="clear-cache-confirm-dialog"`）が開き、「既読話の本文キャッシュのみ削除」（`data-testid="confirm-clear-read-cache-button"`）または「すべての本文キャッシュを削除」（`data-testid="confirm-clear-all-cache-button"`）を選択できること。また、`novel.cachedChapters === 0`、一括キャッシュ中、または目次更新中はボタンが disabled となること。 | `SYS-REQ-05` / `TR-19`                        |
 | **`AC-ND-22`** | 本文キャッシュ削除の即時反映と安全性                     | 本文キャッシュ削除実行時、目次情報・既読フラグ・しおり位置を保持したまま該当話の本文キャッシュ（`body_html = NULL`, `byte_size = 0`, `downloaded_at = NULL`）が削除され、親作品の `cachedChapters` / `totalByteSize` および各話一覧のバッジ（取得済み→未取得）が即時再計算・反映され、完了通知（`novel-detail-notice`）が表示されること。                                                                                                                               | `SYS-REQ-05` / `TR-19`                        |
+| **`AC-ND-23`** | 作品詳細ヘッダーでのお気に入り登録・解除                 | 作品詳細ヘッダーのお気に入りトグルボタン（`data-testid="detail-favorite-toggle-button"`）をタップすると、お気に入り状態（`★ お気に入り済み` / `☆ お気に入り`、`aria-pressed`）が切り替わり、SQLite の `novels.is_favorite` と `novels.updated_at` が同時更新され、本棚画面復帰時やクラウド同期へ反映されること。                                                                                                                                                        | `SYS-REQ-04`, `SYS-REQ-06`                    |
 
 ---
 
@@ -500,6 +516,6 @@ export interface UseNovelDetailResult {
 
 - **`SCN-01`（`test/it/scenarios/scn01-poc-vertical-reader.spec.ts`）**: 作品カード選択による目次表示・目次更新、エピソード選択からリーダー閲覧、「← 目次」ボタンおよび OS バックキーでの復帰時の既読・しおり反映、作品削除（`TR-02`, `TR-04`, `TR-06`, `TR-07`, `AC-ND-01`〜`09`）。
 - **`SCN-02`（`test/it/scenarios/scn02-search-ranking-discovery.spec.ts`）**: 検索・ランキングからの作品カード選択による目次遷移と、OS バックキーによる直前の探索元画面への論理復帰（`TR-07`, `TR-14`, `AC-ND-07`, `09`）。
-- **`SCN-03`（`test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts`）**: 作品詳細画面表示による本棚「NEW」バッジの自動解除（`TR-02`, `AC-ND-10`）。
+- **`SCN-03`（`test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts`）**: 作品詳細画面表示による本棚「NEW」バッジの自動解除、および作品詳細ヘッダーからのお気に入り登録・解除と本棚への反映（`TR-02`, `AC-ND-10`, `23`）。
 - **`SCN-04`（`test/it/scenarios/scn04-prefetch-and-cache.spec.ts`）**: 未取得話一括キャッシュ（1.5秒ウェイト順次取得・進捗表示・中断）、作品ヘッダーでのキャッシュ容量表示、および本文キャッシュ整理ダイアログ（既読話のみ／全話削除）による容量即時再計算と目次・既読・しおり保持（`TR-18`, `TR-19`, `AC-ND-11`〜`13`, `20`〜`22`）。
-- **`SCN-05`（`test/it/scenarios/scn05-cloud-sync.spec.ts`）**: 作品削除時のクラウド同期 Tombstone 自動 Push 連携（`TR-07`, `AC-ND-06`）。
+- **`SCN-05`（`test/it/scenarios/scn05-cloud-sync.spec.ts`）**: 作品削除時のクラウド同期 Tombstone 自動 Push 連携、およびお気に入り状態変更のクラウド同期反映（`TR-07`, `AC-ND-06`, `23`）。

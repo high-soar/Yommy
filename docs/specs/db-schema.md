@@ -2,7 +2,7 @@
 type: spec-db-schema
 title: ローカル DB スキーマ定義（App 全体正本）
 description: SQLite（novels, chapters, download_queue, reader_settings, app_settings）のER図、テーブル構造、およびDDL定義の正本。
-status: "Approved"
+status: "Review (#266)"
 updated: "2026-11-07"
 tags:
   [
@@ -23,11 +23,15 @@ tags:
     pagination,
     font-family,
     page-margin,
+    favorite,
+    bookshelf-filter,
     ho-23,
     ho-24,
     ho-25,
+    ho-32,
   ]
 related_specs:
+  - docs/specs/changes/issue-266-bookshelf-favorite-and-sync.md
   - docs/specs/changes/archive/issue-169-font-and-margin-customization.md
   - docs/specs/changes/archive/issue-170-cache-management-and-capacity-visualization.md
   - docs/specs/changes/archive/issue-168-reader-pagination-and-touch-refinement.md
@@ -157,6 +161,7 @@ erDiagram
 
 - **`has_new_update`**: 目次更新（自動更新チェックまたは手動更新）時に話数増加・新規エピソード追加が検知された場合に `1`（NEWバッジ表示）が記録され、作品閲覧時（`SCR-02` または `SCR-03` 表示時）に `0` へ解除されます。
 - **`latest_episode_published_at`**: `upsertNovelWithToc` 実行時に `index.chapters` 内の各エピソードのうち有効な `publishedAt` の最大値（最新公開/更新日時）を算出し、ISO 8601 UTC 文字列（例: `2026-01-01T20:00:00.000Z`）に正規化して保持します（サイトごとのタイムゾーン表記揺れによる文字列ソート誤差を防止）。全エピソード未設定時は `NULL` となります。本カラムにより、ソート順「作品更新日順（`latest_published`）」において `chapters` テーブルとの結合なしで高速にソートクエリを実行可能です。
+- **`is_favorite` と `updated_at` 連動（`v0.8` Issue #266）**: 本棚画面（`SCR-01`）または作品詳細画面（`SCR-02`）からお気に入り状態がトグル操作（`novelRepository.setFavorite(novelId, isFavorite)`）された際、`novels.is_favorite`（`1` または `0`）の更新と同一の SQL 文で **`novels.updated_at` も現在時刻（ISO 8601 UTC 文字列）へ同時に更新** します。これにより Google Drive クラウド同期（`SyncEngine`）において、端末間のお気に入り変更が `updated_at` 基準の Last-Write-Wins（LWW）競合解決で双方向（Push / Pull とも）に正しく反映されます。なお、目次再取得（`upsertNovelWithToc`）時には既存の `is_favorite` 値が保持されます。
 - **`updated_at` とキャッシュ削除（`v0.5` Issue #170 / R1-01）**: 本文キャッシュの削除（作品詳細画面での `deleteCachedBodies` または設定画面での `deleteAllCachedBodies`）が行われた際、`novels.cached_chapters` および `novels.total_byte_size` は再集計値へ更新されますが、**`novels.updated_at` は意図的に更新されず既存値が保持されます**。キャッシュ削除はローカルストレージの空き容量確保操作であり作品メタデータ自体の更新ではないため、`updated_at` を進めてしまうと Google Drive 等のクラウド同期（`v0.4` Issue #120）における Last-Write-Wins 競合解決や論理削除 Tombstone 判定（`remoteDeletedAt > max(created, updated)`）が誤って妨害され、他端末で削除された作品がローカル端末で復活してしまう不整合を防ぐためです（R1-01）。
 
 ```sql
@@ -270,9 +275,9 @@ INSERT OR IGNORE INTO reader_settings (
 > - **`font_family`**: `mincho` / `gothic` / `biz-ud-mincho` / `biz-ud-gothic` / `klee`（既定値 `'biz-ud-mincho'`）。設定画面（`SCR-05`）の 5 種ドロップダウンで選択・永続化し、サンプルプレビュー枠およびリーダー画面（`SCR-03`）へ動的反映する。
 > - **`page_margin_px`**: `8 〜 48px`（既定値 `20px`、`4px` 刻み）。設定画面（`SCR-05`）のステッパーボタンで調整・永続化し、サンプルプレビュー枠およびリーダー画面（`SCR-03`）の余白・縦書きマルチカラム組版（段幅・段高・`columnGap`）へ動的反映する。
 
-### 3.5 `app_settings` テーブル（汎用アプリケーション設定・本棚ソート順）
+### 3.5 `app_settings` テーブル（汎用アプリケーション設定・本棚ソート順・お気に入りフィルタ）
 
-本棚のソート順や各種アプリ全体状態をキー・バリュー形式で柔軟に永続化する設定テーブルです。スキーマ初期化時に本棚デフォルトソート順（`bookshelf_sort_order = 'unread_first'`）が登録されます。
+本棚のソート順やお気に入りフィルタ状態、各種アプリ全体状態をキー・バリュー形式で柔軟に永続化する設定テーブルです。スキーマ初期化時に本棚デフォルトソート順（`bookshelf_sort_order = 'unread_first'`）および本棚お気に入りフィルタ初期値（`bookshelf_favorite_only = 'false'`）が登録されます。
 
 ```sql
 CREATE TABLE IF NOT EXISTS app_settings (
@@ -286,6 +291,12 @@ INSERT OR IGNORE INTO app_settings (
 ) VALUES (
   'bookshelf_sort_order', 'unread_first', '2026-01-01T00:00:00.000Z'
 );
+
+INSERT OR IGNORE INTO app_settings (
+  key, value, updated_at
+) VALUES (
+  'bookshelf_favorite_only', 'false', '2026-01-01T00:00:00.000Z'
+);
 ```
 
 #### 本棚ソート順キー仕様（`key: 'bookshelf_sort_order'`）
@@ -297,6 +308,13 @@ INSERT OR IGNORE INTO app_settings (
 | `latest_published` | 作品更新日順                         | `CASE WHEN novels.latest_episode_published_at IS NOT NULL THEN 0 ELSE 1 END, novels.latest_episode_published_at DESC, novels.updated_at DESC` |
 | `created_at`       | 登録日順                             | `novels.created_at DESC`                                                                                                                      |
 | `title`            | タイトル順                           | `novels.title COLLATE NOCASE ASC`                                                                                                             |
+
+#### 本棚お気に入りフィルタキー仕様（`key: 'bookshelf_favorite_only'`、`v0.8` Issue #266 新設）
+
+| 値 (`value`) | フィルタ状態                             | 挙動・復元ルール                                                                                                                                          |
+| :----------- | :--------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `'false'`    | すべての登録作品を表示（既定値）         | `listNovels(sortOrder)` の全件をそのまま本棚一覧に表示する（未設定・`'true'` 以外の値も `'false'` として扱う）。                                          |
+| `'true'`     | お気に入り作品のみを表示（フィルタ有効） | `novels.filter((n) => n.isFavorite)` で絞り込んで本棚一覧に表示し、手動更新チェック時はお気に入り作品のみを対象とする（バックグラウンド自動更新は全件）。 |
 
 #### クラウド同期設定キー仕様（v0.4 新設: Issue #120）
 
