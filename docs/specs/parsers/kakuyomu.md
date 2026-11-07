@@ -16,7 +16,7 @@ tags:
   - multi-genre
   - ho-31
 related_specs:
-  - docs/specs/changes/issue-264-advanced-search-filter.md
+  - docs/specs/changes/archive/issue-264-advanced-search-filter.md
   - docs/specs/architecture.md
   - docs/specs/requirements.md
   - docs/specs/db-schema.md

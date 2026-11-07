@@ -3,7 +3,7 @@ type: spec-delta
 title: "検索画面（SCR-06）の高度検索フィルタ機能（除外キーワード指定・複数ジャンル選択）の設計"
 description: "Issue #264（HO-31）に対する差分仕様、カクヨム・小説家になろうの除外キーワードおよび複数ジャンル検索URL生成仕様、検索画面のインライン折りたたみ除外ワードUI・マルチセレクトジャンルピル設計、テスト計画、およびSub-issue分割計画。"
 issue: "#264"
-status: "Review (#264)"
+status: "Completed (Archived)"
 updated: "2026-11-07"
 tags:
   - delta
@@ -59,7 +59,7 @@ Step 1 の `/grill-me` インタビューおよび実サイト（カクヨム Ne
 
 ### 2.1 Parser Layer（`NovelSearchOptions` / `KakuyomuParser` / `NarouParser`）の拡張
 
-[docs/specs/architecture.md](../architecture.md)、[docs/specs/parsers/kakuyomu.md](../parsers/kakuyomu.md)、および [docs/specs/parsers/narou.md](../parsers/narou.md) の検索 URL 生成仕様を以下の通り拡張します。
+[docs/specs/architecture.md](../../architecture.md)、[docs/specs/parsers/kakuyomu.md](../../parsers/kakuyomu.md)、および [docs/specs/parsers/narou.md](../../parsers/narou.md) の検索 URL 生成仕様を以下の通り拡張します。
 
 1. **`NovelSearchOptions` 型契約の拡張（`src/parsers/types.ts`）**:
    ```typescript
@@ -94,7 +94,7 @@ Step 1 の `/grill-me` インタビューおよび実サイト（カクヨム Ne
 
 ### 2.2 検索画面（`SCR-06`）の高度検索フィルタ UI 仕様
 
-[docs/specs/features/search.md](../features/search.md) のコンポーネント契約を以下の通り拡張します。
+[docs/specs/features/search.md](../../features/search.md) のコンポーネント契約を以下の通り拡張します。
 
 1. **`SearchInputBar`（除外キーワードトグルボタン ＆ インライン展開入力欄）**:
    - **Props 拡張（`SearchInputBarProps`）**:
@@ -224,6 +224,6 @@ Step 1 の `/grill-me` インタビューおよび実サイト（カクヨム Ne
     - 本 Issue は Parser の検索 URL クエリ組み立て拡張および検索画面ヘッダー内の React フォーム・ピル状態拡張であり、Android ネイティブプラグインの新設・変更や物理ジェスチャー追加を伴わない。
     - 375px モバイル幅でのレイアウト整合性は Storybook VRT（375px）および Playwright 実ブラウザ結合テスト（`SCN-02`）で自動検証し、Android 実機での最終確認は Milestone `v0.8` 完了承認 Issue #267（Step 2）にて他機能（#265, #266）と一筆書きで一括実施する。
 
-| 申し送り ID | 起票元 Issue | 申し送り事項の内容                                                                                                     | 解決先（対象 Issue / 成果物）                                                | 完了ゲート                                                                       |  状態  |
-| :---------: | :----------: | :--------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------- | :------------------------------------------------------------------------------- | :----: |
-| **`HO-31`** |     #240     | 除外キーワード指定や複数ジャンル AND/OR モーダル等の高度な検索フィルタ機能の検討・実装（Issue #240 §3 対象外スコープ） | Issue #264（Sub-issue #271, #272） / Milestone `v0.8` 実機検証（Issue #267） | 親 Issue #264 完了前（コード・IT精算） / Milestone `v0.8` 完了前（実機一括検証） | `Open` |
+| 申し送り ID | 起票元 Issue | 申し送り事項の内容                                                                                                     | 解決先（対象 Issue / 成果物）                                                | 完了ゲート                                                                       |    状態    |
+| :---------: | :----------: | :--------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------- | :------------------------------------------------------------------------------- | :--------: |
+| **`HO-31`** |     #240     | 除外キーワード指定や複数ジャンル AND/OR モーダル等の高度な検索フィルタ機能の検討・実装（Issue #240 §3 対象外スコープ） | Issue #264（Sub-issue #271, #272） / Milestone `v0.8` 実機検証（Issue #267） | 親 Issue #264 完了前（コード・IT精算） / Milestone `v0.8` 完了前（実機一括検証） | `Resolved` |
