@@ -27,6 +27,7 @@ related_specs:
   - docs/quality/bug-and-handover-log.md
 related_tests:
   - src/parsers/narou/NarouParser.test.ts
+  - src/parsers/narou/genres.test.ts
   - src/features/search/components/SiteSelector.test.tsx
   - src/features/search/components/SearchFilterBar.test.tsx
   - src/features/search/components/SearchPage.test.tsx

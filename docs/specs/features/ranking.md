@@ -35,6 +35,7 @@ related_tests:
   - src/app/router.test.tsx
   - src/features/ranking/components/SiteSelector.test.tsx
   - src/features/ranking/components/RankingFilterBar.test.tsx
+  - src/features/ranking/components/RankingNovelCard.test.tsx
   - src/features/ranking/components/RankingPage.test.tsx
   - src/features/ranking/components/RankingContainer.test.tsx
   - src/features/ranking/hooks/useNovelRanking.test.ts
@@ -231,7 +232,7 @@ export interface UseNovelRankingResult {
 
 ## 6. テスト責務・カバレッジ計画
 
-- **単体テスト (`RankingPage.test.tsx`, `RankingNovelCard.test.tsx`, `useNovelRanking.test.ts`)**:
+- **単体テスト (`SiteSelector.test.tsx`, `RankingFilterBar.test.tsx`, `RankingNovelCard.test.tsx`, `RankingPage.test.tsx`, `RankingContainer.test.tsx`, `useNovelRanking.test.ts`)**:
   - `docs/guidelines/testing.md` に従い、全分岐（C0/C1 100%）および順位バッジ・ボタン状態遷移を検証。
   - SQLite リポジトリとの連携テストは `resetTestDb()` を使用して決定論的に実行。
 - **Storybook ＆ VRT (1280px / 375px)**:

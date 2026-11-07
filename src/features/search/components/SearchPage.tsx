@@ -99,6 +99,8 @@ export const SearchPage: React.FC<SearchPageProps> = ({
   onAddNovel,
   onSelectCard,
 }) => {
+  const isInteractingDisabled = isLoading || isLoadingMore;
+
   return (
     <div
       data-testid="search-page"
@@ -114,7 +116,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
           <SiteSelector
             selectedSite={selectedSite}
             onSelectSite={onSelectSite}
-            disabled={isLoading}
+            disabled={isInteractingDisabled}
           />
         </div>
 
@@ -122,7 +124,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
           keyword={keyword}
           onChangeKeyword={onChangeKeyword}
           onSubmitSearch={onSubmitSearch}
-          isLoading={isLoading}
+          isLoading={isInteractingDisabled}
         />
 
         <SearchFilterBar
@@ -133,7 +135,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
           onSelectSerialStatus={onSelectSerialStatus}
           selectedGenre={selectedGenre}
           onSelectGenre={onSelectGenre}
-          disabled={isLoading}
+          disabled={isInteractingDisabled}
         />
       </header>
 

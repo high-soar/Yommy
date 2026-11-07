@@ -102,6 +102,12 @@ export function useNovelSearch(): UseNovelSearchResult {
 
   // 通信重複ガードおよび非同期競合（Race Condition）防止用 ref
   const isSearchingRef = useRef<boolean>(false);
+  const searchGenerationRef = useRef<number>(0);
+  const selectedSiteRef = useRef<NovelSiteType>(selectedSite);
+
+  useEffect(() => {
+    selectedSiteRef.current = selectedSite;
+  }, [selectedSite]);
 
   /**
    * DB内の登録済み作品ID一覧を更新（サイト切替時は targetSite を明示して照合）
@@ -137,6 +143,7 @@ export function useNovelSearch(): UseNovelSearchResult {
     async (params?: ExecuteSearchParams) => {
       if (isSearchingRef.current) return;
       isSearchingRef.current = true;
+      searchGenerationRef.current += 1;
 
       const targetSite =
         params?.site !== undefined ? params.site : selectedSite;
@@ -198,7 +205,11 @@ export function useNovelSearch(): UseNovelSearchResult {
 
   const setSelectedSite = useCallback(
     (newSite: NovelSiteType) => {
-      if (isSearchingRef.current || newSite === selectedSite) return;
+      if (isLoadingMore || isSearchingRef.current || newSite === selectedSite) {
+        return;
+      }
+      searchGenerationRef.current += 1;
+      selectedSiteRef.current = newSite;
       setSelectedSiteState(newSite);
       setGenreState(undefined);
       setError(null);
@@ -208,7 +219,7 @@ export function useNovelSearch(): UseNovelSearchResult {
         void refreshRegisteredIds(newSite);
       }
     },
-    [selectedSite, executeSearch, refreshRegisteredIds],
+    [isLoadingMore, selectedSite, executeSearch, refreshRegisteredIds],
   );
 
   const search = useCallback(async () => {
@@ -219,6 +230,9 @@ export function useNovelSearch(): UseNovelSearchResult {
     if (!hasNextPage || isLoadingMore || isLoading || isSearchingRef.current) {
       return;
     }
+
+    const generationAtStart = searchGenerationRef.current;
+    const siteAtStart = selectedSite;
 
     setIsLoadingMore(true);
     setError(null);
@@ -241,12 +255,24 @@ export function useNovelSearch(): UseNovelSearchResult {
       });
 
       const response = await httpClient.getHtml({ url });
+      if (
+        searchGenerationRef.current !== generationAtStart ||
+        selectedSiteRef.current !== siteAtStart
+      ) {
+        return;
+      }
       const result = parser.searchNovels(response.html, url);
 
       setItems((prev) => [...prev, ...result.items]);
       setCurrentPage(result.pageInfo.currentPage);
       setHasNextPage(result.pageInfo.hasNextPage);
     } catch (err) {
+      if (
+        searchGenerationRef.current !== generationAtStart ||
+        selectedSiteRef.current !== siteAtStart
+      ) {
+        return;
+      }
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
     } finally {
@@ -272,41 +298,45 @@ export function useNovelSearch(): UseNovelSearchResult {
 
   const setOrder = useCallback(
     (newOrder: NovelSearchOrder) => {
-      if (isSearchingRef.current) return;
+      if (isLoadingMore || isSearchingRef.current) return;
+      searchGenerationRef.current += 1;
       setOrderState(newOrder);
       if (hasSearchedRef.current) {
         void executeSearch({ order: newOrder });
       }
     },
-    [executeSearch],
+    [isLoadingMore, executeSearch],
   );
 
   const setSerialStatus = useCallback(
     (newStatus: NovelSerialStatus) => {
-      if (isSearchingRef.current) return;
+      if (isLoadingMore || isSearchingRef.current) return;
+      searchGenerationRef.current += 1;
       setSerialStatusState(newStatus);
       if (hasSearchedRef.current) {
         void executeSearch({ serialStatus: newStatus });
       }
     },
-    [executeSearch],
+    [isLoadingMore, executeSearch],
   );
 
   const setGenre = useCallback(
     (newGenre: string | undefined) => {
-      if (isSearchingRef.current) return;
+      if (isLoadingMore || isSearchingRef.current) return;
+      searchGenerationRef.current += 1;
       setGenreState(newGenre);
       if (hasSearchedRef.current) {
         void executeSearch({ genre: newGenre });
       }
     },
-    [executeSearch],
+    [isLoadingMore, executeSearch],
   );
 
   const addNovelToBookshelf = useCallback(
     async (item: NovelSearchResultItem): Promise<string | null> => {
       if (addingWorkId === item.remoteWorkId) return null;
 
+      const siteAtStart = selectedSite;
       setAddingWorkId(item.remoteWorkId);
       setError(null);
 
@@ -324,7 +354,9 @@ export function useNovelSearch(): UseNovelSearchResult {
           new Date().toISOString(),
         );
 
-        setRegisteredWorkIds((prev) => new Set(prev).add(item.remoteWorkId));
+        if (selectedSiteRef.current === siteAtStart) {
+          setRegisteredWorkIds((prev) => new Set(prev).add(item.remoteWorkId));
+        }
         setAddingWorkId((prev) => (prev === item.remoteWorkId ? null : prev));
         syncEngine?.notifyChanged().catch(() => {});
         return savedNovel.id;
@@ -335,7 +367,14 @@ export function useNovelSearch(): UseNovelSearchResult {
         return null;
       }
     },
-    [addingWorkId, httpClient, novelRepository, parserRegistry, syncEngine],
+    [
+      addingWorkId,
+      httpClient,
+      novelRepository,
+      parserRegistry,
+      selectedSite,
+      syncEngine,
+    ],
   );
 
   const handleCardSelect = useCallback(

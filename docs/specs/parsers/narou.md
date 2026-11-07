@@ -30,6 +30,8 @@ related_specs:
   - docs/guidelines/testing.md
 related_tests:
   - src/parsers/narou/NarouParser.test.ts
+  - src/parsers/narou/genres.test.ts
+  - src/parsers/fetchFullNovelIndex.test.ts
   - src/parsers/parserRegistry.test.ts
   - src/parsers/sanitizer.test.ts
 ---
@@ -47,6 +49,10 @@ related_tests:
   - 検索・ランキング: 小説家になろう 公式「なろう小説 API」（`https://api.syosetu.com/novelapi/api/`、JSON 形式 `out=json`）
   - ※18 禁サイト（`novel18.syosetu.com` 等、年齢確認 Cookie 必須領域）は対象外。
 - **サイト識別子 (`NovelSiteType`)**: `'narou'`
+- **対象ファイル**:
+  - `src/parsers/narou/NarouParser.ts`: 小説家になろう用パーサー本体（作品情報・目次・短編・本文・検索・ランキング抽出）
+  - `src/parsers/narou/genres.ts`: なろう公式小ジャンル定義（21種）および相互変換ヘルパー
+  - `src/parsers/fetchFullNovelIndex.ts`: 複数ページ目次連続取得ヘルパー
 - **取得方式**:
   - Android 実機環境: `CapacitorHttp`（`HttpClientBridge` 経由）によるネイティブ CORS 回避通信
   - UT / テスト環境: ローカル HTML / JSON フィクスチャ（`src/parsers/narou/__fixtures__/*.html`, `*.json`）を用いた決定論的解析
@@ -308,3 +314,20 @@ DOM 要素の抽出は文書順ではなく、以下の優先順位リストに�
 | **`AC-NR-12`** | 検索 API 結果 JSON パース                   | `searchNovels` により、なろう小説 API の JSON から小文字 `remoteWorkId`、小ジャンル日本語ラベル、連載/完結/短編ラベル、話数、文字数、スペース区切りタグ、総合ポイント、正規化 `workUrl`、および `hasNextPage` / `totalCount` が正確に抽出されること。                   | `SYS-REQ-17`     |
 | **`AC-NR-13`** | ランキング API URL 生成                     | `buildRankingUrl` により、集計期間（日間 `dailypoint` / 週間 `weeklypoint` / 月間 `monthlypoint` / 累計 `hyoka`）およびジャンル（総合時は省略、個別時は `genre`）に応じた API URL が正しく生成されること。                                                              | `SYS-REQ-18`     |
 | **`AC-NR-14`** | ランキング API 結果 JSON パース             | `getRanking` により、1位からの連番 `rank` および選択集計期間に応じた期間ポイント（`daily_point` / `weekly_point` / `monthly_point` / `global_point`）を持つ作品一覧が正確に抽出されること。                                                                             | `SYS-REQ-18`     |
+
+---
+
+## 8. 結合テスト（IT）対応
+
+`NarouParser` および複数ページ目次連続取得パイプライン（`fetchFullNovelIndex`）は、以下の Playwright 実ブラウザ結合テスト（`test/it/scenarios/`）によって実運用フローに即した一気通貫の自動回帰検証が行われます。
+
+1. **`SCN-02`（検索・ランキング探索・その場追加・目次遷移・読書シナリオ）**:
+   - `test/it/scenarios/scn02-search-ranking-discovery.spec.ts`
+   - 検索画面およびランキング画面における「小説家になろう」へのサイト切替（`SiteSelector`）、公式小ジャンル（21種）フィルタ連動、キーワード検索・ランキング API レスポンス解析（`AC-NR-11`〜`14`）。
+   - 探索カードからの「＋ 本棚に追加」および未登録カードタップに伴う作品自動登録（`fetchFullNovelIndex` 経由での全話目次結合・DB保存、`AC-NR-01`〜`04`）。
+   - リーダー画面への遷移、なろう本文の縦書きマルチカラム組版、前書き・本編・後書きの区切り線結合（`AC-NR-06`）、ルビおよび傍点（`<em class="bouten">`、`AC-NR-07`）の描画検証。
+
+2. **`SCN-05`（クラウド同期・複数ページ目次自動補完・読書シナリオ）**:
+   - `test/it/scenarios/scn05-cloud-sync.spec.ts`
+   - Google Drive クラウド同期（`SyncEngine`）によるマルチサイト作品同期において、なろう複数ページ目次連載作品（100話超）の同期メタデータ受信時に、起動時自動 Pull パイプライン内で `fetchFullNovelIndex` が呼び出され、全ページ目次（全5話等）の自動補完・結合、既読フラグ、およびしおり話数が欠損なくローカル SQLite へ復元されること（`AC-NR-04`, `AC-NR-05`, `SYS-REQ-02, 12`）。
+   - 同期復元されたなろう作品のリーダー起動時における本文抽出（前書き・本編・後書き結合、ルビ・傍点描画）の回帰検証。

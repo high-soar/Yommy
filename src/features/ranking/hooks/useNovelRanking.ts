@@ -72,6 +72,11 @@ export function useNovelRanking(): UseNovelRankingResult {
 
   // 通信中重複リクエストガードおよび非同期競合（Race Condition）防止用 ref
   const isFetchingRef = useRef<boolean>(false);
+  const selectedSiteRef = useRef<NovelSiteType>(selectedSite);
+
+  useEffect(() => {
+    selectedSiteRef.current = selectedSite;
+  }, [selectedSite]);
 
   /**
    * DB内の登録済み作品ID一覧を更新（サイト切替時は targetSite を明示して照合）
@@ -164,6 +169,7 @@ export function useNovelRanking(): UseNovelRankingResult {
   const setSelectedSite = useCallback(
     (newSite: NovelSiteType) => {
       if (isFetchingRef.current || newSite === selectedSite) return;
+      selectedSiteRef.current = newSite;
       setSelectedSiteState(newSite);
       setGenreState(undefined);
       setError(null);
@@ -198,6 +204,7 @@ export function useNovelRanking(): UseNovelRankingResult {
     async (item: NovelRankingResultItem): Promise<string | null> => {
       if (addingWorkId === item.remoteWorkId) return null;
 
+      const siteAtStart = selectedSite;
       setAddingWorkId(item.remoteWorkId);
       setError(null);
 
@@ -215,7 +222,9 @@ export function useNovelRanking(): UseNovelRankingResult {
           new Date().toISOString(),
         );
 
-        setRegisteredWorkIds((prev) => new Set(prev).add(item.remoteWorkId));
+        if (selectedSiteRef.current === siteAtStart) {
+          setRegisteredWorkIds((prev) => new Set(prev).add(item.remoteWorkId));
+        }
         setAddingWorkId((prev) => (prev === item.remoteWorkId ? null : prev));
         syncEngine?.notifyChanged().catch(() => {});
         return savedNovel.id;
@@ -226,7 +235,14 @@ export function useNovelRanking(): UseNovelRankingResult {
         return null;
       }
     },
-    [addingWorkId, httpClient, novelRepository, parserRegistry, syncEngine],
+    [
+      addingWorkId,
+      httpClient,
+      novelRepository,
+      parserRegistry,
+      selectedSite,
+      syncEngine,
+    ],
   );
 
   const handleCardSelect = useCallback(

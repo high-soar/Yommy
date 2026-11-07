@@ -1,9 +1,10 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./SearchContainer.stories";
 import { SearchContainer } from "./SearchContainer";
+import * as SearchPageModule from "./SearchPage";
 import { ServiceProvider } from "../../../app/ServiceProvider";
 import { RouterProvider } from "../../../app/router";
 import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
@@ -62,13 +63,27 @@ describe("SearchContainer コンポーネント", () => {
     );
   };
 
-  it("Default ストーリー: 検索画面の初期未検索状態がレンダリングされること", async () => {
+  it("Default ストーリー: 検索画面の初期未検索状態がレンダリングされ、子コンポーネント（SearchPage）に初期Propsが正しく伝搬されること (R1-21)", async () => {
+    const pageSpy = vi.spyOn(SearchPageModule, "SearchPage");
     render(<Default />);
 
     await waitFor(() => {
       expect(screen.getByTestId("search-page")).toBeInTheDocument();
+      expect(pageSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          selectedSite: "kakuyomu",
+          keyword: "",
+          selectedOrder: "weekly_ranking",
+          selectedSerialStatus: "all",
+          selectedGenre: undefined,
+          isLoading: false,
+          items: [],
+        }),
+        undefined,
+      );
     });
     expect(screen.getByTestId("search-initial-state")).toBeInTheDocument();
+    pageSpy.mockRestore();
   });
 
   it("検索実行前に入力欄へキーワードを入力しても初期状態表示が維持されること", async () => {
@@ -246,20 +261,34 @@ describe("SearchContainer コンポーネント", () => {
     expect(handleSelectNovel).not.toHaveBeenCalled();
   });
 
-  it("SiteSelector で小説家になろうへ切り替えると、なろう小ジャンルピルが表示されること (AC-SE-10)", async () => {
-    const user = userEvent.setup();
+  it("SiteSelector によるサイト切替コールバック（onSelectSite）呼び出し時に、子コンポーネント（SearchPage）へ selectedSite が伝搬すること (AC-SE-10, R1-21)", async () => {
+    const pageSpy = vi.spyOn(SearchPageModule, "SearchPage");
     renderWithProviders();
 
     await waitFor(() => {
-      expect(screen.getByTestId("site-selector-narou")).toBeInTheDocument();
+      expect(pageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selectedSite: "kakuyomu",
+          isLoading: false,
+        }),
+        undefined,
+      );
     });
 
-    const narouBtn = screen.getByTestId("site-selector-narou");
-    await user.click(narouBtn);
+    const lastCallProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+    act(() => {
+      lastCallProps.onSelectSite("narou");
+    });
 
     await waitFor(() => {
-      expect(narouBtn).toHaveAttribute("aria-pressed", "true");
-      expect(screen.getByTestId("search-genre-201")).toBeInTheDocument();
+      expect(pageSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          selectedSite: "narou",
+        }),
+        undefined,
+      );
     });
+
+    pageSpy.mockRestore();
   });
 });

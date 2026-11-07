@@ -25,6 +25,8 @@ related_specs:
   - docs/specs/features/ranking.md
   - docs/quality/bug-and-handover-log.md
 related_tests:
+  - src/parsers/narou/NarouParser.test.ts
+  - src/parsers/fetchFullNovelIndex.test.ts
   - src/parsers/parserRegistry.test.ts
   - src/parsers/sanitizer.test.ts
   - src/features/bookshelf/hooks/useBookshelf.test.ts
@@ -33,6 +35,7 @@ related_tests:
   - src/features/ranking/hooks/useNovelRanking.test.ts
   - src/features/cloud-sync/services/syncEngine.test.ts
   - src/app/ServiceProvider.test.tsx
+  - test/it/scenarios/scn05-cloud-sync.spec.ts
 ---
 
 # 差分仕様書：小説家になろう（narou）パーサーおよび複数ページ目次取得・クラウド同期対応（Issue #239）

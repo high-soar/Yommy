@@ -301,6 +301,8 @@ describe("fetchFullNovelIndex: 複数ページ目次連続取得パイプライ�
       };
     });
 
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
     const result = await fetchFullNovelIndex(
       mockHttpClient,
       mockParser,
@@ -313,6 +315,10 @@ describe("fetchFullNovelIndex: 複数ページ目次連続取得パイプライ�
     expect(result.chapters.map((c) => c.chapterIndex)).toEqual([1, 2, 3]);
     expect(result.nextTocPageUrl).toBeNull();
     expect(mockParser.parseNovelIndex).toHaveBeenCalledTimes(3);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Reached maxPages (3) limit"),
+    );
+    warnSpy.mockRestore();
   });
 
   it("循環 URL（同一 URL の再訪）を検知した場合、無限ループを防止して安全に終了すること", async () => {
@@ -370,6 +376,8 @@ describe("fetchFullNovelIndex: 複数ページ目次連続取得パイプライ�
       };
     });
 
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
     const result = await fetchFullNovelIndex(
       mockHttpClient,
       mockParser,
@@ -380,12 +388,21 @@ describe("fetchFullNovelIndex: 複数ページ目次連続取得パイプライ�
     expect(result.chapters).toHaveLength(2);
     expect(result.nextTocPageUrl).toBeNull();
     expect(mockParser.parseNovelIndex).toHaveBeenCalledTimes(2);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Circular reference detected"),
+    );
+    warnSpy.mockRestore();
   });
 
   describe("不正な nextTocPageUrl ガード（SSRF・別作品混入防止）", () => {
     const canonicalUrl = "https://ncode.syosetu.com/n9669bk/";
 
-    const testInvalidNextUrl = async (invalidNextUrl: string) => {
+    const testInvalidNextUrl = async (
+      invalidNextUrl: string,
+      expectedWarningSubstr?: string,
+    ) => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
       mockHttpClient.setResponse(canonicalUrl, () => ({
         status: 200,
         url: canonicalUrl,
@@ -423,6 +440,14 @@ describe("fetchFullNovelIndex: 複数ページ目次連続取得パイプライ�
       expect(result.chapters).toHaveLength(1);
       expect(result.nextTocPageUrl).toBeNull();
       expect(mockParser.parseNovelIndex).toHaveBeenCalledTimes(1);
+      if (expectedWarningSubstr) {
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining(expectedWarningSubstr),
+        );
+      } else {
+        expect(warnSpy).toHaveBeenCalled();
+      }
+      warnSpy.mockRestore();
     };
 
     it("非 HTTPS スキームの次ページ URL は拒否して終了すること (http:)", async () => {

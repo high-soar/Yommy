@@ -17,6 +17,7 @@ import { sampleRankingItem1, sampleRankingItem2 } from "../types";
 import type { HttpResponse } from "../../../bridges/http/types";
 import type { NovelRankingResultItem } from "../../../parsers/types";
 import type { SyncEngine } from "../../cloud-sync/services/syncEngine";
+import type { NovelRepository } from "../../../storage/types";
 
 describe("useNovelRanking", () => {
   let mockHttpClient: MockHttpClient;
@@ -68,11 +69,11 @@ describe("useNovelRanking", () => {
   });
 
   const createWrapper =
-    (initialPath = "/ranking") =>
+    (initialPath = "/ranking", customServices = {}) =>
     ({ children }: { children: React.ReactNode }) =>
       React.createElement(
         ServiceProvider,
-        { services: { httpClient: mockHttpClient } },
+        { services: { httpClient: mockHttpClient, ...customServices } },
         React.createElement(RouterProvider, { initialPath }, children),
       );
 
@@ -284,6 +285,14 @@ describe("useNovelRanking", () => {
       expect(resolvers.length).toBe(1);
     });
 
+    // 1回目解決前に 2回目のリクエストを発火（期間変更）
+    act(() => {
+      result.current.setPeriod("monthly");
+    });
+
+    // 通信中ガードにより多重リクエストは抑止され、resolvers.length は 1 のまま維持されること (R1-20)
+    expect(resolvers.length).toBe(1);
+
     // 1回目を解決
     await act(async () => {
       resolvers[0]({
@@ -298,31 +307,82 @@ describe("useNovelRanking", () => {
       expect(result.current.isLoading).toBe(false);
       expect(result.current.items.length).toBeGreaterThan(0);
     });
+  });
 
-    // 2回目のリクエストを開始
-    act(() => {
-      result.current.setPeriod("monthly");
+  it("addNovelToBookshelf 実行中にサイト切替された場合、registeredWorkIds が旧サイトのまま追加されないこと (R1-01)", async () => {
+    let resolveUpsert!: (novel: unknown) => void;
+    const upsertPromise = new Promise((resolve) => {
+      resolveUpsert = resolve;
     });
 
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(true);
-      expect(resolvers.length).toBe(2);
-    });
+    const mockNovelRepo = {
+      listNovels: vi.fn().mockResolvedValue([]),
+      upsertNovelWithToc: vi.fn().mockImplementation(() => upsertPromise),
+    };
 
-    // 2回目を解決（空データ）
-    await act(async () => {
-      resolvers[1]({
-        status: 200,
-        url: "https://kakuyomu.jp/rankings/monthly",
-        headers: {},
-        html: rankingEmptyHtml,
-      });
+    mockHttpClient.setResponse(/.*/, (req) => ({
+      status: 200,
+      url: req.url,
+      headers: {},
+      html: rankingApolloHtml,
+    }));
+
+    const { result } = renderHook(() => useNovelRanking(), {
+      wrapper: createWrapper("/ranking", {
+        novelRepository: mockNovelRepo as unknown as NovelRepository,
+      }),
     });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
-      expect(result.current.items).toEqual([]);
+      expect(result.current.items.length).toBeGreaterThan(0);
     });
+
+    const targetItem = result.current.items[0];
+
+    // addNovelToBookshelf 開始
+    let addPromise!: Promise<string | null>;
+    act(() => {
+      addPromise = result.current.addNovelToBookshelf(targetItem);
+    });
+
+    await waitFor(() => {
+      expect(result.current.addingWorkId).toBe(targetItem.remoteWorkId);
+    });
+
+    // DB 保存待ちの間にサイトをなろうに切り替える
+    act(() => {
+      result.current.setSelectedSite("narou");
+    });
+    expect(result.current.selectedSite).toBe("narou");
+
+    // upsert 完了
+    await act(async () => {
+      resolveUpsert({
+        id: `kakuyomu:${targetItem.remoteWorkId}`,
+        siteType: "kakuyomu",
+        remoteWorkId: targetItem.remoteWorkId,
+        canonicalUrl: targetItem.workUrl,
+        title: targetItem.title,
+        author: targetItem.author,
+        synopsis: targetItem.synopsis,
+        totalChapters: 1,
+        cachedChapters: 0,
+        bookmarkChapterIndex: null,
+        bookmarkScrollProgress: 0,
+        hasNewUpdate: false,
+        lastCheckedAt: null,
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-01T00:00:00Z",
+        deletedAt: null,
+      });
+      await addPromise;
+    });
+
+    // なろうサイト表示中のため、カクヨム作品の remoteWorkId は registeredWorkIds に追加されないこと
+    expect(result.current.registeredWorkIds.has(targetItem.remoteWorkId)).toBe(
+      false,
+    );
   });
 
   it("カードの「＋ 本棚に追加」で DB に保存され registeredWorkIds が更新されること (AC-RK-06)", async () => {
