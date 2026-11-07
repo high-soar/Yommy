@@ -2,10 +2,11 @@
 type: quality-log
 title: 品質記録・バグ記録票 ＆ 申し送り管理シート（Bug & Handover Log）
 description: 製品コードと支援成果物を分離したバグ記録（原因5分類 L/S/D/B/A）および後続タスクへの申し送り事項（HO-xx）を追跡する正本シート。
-status: "Review (#264)"
+status: "Review (#265)"
 updated: "2026-11-07"
 tags: [quality, bug-log, handover, dre, kaizen]
 related_specs:
+  - docs/specs/changes/issue-265-work-variation-filter.md
   - docs/specs/changes/archive/issue-264-advanced-search-filter.md
   - docs/quality/archive/v0.7-narou-site-support-and-loading-ux-log.md
   - docs/quality/reports/v0.7-narou-site-support-and-loading-ux.md

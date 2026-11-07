@@ -1,8 +1,8 @@
 ---
 type: spec-parser
 title: カクヨム パーサー・スクレイピング仕様書（kakuyomu.jp）
-description: カクヨム小説の作品トップ・目次抽出、各話本文抽出、ルビ・傍点解析、検索（除外キーワード・複数ジャンル対応）・ランキング解析、およびURL正規化ルールの正本仕様。
-status: "Review (#264)"
+description: カクヨム小説の作品トップ・目次抽出、各話本文抽出、ルビ・傍点解析、検索（除外キーワード・複数ジャンル対応）・ランキング（作品種別 work_variation 対応）解析、およびURL正規化ルールの正本仕様。
+status: "Review (#265)"
 updated: "2026-11-07"
 tags:
   - parser
@@ -12,10 +12,12 @@ tags:
   - bouten
   - search
   - ranking
+  - work-variation
   - exclude-keyword
   - multi-genre
   - ho-31
 related_specs:
+  - docs/specs/changes/issue-265-work-variation-filter.md
   - docs/specs/changes/archive/issue-264-advanced-search-filter.md
   - docs/specs/architecture.md
   - docs/specs/requirements.md
@@ -140,7 +142,10 @@ DOM 要素の抽出は文書順ではなく、以下の優先順位リストに�
 - **クエリ文字列組み立て**:
   - `q`: メインキーワード `query.trim()` に加え、`options?.excludeKeyword` が指定されている場合は空白分割（`/\s+/`）および先頭ハイフン重複除去（`token.replace(/^-+/, "").trim()`）で正規化した各除外語に `-` を前置（`-${token}`）し、半角スペース区切りで結合して設定する（例: `query="異世界"`, `excludeKeyword="ハーレム -チート"` → `q="異世界 -ハーレム -チート"`。`query=""`, `excludeKeyword="ハーレム"` → `q="-ハーレム"`。v0.8 Issue #264）。
   - `order`: `options?.order`（未指定時は `"weekly_ranking"`）
-  - `serial_status`: `options?.serialStatus`（`"running"` または `"completed"` の場合のみ付与、`"all"` または未指定時は省略）
+  - `serial_status`: `options?.serialStatus` に応じて以下の値を設定（v0.8 Issue #265）：
+    - `"all"` または未指定 → 省略
+    - `"running"`（連載中）→ `"running"`
+    - `"completed"`（完結済）または `"short"`（短編）→ `"completed"`（カクヨム Web 検索では短編も完結済として扱われるため `"completed"` にマッピング）
   - `genre_name`: `options?.genres`（複数ジャンル配列、未指定時は `options?.genre` 単一指定をフォールバック使用）から空白トリム・空文字除去・重複除去・小文字化したスラッグ配列を作成し、1 件以上存在する場合にカンマ `,` で連結して設定する（例: `genres: ["fantasy", "action"]` → `genre_name=fantasy,action`。未指定または空配列時は省略。v0.8 Issue #264）。
   - `page`: `options?.page`（2 以上の整数時のみ付与、1 または未指定時は省略）
 
@@ -172,12 +177,12 @@ DOM 要素の抽出は文書順ではなく、以下の優先順位リストに�
 
 ### 6.1 URL 生成（`buildRankingUrl`）
 
-- **ベース URL 形式**: `https://kakuyomu.jp/rankings/{target}/{period}?work_variation=long`
+- **ベース URL 形式**: `https://kakuyomu.jp/rankings/{target}/{period}?work_variation={workVariation}`
 - **引数**: `options?: NovelRankingOptions`
 - **パラメータ組み立て**:
   - `{target}`: `options?.genre || "all"`（総合時は `"all"`、個別ジャンル指定時は小文字スラッグ）
   - `{period}`: `options?.period || "weekly"`（`"daily"`, `"weekly"`, `"monthly"`, `"entire"`）
-  - `work_variation=long`: カクヨム公式標準の長編指定（固定）
+  - `work_variation`: `options?.workVariation || "long"`（`"all"`: すべて / `"long"`: 長編［デフォルト］ / `"short"`: 短編、v0.8 Issue #265）
   - `page`: `options?.page`（2 以上の場合にクエリパラメータ `page` を付与）
 
 ### 6.2 解析処理（`getRanking`）
@@ -193,16 +198,16 @@ DOM 要素の抽出は文書順ではなく、以下の優先順位リストに�
 
 ## 7. 受け入れ条件一覧（Acceptance Criteria: `AC-xx`）
 
-| AC ID       | 対象機能             | 検証条件                                                                                                                                                                                                                           | 関連要件 ID      |
-| :---------- | :------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------- |
-| **`AC-01`** | URL 判定と正規化     | カクヨムの作品トップ URL・エピソード URL を正しく判定（`canParse`）し、クエリやハッシュが付与されていても作品トップ URL へ正規化（`normalizeWorkUrl`）できること。他サイトの URL では `false` を返すこと。                         | `SYS-REQ-01`     |
-| **`AC-02`** | 作品トップ情報の抽出 | 作品トップ HTML から作品 ID、タイトル、著者名、あらすじ、および全エピソード目次（`chapters`）を正しく抽出できること。                                                                                                              | `SYS-REQ-01`     |
-| **`AC-03`** | 章見出しの紐付け     | 目次内に章・部見出しが存在する場合、以降のエピソードの `partTitle` に正しく紐付けられ、エピソード連番が付与されること。                                                                                                            | `SYS-REQ-01`     |
-| **`AC-04`** | 本文ルビ・傍点の抽出 | 各話 HTML からサブタイトルおよび `<ruby>` と傍点（`<em class="bouten">`）を保持した本文 HTML を抽出できること。                                                                                                                    | `SYS-REQ-02, 07` |
-| **`AC-05`** | XSS 防止サニタイズ   | `<script>`, `onerror`, `style` 等の悪意あるタグや属性が本文 HTML に含まれていた場合、それらが完全に無害化・除去されること。                                                                                                        | `SYS-REQ-07`     |
-| **`AC-06`** | 前後ナビゲーション   | 単話作品、第1話、最終話、中間話において、`prevChapterUrl` および `nextChapterUrl` が正しく絶対 URL または `null` として抽出されること。                                                                                            | `SYS-REQ-02, 11` |
-| **`AC-07`** | 決定論的検証         | 一切の外部ネットワーク通信を行わず、ローカル HTML フィクスチャにより Vitest で C0/C1 100% 検証できること。                                                                                                                         | `SYS-REQ-01`     |
-| **`AC-08`** | 検索 URL 生成        | `buildSearchUrl` により、キーワード、除外キーワード（`q` への `-語` 結合）、4種の並び順、連載状態、単一・複数ジャンル（`genre_name` カンマ連結）、ページ番号がカクヨムの規格に合致したクエリパラメータとして正しく構築されること。 | `SYS-REQ-17`     |
-| **`AC-09`** | 検索結果パース       | `searchNovels` により、検索結果 HTML（Apollo State）から作品メタデータ一覧、順位、`hasNextPage`、`totalCount` が正確に抽出されること。                                                                                             | `SYS-REQ-17`     |
-| **`AC-10`** | ランキング URL 生成  | `buildRankingUrl` により、指定した期間（日間/週間/月間/累計）およびジャンル（総合/個別）に応じたパス・クエリが正しく構築されること。                                                                                               | `SYS-REQ-18`     |
-| **`AC-11`** | ランキング結果パース | `getRanking` により、ランキング HTML から1位から順に番号付けされた作品メタデータ一覧が正確に抽出されること。                                                                                                                       | `SYS-REQ-18`     |
+| AC ID       | 対象機能             | 検証条件                                                                                                                                                                                                                                                                                   | 関連要件 ID      |
+| :---------- | :------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------- |
+| **`AC-01`** | URL 判定と正規化     | カクヨムの作品トップ URL・エピソード URL を正しく判定（`canParse`）し、クエリやハッシュが付与されていても作品トップ URL へ正規化（`normalizeWorkUrl`）できること。他サイトの URL では `false` を返すこと。                                                                                 | `SYS-REQ-01`     |
+| **`AC-02`** | 作品トップ情報の抽出 | 作品トップ HTML から作品 ID、タイトル、著者名、あらすじ、および全エピソード目次（`chapters`）を正しく抽出できること。                                                                                                                                                                      | `SYS-REQ-01`     |
+| **`AC-03`** | 章見出しの紐付け     | 目次内に章・部見出しが存在する場合、以降のエピソードの `partTitle` に正しく紐付けられ、エピソード連番が付与されること。                                                                                                                                                                    | `SYS-REQ-01`     |
+| **`AC-04`** | 本文ルビ・傍点の抽出 | 各話 HTML からサブタイトルおよび `<ruby>` と傍点（`<em class="bouten">`）を保持した本文 HTML を抽出できること。                                                                                                                                                                            | `SYS-REQ-02, 07` |
+| **`AC-05`** | XSS 防止サニタイズ   | `<script>`, `onerror`, `style` 等の悪意あるタグや属性が本文 HTML に含まれていた場合、それらが完全に無害化・除去されること。                                                                                                                                                                | `SYS-REQ-07`     |
+| **`AC-06`** | 前後ナビゲーション   | 単話作品、第1話、最終話、中間話において、`prevChapterUrl` および `nextChapterUrl` が正しく絶対 URL または `null` として抽出されること。                                                                                                                                                    | `SYS-REQ-02, 11` |
+| **`AC-07`** | 決定論的検証         | 一切の外部ネットワーク通信を行わず、ローカル HTML フィクスチャにより Vitest で C0/C1 100% 検証できること。                                                                                                                                                                                 | `SYS-REQ-01`     |
+| **`AC-08`** | 検索 URL 生成        | `buildSearchUrl` により、キーワード、除外キーワード（`q` への `-語` 結合）、4種の並び順、連載状態（`running`, `completed`、`short` 指定時は `completed`）、単一・複数ジャンル（`genre_name` カンマ連結）、ページ番号がカクヨムの規格に合致したクエリパラメータとして正しく構築されること。 | `SYS-REQ-17`     |
+| **`AC-09`** | 検索結果パース       | `searchNovels` により、検索結果 HTML（Apollo State）から作品メタデータ一覧、順位、`hasNextPage`、`totalCount` が正確に抽出されること。                                                                                                                                                     | `SYS-REQ-17`     |
+| **`AC-10`** | ランキング URL 生成  | `buildRankingUrl` により、指定した期間（日間/週間/月間/累計）、ジャンル（総合/個別）、および作品種別（`work_variation`: `all` / `long`［デフォルト］/ `short`）に応じたパス・クエリが正しく構築されること。                                                                                | `SYS-REQ-18`     |
+| **`AC-11`** | ランキング結果パース | `getRanking` により、ランキング HTML から1位から順に番号付けされた作品メタデータ一覧が正確に抽出されること。                                                                                                                                                                               | `SYS-REQ-18`     |

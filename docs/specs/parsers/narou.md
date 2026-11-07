@@ -1,8 +1,8 @@
 ---
 type: spec-parser
 title: "小説家になろう パーサー・スクレイピング仕様書（ncode.syosetu.com / api.syosetu.com）"
-description: "小説家になろう（ncode.syosetu.com / api.syosetu.com）の作品トップ・複数ページ目次抽出、短編作品対応、各話本文（前書き・本編・後書き）抽出、ルビ・傍点正規化、検索（除外キーワード notword・複数ジャンルハイフン連結対応）・ランキング（なろう小説API JSON）解析、およびURL正規化ルールの正本仕様。"
-status: "Review (#264)"
+description: "小説家になろう（ncode.syosetu.com / api.syosetu.com）の作品トップ・複数ページ目次抽出、短編作品対応、各話本文（前書き・本編・後書き）抽出、ルビ・傍点正規化、検索（除外キーワード notword・複数ジャンルハイフン連結・作品種別対応）・ランキング（作品種別 type 対応・なろう小説API JSON）解析、およびURL正規化ルールの正本仕様。"
+status: "Review (#265)"
 updated: "2026-11-07"
 tags:
   - parser
@@ -13,12 +13,14 @@ tags:
   - bouten
   - multi-page-toc
   - short-story
+  - work-variation
   - search
   - ranking
   - exclude-keyword
   - multi-genre
   - ho-31
 related_specs:
+  - docs/specs/changes/issue-265-work-variation-filter.md
   - docs/specs/changes/archive/issue-264-advanced-search-filter.md
   - docs/specs/changes/archive/issue-240-narou-search-ranking-and-site-selector.md
   - docs/specs/architecture.md
@@ -207,10 +209,11 @@ DOM 要素の抽出は文書順ではなく、以下の優先順位リストに�
     - `"popular"`（累計ランキング順）→ `"hyoka"`
     - `"last_episode_published_at"`（更新順）→ `"new"`
     - `"published_at"`（新作順）→ `"generalfirstup"`
-  - `type`: `options?.serialStatus` に応じて以下の値を指定：
+  - `type`: `options?.serialStatus` に応じて以下の値を指定（v0.8 Issue #265）：
     - `"all"` または未指定 → 省略（連載中・完結済連載・短編のすべてを含む）
     - `"running"`（連載中）→ `"r"`（連載中の作品のみ）
-    - `"completed"`（完結済）→ `"ter"`（短編および完結済連載小説の双方を含む）
+    - `"completed"`（完結済）→ `"er"`（完結済の連載作品のみ）
+    - `"short"`（短編）→ `"t"`（短編作品のみ）
   - `genre`: `options?.genres`（複数小ジャンル配列、未指定時は `options?.genre` 単一指定をフォールバック使用）から空白トリム・空文字除去・重複除去したコード配列を作成し、1 件以上存在する場合にハイフン `-` で連結して付与（例: `genres: ["201", "202"]` → `genre=201-202`、単一時は `"201"`。未指定・空配列時は省略。v0.8 Issue #264）
   - `st`: `options?.page` が 2 以上の整数の場合のみ、開始位置 `st = (page - 1) * 20 + 1` を付与（1 または未指定時は省略。なお API 仕様上の上限は `st <= 2000`）
 
@@ -286,6 +289,10 @@ DOM 要素の抽出は文書順ではなく、以下の優先順位リストに�
     - `"weekly"`（週間）→ `"weeklypoint"`
     - `"monthly"`（月間）→ `"monthlypoint"`
     - `"entire"`（累計）→ `"hyoka"`
+  - `type`: `options?.workVariation` に応じて以下の値を指定（v0.8 Issue #265）：
+    - `"all"` または未指定 → 省略（連載中・完結済連載・短編のすべてを含む）
+    - `"long"`（長編・連載）→ `"re"`（連載中 `r` ＋ 完結済連載 `er` の全連載作品）
+    - `"short"`（短編）→ `"t"`（短編作品のみ）
   - `genre`: `options?.genre` が非空かつ `"all"` 以外の場合のみ付与（なろう小ジャンルコード、例: `"201"`。総合時は省略）
   - `st`: `options?.page` が 2 以上の整数の場合のみ `st = (page - 1) * 20 + 1` を付与
 
@@ -303,22 +310,22 @@ DOM 要素の抽出は文書順ではなく、以下の優先順位リストに�
 
 ## 7. 受け入れ条件一覧（Acceptance Criteria: `AC-NR-xx`）
 
-| AC ID          | 対象機能                                    | 検証条件                                                                                                                                                                                                                                                                                         | 関連要件 ID      |
-| :------------- | :------------------------------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------- |
-| **`AC-NR-01`** | URL 判定と小文字正規化                      | `https://ncode.syosetu.com/n9669bk/`、各話 URL、ページネーション URL、大文字 ncode URL を正しく判定（`canParse`）し、`https://ncode.syosetu.com/n9669bk/` へ正規化（`normalizeWorkUrl`）できること。他サイトや `novel18.syosetu.com` は `false` を返すこと。                                     | `SYS-REQ-01`     |
-| **`AC-NR-02`** | 連載作品トップ情報の抽出                    | 連載作品トップ HTML から小文字 `remoteWorkId`、タイトル、著者名（「作者：」除去済み）、あらすじ、および各話目次（`chapters`）と初回公開日時（`publishedAt`）を正しく抽出できること。                                                                                                             | `SYS-REQ-01`     |
-| **`AC-NR-03`** | 章見出しの紐付け                            | 目次（`.p-eplist`）内に `.p-eplist__chapter-title` が存在する場合、以降のエピソードの `partTitle` に正しく紐付けられること。                                                                                                                                                                     | `SYS-REQ-01`     |
-| **`AC-NR-04`** | 複数ページ目次の次ページ URL 抽出と検証     | 100 話超の連載作品目次ページにおいて `.c-pager__item--next[href]` から絶対 URL 化された `nextTocPageUrl`（`https://ncode.syosetu.com/{ncode}/?p=2` 等）を抽出し、最終ページ・100 話以下の作品、または外部ドメイン・非 HTTPS・別作品パスのリンクでは `null` を返すこと。                          | `SYS-REQ-01, 04` |
-| **`AC-NR-05`** | 短編作品（1 話完結）の目次・本文抽出        | `.p-eplist` が存在せず `.p-novel__body` が存在する短編作品ページにおいて、`chapterIndex: 1`, `remoteChapterId: "1"`, `url: canonicalUrl` の擬似 1 話目次を生成でき、`parseChapterContent` でも短編トップ URL から本文を抽出できること。                                                          | `SYS-REQ-01, 02` |
-| **`AC-NR-06`** | 前書き・本編・後書きの本文抽出結合          | 各話 HTML からサブタイトル（PC `.p-novel__title--rensai` / モバイル `.p-novel__subtitle-episode` 双方対応）を抽出し、前書き・本編・後書きが存在する場合は区切り段落 `<p><br></p><p>────────────</p><p><br></p>` を挟んで結合できること。                                                         | `SYS-REQ-02`     |
-| **`AC-NR-07`** | ルビ保持と傍点 `<em class="bouten">` 正規化 | 通常ルビ `<ruby>` を保持しつつ、`<rt>` が傍点記号（`・` / `﹅` / `●`）のみの `<ruby>` を `<em class="bouten">` に正規化して抽出できること。                                                                                                                                                      | `SYS-REQ-07`     |
-| **`AC-NR-08`** | XSS 防止サニタイズ                          | 本文中の `<script>`, `onerror`, `id="L1"` 等のタグ・属性が `HtmlSanitizer` により完全に無害化・除去されること。                                                                                                                                                                                  | `SYS-REQ-07`     |
-| **`AC-NR-09`** | 前後話ナビゲーション URL 抽出               | `.c-pager__item--before` / `.c-pager__item--next` から `prevChapterUrl` / `nextChapterUrl` が絶対 URL または `null` として正しく抽出されること。                                                                                                                                                 | `SYS-REQ-02, 11` |
-| **`AC-NR-10`** | 決定論的単体テスト                          | 外部ネットワーク通信を一切行わず、ローカル HTML / JSON フィクスチャ（`src/parsers/narou/__fixtures__/*`）により Vitest で C0/C1/Functions 100% 検証できること。                                                                                                                                  | `SYS-REQ-01`     |
-| **`AC-NR-11`** | 検索 API URL 生成                           | `buildSearchUrl` により、キーワード（`word`）、除外キーワード（`notword`）、4種の並び順（`weeklypoint`, `hyoka`, `new`, `generalfirstup`）、連載状態（省略, `r`, `ter`）、単一・複数小ジャンル（`genre` ハイフン連結）、開始位置（`st`）がなろう小説 API 形式の URL として正しく生成されること。 | `SYS-REQ-17`     |
-| **`AC-NR-12`** | 検索 API 結果 JSON パース                   | `searchNovels` により、なろう小説 API の JSON から小文字 `remoteWorkId`、小ジャンル日本語ラベル、連載/完結/短編ラベル、話数、文字数、スペース区切りタグ、総合ポイント、正規化 `workUrl`、および `hasNextPage` / `totalCount` が正確に抽出されること。                                            | `SYS-REQ-17`     |
-| **`AC-NR-13`** | ランキング API URL 生成                     | `buildRankingUrl` により、集計期間（日間 `dailypoint` / 週間 `weeklypoint` / 月間 `monthlypoint` / 累計 `hyoka`）およびジャンル（総合時は省略、個別時は `genre`）に応じた API URL が正しく生成されること。                                                                                       | `SYS-REQ-18`     |
-| **`AC-NR-14`** | ランキング API 結果 JSON パース             | `getRanking` により、1位からの連番 `rank` および選択集計期間に応じた期間ポイント（`daily_point` / `weekly_point` / `monthly_point` / `global_point`）を持つ作品一覧が正確に抽出されること。                                                                                                      | `SYS-REQ-18`     |
+| AC ID          | 対象機能                                    | 検証条件                                                                                                                                                                                                                                                                                             | 関連要件 ID      |
+| :------------- | :------------------------------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------- |
+| **`AC-NR-01`** | URL 判定と小文字正規化                      | `https://ncode.syosetu.com/n9669bk/`、各話 URL、ページネーション URL、大文字 ncode URL を正しく判定（`canParse`）し、`https://ncode.syosetu.com/n9669bk/` へ正規化（`normalizeWorkUrl`）できること。他サイトや `novel18.syosetu.com` は `false` を返すこと。                                         | `SYS-REQ-01`     |
+| **`AC-NR-02`** | 連載作品トップ情報の抽出                    | 連載作品トップ HTML から小文字 `remoteWorkId`、タイトル、著者名（「作者：」除去済み）、あらすじ、および各話目次（`chapters`）と初回公開日時（`publishedAt`）を正しく抽出できること。                                                                                                                 | `SYS-REQ-01`     |
+| **`AC-NR-03`** | 章見出しの紐付け                            | 目次（`.p-eplist`）内に `.p-eplist__chapter-title` が存在する場合、以降のエピソードの `partTitle` に正しく紐付けられること。                                                                                                                                                                         | `SYS-REQ-01`     |
+| **`AC-NR-04`** | 複数ページ目次の次ページ URL 抽出と検証     | 100 話超の連載作品目次ページにおいて `.c-pager__item--next[href]` から絶対 URL 化された `nextTocPageUrl`（`https://ncode.syosetu.com/{ncode}/?p=2` 等）を抽出し、最終ページ・100 話以下の作品、または外部ドメイン・非 HTTPS・別作品パスのリンクでは `null` を返すこと。                              | `SYS-REQ-01, 04` |
+| **`AC-NR-05`** | 短編作品（1 話完結）の目次・本文抽出        | `.p-eplist` が存在せず `.p-novel__body` が存在する短編作品ページにおいて、`chapterIndex: 1`, `remoteChapterId: "1"`, `url: canonicalUrl` の擬似 1 話目次を生成でき、`parseChapterContent` でも短編トップ URL から本文を抽出できること。                                                              | `SYS-REQ-01, 02` |
+| **`AC-NR-06`** | 前書き・本編・後書きの本文抽出結合          | 各話 HTML からサブタイトル（PC `.p-novel__title--rensai` / モバイル `.p-novel__subtitle-episode` 双方対応）を抽出し、前書き・本編・後書きが存在する場合は区切り段落 `<p><br></p><p>────────────</p><p><br></p>` を挟んで結合できること。                                                             | `SYS-REQ-02`     |
+| **`AC-NR-07`** | ルビ保持と傍点 `<em class="bouten">` 正規化 | 通常ルビ `<ruby>` を保持しつつ、`<rt>` が傍点記号（`・` / `﹅` / `●`）のみの `<ruby>` を `<em class="bouten">` に正規化して抽出できること。                                                                                                                                                          | `SYS-REQ-07`     |
+| **`AC-NR-08`** | XSS 防止サニタイズ                          | 本文中の `<script>`, `onerror`, `id="L1"` 等のタグ・属性が `HtmlSanitizer` により完全に無害化・除去されること。                                                                                                                                                                                      | `SYS-REQ-07`     |
+| **`AC-NR-09`** | 前後話ナビゲーション URL 抽出               | `.c-pager__item--before` / `.c-pager__item--next` から `prevChapterUrl` / `nextChapterUrl` が絶対 URL または `null` として正しく抽出されること。                                                                                                                                                     | `SYS-REQ-02, 11` |
+| **`AC-NR-10`** | 決定論的単体テスト                          | 外部ネットワーク通信を一切行わず、ローカル HTML / JSON フィクスチャ（`src/parsers/narou/__fixtures__/*`）により Vitest で C0/C1/Functions 100% 検証できること。                                                                                                                                      | `SYS-REQ-01`     |
+| **`AC-NR-11`** | 検索 API URL 生成                           | `buildSearchUrl` により、キーワード（`word`）、除外キーワード（`notword`）、4種の並び順（`weeklypoint`, `hyoka`, `new`, `generalfirstup`）、連載状態（省略, `r`, `er`, `t`）、単一・複数小ジャンル（`genre` ハイフン連結）、開始位置（`st`）がなろう小説 API 形式の URL として正しく生成されること。 | `SYS-REQ-17`     |
+| **`AC-NR-12`** | 検索 API 結果 JSON パース                   | `searchNovels` により、なろう小説 API の JSON から小文字 `remoteWorkId`、小ジャンル日本語ラベル、連載/完結/短編ラベル、話数、文字数、スペース区切りタグ、総合ポイント、正規化 `workUrl`、および `hasNextPage` / `totalCount` が正確に抽出されること。                                                | `SYS-REQ-17`     |
+| **`AC-NR-13`** | ランキング API URL 生成                     | `buildRankingUrl` により、集計期間（日間 `dailypoint` / 週間 `weeklypoint` / 月間 `monthlypoint` / 累計 `hyoka`）、作品種別（`type`: 省略 / `re`［長編・連載］/ `t`［短編］）、およびジャンル（総合時は省略、個別時は `genre`）に応じた API URL が正しく生成されること。                             | `SYS-REQ-18`     |
+| **`AC-NR-14`** | ランキング API 結果 JSON パース             | `getRanking` により、1位からの連番 `rank` および選択集計期間に応じた期間ポイント（`daily_point` / `weekly_point` / `monthly_point` / `global_point`）を持つ作品一覧が正確に抽出されること。                                                                                                          | `SYS-REQ-18`     |
 
 ---
 
