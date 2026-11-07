@@ -84,6 +84,10 @@ MK 作業はファイル編集数やテスト・VRT 実行ログが多く、メ�
   - **Container / Page テストにおける `vi.spyOn` / `vi.mock` を用いた親子分離と実時間依存（固定過去日付）の排除（原因 `A`/`B` 再発防止: `R1-01`, `R1-11`, `R1-23`）**:
     - Container / Page の単体テストでは直下の子コンポーネントへの Props・コールバック受け渡しを `vi.spyOn`（または `vi.mock`）で検証し、子・孫の内部 DOM 重複アサートや CI 高負荷時の非同期競合を排除すること。
     - `Date.now()` と比較する保持期限（Tombstone GC・TTL 等）のテストでは固定過去日付をハードコードせず、必ず `Date.now()` からの相対日時計算（`new Date(baseNow - days * 86_400_000).toISOString()` 等）または `vi.setSystemTime` を使用すること。
+  - **`useReader` における非同期参照・同期反映と探索世代ガード・結合テスト実体アサーション（原因 `A`/`L`/`S` 再発防止: `v0.7 Kaizen`）**:
+    - `useReader` の `loadInitialData` および `fetchNovelFromUrl` では、`setNovel` と同時に `novelRef.current` および `currentChapterIndexRef.current` を同期的（インライン）に更新し、コールバックでのしおり保存スキップを防ぐため `novelRef.current ?? novel` フォールバックを行うこと。
+    - 非同期探索 Hook（`useNovelSearch`, `useNovelRanking`）では `requestIdRef`（世代カウンタ）を導入して旧通信の遅延解決結果による一覧汚染を防止し、通信中のセレクター・ピル操作を UI レベルで非活性化（`isInteractingDisabled`）すること。
+    - 結合テスト（IT）では条件分岐（`if (await element.isVisible())`）による暗黙スキップや `waitForTimeout` を禁止し、`toHaveAttribute("aria-pressed", "true")` や `toHaveValue(...)` で選択状態の反映を決定論的にアサートすること。
   - `*.test.tsx` で `composeStories` による全 Story 実行＋内部ロジック補完テストを記述する。
 - **失敗確認とコミット**: `npx vitest run <対象テスト>` を実行し、未実装により期待通り失敗することを確認して `test(<scope>): ...（Red）` をコミットする。
 

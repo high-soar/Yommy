@@ -2,8 +2,8 @@
 type: spec-feature
 title: "ランキング画面仕様書（SCR-07: Novel Ranking）"
 description: "複数小説サイト（カクヨム・小説家になろう）のサイト切替、ランキング一覧（期間×総合/サイト別主要ジャンル）、順位バッジ表示、作品カード一覧およびその場での本棚追加を提供するランキング画面（SCR-07）の正本仕様。"
-status: "Review (#240)"
-updated: "2026-11-06"
+status: "Approved"
+updated: "2026-11-07"
 tags:
   - ranking
   - scr-07
