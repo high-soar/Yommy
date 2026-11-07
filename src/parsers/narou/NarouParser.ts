@@ -627,6 +627,17 @@ export class NarouParser implements NovelParser {
       url.searchParams.set("word", trimmedQuery);
     }
 
+    // 除外キーワードのトークン分割と先頭ハイフン正規化 (v0.8 Issue #264)
+    const excludeTokens = options?.excludeKeyword
+      ? options.excludeKeyword
+          .split(/\s+/)
+          .map((token) => token.replace(/^-+/, "").trim())
+          .filter(Boolean)
+      : [];
+    if (excludeTokens.length > 0) {
+      url.searchParams.set("notword", excludeTokens.join(" "));
+    }
+
     const orderMap: Record<NovelSearchOrder, string> = {
       weekly_ranking: "weeklypoint",
       popular: "hyoka",
@@ -643,8 +654,18 @@ export class NarouParser implements NovelParser {
       url.searchParams.set("type", "ter");
     }
 
-    if (options?.genre && options.genre.trim()) {
-      url.searchParams.set("genre", options.genre.trim());
+    // 複数ジャンル（ハイフン結合）の解決（genres 優先、genre フォールバック） (v0.8 Issue #264)
+    let genres: string[] = [];
+    if (options?.genres !== undefined) {
+      genres = Array.from(
+        new Set(options.genres.map((g) => g.trim()).filter(Boolean)),
+      );
+    } else if (options?.genre && options.genre.trim()) {
+      genres = [options.genre.trim()];
+    }
+
+    if (genres.length > 0) {
+      url.searchParams.set("genre", genres.join("-"));
     }
 
     if (options?.page !== undefined && options.page >= 2) {

@@ -741,7 +741,25 @@ export class KakuyomuParser implements NovelParser {
    */
   buildSearchUrl(query: string, options?: NovelSearchOptions): string {
     const url = new URL("https://kakuyomu.jp/search");
-    url.searchParams.set("q", query.trim());
+    const trimmedQuery = query.trim();
+
+    // 除外キーワードのトークン分割と先頭ハイフン正規化 (v0.8 Issue #264)
+    const excludeTokens = options?.excludeKeyword
+      ? options.excludeKeyword
+          .split(/\s+/)
+          .map((token) => token.replace(/^-+/, "").trim())
+          .filter(Boolean)
+      : [];
+
+    const qParts: string[] = [];
+    if (trimmedQuery) {
+      qParts.push(trimmedQuery);
+    }
+    for (const token of excludeTokens) {
+      qParts.push(`-${token}`);
+    }
+    url.searchParams.set("q", qParts.join(" "));
+
     url.searchParams.set("order", options?.order ?? "weekly_ranking");
     if (
       options?.serialStatus === "running" ||
@@ -749,9 +767,23 @@ export class KakuyomuParser implements NovelParser {
     ) {
       url.searchParams.set("serial_status", options.serialStatus);
     }
-    if (options?.genre) {
-      url.searchParams.set("genre_name", options.genre.toLowerCase());
+
+    // 複数ジャンル（カンマ区切り小文字）の解決（genres 優先、genre フォールバック） (v0.8 Issue #264)
+    let genres: string[] = [];
+    if (options?.genres !== undefined) {
+      genres = Array.from(
+        new Set(
+          options.genres.map((g) => g.trim().toLowerCase()).filter(Boolean),
+        ),
+      );
+    } else if (options?.genre && options.genre.trim()) {
+      genres = [options.genre.trim().toLowerCase()];
     }
+
+    if (genres.length > 0) {
+      url.searchParams.set("genre_name", genres.join(","));
+    }
+
     if (options?.page !== undefined && options.page >= 2) {
       url.searchParams.set("page", String(options.page));
     }
