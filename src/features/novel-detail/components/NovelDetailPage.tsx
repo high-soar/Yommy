@@ -41,6 +41,7 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
   onOpenClearCacheDialog,
   onCloseClearCacheDialog = noop,
   onConfirmClearCache = noop,
+  onToggleFavorite,
 }) => {
   const episodeContainerRef = useRef<HTMLElement | null>(null);
   const scrolledNovelIdRef = useRef<string | null>(null);
@@ -137,6 +138,7 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
               onCancelBatchCache={onCancelBatchCache}
               onOpenDeleteDialog={onOpenDeleteDialog}
               onOpenClearCacheDialog={onOpenClearCacheDialog}
+              onToggleFavorite={onToggleFavorite}
             />
           </div>
 

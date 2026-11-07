@@ -2077,5 +2077,93 @@ describe("useBookshelf", () => {
       // お気に入りの novel1Fav のみ upsertNovelWithToc が呼ばれ、novel2NotFav は呼ばれないこと
       expect(customNovelRepo.upsertNovelWithToc).toHaveBeenCalledTimes(1);
     });
+
+    it("setFavoriteOnly で例外が発生した場合、エラー状態がセットされること", async () => {
+      const customAppSettingsRepo = {
+        getSetting: vi.fn().mockResolvedValue("false"),
+        setSetting: vi.fn().mockRejectedValue(new Error("設定保存エラー")),
+      };
+      const customNovelRepo = {
+        listNovels: vi.fn().mockResolvedValue([novel1Fav]),
+        getNovelById: vi.fn().mockResolvedValue(null),
+        upsertNovelWithToc: vi.fn(),
+        updateBookmark: vi.fn(),
+        setFavorite: vi.fn(),
+        deleteNovel: vi.fn(),
+        clearNewUpdate: vi.fn(),
+        updateLastCheckedAt: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          appSettingsRepository: customAppSettingsRepo,
+          novelRepository: customNovelRepo as unknown as NovelRepository,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.setFavoriteOnly(true);
+      });
+
+      expect(result.current.error).toBe("設定保存エラー");
+
+      // 非Error例外
+      customAppSettingsRepo.setSetting.mockRejectedValueOnce(
+        "非Error設定保存エラー",
+      );
+      await act(async () => {
+        await result.current.setFavoriteOnly(false);
+      });
+      expect(result.current.error).toBe("非Error設定保存エラー");
+    });
+
+    it("toggleFavorite で例外が発生した場合、エラー状態がセットされること", async () => {
+      const customAppSettingsRepo = {
+        getSetting: vi.fn().mockResolvedValue("false"),
+        setSetting: vi.fn().mockResolvedValue(undefined),
+      };
+      const customNovelRepo = {
+        listNovels: vi.fn().mockResolvedValue([novel1Fav]),
+        getNovelById: vi.fn().mockResolvedValue(null),
+        upsertNovelWithToc: vi.fn(),
+        updateBookmark: vi.fn(),
+        setFavorite: vi
+          .fn()
+          .mockRejectedValue(new Error("お気に入り保存エラー")),
+        deleteNovel: vi.fn(),
+        clearNewUpdate: vi.fn(),
+        updateLastCheckedAt: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          appSettingsRepository: customAppSettingsRepo,
+          novelRepository: customNovelRepo as unknown as NovelRepository,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.toggleFavorite(novel1Fav.id);
+      });
+
+      expect(result.current.error).toBe("お気に入り保存エラー");
+
+      // 非Error例外
+      customNovelRepo.setFavorite.mockRejectedValueOnce(
+        "非Errorお気に入り保存エラー",
+      );
+      await act(async () => {
+        await result.current.toggleFavorite(novel1Fav.id);
+      });
+      expect(result.current.error).toBe("非Errorお気に入り保存エラー");
+    });
   });
 });

@@ -26,6 +26,7 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
   onCancelBatchCache,
   onOpenDeleteDialog,
   onOpenClearCacheDialog,
+  onToggleFavorite,
 }) => {
   const [isSynopsisExpanded, setIsSynopsisExpanded] = useState(false);
 
@@ -44,6 +45,20 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
     >
       {/* 管理アクションバー（右寄せ） */}
       <div className="flex items-center justify-end gap-2 flex-wrap">
+        <button
+          type="button"
+          data-testid="detail-favorite-toggle-button"
+          aria-pressed={novel.isFavorite}
+          onClick={onToggleFavorite}
+          disabled={isRefreshing || isBatchCaching}
+          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-amber-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed ${
+            novel.isFavorite
+              ? "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 hover:bg-amber-100 dark:hover:bg-amber-900/50"
+              : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200"
+          }`}
+        >
+          {novel.isFavorite ? "★ お気に入り済み" : "☆ お気に入り"}
+        </button>
         {isBatchCaching ? (
           <div className="flex items-center gap-2">
             <span

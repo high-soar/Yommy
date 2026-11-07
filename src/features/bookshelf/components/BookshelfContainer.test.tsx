@@ -100,6 +100,7 @@ const RouteObserverWrapper: React.FC<{
 
 describe("BookshelfContainer", () => {
   beforeEach(async () => {
+    localStorage.clear();
     await resetTestDb();
     window.history.pushState(null, "", "/");
   });
@@ -430,17 +431,20 @@ describe("BookshelfContainer", () => {
 
     it("ヘッダーのお気に入りフィルタボタンをクリックしたときにお気に入りフィルタが切り替わること (Issue #266)", async () => {
       const user = userEvent.setup();
+      const now = new Date().toISOString();
       const favNovel: NovelSummary = {
         ...sampleNovels[0],
         id: "kakuyomu:fav-1",
         title: "お気に入り作品",
         isFavorite: true,
+        lastCheckedAt: now,
       };
       const normalNovel: NovelSummary = {
         ...sampleNovels[0],
         id: "kakuyomu:norm-1",
         title: "通常作品",
         isFavorite: false,
+        lastCheckedAt: now,
       };
 
       const novelRepo = createMockNovelRepo([favNovel, normalNovel]);
@@ -472,8 +476,9 @@ describe("BookshelfContainer", () => {
       const user = userEvent.setup();
       const normalNovel: NovelSummary = {
         ...sampleNovels[0],
-        id: "kakuyomu:norm-1",
+        id: "kakuyomu:16817330658027210412",
         isFavorite: false,
+        lastCheckedAt: new Date().toISOString(),
       };
 
       const setFavoriteSpy = vi.fn();
@@ -497,7 +502,10 @@ describe("BookshelfContainer", () => {
       const favBtn = screen.getByTestId("novel-card-favorite-button");
       await user.click(favBtn);
 
-      expect(setFavoriteSpy).toHaveBeenCalledWith("kakuyomu:norm-1", true);
+      expect(setFavoriteSpy).toHaveBeenCalledWith(
+        "kakuyomu:16817330658027210412",
+        true,
+      );
     });
   });
 });

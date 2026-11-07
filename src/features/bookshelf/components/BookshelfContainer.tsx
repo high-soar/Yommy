@@ -29,11 +29,16 @@ export const BookshelfContainer: React.FC<BookshelfContainerProps> = ({
   const router = useRouter();
   const {
     novels,
+    totalNovelsCount,
     isLoading,
     isCheckingUpdates,
     updateCheckProgress,
     sortOrder,
+    favoriteOnly,
     setSortOrder,
+    setFavoriteOnly: _setFavoriteOnly,
+    toggleFavoriteFilter,
+    toggleFavorite,
     checkUpdates,
     clearNovelUpdate,
   } = useBookshelf();
@@ -89,11 +94,15 @@ export const BookshelfContainer: React.FC<BookshelfContainerProps> = ({
   return (
     <BookshelfPage
       novels={novels}
+      totalNovelsCount={totalNovelsCount}
       isLoading={isLoading}
       isCheckingUpdates={isCheckingUpdates}
       updateCheckProgress={updateCheckProgress}
       sortOrder={sortOrder}
+      favoriteOnly={favoriteOnly}
       onSortChange={setSortOrder}
+      onToggleFavoriteFilter={toggleFavoriteFilter}
+      onToggleFavoriteNovel={toggleFavorite}
       onCheckUpdates={checkUpdates}
       onNavigateSearch={handleNavigateSearch}
       onNavigateRanking={handleNavigateRanking}

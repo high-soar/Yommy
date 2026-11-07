@@ -21,6 +21,9 @@ export const DEFAULT_DELETE_ERROR_MESSAGE = "作品の削除に失敗しまし�
 /** 本文キャッシュ削除失敗時のデフォルトエラーメッセージ */
 export const DEFAULT_CLEAR_CACHE_ERROR_MESSAGE =
   "本文キャッシュの削除に失敗しました";
+/** お気に入り更新失敗時のデフォルトエラーメッセージ */
+export const DEFAULT_TOGGLE_FAVORITE_ERROR_MESSAGE =
+  "お気に入りの更新に失敗しました";
 
 /**
  * 例外オブジェクトからユーザー向けエラーメッセージを安全に抽出する。
@@ -535,6 +538,50 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     ],
   );
 
+  /**
+   * 作品のお気に入り（★）状態を反転登録/解除し、DB永続化およびクラウド同期通知を行う。
+   * 排他処理中または作品未読み込み時は操作をガードして false を返す。
+   */
+  const toggleFavorite = useCallback(async (): Promise<boolean> => {
+    if (
+      !novel ||
+      isDeleting ||
+      isRefreshing ||
+      isBatchCaching ||
+      isBatchCachingRef.current ||
+      isClearingCache
+    ) {
+      return false;
+    }
+
+    const nextIsFavorite = !novel.isFavorite;
+    try {
+      await novelRepository.setFavorite(novelId, nextIsFavorite);
+      const nowIso = new Date().toISOString();
+      setNovel({
+        ...novel,
+        isFavorite: nextIsFavorite,
+        updatedAt: nowIso,
+      });
+      if (syncEngine) {
+        syncEngine.notifyChanged().catch(() => {});
+      }
+      return true;
+    } catch (err: unknown) {
+      setError(extractErrorMessage(err, DEFAULT_TOGGLE_FAVORITE_ERROR_MESSAGE));
+      return false;
+    }
+  }, [
+    novel,
+    isDeleting,
+    isRefreshing,
+    isBatchCaching,
+    isClearingCache,
+    novelRepository,
+    novelId,
+    syncEngine,
+  ]);
+
   return {
     novel,
     chapters,
@@ -558,7 +605,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     openClearCacheDialog,
     closeClearCacheDialog,
     confirmClearCache,
-    toggleFavorite: async () => false,
+    toggleFavorite,
     reloadDetail,
   };
 }
