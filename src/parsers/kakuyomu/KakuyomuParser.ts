@@ -784,11 +784,13 @@ export class KakuyomuParser implements NovelParser {
     url.searchParams.set("q", qParts.join(" "));
 
     url.searchParams.set("order", options?.order ?? "weekly_ranking");
-    if (
-      options?.serialStatus === "running" ||
-      options?.serialStatus === "completed"
+    if (options?.serialStatus === "running") {
+      url.searchParams.set("serial_status", "running");
+    } else if (
+      options?.serialStatus === "completed" ||
+      options?.serialStatus === "short"
     ) {
-      url.searchParams.set("serial_status", options.serialStatus);
+      url.searchParams.set("serial_status", "completed");
     }
 
     const genres = resolveKakuyomuGenres(options);
@@ -881,7 +883,7 @@ export class KakuyomuParser implements NovelParser {
         : "all";
     const period = options?.period ?? "weekly";
     const url = new URL(`https://kakuyomu.jp/rankings/${genre}/${period}`);
-    url.searchParams.set("work_variation", "long");
+    url.searchParams.set("work_variation", options?.workVariation ?? "long");
     if (options?.page !== undefined && options.page >= 2) {
       url.searchParams.set("page", String(options.page));
     }

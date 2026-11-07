@@ -737,7 +737,7 @@ describe("KakuyomuParser", () => {
       ).toContain("order=weekly_ranking");
     });
 
-    it("連載状態オプション（running, completed）を付与し、all または未指定の場合はクエリから省略すること", () => {
+    it("連載状態オプション（running, completed）を付与し、all または未指定の場合はクエリから省略すること (AC-08)", () => {
       expect(
         parser.buildSearchUrl("テスト", { serialStatus: "running" }),
       ).toContain("serial_status=running");
@@ -750,6 +750,12 @@ describe("KakuyomuParser", () => {
       expect(parser.buildSearchUrl("テスト", {})).not.toContain(
         "serial_status",
       );
+    });
+
+    it("連載状態オプションに short を指定した場合は completed にマッピングされて serial_status=completed が付与されること (AC-08)", () => {
+      expect(
+        parser.buildSearchUrl("テスト", { serialStatus: "short" }),
+      ).toContain("serial_status=completed");
     });
 
     it("ジャンル名オプション（小文字スラッグ）を正しくクエリに付与すること", () => {
@@ -1071,14 +1077,29 @@ describe("KakuyomuParser", () => {
   });
 
   describe("ランキング URL の生成 (AC-10)", () => {
-    it("オプション未指定時に総合・週間・長編（all/weekly?work_variation=long）のデフォルト URL を構築すること", () => {
+    it("オプション未指定時に総合・週間・長編（all/weekly?work_variation=long）のデフォルト URL を構築すること (AC-10)", () => {
       const url = parser.buildRankingUrl();
       expect(url).toBe(
         "https://kakuyomu.jp/rankings/all/weekly?work_variation=long",
       );
     });
 
-    it("集計期間オプション（daily, weekly, monthly, entire）に応じてパスを正しく組み立てること", () => {
+    it("作品種別オプション（workVariation）に応じて work_variation パラメータを設定し、未指定時はデフォルトの long になること (AC-10)", () => {
+      expect(parser.buildRankingUrl({ workVariation: "all" })).toBe(
+        "https://kakuyomu.jp/rankings/all/weekly?work_variation=all",
+      );
+      expect(parser.buildRankingUrl({ workVariation: "long" })).toBe(
+        "https://kakuyomu.jp/rankings/all/weekly?work_variation=long",
+      );
+      expect(parser.buildRankingUrl({ workVariation: "short" })).toBe(
+        "https://kakuyomu.jp/rankings/all/weekly?work_variation=short",
+      );
+      expect(parser.buildRankingUrl({})).toBe(
+        "https://kakuyomu.jp/rankings/all/weekly?work_variation=long",
+      );
+    });
+
+    it("集計期間オプション（daily, weekly, monthly, entire）に応じてパスを正しく組み立てること (AC-10)", () => {
       expect(parser.buildRankingUrl({ period: "daily" })).toBe(
         "https://kakuyomu.jp/rankings/all/daily?work_variation=long",
       );
@@ -1093,7 +1114,7 @@ describe("KakuyomuParser", () => {
       );
     });
 
-    it("ジャンルオプション（fantasy, sf など）に応じて対象パスを正しく組み立てること", () => {
+    it("ジャンルオプション（fantasy, sf など）に応じて対象パスを正しく組み立てること (AC-10)", () => {
       expect(parser.buildRankingUrl({ genre: "fantasy" })).toBe(
         "https://kakuyomu.jp/rankings/fantasy/weekly?work_variation=long",
       );
@@ -1105,7 +1126,7 @@ describe("KakuyomuParser", () => {
       );
     });
 
-    it("ページ番号が 2 以上の場合に page クエリを付与し、1 または未指定では省略すること", () => {
+    it("ページ番号が 2 以上の場合に page クエリを付与し、1 または未指定では省略すること (AC-10)", () => {
       expect(parser.buildRankingUrl({ page: 2 })).toBe(
         "https://kakuyomu.jp/rankings/all/weekly?work_variation=long&page=2",
       );
@@ -1117,14 +1138,15 @@ describe("KakuyomuParser", () => {
       );
     });
 
-    it("ジャンル・期間・ページの組み合わせで正しいランキング URL を生成すること", () => {
+    it("作品種別・ジャンル・期間・ページの組み合わせで正しいランキング URL を生成すること (AC-10)", () => {
       const url = parser.buildRankingUrl({
         genre: "action",
         period: "monthly",
+        workVariation: "short",
         page: 3,
       });
       expect(url).toBe(
-        "https://kakuyomu.jp/rankings/action/monthly?work_variation=long&page=3",
+        "https://kakuyomu.jp/rankings/action/monthly?work_variation=short&page=3",
       );
     });
   });

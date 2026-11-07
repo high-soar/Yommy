@@ -50,9 +50,9 @@ export type NovelSearchOrder =
 export type SearchOrder = NovelSearchOrder;
 
 /**
- * 小説検索の連載状態
+ * 小説検索の連載状態・作品種別（v0.8 Issue #265 で "short" を追加）
  */
-export type NovelSerialStatus = "all" | "running" | "completed";
+export type NovelSerialStatus = "all" | "running" | "completed" | "short";
 
 /**
  * 小説検索オプション
@@ -109,11 +109,18 @@ export type NovelRankingPeriod = "daily" | "weekly" | "monthly" | "entire";
 export type RankingPeriod = NovelRankingPeriod;
 
 /**
+ * ランキング作品種別区分（v0.8 Issue #265）
+ */
+export type NovelRankingWorkVariation = "all" | "long" | "short";
+
+/**
  * ランキング取得オプション
  */
 export interface NovelRankingOptions {
   period?: NovelRankingPeriod;
   genre?: string;
+  /** 作品種別（"all": すべて / "long": 長編・連載 / "short": 短編、v0.8 Issue #265） */
+  workVariation?: NovelRankingWorkVariation;
   page?: number;
 }
 

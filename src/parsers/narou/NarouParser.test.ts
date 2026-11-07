@@ -843,12 +843,15 @@ describe("NarouParser", () => {
       expect(published.searchParams.get("order")).toBe("generalfirstup");
     });
 
-    it("連載状態オプション (serialStatus) が正しくマッピングされること", () => {
+    it("連載状態オプション (serialStatus) が正しくマッピングされること (AC-NR-11)", () => {
       // 1. すべて (all または未指定) -> type 省略
       const allUrl = new URL(
         parser.buildSearchUrl("テスト", { serialStatus: "all" }),
       );
       expect(allUrl.searchParams.has("type")).toBe(false);
+
+      const defaultUrl = new URL(parser.buildSearchUrl("テスト", {}));
+      expect(defaultUrl.searchParams.has("type")).toBe(false);
 
       // 2. 連載中 (running) -> type=r
       const runningUrl = new URL(
@@ -856,11 +859,17 @@ describe("NarouParser", () => {
       );
       expect(runningUrl.searchParams.get("type")).toBe("r");
 
-      // 3. 完結済 (completed) -> type=ter
+      // 3. 完結済 (completed) -> type=er（短編が分離したため er）
       const completedUrl = new URL(
         parser.buildSearchUrl("テスト", { serialStatus: "completed" }),
       );
-      expect(completedUrl.searchParams.get("type")).toBe("ter");
+      expect(completedUrl.searchParams.get("type")).toBe("er");
+
+      // 4. 短編 (short) -> type=t
+      const shortUrl = new URL(
+        parser.buildSearchUrl("テスト", { serialStatus: "short" }),
+      );
+      expect(shortUrl.searchParams.get("type")).toBe("t");
     });
 
     it("小ジャンルオプション (genre) が指定された場合に付与されること", () => {
@@ -965,7 +974,7 @@ describe("NarouParser", () => {
       expect(parsed.searchParams.get("word")).toBe("悪役令嬢");
       expect(parsed.searchParams.get("notword")).toBe("追放 溺愛");
       expect(parsed.searchParams.get("order")).toBe("hyoka");
-      expect(parsed.searchParams.get("type")).toBe("ter");
+      expect(parsed.searchParams.get("type")).toBe("er");
       expect(parsed.searchParams.get("genre")).toBe("101-102");
       expect(parsed.searchParams.get("st")).toBe("41");
     });
@@ -1096,14 +1105,39 @@ describe("NarouParser", () => {
   });
 
   describe("AC-NR-13: ランキング API URL 生成 (buildRankingUrl)", () => {
-    it("デフォルトオプション時になろう小説 API 形式のランキング URL が生成されること", () => {
+    it("デフォルトオプション時になろう小説 API 形式のランキング URL が生成されること (AC-NR-13)", () => {
       const url = parser.buildRankingUrl();
       expect(url).toBe(
         "https://api.syosetu.com/novelapi/api/?out=json&lim=20&order=weeklypoint",
       );
     });
 
-    it("集計期間オプション (period) の4種類が正しくマッピングされること", () => {
+    it("作品種別オプション (workVariation) に応じて type パラメータが設定され、all または未指定時は省略されること (AC-NR-13)", () => {
+      // 1. 長編・連載 (long) -> type=re
+      const longUrl = new URL(
+        parser.buildRankingUrl({ workVariation: "long" }),
+      );
+      expect(longUrl.searchParams.get("type")).toBe("re");
+
+      // 2. 短編 (short) -> type=t
+      const shortUrl = new URL(
+        parser.buildRankingUrl({ workVariation: "short" }),
+      );
+      expect(shortUrl.searchParams.get("type")).toBe("t");
+
+      // 3. すべて (all) -> type 省略
+      const allUrl = new URL(parser.buildRankingUrl({ workVariation: "all" }));
+      expect(allUrl.searchParams.has("type")).toBe(false);
+
+      // 4. 未指定 -> type 省略
+      const defaultUrl = new URL(parser.buildRankingUrl({}));
+      expect(defaultUrl.searchParams.has("type")).toBe(false);
+
+      const noArgUrl = new URL(parser.buildRankingUrl());
+      expect(noArgUrl.searchParams.has("type")).toBe(false);
+    });
+
+    it("集計期間オプション (period) の4種類が正しくマッピングされること (AC-NR-13)", () => {
       // 1. 日間 (daily) -> dailypoint
       const daily = new URL(parser.buildRankingUrl({ period: "daily" }));
       expect(daily.searchParams.get("order")).toBe("dailypoint");
@@ -1121,7 +1155,7 @@ describe("NarouParser", () => {
       expect(entire.searchParams.get("order")).toBe("hyoka");
     });
 
-    it("ジャンルオプション (genre) が指定された場合に付与され、all時は省略されること", () => {
+    it("ジャンルオプション (genre) が指定された場合に付与され、all時は省略されること (AC-NR-13)", () => {
       const genreUrl = new URL(parser.buildRankingUrl({ genre: "201" }));
       expect(genreUrl.searchParams.get("genre")).toBe("201");
 
@@ -1129,12 +1163,26 @@ describe("NarouParser", () => {
       expect(allGenreUrl.searchParams.has("genre")).toBe(false);
     });
 
-    it("ページ番号 (page) に応じて開始位置 st が付与されること", () => {
+    it("ページ番号 (page) に応じて開始位置 st が付与されること (AC-NR-13)", () => {
       const page1 = new URL(parser.buildRankingUrl({ page: 1 }));
       expect(page1.searchParams.has("st")).toBe(false);
 
       const page3 = new URL(parser.buildRankingUrl({ page: 3 }));
       expect(page3.searchParams.get("st")).toBe("41");
+    });
+
+    it("作品種別・ジャンル・期間・ページの組み合わせで正しいランキング API URL を生成すること (AC-NR-13)", () => {
+      const url = parser.buildRankingUrl({
+        period: "monthly",
+        genre: "201",
+        workVariation: "long",
+        page: 3,
+      });
+      const parsed = new URL(url);
+      expect(parsed.searchParams.get("order")).toBe("monthlypoint");
+      expect(parsed.searchParams.get("genre")).toBe("201");
+      expect(parsed.searchParams.get("type")).toBe("re");
+      expect(parsed.searchParams.get("st")).toBe("41");
     });
   });
 
