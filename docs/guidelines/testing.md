@@ -2,8 +2,8 @@
 type: guideline
 title: テスト・実装規律の正本（SSOT）
 description: Yommyの3層テスト体系（Parser/Storage/Viewer）、TDDコミット規約、1対1 Story/UT、親子分離、C0/C1 100%、縦書きVRT、および原因D設計同期ルールの正本。
-status: Approved
-updated: "2026-11-05"
+status: "Approved"
+updated: "2026-11-07"
 tags: [testing, tdd, vrt, storybook, vitest, playwright, coverage]
 related_specs:
   - docs/index.md
@@ -155,6 +155,23 @@ Git Worktree を用いた並行開発やフォーク環境において、環境�
 6. **マルチパス DOM 計測を伴う初期位置復元の耐性保証（v0.6 `R1-26` 再発防止）**:
    - ページめくり組版のように初回マウント・コンテナ寸法反映・`requestAnimationFrame`・`document.fonts.ready` 等で総ページ数（`setTotalPages`）が複数回更新される UI では、最初の 1 回の計測コールバックだけで初期復元フラグを消費（`false` 化）してはならない（初回 0px 幅等の仮計測値に引きずられ、確定計測時に中間ページが最終ページや 1 ページ目へ化けるため）。
    - ユーザーが明示的なページ移動操作（`goToPage` 等）を行うまでの初期レイアウト確定期間中は、総ページ数が更新されるたびに保存済み進捗率（`initialScrollProgress`）から目標ページを再算出して復元し、また 3 ページ以上ある長文の中間ページ（先頭でも最終でもないページ）から別画面へ移動・再遷移するテストを UT および Playwright IT で検証すること。
+
+### 3.5 リーダー非同期同期反映・探索世代ガード・結合テスト実体アサーション規約（v0.7 Kaizen）
+
+1. **`useReader` における非同期参照・同期反映規律（No. 233, `R1-18`, `R1-19` 再発防止）**:
+   - `loadInitialData` および `fetchNovelFromUrl` での小説データ読み込み時、`setNovel(loadedNovel)` の React State コミットを待たずに `novelRef.current` および `currentChapterIndexRef.current` を同期的（インライン）に更新すること。
+   - `updateScrollProgress` および `flushBookmark` 等の非同期コールバックでは、`novelRef.current ?? novel` のフォールバック参照を行い、初期ロード直後のコミットラグによるしおり保存スキップを根絶すること。
+   - 非同期 Hook では `isMountedRef` によるアンマウント後の DB 更新・State 更新遮断を徹底し、Web 小説の全話インデックス取得は必ず `fetchFullNovelIndex` に一本化すること（100話超作品の1ページ目頭打ち防止）。
+2. **非同期探索・ページネーションにおけるリクエスト世代ガードと UI 相互排他（No. 209: `R1-01` 再発防止）**:
+   - 検索・ランキングでの `loadMore`（次ページ取得）や通信中に、ユーザーが別サイト（`SiteSelector`）や検索条件・集計期間ピルを変更した際、遅延解決した旧リクエストの結果が新条件の一覧に混入・上書きされるのを防ぐため、各探索 Hook に `requestIdRef`（世代カウンタ）を配備して通信完了時に発行時点の最新リクエスト ID と一致するかを検証すること。
+   - 画面側（`SearchPage`, `RankingPage`）では、`isLoading || isLoadingMore` 通信中は `isInteractingDisabled` フラグにより、サイトセレクターおよび条件ピル操作を UI レベルで非活性化（二重実行抑止）すること。
+3. **結合テスト（IT）における実体アサーション徹底（No. 206, 207, 210, 216, 232: `R1-02`, `R1-08`, `R1-24` 再発防止）**:
+   - 結合テスト（`test/it/`）での条件分岐（`if (await element.isVisible())`）による暗黙テストスキップは固く禁止し、`toBeVisible()` 等で要素の存在・可視性を決定論的にアサートすること。
+   - フィルタ・ピル切替時は、一覧コンテナの可視性だけでなく `toHaveAttribute("aria-pressed", "true")` や `toHaveValue(...)` による「UI 選択状態の反映」を必ず検証すること。
+   - 外部サイトパーサーの結合検証では、本文テキストだけでなくルビ（`<ruby>`）、傍点（`<em class="bouten">`）、区切り線（`<hr>`）、前書き・後書きの実レンダリングを E2E で確実に検証すること。また固定待機 `waitForTimeout` の使用を禁止し、状態アサーション（`expect.poll` 等）に一本化すること。
+4. **正本仕様書・OKF フロントマターの 3 点双方向トレーサビリティ同期（No. 202, 204, 211, 217, 218 等再発防止）**:
+   - 新規受入条件（`AC-NR-xx`, `AC-RD-28` 等）新設時は、「① `requirements.md`（機能一覧 ＆ ロードマップ表）」「② `screen-transitions.md`（遷移表 ＆ E2E シナリオマッピング）」「③ 個別仕様書（`features/*.md` / `parsers/*.md`）」の 3 点セットで同時に双方向リンクを更新すること。
+   - OKF YAML フロントマターの `tags`, `related_specs`, `related_tests` も相互に対称性を確認し、`validate-okf.mjs` による機械検証をマージ前必須とすること。
 
 ---
 

@@ -2,8 +2,8 @@
 type: spec-parser
 title: "小説家になろう パーサー・スクレイピング仕様書（ncode.syosetu.com / api.syosetu.com）"
 description: "小説家になろう（ncode.syosetu.com / api.syosetu.com）の作品トップ・複数ページ目次抽出、短編作品対応、各話本文（前書き・本編・後書き）抽出、ルビ・傍点正規化、検索・ランキング（なろう小説API JSON）解析、およびURL正規化ルールの正本仕様。"
-status: "Review (#240)"
-updated: "2026-11-06"
+status: "Approved"
+updated: "2026-11-07"
 tags:
   - parser
   - narou
