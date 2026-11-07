@@ -32,10 +32,17 @@ export const SearchFilterBar: React.FC<SearchFilterBarProps> = ({
   selectedSerialStatus,
   onSelectSerialStatus,
   selectedGenre,
+  selectedGenres,
   onSelectGenre,
   disabled = false,
 }) => {
   const genres = selectedSite === "narou" ? NAROU_SEARCH_GENRES : SEARCH_GENRES;
+  const activeGenres =
+    selectedGenres !== undefined
+      ? selectedGenres
+      : selectedGenre !== undefined
+        ? [selectedGenre]
+        : [];
 
   return (
     <div
@@ -121,7 +128,10 @@ export const SearchFilterBar: React.FC<SearchFilterBarProps> = ({
         className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-1 px-1"
       >
         {genres.map((opt) => {
-          const isSelected = selectedGenre === opt.id;
+          const isSelected =
+            opt.id === undefined
+              ? activeGenres.length === 0
+              : activeGenres.includes(opt.id);
           return (
             <button
               key={opt.id ?? "all"}

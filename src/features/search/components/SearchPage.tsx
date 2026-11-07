@@ -85,12 +85,15 @@ export const SearchPage: React.FC<SearchPageProps> = ({
   onSelectSite,
   keyword,
   onChangeKeyword,
+  excludeKeyword,
+  onChangeExcludeKeyword,
   onSubmitSearch,
   selectedOrder,
   onSelectOrder,
   selectedSerialStatus,
   onSelectSerialStatus,
   selectedGenre,
+  selectedGenres,
   onSelectGenre,
   items,
   registeredWorkIds,
@@ -129,6 +132,8 @@ export const SearchPage: React.FC<SearchPageProps> = ({
         <SearchInputBar
           keyword={keyword}
           onChangeKeyword={onChangeKeyword}
+          excludeKeyword={excludeKeyword}
+          onChangeExcludeKeyword={onChangeExcludeKeyword}
           onSubmitSearch={onSubmitSearch}
           isLoading={isInteractingDisabled}
         />
@@ -140,6 +145,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
           selectedSerialStatus={selectedSerialStatus}
           onSelectSerialStatus={onSelectSerialStatus}
           selectedGenre={selectedGenre}
+          selectedGenres={selectedGenres}
           onSelectGenre={onSelectGenre}
           disabled={isInteractingDisabled}
         />

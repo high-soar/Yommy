@@ -68,7 +68,7 @@ interface ExecuteSearchParams {
   site?: NovelSiteType;
   order?: NovelSearchOrder;
   serialStatus?: NovelSerialStatus;
-  genre?: string | undefined;
+  genres?: string[];
 }
 
 /**
@@ -86,10 +86,12 @@ export function useNovelSearch(): UseNovelSearchResult {
   const [selectedSite, setSelectedSiteState] =
     useState<NovelSiteType>("kakuyomu");
   const [keyword, setKeyword] = useState<string>("");
+  const [excludeKeyword, setExcludeKeyword] = useState<string>("");
   const [order, setOrderState] = useState<NovelSearchOrder>("weekly_ranking");
   const [serialStatus, setSerialStatusState] =
     useState<NovelSerialStatus>("all");
-  const [genre, setGenreState] = useState<string | undefined>(undefined);
+  const [genres, setGenresState] = useState<string[]>([]);
+  const genre = genres[0];
 
   const [items, setItems] = useState<NovelSearchResultItem[]>([]);
   const [registeredWorkIds, setRegisteredWorkIds] = useState<Set<string>>(
@@ -156,7 +158,9 @@ export function useNovelSearch(): UseNovelSearchResult {
       const targetOrder = params?.order !== undefined ? params.order : order;
       const targetSerial =
         params?.serialStatus !== undefined ? params.serialStatus : serialStatus;
-      const targetGenre = params && "genre" in params ? params.genre : genre;
+      const targetGenres =
+        params?.genres !== undefined ? params.genres : genres;
+      const targetGenre = targetGenres[0];
 
       setIsLoading(true);
       setError(null);
@@ -176,6 +180,8 @@ export function useNovelSearch(): UseNovelSearchResult {
           order: targetOrder,
           serialStatus: targetSerial,
           genre: targetGenre,
+          genres: targetGenres,
+          excludeKeyword,
           page: 1,
         });
 
@@ -199,9 +205,10 @@ export function useNovelSearch(): UseNovelSearchResult {
     },
     [
       keyword,
+      excludeKeyword,
       order,
       serialStatus,
-      genre,
+      genres,
       selectedSite,
       parserRegistry,
       httpClient,
@@ -217,10 +224,10 @@ export function useNovelSearch(): UseNovelSearchResult {
       searchGenerationRef.current += 1;
       selectedSiteRef.current = newSite;
       setSelectedSiteState(newSite);
-      setGenreState(undefined);
+      setGenresState([]);
       setError(null);
       if (hasSearchedRef.current) {
-        void executeSearch({ site: newSite, genre: undefined });
+        void executeSearch({ site: newSite, genres: [] });
       } else {
         void refreshRegisteredIds(newSite);
       }
@@ -256,7 +263,9 @@ export function useNovelSearch(): UseNovelSearchResult {
       const url = parser.buildSearchUrl(keyword, {
         order,
         serialStatus,
-        genre,
+        genre: genres[0],
+        genres,
+        excludeKeyword,
         page: nextPage,
       });
 
@@ -292,9 +301,10 @@ export function useNovelSearch(): UseNovelSearchResult {
     selectedSite,
     currentPage,
     keyword,
+    excludeKeyword,
     order,
     serialStatus,
-    genre,
+    genres,
     httpClient,
   ]);
 
@@ -327,15 +337,25 @@ export function useNovelSearch(): UseNovelSearchResult {
   );
 
   const setGenre = useCallback(
-    (newGenre: string | undefined) => {
+    (targetGenre: string | undefined) => {
       if (isLoadingMore || isSearchingRef.current) return;
       searchGenerationRef.current += 1;
-      setGenreState(newGenre);
+      let nextGenres: string[];
+      if (targetGenre === undefined) {
+        nextGenres = [];
+      } else {
+        if (genres.includes(targetGenre)) {
+          nextGenres = genres.filter((g) => g !== targetGenre);
+        } else {
+          nextGenres = [...genres, targetGenre];
+        }
+      }
+      setGenresState(nextGenres);
       if (hasSearchedRef.current) {
-        void executeSearch({ genre: newGenre });
+        void executeSearch({ genres: nextGenres });
       }
     },
-    [isLoadingMore, executeSearch],
+    [isLoadingMore, genres, executeSearch],
   );
 
   const addNovelToBookshelf = useCallback(
@@ -428,15 +448,15 @@ export function useNovelSearch(): UseNovelSearchResult {
     setSelectedSite,
     keyword,
     setKeyword,
-    excludeKeyword: "",
-    setExcludeKeyword: () => {},
+    excludeKeyword,
+    setExcludeKeyword,
     search,
     order,
     setOrder,
     serialStatus,
     setSerialStatus,
     genre,
-    genres: [],
+    genres,
     setGenre,
     items,
     registeredWorkIds,
