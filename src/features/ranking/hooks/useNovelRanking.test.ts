@@ -1180,4 +1180,220 @@ describe("useNovelRanking", () => {
       expect(result.current.selectedSite).toBe("kakuyomu");
     });
   });
+
+  describe("作品種別（workVariation）フィルタと非同期世代ガード (AC-RK-10, Issue #265)", () => {
+    it("初期化時にデフォルトで workVariation === 'long' となり、カクヨムランキング取得URLに work_variation=long が付与されること (AC-RK-01, AC-RK-10)", async () => {
+      const getHtmlSpy = vi.spyOn(mockHttpClient, "getHtml");
+
+      const { result } = renderHook(() => useNovelRanking(), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+        expect(result.current.items.length).toBeGreaterThan(0);
+      });
+
+      expect(result.current.workVariation).toBe("long");
+      expect(getHtmlSpy).toHaveBeenCalled();
+      const calledUrl = getHtmlSpy.mock.calls[0][0].url;
+      expect(calledUrl).toContain("work_variation=long");
+    });
+
+    it("setWorkVariation('short') により workVariation が 'short' に更新され、カクヨムランキング取得URLに work_variation=short が付与されて再取得されること (AC-RK-10)", async () => {
+      const { result } = renderHook(() => useNovelRanking(), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      const getHtmlSpy = vi.spyOn(mockHttpClient, "getHtml");
+
+      act(() => {
+        result.current.setWorkVariation("short");
+      });
+
+      expect(result.current.workVariation).toBe("short");
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(getHtmlSpy).toHaveBeenCalled();
+      const calledUrl = getHtmlSpy.mock.calls[0][0].url;
+      expect(calledUrl).toContain("work_variation=short");
+    });
+
+    it("setWorkVariation('all') により workVariation が 'all' に更新され、カクヨムランキング取得URLに work_variation=all が付与されて再取得されること (AC-RK-10)", async () => {
+      const { result } = renderHook(() => useNovelRanking(), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      const getHtmlSpy = vi.spyOn(mockHttpClient, "getHtml");
+
+      act(() => {
+        result.current.setWorkVariation("all");
+      });
+
+      expect(result.current.workVariation).toBe("all");
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(getHtmlSpy).toHaveBeenCalled();
+      const calledUrl = getHtmlSpy.mock.calls[0][0].url;
+      expect(calledUrl).toContain("work_variation=all");
+    });
+
+    it("通信中（isLoading === true）の setWorkVariation 呼び出しはガード（無視）されること (AC-RK-08)", async () => {
+      let resolveRanking: (res: HttpResponse) => void = () => {};
+      mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/rankings\//, () => {
+        return new Promise<HttpResponse>((resolve) => {
+          resolveRanking = resolve;
+        });
+      });
+
+      const { result } = renderHook(() => useNovelRanking(), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(true);
+      });
+
+      // 通信中に setWorkVariation を呼び出し
+      act(() => {
+        result.current.setWorkVariation("short");
+      });
+
+      // 状態は long のままであること
+      expect(result.current.workVariation).toBe("long");
+
+      await act(async () => {
+        resolveRanking({
+          status: 200,
+          url: "https://kakuyomu.jp/rankings/weekly?work_variation=long",
+          headers: {},
+          html: rankingApolloHtml,
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+      expect(result.current.workVariation).toBe("long");
+    });
+
+    it("サイト切替時（カクヨム -> なろう）に選択中の workVariation が維持され、なろうURLへ反映されること (AC-RK-09, AC-RK-10)", async () => {
+      const { result } = renderHook(() => useNovelRanking(), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // 短編に変更
+      act(() => {
+        result.current.setWorkVariation("short");
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+      expect(result.current.workVariation).toBe("short");
+
+      const getHtmlSpy = vi.spyOn(mockHttpClient, "getHtml");
+
+      // なろうに切り替え
+      act(() => {
+        result.current.setSelectedSite("narou");
+      });
+
+      await waitFor(() => {
+        expect(result.current.selectedSite).toBe("narou");
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // workVariation が short のまま維持されていること
+      expect(result.current.workVariation).toBe("short");
+
+      // なろう API への URL に type=t（短編）が付与されていること
+      expect(getHtmlSpy).toHaveBeenCalled();
+      const calledUrl = getHtmlSpy.mock.calls[0][0].url;
+      expect(calledUrl).toContain("api.syosetu.com");
+      expect(calledUrl).toContain("type=t");
+    });
+
+    it("初期状態（workVariation === 'long'）でなろうに切り替えた場合、type=re（連載）が付与されること (AC-RK-09, AC-RK-10)", async () => {
+      const { result } = renderHook(() => useNovelRanking(), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      const getHtmlSpy = vi.spyOn(mockHttpClient, "getHtml");
+
+      act(() => {
+        result.current.setSelectedSite("narou");
+      });
+
+      await waitFor(() => {
+        expect(result.current.selectedSite).toBe("narou");
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.workVariation).toBe("long");
+
+      expect(getHtmlSpy).toHaveBeenCalled();
+      const calledUrl = getHtmlSpy.mock.calls[0][0].url;
+      expect(calledUrl).toContain("api.syosetu.com");
+      expect(calledUrl).toContain("type=re");
+    });
+
+    it("世代カウンタ（requestIdRef）により、非同期解決時に世代が一致する場合のみアイテムおよびエラー状態が更新されること (AC-RK-08)", async () => {
+      let resolveRanking!: (res: HttpResponse) => void;
+
+      mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/rankings\//, () => {
+        return new Promise<HttpResponse>((resolve) => {
+          resolveRanking = resolve;
+        });
+      });
+
+      const { result } = renderHook(() => useNovelRanking(), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(true);
+      });
+
+      expect(result.current.items).toEqual([]);
+
+      await act(async () => {
+        resolveRanking({
+          status: 200,
+          url: "https://kakuyomu.jp/rankings/weekly?work_variation=long",
+          headers: {},
+          html: rankingApolloHtml,
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.items.length).toBeGreaterThan(0);
+      expect(result.current.items[0].remoteWorkId).toBe("16817330658027210101");
+    });
+  });
 });
