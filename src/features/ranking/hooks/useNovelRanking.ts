@@ -47,6 +47,7 @@ export interface UseNovelRankingResult {
 interface ExecuteFetchParams {
   site?: NovelSiteType;
   period?: NovelRankingPeriod;
+  workVariation?: NovelRankingWorkVariation;
   genre?: string | undefined;
 }
 
@@ -64,6 +65,8 @@ export function useNovelRanking(): UseNovelRankingResult {
   const [selectedSite, setSelectedSiteState] =
     useState<NovelSiteType>("kakuyomu");
   const [period, setPeriodState] = useState<NovelRankingPeriod>("weekly");
+  const [workVariation, setWorkVariationState] =
+    useState<NovelRankingWorkVariation>("long");
   const [genre, setGenreState] = useState<string | undefined>(undefined);
 
   const [items, setItems] = useState<NovelRankingResultItem[]>([]);
@@ -77,6 +80,7 @@ export function useNovelRanking(): UseNovelRankingResult {
 
   // 通信中重複リクエストガードおよび非同期競合（Race Condition）防止用 ref
   const isFetchingRef = useRef<boolean>(false);
+  const requestIdRef = useRef<number>(0);
   const selectedSiteRef = useRef<NovelSiteType>(selectedSite);
 
   useEffect(() => {
@@ -110,11 +114,16 @@ export function useNovelRanking(): UseNovelRankingResult {
     async (params?: ExecuteFetchParams) => {
       if (isFetchingRef.current) return;
       isFetchingRef.current = true;
+      const currentRequestId = ++requestIdRef.current;
 
       const targetSite =
         params?.site !== undefined ? params.site : selectedSite;
       const targetPeriod =
         params?.period !== undefined ? params.period : period;
+      const targetVariation =
+        params?.workVariation !== undefined
+          ? params.workVariation
+          : workVariation;
       const targetGenre = params && "genre" in params ? params.genre : genre;
 
       setIsLoading(true);
@@ -132,26 +141,34 @@ export function useNovelRanking(): UseNovelRankingResult {
         const url = parser.buildRankingUrl({
           period: targetPeriod,
           genre: targetGenre,
+          workVariation: targetVariation,
           page: 1,
         });
 
         const response = await httpClient.getHtml({ url });
         const result = parser.getRanking(response.html, url);
 
-        setItems(result.items);
-        await refreshRegisteredIds(targetSite);
+        if (currentRequestId === requestIdRef.current) {
+          setItems(result.items);
+          await refreshRegisteredIds(targetSite);
+        }
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        setError(message);
-        setItems([]);
+        if (currentRequestId === requestIdRef.current) {
+          const message = err instanceof Error ? err.message : String(err);
+          setError(message);
+          setItems([]);
+        }
       } finally {
-        isFetchingRef.current = false;
-        setIsLoading(false);
+        if (currentRequestId === requestIdRef.current) {
+          isFetchingRef.current = false;
+          setIsLoading(false);
+        }
       }
     },
     [
       selectedSite,
       period,
+      workVariation,
       genre,
       parserRegistry,
       httpClient,
@@ -188,6 +205,15 @@ export function useNovelRanking(): UseNovelRankingResult {
       if (isFetchingRef.current) return;
       setPeriodState(newPeriod);
       void executeFetch({ period: newPeriod });
+    },
+    [executeFetch],
+  );
+
+  const setWorkVariation = useCallback(
+    (newVariation: NovelRankingWorkVariation) => {
+      if (isFetchingRef.current) return;
+      setWorkVariationState(newVariation);
+      void executeFetch({ workVariation: newVariation });
     },
     [executeFetch],
   );
@@ -295,8 +321,8 @@ export function useNovelRanking(): UseNovelRankingResult {
     setSelectedSite,
     period,
     setPeriod,
-    workVariation: "long",
-    setWorkVariation: () => {},
+    workVariation,
+    setWorkVariation,
     genre,
     setGenre,
     items,
