@@ -434,6 +434,59 @@ describe("ServiceProvider", () => {
       });
     });
 
+    it("createDefaultMockHttpClient がなろうランキングURLで type=re または type=t が付与されていてもランキング結果を返すこと (Issue #265)", async () => {
+      let rankingLongJson = "";
+      let rankingShortJson = "";
+      let searchShortJson = "";
+
+      const TestConsumer: React.FC = () => {
+        const services = useServices();
+        React.useEffect(() => {
+          if (services.isReady) {
+            // ランキング: 長編・連載（type=re）
+            services.httpClient
+              .getHtml({
+                url: "https://api.syosetu.com/novelapi/api/?out=json&lim=20&order=weeklypoint&type=re",
+              })
+              .then((res) => {
+                rankingLongJson = res.html;
+              });
+            // ランキング: 短編（type=t）
+            services.httpClient
+              .getHtml({
+                url: "https://api.syosetu.com/novelapi/api/?out=json&lim=20&order=weeklypoint&type=t",
+              })
+              .then((res) => {
+                rankingShortJson = res.html;
+              });
+            // 検索: 短編（type=t かつ word 指定）
+            services.httpClient
+              .getHtml({
+                url: "https://api.syosetu.com/novelapi/api/?out=json&lim=20&word=%E7%9F%AD%E7%B7%A8&type=t",
+              })
+              .then((res) => {
+                searchShortJson = res.html;
+              });
+          }
+        }, [services]);
+        return <div>なろう作品種別モックテスト</div>;
+      };
+
+      render(
+        <ServiceProvider>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(rankingLongJson).toContain("デイリー1位作品");
+        expect(rankingShortJson).toContain("デイリー1位作品");
+        expect(searchShortJson).toContain(
+          "無職転生 - 異世界行ったら本気だす -",
+        );
+      });
+    });
+
     it("カスタム databaseAdapter および 各 Repository が渡された場合にそのまま利用されること", async () => {
       const customDb = {
         execute: vi.fn(),

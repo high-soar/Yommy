@@ -11,6 +11,7 @@ import * as rankingFilterBarModule from "./RankingFilterBar";
 const {
   WeeklyOverall,
   GenreFantasy,
+  ShortStoryRanking,
   MixedRegistration,
   Loading,
   LoadingWithItems,
@@ -47,6 +48,15 @@ describe("RankingPage コンポーネント", () => {
       "true",
     );
     expect(screen.getByTestId("ranking-genre-fantasy")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("ShortStoryRanking ストーリー: 短編作品種別が選択されていること (AC-RK-10, Issue #265)", () => {
+    render(<ShortStoryRanking />);
+
+    expect(screen.getByTestId("ranking-variation-short")).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -230,6 +240,42 @@ describe("RankingPage コンポーネント", () => {
     );
 
     siteSelectorSpy.mockRestore();
+    filterBarSpy.mockRestore();
+  });
+
+  it("親子分離: selectedWorkVariation と onSelectWorkVariation が RankingFilterBar へ正しく伝播すること (AC-RK-10, Issue #265)", () => {
+    const filterBarSpy = vi.spyOn(rankingFilterBarModule, "RankingFilterBar");
+    const handleWorkVariation = vi.fn();
+
+    render(
+      <RankingPage
+        selectedSite="kakuyomu"
+        onSelectSite={vi.fn()}
+        selectedPeriod="weekly"
+        onSelectPeriod={vi.fn()}
+        selectedWorkVariation="short"
+        onSelectWorkVariation={handleWorkVariation}
+        selectedGenre={undefined}
+        onSelectGenre={vi.fn()}
+        items={[]}
+        registeredWorkIds={new Set()}
+        addingWorkId={null}
+        isLoading={false}
+        error={null}
+        onRetry={vi.fn()}
+        onAddNovel={vi.fn()}
+        onSelectCard={vi.fn()}
+      />,
+    );
+
+    expect(filterBarSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selectedWorkVariation: "short",
+        onSelectWorkVariation: handleWorkVariation,
+      }),
+      undefined,
+    );
+
     filterBarSpy.mockRestore();
   });
 });

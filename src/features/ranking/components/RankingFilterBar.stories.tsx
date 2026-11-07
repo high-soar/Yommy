@@ -11,6 +11,8 @@ const meta: Meta<typeof RankingFilterBar> = {
   args: {
     selectedPeriod: "weekly",
     onSelectPeriod: fn(),
+    selectedWorkVariation: "long",
+    onSelectWorkVariation: fn(),
     selectedGenre: undefined,
     onSelectGenre: fn(),
   },
@@ -23,9 +25,34 @@ type Story = StoryObj<typeof RankingFilterBar>;
  * ランキング絞り込みバー（デフォルト初期表示）
  */
 export const Default: Story = {
-  name: "デフォルト（総合・週間）",
+  name: "デフォルト（総合・週間・長編連載）",
   args: {
     selectedPeriod: "weekly",
+    selectedWorkVariation: "long",
+    selectedGenre: undefined,
+  },
+};
+
+/**
+ * ランキング絞り込みバー（短編選択時 / v0.8 Issue #265）
+ */
+export const ShortStoryVariation: Story = {
+  name: "短編選択（短編・週間）",
+  args: {
+    selectedPeriod: "weekly",
+    selectedWorkVariation: "short",
+    selectedGenre: undefined,
+  },
+};
+
+/**
+ * ランキング絞り込みバー（すべて選択時 / v0.8 Issue #265）
+ */
+export const AllVariation: Story = {
+  name: "すべて選択（全作品種別・日間）",
+  args: {
+    selectedPeriod: "daily",
+    selectedWorkVariation: "all",
     selectedGenre: undefined,
   },
 };
@@ -34,9 +61,10 @@ export const Default: Story = {
  * ランキング絞り込みバー（条件指定・フィルタ適用時）
  */
 export const Filtered: Story = {
-  name: "絞り込み適用（ファンタジー・月間）",
+  name: "絞り込み適用（ファンタジー・月間・長編連載）",
   args: {
     selectedPeriod: "monthly",
+    selectedWorkVariation: "long",
     selectedGenre: "fantasy",
   },
 };

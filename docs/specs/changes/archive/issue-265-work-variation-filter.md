@@ -3,7 +3,7 @@ type: spec-delta
 title: "ランキング・検索画面（SCR-07 / SCR-06）における作品種別（長編/連載・短編）フィルタ切替対応の設計"
 description: "Issue #265 に対する差分仕様、カクヨム・小説家になろうの作品種別ランキング/検索URL生成仕様、ランキング画面の作品種別セグメントピルおよび検索画面の短編ピル追加設計、テスト計画、およびSub-issue分割計画。"
 issue: "#265"
-status: "Review (#265)"
+status: "Completed (Archived)"
 updated: "2026-11-07"
 tags:
   - delta
@@ -63,7 +63,7 @@ Step 1 の `/grill-me` インタビューおよび既存仕様・コード調査
 
 ### 2.1 Parser Layer（`NovelRankingOptions` / `NovelSerialStatus` / `KakuyomuParser` / `NarouParser`）の拡張
 
-[docs/specs/architecture.md](../architecture.md)、[docs/specs/parsers/kakuyomu.md](../parsers/kakuyomu.md)、および [docs/specs/parsers/narou.md](../parsers/narou.md) の型契約および URL 生成仕様を以下の通り拡張します。
+[docs/specs/architecture.md](../../architecture.md)、[docs/specs/parsers/kakuyomu.md](../../parsers/kakuyomu.md)、および [docs/specs/parsers/narou.md](../../parsers/narou.md) の型契約および URL 生成仕様を以下の通り拡張します。
 
 1. **型契約の拡張（`src/parsers/types.ts`）**:
    ```typescript
@@ -105,7 +105,7 @@ Step 1 の `/grill-me` インタビューおよび既存仕様・コード調査
 
 ### 2.2 ランキング画面（`SCR-07`）の作品種別フィルタ UI と状態管理（`useNovelRanking`）
 
-[docs/specs/features/ranking.md](../features/ranking.md) のコンポーネントおよびカスタムフック契約を以下の通り拡張します。
+[docs/specs/features/ranking.md](../../features/ranking.md) のコンポーネントおよびカスタムフック契約を以下の通り拡張します。
 
 1. **作品種別定数定義（`src/features/ranking/types.ts`）**:
    ```typescript

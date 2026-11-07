@@ -276,6 +276,33 @@ describe("useNovelSearch", () => {
     expect(getHtmlSpy).toHaveBeenCalledTimes(2);
   });
 
+  it("連載状況に短編（short）を指定した場合に自動再検索が走り serial_status=completed が指定されること (Issue #265)", async () => {
+    const { result } = renderHook(() => useNovelSearch(), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.setKeyword("異世界");
+    });
+
+    await act(async () => {
+      await result.current.search();
+    });
+
+    const getHtmlSpy = vi.spyOn(mockHttpClient, "getHtml");
+
+    await act(async () => {
+      result.current.setSerialStatus("short");
+    });
+
+    expect(result.current.serialStatus).toBe("short");
+    expect(getHtmlSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: expect.stringContaining("serial_status=completed"),
+      }),
+    );
+  });
+
   it("ジャンル選択後に「すべて（undefined）」へ切り替えた際、genre パラメータが正しく解除されて再検索されること (AC-SE-04)", async () => {
     const { result } = renderHook(() => useNovelSearch(), {
       wrapper: createWrapper(),
@@ -1572,6 +1599,38 @@ describe("useNovelSearch", () => {
       expect(result.current.genre).toBeUndefined();
       expect(result.current.error).toBeNull();
       expect(result.current.items[0].workUrl).toContain("syosetu.com");
+    });
+
+    it("連載状況に短編（short）を指定した状態でサイトを narou へ切り替えた場合、serialStatus が保持され新サイト（type=t）で自動再検索されること (Issue #265)", async () => {
+      const { result } = renderHook(() => useNovelSearch(), {
+        wrapper: createWrapper(),
+      });
+
+      act(() => {
+        result.current.setKeyword("転生");
+        result.current.setSerialStatus("short");
+      });
+
+      // 初回検索を実行
+      await act(async () => {
+        await result.current.search();
+      });
+
+      expect(result.current.serialStatus).toBe("short");
+
+      const getHtmlSpy = vi.spyOn(mockHttpClient, "getHtml");
+
+      // narou へサイト切り替え
+      await act(async () => {
+        result.current.setSelectedSite("narou");
+      });
+
+      expect(result.current.selectedSite).toBe("narou");
+      expect(result.current.serialStatus).toBe("short");
+      expect(getHtmlSpy).toHaveBeenCalled();
+      const calledUrl = getHtmlSpy.mock.calls[0][0].url;
+      expect(calledUrl).toContain("api.syosetu.com");
+      expect(calledUrl).toContain("type=t");
     });
 
     it("同一サイト（kakuyomu -> kakuyomu）への切り替え操作は何もしないこと（no-op）", async () => {

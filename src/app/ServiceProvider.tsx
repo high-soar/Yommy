@@ -211,11 +211,20 @@ export function createDefaultMockHttpClient(): MockHttpClient {
   client.setResponse(
     /^https:\/\/api\.syosetu\.com\/novelapi\/api\//,
     (options) => {
-      const isSearch =
-        options.url.includes("word=") ||
-        options.url.includes("type=") ||
-        options.url.includes("order=new") ||
-        options.url.includes("order=generalfirstup");
+      const urlObj = new URL(options.url);
+      const order = urlObj.searchParams.get("order") ?? "";
+      const type = urlObj.searchParams.get("type") ?? "";
+      const hasSearchKeywords =
+        urlObj.searchParams.has("word") || urlObj.searchParams.has("notword");
+      const hasSearchOnlyParams =
+        order === "new" ||
+        order === "generalfirstup" ||
+        type === "r" ||
+        type === "er" ||
+        type === "ter" ||
+        (urlObj.searchParams.get("genre") ?? "").includes("-");
+
+      const isSearch = hasSearchKeywords || hasSearchOnlyParams;
 
       return {
         status: 200,
