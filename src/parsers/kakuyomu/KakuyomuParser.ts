@@ -117,6 +117,36 @@ function parseSerialStatus(raw?: string | null): {
 }
 
 /**
+ * 除外キーワード文字列をトークン分割し、先頭ハイフンを除去・正規化する (v0.8 Issue #264)
+ */
+function parseExcludeTokens(excludeKeyword?: string): string[] {
+  if (!excludeKeyword) {
+    return [];
+  }
+  return excludeKeyword
+    .split(/\s+/)
+    .map((token) => token.replace(/^-+/, "").trim())
+    .filter(Boolean);
+}
+
+/**
+ * カクヨム用の検索ジャンル配列を解決する（genres 優先、genre フォールバック、小文字化・重複排除） (v0.8 Issue #264)
+ */
+function resolveKakuyomuGenres(options?: NovelSearchOptions): string[] {
+  if (options?.genres !== undefined) {
+    return Array.from(
+      new Set(
+        options.genres.map((g) => g.trim().toLowerCase()).filter(Boolean),
+      ),
+    );
+  }
+  if (options?.genre && options.genre.trim()) {
+    return [options.genre.trim().toLowerCase()];
+  }
+  return [];
+}
+
+/**
  * ページ URL のクエリパラメータから現在のページ番号を抽出する
  */
 function extractCurrentPage(pageUrl: string): number {
@@ -742,14 +772,7 @@ export class KakuyomuParser implements NovelParser {
   buildSearchUrl(query: string, options?: NovelSearchOptions): string {
     const url = new URL("https://kakuyomu.jp/search");
     const trimmedQuery = query.trim();
-
-    // 除外キーワードのトークン分割と先頭ハイフン正規化 (v0.8 Issue #264)
-    const excludeTokens = options?.excludeKeyword
-      ? options.excludeKeyword
-          .split(/\s+/)
-          .map((token) => token.replace(/^-+/, "").trim())
-          .filter(Boolean)
-      : [];
+    const excludeTokens = parseExcludeTokens(options?.excludeKeyword);
 
     const qParts: string[] = [];
     if (trimmedQuery) {
@@ -768,18 +791,7 @@ export class KakuyomuParser implements NovelParser {
       url.searchParams.set("serial_status", options.serialStatus);
     }
 
-    // 複数ジャンル（カンマ区切り小文字）の解決（genres 優先、genre フォールバック） (v0.8 Issue #264)
-    let genres: string[] = [];
-    if (options?.genres !== undefined) {
-      genres = Array.from(
-        new Set(
-          options.genres.map((g) => g.trim().toLowerCase()).filter(Boolean),
-        ),
-      );
-    } else if (options?.genre && options.genre.trim()) {
-      genres = [options.genre.trim().toLowerCase()];
-    }
-
+    const genres = resolveKakuyomuGenres(options);
     if (genres.length > 0) {
       url.searchParams.set("genre_name", genres.join(","));
     }

@@ -316,6 +316,34 @@ function parseNovelEntry(
 }
 
 /**
+ * 除外キーワード文字列をトークン分割し、先頭ハイフンを除去・正規化する (v0.8 Issue #264)
+ */
+function parseExcludeTokens(excludeKeyword?: string): string[] {
+  if (!excludeKeyword) {
+    return [];
+  }
+  return excludeKeyword
+    .split(/\s+/)
+    .map((token) => token.replace(/^-+/, "").trim())
+    .filter(Boolean);
+}
+
+/**
+ * なろう用の検索小ジャンルコード配列を解決する（genres 優先、genre フォールバック、重複排除） (v0.8 Issue #264)
+ */
+function resolveNarouGenres(options?: NovelSearchOptions): string[] {
+  if (options?.genres !== undefined) {
+    return Array.from(
+      new Set(options.genres.map((g) => g.trim()).filter(Boolean)),
+    );
+  }
+  if (options?.genre && options.genre.trim()) {
+    return [options.genre.trim()];
+  }
+  return [];
+}
+
+/**
  * 小説家になろう（ncode.syosetu.com）向け小説パーサー
  * DOMParser を用いた決定論的 DOM トラバーサル処理（外部ネットワーク通信なし）
  */
@@ -627,13 +655,7 @@ export class NarouParser implements NovelParser {
       url.searchParams.set("word", trimmedQuery);
     }
 
-    // 除外キーワードのトークン分割と先頭ハイフン正規化 (v0.8 Issue #264)
-    const excludeTokens = options?.excludeKeyword
-      ? options.excludeKeyword
-          .split(/\s+/)
-          .map((token) => token.replace(/^-+/, "").trim())
-          .filter(Boolean)
-      : [];
+    const excludeTokens = parseExcludeTokens(options?.excludeKeyword);
     if (excludeTokens.length > 0) {
       url.searchParams.set("notword", excludeTokens.join(" "));
     }
@@ -654,16 +676,7 @@ export class NarouParser implements NovelParser {
       url.searchParams.set("type", "ter");
     }
 
-    // 複数ジャンル（ハイフン結合）の解決（genres 優先、genre フォールバック） (v0.8 Issue #264)
-    let genres: string[] = [];
-    if (options?.genres !== undefined) {
-      genres = Array.from(
-        new Set(options.genres.map((g) => g.trim()).filter(Boolean)),
-      );
-    } else if (options?.genre && options.genre.trim()) {
-      genres = [options.genre.trim()];
-    }
-
+    const genres = resolveNarouGenres(options);
     if (genres.length > 0) {
       url.searchParams.set("genre", genres.join("-"));
     }
