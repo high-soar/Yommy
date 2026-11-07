@@ -286,6 +286,7 @@ describe("ServiceProvider", () => {
       let rankingHtml = "";
       let searchNovelHtml = "";
       let rankingNovelHtml = "";
+      let customNovelHtml = "";
       const TestConsumer: React.FC = () => {
         const services = useServices();
         React.useEffect(() => {
@@ -318,6 +319,13 @@ describe("ServiceProvider", () => {
               .then((res) => {
                 rankingNovelHtml = res.html;
               });
+            services.httpClient
+              .getHtml({
+                url: "https://kakuyomu.jp/works/16817330658027210002",
+              })
+              .then((res) => {
+                customNovelHtml = res.html;
+              });
           }
         }, [services]);
         return <div>検索・ランキングモックテスト</div>;
@@ -334,6 +342,7 @@ describe("ServiceProvider", () => {
         expect(rankingHtml).toContain("ランキング1位作品：最強の剣士");
         expect(searchNovelHtml).toContain("転生令嬢の異世界冒険譚");
         expect(rankingNovelHtml).toContain("ランキング1位作品：最強の剣士");
+        expect(customNovelHtml).toContain("あいうえおの冒険");
       });
     });
 
