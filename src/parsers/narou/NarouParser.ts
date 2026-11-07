@@ -673,7 +673,9 @@ export class NarouParser implements NovelParser {
     if (options?.serialStatus === "running") {
       url.searchParams.set("type", "r");
     } else if (options?.serialStatus === "completed") {
-      url.searchParams.set("type", "ter");
+      url.searchParams.set("type", "er");
+    } else if (options?.serialStatus === "short") {
+      url.searchParams.set("type", "t");
     }
 
     const genres = resolveNarouGenres(options);
@@ -774,6 +776,12 @@ export class NarouParser implements NovelParser {
     const period = options?.period ?? "weekly";
     const orderParam = periodMap[period];
     url.searchParams.set("order", orderParam);
+
+    if (options?.workVariation === "long") {
+      url.searchParams.set("type", "re");
+    } else if (options?.workVariation === "short") {
+      url.searchParams.set("type", "t");
+    }
 
     if (options?.genre && options.genre !== "all" && options.genre.trim()) {
       url.searchParams.set("genre", options.genre.trim());
