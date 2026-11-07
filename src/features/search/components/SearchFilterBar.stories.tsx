@@ -95,3 +95,15 @@ export const NarouMultiGenres: Story = {
     selectedGenres: ["201", "202"],
   },
 };
+
+/**
+ * 検索絞り込みバー（短編選択 / v0.8 Issue #265）
+ */
+export const ShortStorySelected: Story = {
+  name: "短編選択（短編・全ジャンル）",
+  args: {
+    selectedOrder: "weekly_ranking",
+    selectedSerialStatus: "short",
+    selectedGenre: undefined,
+  },
+};

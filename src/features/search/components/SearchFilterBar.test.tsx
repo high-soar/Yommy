@@ -105,6 +105,29 @@ describe("SearchFilterBar コンポーネント", () => {
     expect(handleSerial).toHaveBeenCalledWith("completed");
   });
 
+  it("短編ピル（search-serial-short）が描画され、押下時に onSelectSerialStatus('short') が呼び出されること (AC-SE-04, Issue #265)", async () => {
+    const user = userEvent.setup();
+    const handleSerial = vi.fn();
+
+    render(
+      <SearchFilterBar
+        selectedOrder="weekly_ranking"
+        onSelectOrder={vi.fn()}
+        selectedSerialStatus="short"
+        onSelectSerialStatus={handleSerial}
+        onSelectGenre={vi.fn()}
+      />,
+    );
+
+    const shortPill = screen.getByTestId("search-serial-short");
+    expect(shortPill).toBeInTheDocument();
+    expect(shortPill).toHaveTextContent("短編");
+    expect(shortPill).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(shortPill);
+    expect(handleSerial).toHaveBeenCalledWith("short");
+  });
+
   it("ジャンルピル押下時に onSelectGenre が呼び出されること (カクヨムジャンル)", async () => {
     const user = userEvent.setup();
     const handleGenre = vi.fn();
