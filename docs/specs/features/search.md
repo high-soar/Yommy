@@ -203,6 +203,8 @@ export interface SearchInputBarProps {
   excludeKeyword?: string;
   /** 除外キーワード変更コールバック（v0.8 Issue #264） */
   onChangeExcludeKeyword?: (excludeKeyword: string) => void;
+  /** 除外キーワード入力欄の初期開閉状態（Storybook / テスト用、省略時は excludeKeyword の有無で判定、R1-12） */
+  defaultOpenExclude?: boolean;
   onSubmitSearch: () => void;
   /** 検索通信中フラグ（true時は検索ボタン無効化、テキスト入力は可能維持、v0.7 Issue #238） */
   isLoading?: boolean;

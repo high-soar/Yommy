@@ -179,19 +179,21 @@ describe("NovelDetailHeader", () => {
       expect(synopsis).toHaveClass("overflow-y-auto");
     });
 
-    it("Favorite ストーリーでお気に入り登録済み（★）ボタンが描画され、aria-pressed が true であること (Issue #266)", () => {
+    it("Favorite ストーリーでお気に入り登録済み（★）ボタンが描画され、aria-pressed が true であること (Issue #266, R1-10)", () => {
       render(<Favorite />);
       const favButton = screen.getByTestId("detail-favorite-toggle-button");
       expect(favButton).toBeInTheDocument();
       expect(favButton).toHaveAttribute("aria-pressed", "true");
+      expect(favButton).toHaveAttribute("aria-label", "お気に入り");
       expect(favButton).toHaveTextContent("★ お気に入り済み");
     });
 
-    it("NotFavorite ストーリーでお気に入り未登録（☆）ボタンが描画され、aria-pressed が false であること (Issue #266)", () => {
+    it("NotFavorite ストーリーでお気に入り未登録（☆）ボタンが描画され、aria-pressed が false であること (Issue #266, R1-10)", () => {
       render(<NotFavorite />);
       const favButton = screen.getByTestId("detail-favorite-toggle-button");
       expect(favButton).toBeInTheDocument();
       expect(favButton).toHaveAttribute("aria-pressed", "false");
+      expect(favButton).toHaveAttribute("aria-label", "お気に入り");
       expect(favButton).toHaveTextContent("☆ お気に入り");
     });
   });

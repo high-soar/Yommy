@@ -95,26 +95,26 @@ describe("NovelCard", () => {
       );
     });
 
-    it("Favorite ストーリーでお気に入り登録済み（★）ボタンが描画され、aria-pressed が true であること (Issue #266)", () => {
+    it("Favorite ストーリーでお気に入り登録済み（★）ボタンが描画され、aria-pressed が true であること (Issue #266, R1-10)", () => {
       render(<Favorite />);
       const favButton = screen.getByTestId("novel-card-favorite-button");
       expect(favButton).toBeInTheDocument();
       expect(favButton).toHaveAttribute("aria-pressed", "true");
       expect(favButton).toHaveAttribute(
         "aria-label",
-        `${dummyNovelWithBookmark.title}のお気に入りを解除`,
+        `${dummyNovelWithBookmark.title}のお気に入り`,
       );
       expect(favButton).toHaveTextContent("★");
     });
 
-    it("Unfavorite ストーリーでお気に入り未登録（☆）ボタンが描画され、aria-pressed が false であること (Issue #266)", () => {
+    it("Unfavorite ストーリーでお気に入り未登録（☆）ボタンが描画され、aria-pressed が false であること (Issue #266, R1-10)", () => {
       render(<Unfavorite />);
       const favButton = screen.getByTestId("novel-card-favorite-button");
       expect(favButton).toBeInTheDocument();
       expect(favButton).toHaveAttribute("aria-pressed", "false");
       expect(favButton).toHaveAttribute(
         "aria-label",
-        `${dummyNovelWithBookmark.title}をお気に入りに登録`,
+        `${dummyNovelWithBookmark.title}のお気に入り`,
       );
       expect(favButton).toHaveTextContent("☆");
     });

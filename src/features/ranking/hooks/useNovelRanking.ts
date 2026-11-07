@@ -87,6 +87,13 @@ export function useNovelRanking(): UseNovelRankingResult {
     selectedSiteRef.current = selectedSite;
   }, [selectedSite]);
 
+  useEffect(() => {
+    return () => {
+      // アンマウント時に世代を進め、完了後のステート更新を防止 (R1-08)
+      requestIdRef.current += 1;
+    };
+  }, []);
+
   /**
    * DB内の登録済み作品ID一覧を更新（サイト切替時は targetSite を明示して照合）
    */
@@ -159,8 +166,9 @@ export function useNovelRanking(): UseNovelRankingResult {
           setItems([]);
         }
       } finally {
+        // 世代に関わらず通信完了時は isFetchingRef を確実に解除し永久ロックを防止 (R1-08)
+        isFetchingRef.current = false;
         if (currentRequestId === requestIdRef.current) {
-          isFetchingRef.current = false;
           setIsLoading(false);
         }
       }

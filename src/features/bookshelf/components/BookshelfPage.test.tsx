@@ -4,6 +4,8 @@ import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./BookshelfPage.stories";
 import { BookshelfPage } from "./BookshelfPage";
+import * as BookshelfEmptyStateModule from "./BookshelfEmptyState";
+import * as NovelCardModule from "./NovelCard";
 import type { NovelSummary } from "../../../storage/types";
 
 const {
@@ -347,8 +349,11 @@ describe("BookshelfPage", () => {
       expect(onToggleFavoriteFilter).toHaveBeenCalledTimes(1);
     });
 
-    it("favoriteOnly === true かつ totalNovelsCount > 0 かつ novels.length === 0 のとき、bookshelf-favorite-empty が表示され解除ボタン押下で onToggleFavoriteFilter が呼ばれること (Issue #266)", async () => {
-      const user = userEvent.setup();
+    it("favoriteOnly === true かつ totalNovelsCount > 0 かつ novels.length === 0 のとき、BookshelfEmptyState に isFavoriteFilterActive=true と解除コールバックが正しく伝搬されること (Issue #266, R1-04)", () => {
+      const emptyStateSpy = vi.spyOn(
+        BookshelfEmptyStateModule,
+        "BookshelfEmptyState",
+      );
       const onToggleFavoriteFilter = vi.fn();
 
       render(
@@ -363,17 +368,28 @@ describe("BookshelfPage", () => {
         />,
       );
 
-      expect(
-        screen.getByTestId("bookshelf-favorite-empty"),
-      ).toBeInTheDocument();
-      expect(screen.queryByTestId("bookshelf-empty")).not.toBeInTheDocument();
+      expect(emptyStateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isFavoriteFilterActive: true,
+          onClearFavoriteFilter: onToggleFavoriteFilter,
+        }),
+        undefined,
+      );
 
-      const clearBtn = screen.getByTestId("empty-clear-favorite-filter-button");
-      await user.click(clearBtn);
+      const passedProps =
+        emptyStateSpy.mock.calls[emptyStateSpy.mock.calls.length - 1][0];
+      passedProps.onClearFavoriteFilter?.();
       expect(onToggleFavoriteFilter).toHaveBeenCalledTimes(1);
+
+      emptyStateSpy.mockRestore();
     });
 
-    it("favoriteOnly === true でも totalNovelsCount === 0 のときは通常空状態（bookshelf-empty）が表示されること (Issue #266)", () => {
+    it("favoriteOnly === true でも totalNovelsCount === 0 のときは通常空状態（isFavoriteFilterActive なし）が BookshelfEmptyState へ伝搬すること (Issue #266, R1-04)", () => {
+      const emptyStateSpy = vi.spyOn(
+        BookshelfEmptyStateModule,
+        "BookshelfEmptyState",
+      );
+
       render(
         <BookshelfPage
           novels={[]}
@@ -385,14 +401,18 @@ describe("BookshelfPage", () => {
         />,
       );
 
-      expect(screen.getByTestId("bookshelf-empty")).toBeInTheDocument();
-      expect(
-        screen.queryByTestId("bookshelf-favorite-empty"),
-      ).not.toBeInTheDocument();
+      expect(emptyStateSpy).toHaveBeenCalledWith(
+        expect.not.objectContaining({
+          isFavoriteFilterActive: true,
+        }),
+        undefined,
+      );
+
+      emptyStateSpy.mockRestore();
     });
 
-    it("NovelCard のお気に入りボタンをクリックしたときに onToggleFavoriteNovel が呼び出されること (Issue #266)", async () => {
-      const user = userEvent.setup();
+    it("onToggleFavoriteNovel が指定された場合、各 NovelCard にコールバックが正しく伝搬されること (Issue #266, R1-04)", () => {
+      const novelCardSpy = vi.spyOn(NovelCardModule, "NovelCard");
       const onToggleFavoriteNovel = vi.fn();
 
       render(
@@ -405,13 +425,22 @@ describe("BookshelfPage", () => {
         />,
       );
 
-      const favButtons = screen.getAllByTestId("novel-card-favorite-button");
-      await user.click(favButtons[0]);
+      expect(novelCardSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          novel: sampleNovels[0],
+          onToggleFavorite: onToggleFavoriteNovel,
+        }),
+        undefined,
+      );
 
+      const passedProps = novelCardSpy.mock.calls[0][0];
+      passedProps.onToggleFavorite?.(sampleNovels[0].id, true);
       expect(onToggleFavoriteNovel).toHaveBeenCalledWith(
         sampleNovels[0].id,
         true,
       );
+
+      novelCardSpy.mockRestore();
     });
   });
 });

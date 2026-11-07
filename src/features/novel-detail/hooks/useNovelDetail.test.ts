@@ -663,8 +663,7 @@ describe("useNovelDetail", () => {
         wrapper: createWrapper({
           novelRepository: novelRepo,
           chapterRepository: chapterRepo,
-          // @ts-expect-error Mocking syncEngine for hook test
-          syncEngine: mockSyncEngine,
+          syncEngine: mockSyncEngine as unknown as SyncEngine,
         }),
       });
 
@@ -697,8 +696,7 @@ describe("useNovelDetail", () => {
         wrapper: createWrapper({
           novelRepository: novelRepo,
           chapterRepository: chapterRepo,
-          // @ts-expect-error Mocking syncEngine for hook test
-          syncEngine: mockSyncEngine,
+          syncEngine: mockSyncEngine as unknown as SyncEngine,
         }),
       });
 

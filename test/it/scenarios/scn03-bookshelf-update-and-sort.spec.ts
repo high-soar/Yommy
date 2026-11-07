@@ -328,7 +328,7 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
     await expect(favButtonWork1).toHaveAttribute("aria-pressed", "false");
     await expect(favButtonWork1).toHaveAttribute(
       "aria-label",
-      "境界迷宮と異界の魔術師をお気に入りに登録",
+      "境界迷宮と異界の魔術師のお気に入り",
     );
 
     // 作品1をお気に入りに登録（クリックで詳細画面へ遷移せず、その場で切り替わること: stopPropagation）
@@ -337,7 +337,7 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
     await expect(favButtonWork1).toHaveAttribute("aria-pressed", "true");
     await expect(favButtonWork1).toHaveAttribute(
       "aria-label",
-      "境界迷宮と異界の魔術師のお気に入りを解除",
+      "境界迷宮と異界の魔術師のお気に入り",
     );
 
     // DB に is_favorite = 1 と updated_at 更新が反映されていることを確認
@@ -575,14 +575,34 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
     await expect(favRefreshBtn).toBeEnabled();
     await favRefreshBtn.click();
 
-    // 1作品のため高速に完了: 進捗表示が消去され、更新ボタンが再活性化されることを待機 (TR-17)
+    // 更新完了後に進捗表示が非表示となり、更新ボタンが再活性化されることを待機 (TR-17)
+    await expect(favRefreshBtn).toBeEnabled({ timeout: 15000 });
     await expect(
       page.getByTestId("bookshelf-refresh-progress"),
-    ).not.toBeVisible({ timeout: 15000 });
-    await expect(favRefreshBtn).toBeEnabled();
+    ).not.toBeVisible();
 
     // DB の各作品 last_checked_at を検証:
-    // 作品1（お気に入り・表示中）は更新され、作品2（非お気に入り・除外中）は threeHoursAgo のままであること！
+    // expect.poll で作品1（お気に入り・表示中）の last_checked_at が更新されることをポーリング待機 (R1-14)
+    await expect
+      .poll(
+        async () => {
+          return await page.evaluate(async () => {
+            const services = window.__yommyServices!;
+            const rows = await services.databaseAdapter.query<{
+              id: string;
+              last_checked_at: string;
+            }>("SELECT id, last_checked_at FROM novels ORDER BY id");
+            const work1 = rows.find(
+              (r) => r.id === "kakuyomu:16817330658027210412",
+            );
+            if (!work1) return -1;
+            return Date.now() - new Date(work1.last_checked_at).getTime();
+          });
+        },
+        { timeout: 15000 },
+      )
+      .toBeLessThan(30000);
+
     const checkedRows = await page.evaluate(async () => {
       const services = window.__yommyServices!;
       const rows = await services.databaseAdapter.query<{

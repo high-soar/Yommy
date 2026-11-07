@@ -364,9 +364,37 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     await expect(page).toHaveURL("/settings");
     const syncNowBtnStep3 = page.getByTestId("cloud-sync-now-button");
     await expect(syncNowBtnStep3).toBeVisible();
-    await syncNowBtnStep3.click();
-    await expect(syncNowBtnStep3).toHaveText("今すぐ同期", { timeout: 10000 });
     await expect(syncNowBtnStep3).toBeEnabled();
+    await syncNowBtnStep3.click();
+
+    // 同期完了待機: 「今すぐ同期」が再活性化されることを待機 (TR-17, R1-14)
+    await expect(syncNowBtnStep3).toBeEnabled({ timeout: 15000 });
+    await expect(syncNowBtnStep3).toHaveText("今すぐ同期");
+
+    // 設定画面にいる段階で、手動同期によってローカル DB の is_favorite がリモート値で更新されたことをポーリング検証 (R1-14)
+    // （これにより、本棚画面への遷移時（再マウント時）の自動 Pull ではなく手動同期が正しく反映されたことを保証する）
+    await expect
+      .poll(
+        async () => {
+          return await page.evaluate(async () => {
+            const services = window.__yommyServices!;
+            const narou =
+              await services.novelRepository.getNovelById("narou:n9669bk");
+            const kakuyomu = await services.novelRepository.getNovelById(
+              "kakuyomu:16817330658027210412",
+            );
+            return {
+              narouFav: narou?.isFavorite,
+              kakuyomuFav: kakuyomu?.isFavorite,
+            };
+          });
+        },
+        { timeout: 15000 },
+      )
+      .toEqual({
+        narouFav: true,
+        kakuyomuFav: false,
+      });
 
     // 4. 本棚へ戻り、既存作品に対するリモートのお気に入り変更がローカルに反映されたことを確認
     await page.getByTestId("tab-bookshelf").click();

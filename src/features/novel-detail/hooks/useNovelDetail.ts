@@ -86,9 +86,10 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
   const [error, setError] = useState<string | null>(null);
 
   const isBatchCachingRef = useRef<boolean>(false);
+  const isTogglingFavoriteRef = useRef<boolean>(false);
   const batchAbortControllerRef = useRef<AbortController | null>(null);
 
-  // アンマウント時の一括キャッシュ中断クリーンアップ
+  // アンマウント時の一括キャッシュ中断およびお気に入りトグルクリーンアップ
   useEffect(() => {
     return () => {
       if (batchAbortControllerRef.current) {
@@ -96,6 +97,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
         batchAbortControllerRef.current = null;
       }
       isBatchCachingRef.current = false;
+      isTogglingFavoriteRef.current = false;
     };
   }, []);
 
@@ -541,10 +543,12 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
   /**
    * 作品のお気に入り（★）状態を反転登録/解除し、DB永続化およびクラウド同期通知を行う。
    * 排他処理中または作品未読み込み時は操作をガードして false を返す。
+   * 多重タップ防止ガード（isTogglingFavoriteRef）および stale state 防止関数型更新を適用 (R1-09)
    */
   const toggleFavorite = useCallback(async (): Promise<boolean> => {
     if (
       !novel ||
+      isTogglingFavoriteRef.current ||
       isDeleting ||
       isRefreshing ||
       isBatchCaching ||
@@ -554,23 +558,28 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
       return false;
     }
 
+    isTogglingFavoriteRef.current = true;
     const nextIsFavorite = !novel.isFavorite;
+    let isSuccess = false;
     try {
       await novelRepository.setFavorite(novelId, nextIsFavorite);
       const nowIso = new Date().toISOString();
-      setNovel({
-        ...novel,
+      setNovel((prev) => ({
+        ...prev!,
         isFavorite: nextIsFavorite,
         updatedAt: nowIso,
-      });
+      }));
       if (syncEngine) {
         syncEngine.notifyChanged().catch(() => {});
       }
-      return true;
+      isSuccess = true;
     } catch (err: unknown) {
       setError(extractErrorMessage(err, DEFAULT_TOGGLE_FAVORITE_ERROR_MESSAGE));
-      return false;
+      isSuccess = false;
+    } finally {
+      isTogglingFavoriteRef.current = false;
     }
+    return isSuccess;
   }, [
     novel,
     isDeleting,

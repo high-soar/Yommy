@@ -1749,6 +1749,53 @@ describe("useNovelSearch", () => {
       );
     });
 
+    it("検索実行後に input（keyword / excludeKeyword）を編集しても、loadMore は実行済みの検索条件を維持して次ページを読み込むこと (AC-SE-08, R1-07)", async () => {
+      const getHtmlSpy = vi.spyOn(mockHttpClient, "getHtml");
+      const { result } = renderHook(() => useNovelSearch(), {
+        wrapper: createWrapper(),
+      });
+
+      // 1. 初回検索を実行
+      act(() => {
+        result.current.setKeyword("魔法");
+        result.current.setExcludeKeyword("チート");
+      });
+
+      await act(async () => {
+        await result.current.search();
+      });
+
+      expect(getHtmlSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          url: expect.stringContaining(
+            "q=%E9%AD%94%E6%B3%95+-%E3%83%81%E3%83%BC%E3%83%88",
+          ),
+        }),
+      );
+
+      // 2. 検索実行後に input を未確定で変更（再検索は実行しない）
+      act(() => {
+        result.current.setKeyword("ドラゴン");
+        result.current.setExcludeKeyword("ハーレム");
+      });
+
+      // 3. loadMore を実行
+      await act(async () => {
+        await result.current.loadMore();
+      });
+
+      // loadMore でリクエストされた URL は変更後の「ドラゴン/ハーレム」ではなく、
+      // 実行済み条件「魔法/チート」の page=2 であること (R1-07)
+      const lastUrl =
+        getHtmlSpy.mock.calls[getHtmlSpy.mock.calls.length - 1][0].url;
+      expect(lastUrl).toContain("page=2");
+      expect(lastUrl).toContain(
+        "q=%E9%AD%94%E6%B3%95+-%E3%83%81%E3%83%BC%E3%83%88",
+      );
+      expect(lastUrl).not.toContain("ドラゴン");
+      expect(lastUrl).not.toContain("ハーレム");
+    });
+
     it("genres の初期値が空配列で、setGenre による追加・トグル解除・全解除が正しく動作すること", async () => {
       const { result } = renderHook(() => useNovelSearch(), {
         wrapper: createWrapper(),

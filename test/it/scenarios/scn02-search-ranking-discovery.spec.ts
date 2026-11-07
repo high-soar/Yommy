@@ -512,6 +512,22 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
   test("検索画面で除外キーワード指定および複数ジャンル選択による高度絞り込み検索が正常に機能すること (AC-SE-11)", async ({
     page,
   }) => {
+    // 0. HTTP クライアントのリクエスト URL を捕捉してクエリパラメータを検証できるようにする (R1-03)
+    await page.evaluate(() => {
+      const services = window.__yommyServices!;
+      const client = services.httpClient as unknown as {
+        getHtml: (options: { url: string }) => Promise<unknown>;
+      };
+      (window as unknown as { __capturedUrls: string[] }).__capturedUrls = [];
+      const origGetHtml = client.getHtml.bind(client);
+      client.getHtml = async (options: { url: string }) => {
+        (window as unknown as { __capturedUrls: string[] }).__capturedUrls.push(
+          options.url,
+        );
+        return origGetHtml(options);
+      };
+    });
+
     // 1. 検索画面へ移動
     const tabSearch = page.getByTestId("tab-search");
     await tabSearch.click();
@@ -562,6 +578,19 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     );
     await expect(searchCard1).toBeVisible();
 
+    // カクヨム検索 URL のクエリパラメータ検証 (AC-SE-11, R1-03)
+    const kakuyomuSearchUrl = await page.evaluate(() => {
+      const urls = (window as unknown as { __capturedUrls: string[] })
+        .__capturedUrls;
+      return urls.find((u) => u.startsWith("https://kakuyomu.jp/search"));
+    });
+    expect(kakuyomuSearchUrl).toBeDefined();
+    const kakuyomuUrlObj = new URL(kakuyomuSearchUrl!);
+    expect(kakuyomuUrlObj.searchParams.get("q")).toBe("異世界 -チート");
+    expect(kakuyomuUrlObj.searchParams.get("genre_name")).toBe(
+      "fantasy,action",
+    );
+
     // 6. 小説家になろうへサイト切り替え（除外キーワードが維持され、ジャンルがリセットされること）
     const siteNarouSearch = searchPage.getByTestId("site-selector-narou");
     await siteNarouSearch.click();
@@ -588,11 +617,42 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     // 7. 再検索実行
     await searchSubmit.click();
     await expect(searchList).toBeVisible();
+
+    // なろう検索 URL のクエリパラメータ検証 (AC-SE-11, R1-03)
+    const narouSearchUrl = await page.evaluate(() => {
+      const urls = (window as unknown as { __capturedUrls: string[] })
+        .__capturedUrls;
+      return urls
+        .slice()
+        .reverse()
+        .find((u) => u.startsWith("https://api.syosetu.com/novelapi/api/"));
+    });
+    expect(narouSearchUrl).toBeDefined();
+    const narouUrlObj = new URL(narouSearchUrl!);
+    expect(narouUrlObj.searchParams.get("word")).toBe("異世界");
+    expect(narouUrlObj.searchParams.get("notword")).toBe("チート");
+    expect(narouUrlObj.searchParams.get("genre")).toBe("101-201");
   });
 
-  test("ランキングおよび検索画面で作品種別（短編・長編・すべて）の切替とサイト切替時の状態保持が正常に機能すること (AC-RK-10, AC-SE-12, Issue #265)", async ({
+  test("ランキングおよび検索画面で作品種別（短編・長編・すべて）の切替とサイト切替時の状態保持が正常に機能すること (AC-RK-10, AC-SE-04, AC-SE-10, Issue #265)", async ({
     page,
   }) => {
+    // 0. HTTP クライアントのリクエスト URL を捕捉して作品種別パラメータを検証 (R1-03)
+    await page.evaluate(() => {
+      const services = window.__yommyServices!;
+      const client = services.httpClient as unknown as {
+        getHtml: (options: { url: string }) => Promise<unknown>;
+      };
+      (window as unknown as { __capturedUrls: string[] }).__capturedUrls = [];
+      const origGetHtml = client.getHtml.bind(client);
+      client.getHtml = async (options: { url: string }) => {
+        (window as unknown as { __capturedUrls: string[] }).__capturedUrls.push(
+          options.url,
+        );
+        return origGetHtml(options);
+      };
+    });
+
     // 1. ランキング画面へ移動
     const tabRanking = page.getByTestId("tab-ranking");
     await tabRanking.click();
@@ -615,6 +675,20 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     await expect(variationLong).toHaveAttribute("aria-pressed", "false");
     await expect(rankingList).toBeVisible();
 
+    // カクヨム短編ランキング URL パラメータ検証 (work_variation=short: R1-03)
+    const kakuyomuShortRankingUrl = await page.evaluate(() => {
+      const urls = (window as unknown as { __capturedUrls: string[] })
+        .__capturedUrls;
+      return urls
+        .slice()
+        .reverse()
+        .find((u) => u.startsWith("https://kakuyomu.jp/rankings/"));
+    });
+    expect(kakuyomuShortRankingUrl).toBeDefined();
+    expect(
+      new URL(kakuyomuShortRankingUrl!).searchParams.get("work_variation"),
+    ).toBe("short");
+
     // なろうへサイト切り替え -> 作品種別「短編」が維持されていること
     const siteNarouRanking = page.getByTestId("site-selector-narou");
     await siteNarouRanking.click();
@@ -622,10 +696,34 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     await expect(variationShort).toHaveAttribute("aria-pressed", "true");
     await expect(rankingList).toBeVisible();
 
+    // なろう短編ランキング URL パラメータ検証 (type=t: R1-03)
+    const narouShortRankingUrl = await page.evaluate(() => {
+      const urls = (window as unknown as { __capturedUrls: string[] })
+        .__capturedUrls;
+      return urls
+        .slice()
+        .reverse()
+        .find((u) => u.startsWith("https://api.syosetu.com/novelapi/api/"));
+    });
+    expect(narouShortRankingUrl).toBeDefined();
+    expect(new URL(narouShortRankingUrl!).searchParams.get("type")).toBe("t");
+
     // なろうで「すべて」を選択
     await variationAll.click();
     await expect(variationAll).toHaveAttribute("aria-pressed", "true");
     await expect(rankingList).toBeVisible();
+
+    // なろう「すべて」ランキング URL パラメータ検証 (type パラメータなし: R1-03)
+    const narouAllRankingUrl = await page.evaluate(() => {
+      const urls = (window as unknown as { __capturedUrls: string[] })
+        .__capturedUrls;
+      return urls
+        .slice()
+        .reverse()
+        .find((u) => u.startsWith("https://api.syosetu.com/novelapi/api/"));
+    });
+    expect(narouAllRankingUrl).toBeDefined();
+    expect(new URL(narouAllRankingUrl!).searchParams.get("type")).toBeNull();
 
     // カクヨムへサイト切り替え -> 作品種別「すべて」が維持されていること
     const siteKakuyomuRanking = page.getByTestId("site-selector-kakuyomu");
@@ -633,6 +731,20 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     await expect(siteKakuyomuRanking).toHaveAttribute("aria-pressed", "true");
     await expect(variationAll).toHaveAttribute("aria-pressed", "true");
     await expect(rankingList).toBeVisible();
+
+    // カクヨム「すべて」ランキング URL パラメータ検証 (work_variation=all: R1-03)
+    const kakuyomuAllRankingUrl = await page.evaluate(() => {
+      const urls = (window as unknown as { __capturedUrls: string[] })
+        .__capturedUrls;
+      return urls
+        .slice()
+        .reverse()
+        .find((u) => u.startsWith("https://kakuyomu.jp/rankings/"));
+    });
+    expect(kakuyomuAllRankingUrl).toBeDefined();
+    expect(
+      new URL(kakuyomuAllRankingUrl!).searchParams.get("work_variation"),
+    ).toBe("all");
 
     // 2. 検索画面へ移動
     const tabSearch = page.getByTestId("tab-search");
@@ -660,11 +772,37 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     const searchList = page.getByTestId("search-results-list");
     await expect(searchList).toBeVisible();
 
+    // カクヨム短編検索 URL パラメータ検証 (serial_status=completed: R1-03)
+    const kakuyomuShortSearchUrl = await page.evaluate(() => {
+      const urls = (window as unknown as { __capturedUrls: string[] })
+        .__capturedUrls;
+      return urls
+        .slice()
+        .reverse()
+        .find((u) => u.startsWith("https://kakuyomu.jp/search"));
+    });
+    expect(kakuyomuShortSearchUrl).toBeDefined();
+    expect(
+      new URL(kakuyomuShortSearchUrl!).searchParams.get("serial_status"),
+    ).toBe("completed");
+
     // なろうへサイト切り替え -> 連載状況「短編」が維持されていること
     const siteNarouSearch = page.getByTestId("site-selector-narou");
     await siteNarouSearch.click();
     await expect(siteNarouSearch).toHaveAttribute("aria-pressed", "true");
     await expect(serialShort).toHaveAttribute("aria-pressed", "true");
     await expect(searchList).toBeVisible();
+
+    // なろう短編検索 URL パラメータ検証 (type=t: R1-03)
+    const narouShortSearchUrl = await page.evaluate(() => {
+      const urls = (window as unknown as { __capturedUrls: string[] })
+        .__capturedUrls;
+      return urls
+        .slice()
+        .reverse()
+        .find((u) => u.startsWith("https://api.syosetu.com/novelapi/api/"));
+    });
+    expect(narouShortSearchUrl).toBeDefined();
+    expect(new URL(narouShortSearchUrl!).searchParams.get("type")).toBe("t");
   });
 });

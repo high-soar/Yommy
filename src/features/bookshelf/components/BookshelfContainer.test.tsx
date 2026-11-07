@@ -1,10 +1,11 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./BookshelfContainer.stories";
 import { BookshelfContainer } from "./BookshelfContainer";
+import * as BookshelfPageModule from "./BookshelfPage";
 import { ServiceProvider } from "../../../app/ServiceProvider";
 import { RouterProvider, useRouter } from "../../../app/router";
 import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
@@ -429,8 +430,8 @@ describe("BookshelfContainer", () => {
       });
     });
 
-    it("ヘッダーのお気に入りフィルタボタンをクリックしたときにお気に入りフィルタが切り替わること (Issue #266)", async () => {
-      const user = userEvent.setup();
+    it("子コンポーネント（BookshelfPage）の onToggleFavoriteFilter コールバック呼び出し時にお気に入りフィルタが切り替わり、BookshelfPage の favoriteOnly プロパティが更新されること (Issue #266, R1-04)", async () => {
+      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
       const now = new Date().toISOString();
       const favNovel: NovelSummary = {
         ...sampleNovels[0],
@@ -458,22 +459,39 @@ describe("BookshelfContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getAllByTestId("novel-card")).toHaveLength(2);
-      });
-
-      const filterBtn = screen.getByTestId("bookshelf-favorite-filter-button");
-      await user.click(filterBtn);
-
-      await waitFor(() => {
-        expect(screen.getAllByTestId("novel-card")).toHaveLength(1);
-        expect(screen.getByTestId("novel-card-title")).toHaveTextContent(
-          "お気に入り作品",
+        expect(pageSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            favoriteOnly: false,
+            novels: expect.arrayContaining([
+              expect.objectContaining({ id: "kakuyomu:fav-1" }),
+              expect.objectContaining({ id: "kakuyomu:norm-1" }),
+            ]),
+          }),
+          undefined,
         );
       });
+
+      // BookshelfPage に渡された onToggleFavoriteFilter を直接実行（孫 DOM 操作を排除）
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onToggleFavoriteFilter?.();
+      });
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            favoriteOnly: true,
+            novels: [expect.objectContaining({ id: "kakuyomu:fav-1" })],
+          }),
+          undefined,
+        );
+      });
+
+      pageSpy.mockRestore();
     });
 
-    it("作品カードのお気に入りボタンをクリックしたときにお気に入り状態がトグルされること (Issue #266)", async () => {
-      const user = userEvent.setup();
+    it("子コンポーネント（BookshelfPage）の onToggleFavoriteNovel コールバック呼び出し時にお気に入り状態がトグルされること (Issue #266, R1-04)", async () => {
+      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
       const normalNovel: NovelSummary = {
         ...sampleNovels[0],
         id: "kakuyomu:16817330658027210412",
@@ -481,7 +499,7 @@ describe("BookshelfContainer", () => {
         lastCheckedAt: new Date().toISOString(),
       };
 
-      const setFavoriteSpy = vi.fn();
+      const setFavoriteSpy = vi.fn().mockResolvedValue(undefined);
       const novelRepo = {
         ...createMockNovelRepo([normalNovel]),
         setFavorite: setFavoriteSpy,
@@ -496,16 +514,31 @@ describe("BookshelfContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("novel-card")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            novels: [
+              expect.objectContaining({ id: "kakuyomu:16817330658027210412" }),
+            ],
+          }),
+          undefined,
+        );
       });
 
-      const favBtn = screen.getByTestId("novel-card-favorite-button");
-      await user.click(favBtn);
+      // BookshelfPage に渡された onToggleFavoriteNovel を直接実行（孫 DOM 操作を排除）
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      await act(async () => {
+        await lastProps.onToggleFavoriteNovel?.(
+          "kakuyomu:16817330658027210412",
+          true,
+        );
+      });
 
       expect(setFavoriteSpy).toHaveBeenCalledWith(
         "kakuyomu:16817330658027210412",
         true,
       );
+
+      pageSpy.mockRestore();
     });
   });
 });

@@ -677,6 +677,9 @@ describe("syncEngine", () => {
       expect(localNovel?.title).toBe("境界迷宮と異界の魔術師");
       expect(localNovel?.bookmarkChapterIndex).toBe(2);
       expect(localNovel?.bookmarkScrollProgress).toBe(0.0);
+      expect(localNovel?.isFavorite).toBe(true);
+      // R1-19: 新規作品取込時にリモートの updatedAt がローカルに維持されること
+      expect(localNovel?.updatedAt).toBe("2026-10-31T10:00:00.000Z");
 
       const chapters = await chapterRepo.listChaptersByNovelId(
         "kakuyomu:16817330658027210412",
@@ -2792,6 +2795,7 @@ describe("syncEngine", () => {
       const chapterRepo = new SqlChapterRepository(db);
       const appSettingsRepo = new SqlAppSettingsRepository(db);
       const bridge = new MockCloudSyncBridge();
+      await bridge.signIn();
       const parserRegistry = createDefaultParserRegistry();
       const httpClient = new MockHttpClient();
 
@@ -2845,6 +2849,92 @@ describe("syncEngine", () => {
         "401 Unauthorized",
       );
       expect(signOutSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("ローカル作品で更新チェック（upsertNovelWithToc）やしおり更新が実行されても novels.updated_at が進まず、リモートのお気に入り更新が LWW で反映されること (R1-01, R1-19)", async () => {
+      await resetTestDb();
+      const db = await createInMemoryDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const appSettingsRepo = new SqlAppSettingsRepository(db);
+      const bridge = new MockCloudSyncBridge();
+      await bridge.signIn();
+      const parserRegistry = createDefaultParserRegistry();
+      const httpClient = new MockHttpClient();
+
+      const initialTime = "2026-10-10T00:00:00.000Z";
+      const parser = parserRegistry.getParser(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      )!;
+      const index = await parser.parseNovelIndex(
+        workIndexHtml,
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      await novelRepo.upsertNovelWithToc(index, initialTime);
+      const seeded = await novelRepo.getNovelById(
+        "kakuyomu:16817330658027210412",
+      );
+      expect(seeded?.updatedAt).toBe(initialTime);
+
+      // リモート端末 A で時刻 T2 にお気に入り ON
+      const remoteFavoriteTime = "2026-10-20T10:00:00.000Z";
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: remoteFavoriteTime,
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            id: "kakuyomu:16817330658027210412",
+            siteType: "kakuyomu",
+            remoteWorkId: "16817330658027210412",
+            canonicalUrl: "https://kakuyomu.jp/works/16817330658027210412",
+            title: "境界迷宮と異界の魔術師",
+            author: "小野崎",
+            synopsis: "あらすじ本文",
+            totalChapters: 3,
+            isFavorite: 1,
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: null,
+            bookmarkChapterIndex: 1,
+            lastReadAt: "2026-10-15T00:00:00.000Z",
+            readChapterIds: [],
+            createdAt: initialTime,
+            updatedAt: remoteFavoriteTime,
+          },
+        },
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      // ローカル端末 B で時刻 T3 に更新チェックおよびしおり更新を実行
+      const checkTime = "2026-10-25T00:00:00.000Z";
+      await novelRepo.upsertNovelWithToc(index, checkTime);
+      await novelRepo.updateBookmark("kakuyomu:16817330658027210412", 2, 0.5);
+
+      // ローカルの updatedAt は T1 のまま維持されていること
+      const localBeforePull = await novelRepo.getNovelById(
+        "kakuyomu:16817330658027210412",
+      );
+      expect(localBeforePull?.updatedAt).toBe(initialTime);
+      expect(localBeforePull?.isFavorite).toBe(false);
+
+      // Pull 実行 -> remoteFavoriteTime (T2) > localUpdatedAt (T1) によりお気に入りが反映される
+      const engine = new SyncEngine({
+        bridge,
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        appSettingsRepository: appSettingsRepo,
+        parserRegistry,
+        httpClient,
+      });
+
+      const pullResult = await engine.pullAndMerge();
+      expect(pullResult.pulled).toBe(true);
+
+      const localAfterPull = await novelRepo.getNovelById(
+        "kakuyomu:16817330658027210412",
+      );
+      expect(localAfterPull?.isFavorite).toBe(true);
+      expect(localAfterPull?.updatedAt).toBe(remoteFavoriteTime);
     });
   });
 });

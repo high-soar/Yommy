@@ -249,10 +249,12 @@ src/features/bookshelf/
 
 #### プロパティ契約（`BookshelfContainerProps`）
 
-| プロパティ名    | 型                                                | 必須 | 説明                                                                                                                        |
-| :-------------- | :------------------------------------------------ | :--- | :-------------------------------------------------------------------------------------------------------------------------- |
-| `onSelectNovel` | `(novelId: string) => void`                       | 任意 | 作品カード本体タップ時の遷移コールバック（省略時は `clearNovelUpdate` 実行後に `useRouter().navigateToNovelDetail` を使用） |
-| `onResumeNovel` | `(novelId: string, chapterIndex: number) => void` | 任意 | 「続きから読む」タップ時の遷移コールバック（省略時は `clearNovelUpdate` 実行後に `useRouter().navigateToReader` を使用）    |
+| プロパティ名        | 型                                                | 必須 | 説明                                                                                                                        |
+| :------------------ | :------------------------------------------------ | :--- | :-------------------------------------------------------------------------------------------------------------------------- |
+| `onSelectNovel`     | `(novelId: string) => void`                       | 任意 | 作品カード本体タップ時の遷移コールバック（省略時は `clearNovelUpdate` 実行後に `useRouter().navigateToNovelDetail` を使用） |
+| `onResumeNovel`     | `(novelId: string, chapterIndex: number) => void` | 任意 | 「続きから読む」タップ時の遷移コールバック（省略時は `clearNovelUpdate` 実行後に `useRouter().navigateToReader` を使用）    |
+| `onNavigateSearch`  | `() => void`                                      | 任意 | 空状態「小説を検索する」タップ時の遷移コールバック（省略時は `useRouter().navigateToSearch` を使用、R1-22）                 |
+| `onNavigateRanking` | `() => void`                                      | 任意 | 空状態「ランキングを見る」タップ時の遷移コールバック（省略時は `useRouter().navigateToRanking` を使用、R1-22）              |
 
 ---
 
@@ -295,7 +297,7 @@ export interface UseBookshelfResult {
    - ヘッダーの更新ボタン押下時、1時間経過条件にかかわらず、お気に入りフィルタが ON（`favoriteOnly === true`）のときは **お気に入り登録作品のみ** を対象とし、OFF のときは **全登録作品** を対象にバックグラウンド順次更新チェックを開始する。
 4. **ソート順およびお気に入りフィルタ変更と永続化（`setSortOrder` / `setFavoriteOnly` / `toggleFavoriteFilter`）**:
    - ソート順変更時、即時に `appSettingsRepository.setSetting("bookshelf_sort_order", order)` で DB に永続化し、指定順序で `novelRepository.listNovels(order)` を再取得して画面を更新する。
-   - お気に入りフィルタ変更時、即時に `favoriteOnly` State を更新して表示一覧を切り替え、`appSettingsRepository.setSetting("bookshelf_favorite_only", String(favoriteOnly))` で DB に永続化する。
+   - お気に入りフィルタ変更時（`setFavoriteOnly` / `toggleFavoriteFilter`）、まず `appSettingsRepository.setSetting("bookshelf_favorite_only", String(nextFavoriteOnly))` で DB へ永続化し、成功時に State を更新して表示一覧を切り替える。永続化失敗時は State を維持してエラーを設定する（R1-12）。
 5. **作品のお気に入り登録・解除（`toggleFavorite`、`v0.8` Issue #266）**:
    - `novelRepository.setFavorite(novelId, nextIsFavorite)` を呼び出し、SQLite の `novels.is_favorite` と `novels.updated_at`（現在時刻 ISO 8601）を同時更新する。
    - ローカル State の該当作品の `isFavorite` および `updatedAt` を即時更新する（`favoriteOnly === true` のときにお気に入り解除すると即座に表示一覧から除外される）。
@@ -335,7 +337,7 @@ export interface UseBookshelfResult {
 
 本棚画面（`SCR-01`）に関連する E2E 動作は、`test/it/scenarios/` 配下の以下のシナリオで継続回帰検証されます（詳細は [docs/specs/screen-transitions.md §4](../screen-transitions.md#4-playwright-システム結合テストe2e-シナリオ-scn-01--scn-06マッピング) を参照）：
 
-- **`SCN-01`（`test/it/scenarios/scn01-poc-vertical-reader.spec.ts`）**: 空状態表示、作品カード表示、作品詳細遷移、「続きから読む」によるリーダー直行としおり復元（`TR-02`, `TR-03`, `AC-BS-01`〜`07`）。
+- **`SCN-01`（`test/it/scenarios/scn01-poc-vertical-reader.spec.ts`）**: 空状態表示、作品カード表示、作品詳細遷移、「続きから読む」によるリーダー直行としおり復元、OS バックキー2回押下終了トースト（`TR-02`, `TR-03`, `TR-13`, `AC-BS-01`〜`07`, `12`）。
 - **`SCN-02`（`test/it/scenarios/scn02-search-ranking-discovery.spec.ts`）**: 空状態からの検索・ランキング画面への誘導導線および探索画面からの作品追加反映（`TR-15`, `AC-BS-01`）。
-- **`SCN-03`（`test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts`）**: 本棚表示時の自動/手動一括更新チェック、「NEW」バッジ表示と作品詳細/リーダー閲覧による解除、5種ソート切替と永続化、お気に入り登録・解除、本棚お気に入りフィルタ切替・永続化・0件空状態・フィルタ連動手動更新、OS バックキー2回押下終了トースト（`TR-02`, `TR-03`, `TR-13`, `TR-16`, `TR-17`, `AC-BS-08`〜`12`, `14`, `15`）。
+- **`SCN-03`（`test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts`）**: 本棚表示時の自動/手動一括更新チェック、「NEW」バッジ表示と作品詳細/リーダー閲覧による解除、5種ソート切替と永続化、お気に入り登録・解除、本棚お気に入りフィルタ切替・永続化・0件空状態・フィルタ連動手動更新（`TR-02`, `TR-03`, `TR-16`, `TR-17`, `AC-BS-08`〜`11`, `14`, `15`）。
 - **`SCN-05`（`test/it/scenarios/scn05-cloud-sync.spec.ts`）**: Google Drive クラウド同期によるリモート作品・しおり・既読・お気に入り状態（LWW）の本棚自動反映およびお気に入り変更・作品削除時の自動 Push / Tombstone 伝播（`AC-BS-13`, `14`）。
