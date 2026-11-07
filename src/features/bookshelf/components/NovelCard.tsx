@@ -96,11 +96,7 @@ export const NovelCard: React.FC<NovelCardProps> = ({
             type="button"
             data-testid="novel-card-favorite-button"
             aria-pressed={novel.isFavorite}
-            aria-label={
-              novel.isFavorite
-                ? `${novel.title}のお気に入りを解除`
-                : `${novel.title}をお気に入りに登録`
-            }
+            aria-label={`${novel.title}のお気に入り`}
             onClick={handleFavoriteClick}
             className={`inline-flex items-center justify-center w-7 h-7 text-sm rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-amber-500 cursor-pointer ${
               novel.isFavorite

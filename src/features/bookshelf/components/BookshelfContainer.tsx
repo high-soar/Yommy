@@ -36,7 +36,6 @@ export const BookshelfContainer: React.FC<BookshelfContainerProps> = ({
     sortOrder,
     favoriteOnly,
     setSortOrder,
-    setFavoriteOnly: _setFavoriteOnly,
     toggleFavoriteFilter,
     toggleFavorite,
     checkUpdates,

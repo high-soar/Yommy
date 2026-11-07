@@ -197,15 +197,14 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     const sectionHeader = page.getByTestId("chapter-section-header").first();
     await expect(sectionHeader).toBeVisible();
 
-    // あらすじの折りたたみトグル動作を確認（AC-ND-01）
+    // あらすじの折りたたみトグル動作を確認（AC-ND-01, R1-21: 決定論的検証）
     const synopsisToggle = page.getByTestId("synopsis-toggle-button");
-    if (await synopsisToggle.isVisible()) {
-      await expect(synopsisToggle).toHaveText("あらすじを展開");
-      await synopsisToggle.click();
-      await expect(synopsisToggle).toHaveText("あらすじを折りたたむ");
-      await synopsisToggle.click();
-      await expect(synopsisToggle).toHaveText("あらすじを展開");
-    }
+    await expect(synopsisToggle).toBeVisible();
+    await expect(synopsisToggle).toHaveText("あらすじを展開");
+    await synopsisToggle.click();
+    await expect(synopsisToggle).toHaveText("あらすじを折りたたむ");
+    await synopsisToggle.click();
+    await expect(synopsisToggle).toHaveText("あらすじを展開");
 
     // エピソード一覧コンテナが内部スクロール領域として存在することを確認（AC-ND-02）
     const episodeListContainer = page.getByTestId("episode-list-container");

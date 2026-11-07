@@ -82,6 +82,7 @@ export const SearchInputBar: React.FC<SearchInputBarProps> = ({
           type="button"
           data-testid="search-exclude-toggle-button"
           aria-expanded={isExcludeOpen}
+          aria-controls="search-exclude-input"
           aria-label={
             isExcludeOpen
               ? "除外キーワード入力を閉じる"
@@ -129,7 +130,9 @@ export const SearchInputBar: React.FC<SearchInputBarProps> = ({
           </span>
           <input
             type="search"
+            id="search-exclude-input"
             data-testid="search-exclude-input"
+            aria-label="除外キーワード"
             value={excludeKeyword}
             onChange={(e) => onChangeExcludeKeyword?.(e.target.value)}
             placeholder="除外ワード（スペース区切り）"

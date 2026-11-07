@@ -78,33 +78,19 @@ export class SqlChapterRepository implements ChapterRepository {
 
   /**
    * 作品レコードのキャッシュ統計情報（cached_chapters, total_byte_size）を再計算して更新
+   * （本文保存・キャッシュ削除ともにローカル端末のストレージ操作であり作品メタデータ不変のため、
+   *   クラウド同期 LWW 判定保護のために novels.updated_at は更新しない: R1-01）
    * @param novelId 作品ID
-   * @param updatedAt 更新日時（本文保存時はダウンロード日時を指定。キャッシュ削除時はローカル端末解放であり作品メタデータ不変のため省略し updated_at を更新しない: R1-01）
    */
-  private async recalculateNovelStats(
-    novelId: string,
-    updatedAt?: string,
-  ): Promise<void> {
-    if (updatedAt !== undefined) {
-      await this.db.execute(
-        `UPDATE novels
-         SET
-           cached_chapters = (SELECT COUNT(*) FROM chapters WHERE novel_id = ? AND body_html IS NOT NULL),
-           total_byte_size = (SELECT COALESCE(SUM(byte_size), 0) FROM chapters WHERE novel_id = ? AND body_html IS NOT NULL),
-           updated_at = ?
-         WHERE id = ?;`,
-        [novelId, novelId, updatedAt, novelId],
-      );
-    } else {
-      await this.db.execute(
-        `UPDATE novels
-         SET
-           cached_chapters = (SELECT COUNT(*) FROM chapters WHERE novel_id = ? AND body_html IS NOT NULL),
-           total_byte_size = (SELECT COALESCE(SUM(byte_size), 0) FROM chapters WHERE novel_id = ? AND body_html IS NOT NULL)
-         WHERE id = ?;`,
-        [novelId, novelId, novelId],
-      );
-    }
+  private async recalculateNovelStats(novelId: string): Promise<void> {
+    await this.db.execute(
+      `UPDATE novels
+       SET
+         cached_chapters = (SELECT COUNT(*) FROM chapters WHERE novel_id = ? AND body_html IS NOT NULL),
+         total_byte_size = (SELECT COALESCE(SUM(byte_size), 0) FROM chapters WHERE novel_id = ? AND body_html IS NOT NULL)
+       WHERE id = ?;`,
+      [novelId, novelId, novelId],
+    );
   }
 
   async saveChapterBody(
@@ -127,7 +113,7 @@ export class SqlChapterRepository implements ChapterRepository {
         ],
       );
 
-      await this.recalculateNovelStats(novelId, downloadedAt);
+      await this.recalculateNovelStats(novelId);
     });
   }
 

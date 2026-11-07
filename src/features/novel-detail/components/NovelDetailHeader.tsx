@@ -49,6 +49,7 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
           type="button"
           data-testid="detail-favorite-toggle-button"
           aria-pressed={novel.isFavorite}
+          aria-label="お気に入り"
           onClick={onToggleFavorite}
           disabled={isRefreshing || isBatchCaching}
           className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-amber-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed ${

@@ -112,6 +112,19 @@ export function useNovelSearch(): UseNovelSearchResult {
   const isSearchingRef = useRef<boolean>(false);
   const searchGenerationRef = useRef<number>(0);
   const selectedSiteRef = useRef<NovelSiteType>(selectedSite);
+  const committedQueryRef = useRef<{
+    keyword: string;
+    excludeKeyword: string;
+    order: NovelSearchOrder;
+    serialStatus: NovelSerialStatus;
+    genres: string[];
+  }>({
+    keyword,
+    excludeKeyword,
+    order,
+    serialStatus,
+    genres,
+  });
 
   useEffect(() => {
     selectedSiteRef.current = selectedSite;
@@ -188,6 +201,15 @@ export function useNovelSearch(): UseNovelSearchResult {
         const response = await httpClient.getHtml({ url });
         const result = parser.searchNovels(response.html, url);
 
+        // 検索実行成功時の検索条件をスナップショット（次ページ読込用: R1-07）
+        committedQueryRef.current = {
+          keyword,
+          excludeKeyword,
+          order: targetOrder,
+          serialStatus: targetSerial,
+          genres: targetGenres,
+        };
+
         setItems(result.items);
         setCurrentPage(result.pageInfo.currentPage);
         setHasNextPage(result.pageInfo.hasNextPage);
@@ -260,12 +282,13 @@ export function useNovelSearch(): UseNovelSearchResult {
       }
 
       const nextPage = currentPage + 1;
-      const url = parser.buildSearchUrl(keyword, {
-        order,
-        serialStatus,
-        genre: genres[0],
-        genres,
-        excludeKeyword,
+      const query = committedQueryRef.current;
+      const url = parser.buildSearchUrl(query.keyword, {
+        order: query.order,
+        serialStatus: query.serialStatus,
+        genre: query.genres[0],
+        genres: query.genres,
+        excludeKeyword: query.excludeKeyword,
         page: nextPage,
       });
 
@@ -300,11 +323,6 @@ export function useNovelSearch(): UseNovelSearchResult {
     parserRegistry,
     selectedSite,
     currentPage,
-    keyword,
-    excludeKeyword,
-    order,
-    serialStatus,
-    genres,
     httpClient,
   ]);
 

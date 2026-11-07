@@ -231,7 +231,7 @@ export class SqlNovelRepository implements NovelRepository {
           `UPDATE novels
            SET site_type = ?, remote_work_id = ?, canonical_url = ?, title = ?, author = ?, synopsis = ?,
                total_chapters = ?, has_new_update = ?, latest_episode_published_at = ?,
-               last_checked_at = ?, updated_at = ?
+               last_checked_at = ?
            WHERE id = ?;`,
           [
             index.siteType,
@@ -243,7 +243,6 @@ export class SqlNovelRepository implements NovelRepository {
             index.chapters.length,
             hasNewUpdate,
             latestEpisodePublishedAt,
-            fetchedAt,
             fetchedAt,
             id,
           ],
@@ -283,16 +282,16 @@ export class SqlNovelRepository implements NovelRepository {
     const now = new Date().toISOString();
     await this.db.execute(
       `UPDATE novels
-       SET bookmark_chapter_index = ?, bookmark_scroll_progress = ?, last_read_at = ?, updated_at = ?
+       SET bookmark_chapter_index = ?, bookmark_scroll_progress = ?, last_read_at = ?
        WHERE id = ?;`,
-      [chapterIndex, scrollProgress, now, now, novelId],
+      [chapterIndex, scrollProgress, now, novelId],
     );
   }
 
   /**
    * 作品のお気に入り（★）状態を更新する。
    * クラウド同期の LWW 判定整合性を保つため updated_at も現在時刻へ同時更新する。
-   * （docs/specs/db-schema.md §3.1 および docs/specs/changes/issue-266-bookshelf-favorite-and-sync.md に準拠）
+   * （docs/specs/db-schema.md §3.1 および docs/specs/changes/archive/issue-266-bookshelf-favorite-and-sync.md に準拠）
    */
   async setFavorite(novelId: string, isFavorite: boolean): Promise<void> {
     const now = new Date().toISOString();

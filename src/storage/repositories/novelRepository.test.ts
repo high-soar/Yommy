@@ -164,7 +164,8 @@ describe("SqlNovelRepository", () => {
       expect(updatedNovel.isFavorite).toBe(true); // お気に入りが維持されている
       expect(updatedNovel.createdAt).toBe(fetchedAt1); // 初回登録日時が維持されている
       expect(updatedNovel.lastCheckedAt).toBe(fetchedAt2); // 更新確認日時が更新されている
-      expect(updatedNovel.updatedAt).toBe(fetchedAt2);
+      // R1-01: 目次更新（更新チェック）では作品メタデータ（お気に入り等）の LWW 判定を保護するため updatedAt は進めず従前の値を維持する
+      expect(updatedNovel.updatedAt).toBe(fetchedAt1);
       expect(updatedNovel.hasNewUpdate).toBe(true); // 話数増加により NEW フラグが立つ
       expect(updatedNovel.latestEpisodePublishedAt).toBe(
         "2026-01-12T10:00:00.000Z",
@@ -678,6 +679,8 @@ describe("SqlNovelRepository", () => {
       expect(novel?.bookmarkChapterIndex).toBe(2);
       expect(novel?.bookmarkScrollProgress).toBe(0.42);
       expect(novel?.lastReadAt).not.toBeNull();
+      // R1-01: しおり位置・閲覧日時更新時、お気に入り LWW 保護のため updatedAt は更新されないこと
+      expect(novel?.updatedAt).toBe("2026-01-01T00:00:00Z");
     });
   });
 

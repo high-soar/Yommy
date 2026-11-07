@@ -90,6 +90,7 @@ related_tests:
   - src/App.test.tsx
   - src/parsers/narou/NarouParser.test.ts
   - src/parsers/narou/genres.test.ts
+  - src/parsers/kakuyomu/KakuyomuParser.test.ts
   - src/parsers/fetchFullNovelIndex.test.ts
   - src/shared/ui/BottomTabBar.test.tsx
   - src/storage/schema.test.ts
@@ -466,7 +467,7 @@ export type ReaderTheme = "light" | "sepia" | "dark" | "black";
 
 export interface NovelRecord {
   id: string;
-  siteType: "kakuyomu" | "narou";
+  siteType: NovelSiteType;
   remoteWorkId: string;
   canonicalUrl: string;
   title: string;
@@ -798,7 +799,7 @@ export interface CloudSyncBridge {
   - Push 前の作品和集合およびフィールド単位マージ: `pushCurrentState` 実行時（`buildMergedSyncNovels`）、ローカルの `novels` のみでリモートを全上書きするのではなく、リモートに存在する `novels` と和集合をとってマージする（R1-10）。さらにローカルとリモートの双方に存在する作品（かつ新しい `deletedAt` で削除されていない作品）については、リモート値をローカル値で単純上書きせず、フィールド単位のマージ（`readChapterIds` の和集合、`lastReadAt` 比較による `bookmarkChapterIndex` / `lastReadAt` の LWW、`updatedAt` 比較による `isFavorite` / `updatedAt` の LWW）を実施して他端末の最新進捗消失を防止する（R2-01）。
   - 30日経過 Tombstone の自動パージ: 削除日時から30日（`TOMBSTONE_RETENTION_MS` = 30日）以上経過した古い Tombstone はローカル DB（`purgeExpiredDeletedNovels`）およびリモートへの Push 対象から自動的にパージし、同期データ容量の肥大化を防止する（R1-28）。
   - しおり話数のマージ: 同一作品が両端末にある場合、`lastReadAt` が新しい方の `bookmarkChapterIndex` を採用する（話数変更時はスクロール率を `0.0` にリセット、同一話数の場合は端末ローカルのスクロール率を維持）。
-  - お気に入り状態（`isFavorite`）の双方向 LWW マージ（`v0.8` Issue #266）: 同一作品が両端末にある場合の Pull マージ（`mergeExistingNovel`）において、`updateBookmark` がローカル `updated_at` を書き換える前に元の `localNovel.updatedAt` と `remoteNovel.updatedAt` を比較し、`Date.parse(remoteNovel.updatedAt) > Date.parse(localNovel.updatedAt)` の場合は `novelRepository.updateSyncMetadata(novelId, { isFavorite: remoteNovel.isFavorite === 1, updatedAt: remoteNovel.updatedAt })` を呼び出してローカルの `is_favorite` および `updated_at` をリモート側の最新状態へ更新する。これにより Push 時（`buildMergedSyncNovels`）および Pull 時（`mergeExistingNovel` / `mergeNewNovel`）の双方向でお気に入り状態の Last-Write-Wins（LWW）同期が保証される。
+  - お気に入り状態（`isFavorite`）の双方向 LWW マージと `updated_at` 保護規約（`v0.8` Issue #266 / R1-01）: 同一作品が両端末にある場合の Pull マージ（`mergeExistingNovel`）において、ローカル `localNovel.updatedAt` と `remoteNovel.updatedAt` を比較し、`Date.parse(remoteNovel.updatedAt) > Date.parse(localNovel.updatedAt)` の場合は `novelRepository.updateSyncMetadata(novelId, { isFavorite: remoteNovel.isFavorite === 1, updatedAt: remoteNovel.updatedAt })` を呼び出してローカルの `is_favorite` および `updated_at` をリモート側の最新状態へ更新する。また新規作品の Pull マージ（`mergeNewNovel`）時も `updateSyncMetadata` へリモート `updatedAt` を伝播する（R1-19）。さらに、定常的な目次更新チェック（`upsertNovelWithToc`）、読書時のしおり更新（`updateBookmark`）、本文キャッシュ保存・再集計（`saveChapterBody`, `recalculateNovelStats`）、キャッシュ削除（`deleteCachedBodies`）では `novels.updated_at` を更新せず既存値を保持する規律を徹底し、ローカルの定常動作によって `updated_at` が不当に進んで他端末の最新お気に入り状態が上書き消失する競合を防止する（R1-01）。これにより Push 時（`buildMergedSyncNovels`）および Pull 時の双方向でお気に入り状態の確実な Last-Write-Wins（LWW）同期が保証される。
   - 既読状態のマージ: 両端末の既読エピソード ID の和集合（Union）を採用する。
 - **自動同期トリガーと排他・デバウンス制御**:
   - 未連携時のガード: `cloudSyncBridge.getAuthState()` が `connected` 状態でない場合、`pullAndMerge()` および `pushCurrentState()` は通信を行わず即座に安全にリターンする（R1-14）。

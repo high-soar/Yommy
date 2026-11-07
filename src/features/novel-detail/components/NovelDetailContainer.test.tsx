@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./NovelDetailContainer.stories";
 import { NovelDetailContainer } from "./NovelDetailContainer";
+import * as NovelDetailPageModule from "./NovelDetailPage";
 import { ServiceProvider } from "../../../app/ServiceProvider";
 import { RouterProvider, useRouter } from "../../../app/router";
 import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
@@ -903,8 +904,8 @@ describe("NovelDetailContainer", () => {
       );
     });
 
-    it("お気に入りトグルボタンを押下したときに作品のお気に入り状態がトグルされること (Issue #266)", async () => {
-      const user = userEvent.setup();
+    it("子コンポーネント（NovelDetailPage）の onToggleFavorite コールバック呼び出し時に作品のお気に入り状態がトグルされること (Issue #266, R1-04)", async () => {
+      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
       const setFavoriteMock = vi.fn().mockResolvedValue(undefined);
       const novelRepo = {
         ...createMockNovelRepo({
@@ -928,17 +929,26 @@ describe("NovelDetailContainer", () => {
       );
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("detail-favorite-toggle-button"),
-        ).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            novel: expect.objectContaining({
+              id: sampleNovel.id,
+              isFavorite: false,
+            }),
+          }),
+          undefined,
+        );
       });
 
-      const favBtn = screen.getByTestId("detail-favorite-toggle-button");
-      expect(favBtn).toHaveAttribute("aria-pressed", "false");
-
-      await user.click(favBtn);
+      // NovelDetailPage に渡された onToggleFavorite を直接呼び出し（孫 DOM 操作を排除）
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      await act(async () => {
+        await lastProps.onToggleFavorite?.();
+      });
 
       expect(setFavoriteMock).toHaveBeenCalledWith(sampleNovel.id, true);
+
+      pageSpy.mockRestore();
     });
   });
 });

@@ -154,6 +154,8 @@ describe("SqlChapterRepository", () => {
       const novel2 = await novelRepo.getNovelById(novelId);
       expect(novel2?.cachedChapters).toBe(2);
       expect(novel2?.totalByteSize).toBe(3000);
+      // R1-01: 本文保存時、お気に入り LWW 保護のため novels.updated_at は初期値から更新されないこと
+      expect(novel2?.updatedAt).toBe("2026-01-01T00:00:00Z");
     });
   });
 

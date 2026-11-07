@@ -12,6 +12,7 @@ const {
   NarouGenres,
   MultiGenresSelected,
   NarouMultiGenres,
+  ShortStorySelected,
 } = composeStories(stories);
 
 describe("SearchFilterBar コンポーネント", () => {
@@ -63,6 +64,13 @@ describe("SearchFilterBar コンポーネント", () => {
     expect(
       screen.queryByTestId("search-genre-fantasy"),
     ).not.toBeInTheDocument();
+  });
+
+  it("ShortStorySelected ストーリー: 短編ピルが選択状態（aria-pressed=true）で描画されること (AC-SE-04, Issue #265)", () => {
+    render(<ShortStorySelected />);
+    const shortPill = screen.getByTestId("search-serial-short");
+    expect(shortPill).toBeInTheDocument();
+    expect(shortPill).toHaveAttribute("aria-pressed", "true");
   });
 
   it("並び順変更時に onSelectOrder が呼び出されること", async () => {

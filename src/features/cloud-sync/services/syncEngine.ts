@@ -447,11 +447,12 @@ export class SyncEngine {
       );
     }
 
-    // 新規取込時にお気に入りおよび最終読了日時を復元 (R1-12)
-    // （bookmarkChapterIndex 設定による現在時刻上書きも含め、リモートの lastReadAt: null/string を確実に反映）
+    // 新規取込時にお気に入り、最終読了日時、および更新日時を復元 (R1-12, R1-19)
+    // （upsertNovelWithToc/updateBookmark 設定による現在時刻上書きも含め、リモートの updatedAt / lastReadAt を確実に反映）
     await this.deps.novelRepository.updateSyncMetadata?.(novelId, {
       isFavorite: remoteNovel.isFavorite === 1,
       lastReadAt: remoteNovel.lastReadAt,
+      updatedAt: remoteNovel.updatedAt,
     });
 
     if (remoteNovel.readChapterIds.length > 0) {

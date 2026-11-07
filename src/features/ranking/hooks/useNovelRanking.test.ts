@@ -1395,5 +1395,65 @@ describe("useNovelRanking", () => {
       expect(result.current.items.length).toBeGreaterThan(0);
       expect(result.current.items[0].remoteWorkId).toBe("16817330658027210101");
     });
+
+    it("非同期解決時に世代が一致しない（アンマウント等で stale）場合、アイテムおよびエラー状態が更新されず isFetchingRef が解放されること (R1-08)", async () => {
+      let resolveRanking!: (res: HttpResponse) => void;
+
+      mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/rankings\//, () => {
+        return new Promise<HttpResponse>((resolve) => {
+          resolveRanking = resolve;
+        });
+      });
+
+      const { result, unmount } = renderHook(() => useNovelRanking(), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(true);
+      });
+
+      // 通信中にアンマウントして世代を進める
+      unmount();
+
+      // 遅延していたレスポンスを解決
+      await act(async () => {
+        resolveRanking({
+          status: 200,
+          url: "https://kakuyomu.jp/rankings/weekly?work_variation=long",
+          headers: {},
+          html: rankingApolloHtml,
+        });
+      });
+
+      // アンマウント後のためステートは初期状態のまま更新されない
+      expect(result.current.items).toEqual([]);
+    });
+
+    it("非同期通信が例外で失敗した際に世代が一致しない場合、エラーがセットされず isFetchingRef が解放されること (R1-08)", async () => {
+      let rejectRanking!: (err: Error) => void;
+
+      mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/rankings\//, () => {
+        return new Promise<HttpResponse>((_, reject) => {
+          rejectRanking = reject;
+        });
+      });
+
+      const { result, unmount } = renderHook(() => useNovelRanking(), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(true);
+      });
+
+      unmount();
+
+      await act(async () => {
+        rejectRanking(new Error("Network Error"));
+      });
+
+      expect(result.current.error).toBeNull();
+    });
   });
 });

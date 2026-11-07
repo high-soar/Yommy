@@ -4,6 +4,7 @@ import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./NovelDetailPage.stories";
 import { NovelDetailPage } from "./NovelDetailPage";
+import * as NovelDetailHeaderModule from "./NovelDetailHeader";
 import type { NovelRecord, ChapterSummary } from "../../../storage/types";
 
 const {
@@ -618,8 +619,11 @@ describe("NovelDetailPage", () => {
         expect(notice).toHaveTextContent("本文キャッシュを削除しました（2話）");
       });
 
-      it("onToggleFavorite が指定された場合、NovelDetailHeader のお気に入りボタン押下で呼び出されること (Issue #266)", async () => {
-        const user = userEvent.setup();
+      it("onToggleFavorite が指定された場合、NovelDetailHeader へコールバックが正しく伝搬されること (Issue #266, R1-04)", () => {
+        const headerSpy = vi.spyOn(
+          NovelDetailHeaderModule,
+          "NovelDetailHeader",
+        );
         const onToggleFavorite = vi.fn();
 
         render(
@@ -629,10 +633,18 @@ describe("NovelDetailPage", () => {
           />,
         );
 
-        const favBtn = screen.getByTestId("detail-favorite-toggle-button");
-        await user.click(favBtn);
+        expect(headerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            onToggleFavorite,
+          }),
+          undefined,
+        );
 
+        const passedProps = headerSpy.mock.calls[0][0];
+        passedProps.onToggleFavorite?.();
         expect(onToggleFavorite).toHaveBeenCalledTimes(1);
+
+        headerSpy.mockRestore();
       });
     });
   });
