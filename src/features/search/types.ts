@@ -53,6 +53,7 @@ export const SEARCH_SERIAL_STATUSES: readonly SearchSerialStatusOption[] = [
   { value: "all", label: "すべて" },
   { value: "running", label: "連載中" },
   { value: "completed", label: "完結済" },
+  { value: "short", label: "短編" },
 ] as const;
 
 /**

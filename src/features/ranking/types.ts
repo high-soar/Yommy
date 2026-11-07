@@ -2,6 +2,7 @@ import type {
   NovelRankingOptions,
   NovelRankingPeriod,
   NovelRankingResultItem,
+  NovelRankingWorkVariation,
   NovelSearchResultItem,
   NovelSiteType,
 } from "../../parsers/types";
@@ -10,6 +11,7 @@ export type {
   NovelRankingOptions,
   NovelRankingPeriod,
   NovelRankingResultItem,
+  NovelRankingWorkVariation,
   NovelSearchResultItem,
   NovelSiteType,
 };
@@ -41,6 +43,20 @@ export const RANKING_PERIODS: readonly RankingPeriodOption[] = [
   { value: "weekly", label: "週間" },
   { value: "monthly", label: "月間" },
   { value: "entire", label: "累計" },
+] as const;
+
+/**
+ * 作品種別の選択肢定義（3種: すべて / 長編・連載 / 短編、v0.8 Issue #265）
+ */
+export interface RankingWorkVariationOption {
+  readonly value: NovelRankingWorkVariation;
+  readonly label: string;
+}
+
+export const RANKING_WORK_VARIATIONS: readonly RankingWorkVariationOption[] = [
+  { value: "all", label: "すべて" },
+  { value: "long", label: "長編・連載" },
+  { value: "short", label: "短編" },
 ] as const;
 
 /**
