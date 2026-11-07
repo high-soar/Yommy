@@ -31,8 +31,8 @@ docs/
 │   │   ├── kakuyomu.md                # カクヨム パーサー・スクレイピング仕様書（kakuyomu.jp）
 │   │   └── narou.md                   # 小説家になろう パーサー・スクレイピング仕様書（ncode.syosetu.com）
 │   └── changes/                       # [差分仕様 (Delta Specs)] 要望（親Issue）ごとの設計差分・テスト計画・Sub-issue分割
-│       ├── issue-265-work-variation-filter.md # ランキング・検索画面（SCR-07 / SCR-06）における作品種別（長編/連載・短編）フィルタ切替対応の差分仕様 (#265)
 │       └── archive/                   # 完了済みの差分仕様アーカイブ（親Issueクローズ時に git mv で移動）
+│           ├── issue-265-work-variation-filter.md # [Archived] ランキング・検索画面（SCR-07 / SCR-06）における作品種別（長編/連載・短編）フィルタ切替対応の差分仕様 (#265)
 │           ├── issue-264-advanced-search-filter.md # [Archived] 検索画面（SCR-06）の高度検索フィルタ機能（除外キーワード・複数ジャンル）の差分仕様 (#264)
 │           ├── issue-240-narou-search-ranking-and-site-selector.md # [Archived] 小説家になろう検索・ランキング対応と探索画面サイト切替仕様 (#240)
 │           ├── issue-239-narou-parser-and-multi-page-toc.md # [Archived] 小説家になろうパーサーおよび複数ページ目次取得・クラウド同期対応の差分仕様 (#239)
