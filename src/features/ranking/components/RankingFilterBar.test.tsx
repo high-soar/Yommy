@@ -5,7 +5,14 @@ import { composeStories } from "@storybook/react";
 import * as stories from "./RankingFilterBar.stories";
 import { RankingFilterBar } from "./RankingFilterBar";
 
-const { Default, Filtered, Disabled, NarouGenres } = composeStories(stories);
+const {
+  Default,
+  Filtered,
+  Disabled,
+  NarouGenres,
+  ShortStoryVariation,
+  AllVariation,
+} = composeStories(stories);
 
 describe("RankingFilterBar コンポーネント", () => {
   it("Default ストーリー: デフォルトの集計期間（週間）とジャンル（総合）が選択されていること (AC-RK-01)", () => {
@@ -159,5 +166,114 @@ describe("RankingFilterBar コンポーネント", () => {
     const highFantasyPill = screen.getByTestId("ranking-genre-201");
     await user.click(highFantasyPill);
     expect(handleGenre).not.toHaveBeenCalled();
+  });
+
+  it("作品種別ピル（3種）が描画され、未指定時はデフォルトで長編・連載（long）が選択されること (AC-RK-10, Issue #265)", () => {
+    render(
+      <RankingFilterBar
+        selectedPeriod="weekly"
+        onSelectPeriod={vi.fn()}
+        selectedGenre={undefined}
+        onSelectGenre={vi.fn()}
+      />,
+    );
+
+    const variationGroup = screen.getByRole("group", { name: "作品種別" });
+    expect(variationGroup).toBeInTheDocument();
+
+    const longPill = screen.getByTestId("ranking-variation-long");
+    const shortPill = screen.getByTestId("ranking-variation-short");
+    const allPill = screen.getByTestId("ranking-variation-all");
+
+    expect(longPill).toBeInTheDocument();
+    expect(shortPill).toBeInTheDocument();
+    expect(allPill).toBeInTheDocument();
+
+    expect(longPill).toHaveAttribute("aria-pressed", "true");
+    expect(shortPill).toHaveAttribute("aria-pressed", "false");
+    expect(allPill).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("作品種別ピル押下時に onSelectWorkVariation が呼び出されること (AC-RK-10, Issue #265)", async () => {
+    const user = userEvent.setup();
+    const handleVariation = vi.fn();
+
+    render(
+      <RankingFilterBar
+        selectedPeriod="weekly"
+        onSelectPeriod={vi.fn()}
+        selectedWorkVariation="long"
+        onSelectWorkVariation={handleVariation}
+        selectedGenre={undefined}
+        onSelectGenre={vi.fn()}
+      />,
+    );
+
+    const shortPill = screen.getByTestId("ranking-variation-short");
+    await user.click(shortPill);
+    expect(handleVariation).toHaveBeenCalledWith("short");
+
+    const allPill = screen.getByTestId("ranking-variation-all");
+    await user.click(allPill);
+    expect(handleVariation).toHaveBeenCalledWith("all");
+
+    const longPill = screen.getByTestId("ranking-variation-long");
+    await user.click(longPill);
+    expect(handleVariation).toHaveBeenCalledWith("long");
+  });
+
+  it("ShortStoryVariation ストーリー: 短編が選択状態であること (AC-RK-10, Issue #265)", () => {
+    render(<ShortStoryVariation />);
+
+    const shortPill = screen.getByTestId("ranking-variation-short");
+    expect(shortPill).toHaveAttribute("aria-pressed", "true");
+
+    const longPill = screen.getByTestId("ranking-variation-long");
+    expect(longPill).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("AllVariation ストーリー: すべてが選択状態であること (AC-RK-10, Issue #265)", () => {
+    render(<AllVariation />);
+
+    const allPill = screen.getByTestId("ranking-variation-all");
+    expect(allPill).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("disabled が true のとき、作品種別ピルをクリックしてもコールバックが発火しないこと (AC-RK-08, Issue #265)", async () => {
+    const user = userEvent.setup();
+    const handleVariation = vi.fn();
+
+    render(
+      <RankingFilterBar
+        selectedPeriod="weekly"
+        onSelectPeriod={vi.fn()}
+        selectedWorkVariation="long"
+        onSelectWorkVariation={handleVariation}
+        selectedGenre={undefined}
+        onSelectGenre={vi.fn()}
+        disabled={true}
+      />,
+    );
+
+    const shortPill = screen.getByTestId("ranking-variation-short");
+    expect(shortPill).toBeDisabled();
+    await user.click(shortPill);
+    expect(handleVariation).not.toHaveBeenCalled();
+  });
+
+  it("onSelectWorkVariation が未指定でも作品種別ピルをクリックして例外が発生しないこと", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <RankingFilterBar
+        selectedPeriod="weekly"
+        onSelectPeriod={vi.fn()}
+        selectedGenre={undefined}
+        onSelectGenre={vi.fn()}
+      />,
+    );
+
+    const shortPill = screen.getByTestId("ranking-variation-short");
+    await expect(user.click(shortPill)).resolves.not.toThrow();
   });
 });

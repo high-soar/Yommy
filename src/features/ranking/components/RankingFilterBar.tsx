@@ -1,5 +1,9 @@
 import React from "react";
-import type { NovelRankingPeriod, NovelSiteType } from "../../../parsers/types";
+import type {
+  NovelRankingPeriod,
+  NovelRankingWorkVariation,
+  NovelSiteType,
+} from "../../../parsers/types";
 import { RANKING_GENRES, RANKING_PERIODS } from "../types";
 import { NAROU_RANKING_GENRES } from "../../../parsers/narou/genres";
 
@@ -8,6 +12,10 @@ export interface RankingFilterBarProps {
   selectedSite?: NovelSiteType;
   selectedPeriod: NovelRankingPeriod;
   onSelectPeriod: (period: NovelRankingPeriod) => void;
+  /** 選択中作品種別（すべて / 長編・連載 / 短編、省略時は "long"、v0.8 Issue #265） */
+  selectedWorkVariation?: NovelRankingWorkVariation;
+  /** 作品種別変更コールバック（v0.8 Issue #265） */
+  onSelectWorkVariation?: (workVariation: NovelRankingWorkVariation) => void;
   selectedGenre?: string;
   onSelectGenre: (genre?: string) => void;
   /** 通信中操作抑止フラグ（省略時は false） */
@@ -21,10 +29,14 @@ export const RankingFilterBar: React.FC<RankingFilterBarProps> = ({
   selectedSite = "kakuyomu",
   selectedPeriod,
   onSelectPeriod,
+  selectedWorkVariation,
+  onSelectWorkVariation,
   selectedGenre,
   onSelectGenre,
   disabled = false,
 }) => {
+  void selectedWorkVariation;
+  void onSelectWorkVariation;
   const genres =
     selectedSite === "narou" ? NAROU_RANKING_GENRES : RANKING_GENRES;
 
