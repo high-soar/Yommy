@@ -580,8 +580,10 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
 
         resetPaginationState(nextInitialProgress, nextScrollProgress);
         setNovel(targetNovel);
+        novelRef.current = targetNovel;
         setChapter(targetChapter);
         setCurrentChapterIndex(targetIndex);
+        currentChapterIndexRef.current = targetIndex;
 
         // 本文取得完了時に自動先読みを開始
         if (targetChapter && targetChapter.bodyHtml !== null) {
@@ -725,24 +727,27 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       );
       setScrollProgress(clamped);
       scrollProgressRef.current = clamped;
-      if (novelRef.current) {
+      const currentNovel = novelRef.current ?? novel;
+      if (currentNovel) {
         try {
           await novelRepository.updateBookmark(
-            novelRef.current.id,
+            currentNovel.id,
             currentChapterIndexRef.current,
             clamped,
           );
-          setNovel({
-            ...novelRef.current,
+          const updatedNovel: NovelRecord = {
+            ...currentNovel,
             bookmarkChapterIndex: currentChapterIndexRef.current,
             bookmarkScrollProgress: clamped,
-          });
+          };
+          setNovel(updatedNovel);
+          novelRef.current = updatedNovel;
         } catch (err: unknown) {
           setError(toErrorMessage(err));
         }
       }
     },
-    [novelRepository],
+    [novel, novelRepository],
   );
 
   // 指定ページへの遷移およびしおり自動保存
@@ -776,10 +781,11 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
 
   // しおり最新値即時保存
   const flushBookmark = useCallback(async (): Promise<void> => {
-    if (novelRef.current) {
+    const currentNovel = novelRef.current ?? novel;
+    if (currentNovel) {
       try {
         await novelRepository.updateBookmark(
-          novelRef.current.id,
+          currentNovel.id,
           currentChapterIndexRef.current,
           scrollProgressRef.current,
         );
@@ -790,7 +796,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         setError(toErrorMessage(err));
       }
     }
-  }, [novelRepository, syncEngine]);
+  }, [novel, novelRepository, syncEngine]);
 
   // 前後エピソード遷移
   const goToChapter = useCallback(
@@ -996,8 +1002,10 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         if (!isMountedRef.current) return;
 
         setNovel(reloadedNovel);
+        novelRef.current = reloadedNovel;
         setChapter(savedChapter ? { ...savedChapter, isRead: true } : null);
         setCurrentChapterIndex(targetChapterIdx);
+        currentChapterIndexRef.current = targetChapterIdx;
         resetPaginationState(0, 0);
 
         if (savedChapter && reloadedNovel) {
@@ -1009,6 +1017,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         }
       } else {
         setNovel(savedNovel);
+        novelRef.current = savedNovel;
         setChapter(null);
         resetPaginationState(0, 0);
       }
