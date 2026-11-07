@@ -6,7 +6,7 @@ status: "Review (#266)"
 updated: "2026-11-07"
 tags: [quality, bug-log, handover, dre, kaizen]
 related_specs:
-  - docs/specs/changes/issue-266-bookshelf-favorite-and-sync.md
+  - docs/specs/changes/archive/issue-266-bookshelf-favorite-and-sync.md
   - docs/specs/changes/archive/issue-265-work-variation-filter.md
   - docs/specs/changes/archive/issue-264-advanced-search-filter.md
   - docs/quality/archive/v0.7-narou-site-support-and-loading-ux-log.md
