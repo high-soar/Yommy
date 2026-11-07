@@ -68,8 +68,6 @@ export const RankingPage: React.FC<RankingPageProps> = ({
   onAddNovel,
   onSelectCard,
 }) => {
-  void selectedWorkVariation;
-  void onSelectWorkVariation;
   return (
     <div
       data-testid="ranking-page"
@@ -93,6 +91,8 @@ export const RankingPage: React.FC<RankingPageProps> = ({
           selectedSite={selectedSite}
           selectedPeriod={selectedPeriod}
           onSelectPeriod={onSelectPeriod}
+          selectedWorkVariation={selectedWorkVariation}
+          onSelectWorkVariation={onSelectWorkVariation}
           selectedGenre={selectedGenre}
           onSelectGenre={onSelectGenre}
           disabled={isLoading}

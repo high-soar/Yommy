@@ -4,6 +4,7 @@ import { useRouter } from "../../../app/router";
 import type {
   NovelRankingPeriod,
   NovelRankingResultItem,
+  NovelRankingWorkVariation,
   NovelSiteType,
 } from "../../../parsers/types";
 import { fetchFullNovelIndex } from "../../../parsers/fetchFullNovelIndex";
@@ -17,6 +18,10 @@ export interface UseNovelRankingResult {
   period: NovelRankingPeriod;
   /** 集計期間変更 */
   setPeriod: (period: NovelRankingPeriod) => void;
+  /** 作品種別（すべて / 長編・連載 / 短編、省略時は "long"、v0.8 Issue #265） */
+  workVariation: NovelRankingWorkVariation;
+  /** 作品種別変更コールバック（v0.8 Issue #265） */
+  setWorkVariation: (workVariation: NovelRankingWorkVariation) => void;
   /** ジャンル（未指定時 undefined） */
   genre: string | undefined;
   /** ジャンル変更 */
@@ -290,6 +295,8 @@ export function useNovelRanking(): UseNovelRankingResult {
     setSelectedSite,
     period,
     setPeriod,
+    workVariation: "long",
+    setWorkVariation: () => {},
     genre,
     setGenre,
     items,
