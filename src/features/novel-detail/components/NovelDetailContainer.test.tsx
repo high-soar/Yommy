@@ -108,6 +108,11 @@ function createMockNovelRepo(
       return currentNovel;
     },
     updateBookmark: async () => {},
+    setFavorite: async (_id: string, isFav: boolean) => {
+      if (currentNovel) {
+        currentNovel.isFavorite = isFav;
+      }
+    },
     deleteNovel: async (id: string) => {
       if (options?.deleteError) {
         throw new Error("削除処理に失敗しました");

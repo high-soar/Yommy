@@ -85,6 +85,9 @@ function createMockNovelRepository(novel: NovelRecord | null): NovelRepository {
       novel && novel.id === id ? novel : null,
     upsertNovelWithToc: async () => novel ?? ({} as unknown as NovelRecord),
     updateBookmark: async () => {},
+    setFavorite: async (_id: string, isFav: boolean) => {
+      if (novel) novel.isFavorite = isFav;
+    },
     deleteNovel: async () => {},
     clearNewUpdate: async () => {},
     updateLastCheckedAt: async () => {},
@@ -113,6 +116,7 @@ const loadingNovelRepo: NovelRepository = {
   getNovelById: () => new Promise(() => {}),
   upsertNovelWithToc: () => new Promise(() => {}),
   updateBookmark: () => new Promise(() => {}),
+  setFavorite: () => new Promise(() => {}),
   deleteNovel: () => new Promise(() => {}),
   clearNewUpdate: () => new Promise(() => {}),
   updateLastCheckedAt: () => new Promise(() => {}),

@@ -55,6 +55,12 @@ function createMockNovelRepo(
       return { ...novel, synopsis: "あらすじ" };
     },
     updateBookmark: async () => {},
+    setFavorite: async (id: string, isFav: boolean) => {
+      const target = list.find((n) => n.id === id);
+      if (target) {
+        target.isFavorite = isFav;
+      }
+    },
     deleteNovel: async (id: string) => {
       list = list.filter((n) => n.id !== id);
     },

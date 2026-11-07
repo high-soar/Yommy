@@ -357,6 +357,41 @@ describe("SqlNovelRepository", () => {
     });
   });
 
+  describe("setFavorite", () => {
+    it("setFavorite(novelId, true) により is_favorite が 1 (true) となり、updated_at が更新されること (Issue #266 / db-schema)", async () => {
+      const created = await repository.upsertNovelWithToc(
+        sampleParsedIndex,
+        "2026-01-01T00:00:00.000Z",
+      );
+      expect(created.isFavorite).toBe(false);
+      expect(created.updatedAt).toBe("2026-01-01T00:00:00.000Z");
+
+      const beforeTime = Date.now();
+      await repository.setFavorite(created.id, true);
+
+      const updated = await repository.getNovelById(created.id);
+      expect(updated?.isFavorite).toBe(true);
+      expect(Date.parse(updated!.updatedAt)).toBeGreaterThanOrEqual(beforeTime);
+    });
+
+    it("setFavorite(novelId, false) により is_favorite が 0 (false) となり、updated_at が更新されること (Issue #266 / db-schema)", async () => {
+      const created = await repository.upsertNovelWithToc(
+        sampleParsedIndex,
+        "2026-01-01T00:00:00.000Z",
+      );
+      await repository.setFavorite(created.id, true);
+      const fav = await repository.getNovelById(created.id);
+      expect(fav?.isFavorite).toBe(true);
+
+      const beforeTime = Date.now();
+      await repository.setFavorite(created.id, false);
+
+      const unfav = await repository.getNovelById(created.id);
+      expect(unfav?.isFavorite).toBe(false);
+      expect(Date.parse(unfav!.updatedAt)).toBeGreaterThanOrEqual(beforeTime);
+    });
+  });
+
   describe("updateLastCheckedAt", () => {
     it("updateLastCheckedAt 呼び出しにより last_checked_at が指定日時に更新されること", async () => {
       await repository.upsertNovelWithToc(
@@ -840,6 +875,16 @@ describe("SqlNovelRepository", () => {
       const unchanged = await repository.getNovelById(created.id);
       expect(unchanged?.isFavorite).toBe(false);
       expect(unchanged?.lastReadAt).toBe("2026-11-01T12:00:00Z");
+
+      // updatedAt の更新
+      const targetUpdatedAt = "2026-11-05T18:00:00.000Z";
+      await repository.updateSyncMetadata?.(created.id, {
+        updatedAt: targetUpdatedAt,
+        isFavorite: true,
+      });
+      const withUpdatedAt = await repository.getNovelById(created.id);
+      expect(withUpdatedAt?.isFavorite).toBe(true);
+      expect(withUpdatedAt?.updatedAt).toBe(targetUpdatedAt);
     });
 
     it("purgeExpiredDeletedNovels で指定時刻以前の Tombstone が一括パージされること (R1-28)", async () => {

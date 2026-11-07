@@ -102,6 +102,12 @@ INSERT OR IGNORE INTO app_settings (
   'bookshelf_sort_order', 'unread_first', '2026-01-01T00:00:00.000Z'
 );
 
+INSERT OR IGNORE INTO app_settings (
+  key, value, updated_at
+) VALUES (
+  'bookshelf_favorite_only', 'false', '2026-01-01T00:00:00.000Z'
+);
+
 CREATE TABLE IF NOT EXISTS deleted_novels (
   id TEXT PRIMARY KEY,
   deleted_at INTEGER NOT NULL
@@ -116,6 +122,7 @@ CREATE INDEX IF NOT EXISTS idx_deleted_novels_deleted_at ON deleted_novels(delet
  */
 export const APP_SETTING_KEYS = {
   BOOKSHELF_SORT_ORDER: "bookshelf_sort_order",
+  BOOKSHELF_FAVORITE_ONLY: "bookshelf_favorite_only",
   CLOUD_SYNC_LAST_SYNCED_AT: "cloud_sync_last_synced_at",
   CLOUD_SYNC_ACCOUNT_EMAIL: "cloud_sync_account_email",
 } as const;

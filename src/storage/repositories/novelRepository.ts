@@ -290,6 +290,21 @@ export class SqlNovelRepository implements NovelRepository {
   }
 
   /**
+   * 作品のお気に入り（★）状態を更新する。
+   * クラウド同期の LWW 判定整合性を保つため updated_at も現在時刻へ同時更新する。
+   * （docs/specs/db-schema.md §3.1 および docs/specs/changes/issue-266-bookshelf-favorite-and-sync.md に準拠）
+   */
+  async setFavorite(novelId: string, isFavorite: boolean): Promise<void> {
+    const now = new Date().toISOString();
+    await this.db.execute(
+      `UPDATE novels
+       SET is_favorite = ?, updated_at = ?
+       WHERE id = ?;`,
+      [isFavorite ? 1 : 0, now, novelId],
+    );
+  }
+
+  /**
    * 作品および紐づくエピソード・ダウンロードキュー（CASCADE）を削除し、
    * クラウド同期用の Tombstone（deleted_novels テーブル）に削除日時を記録する
    * （docs/specs/features/bookshelf.md AC-BS-13 および docs/specs/db-schema.md §3.6 に準拠）
@@ -354,7 +369,11 @@ export class SqlNovelRepository implements NovelRepository {
 
   async updateSyncMetadata(
     novelId: string,
-    metadata: { isFavorite?: boolean; lastReadAt?: string | null },
+    metadata: {
+      isFavorite?: boolean;
+      lastReadAt?: string | null;
+      updatedAt?: string;
+    },
   ): Promise<void> {
     const updates: string[] = [];
     const params: unknown[] = [];
@@ -366,6 +385,10 @@ export class SqlNovelRepository implements NovelRepository {
     if (metadata.lastReadAt !== undefined) {
       updates.push("last_read_at = ?");
       params.push(metadata.lastReadAt);
+    }
+    if (metadata.updatedAt !== undefined) {
+      updates.push("updated_at = ?");
+      params.push(metadata.updatedAt);
     }
 
     if (updates.length === 0) return;

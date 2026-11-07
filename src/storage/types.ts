@@ -97,6 +97,7 @@ export interface NovelRepository {
     chapterIndex: number,
     scrollProgress: number,
   ): Promise<void>;
+  setFavorite(novelId: string, isFavorite: boolean): Promise<void>;
   deleteNovel(novelId: string): Promise<void>;
   clearNewUpdate(novelId: string): Promise<void>;
   updateLastCheckedAt(novelId: string, checkedAt: string): Promise<void>;
@@ -104,7 +105,11 @@ export interface NovelRepository {
   purgeDeletedNovels?(idList: string[]): Promise<void>;
   updateSyncMetadata?(
     novelId: string,
-    metadata: { isFavorite?: boolean; lastReadAt?: string | null },
+    metadata: {
+      isFavorite?: boolean;
+      lastReadAt?: string | null;
+      updatedAt?: string;
+    },
   ): Promise<void>;
   purgeExpiredDeletedNovels?(cutoffTimeMs: number): Promise<void>;
 }
