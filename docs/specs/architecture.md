@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Review (#265)"
+status: "Review (#266)"
 updated: "2026-11-07"
 tags:
   - architecture
@@ -34,6 +34,8 @@ tags:
   - hardware-key
   - narou
   - multi-page-toc
+  - favorite
+  - bookshelf-filter
   - ho-23
   - ho-24
   - ho-25
@@ -41,7 +43,9 @@ tags:
   - ho-29
   - ho-30
   - ho-31
+  - ho-32
 related_specs:
+  - docs/specs/changes/issue-266-bookshelf-favorite-and-sync.md
   - docs/specs/changes/archive/issue-265-work-variation-filter.md
   - docs/specs/changes/archive/issue-264-advanced-search-filter.md
   - docs/specs/changes/archive/issue-240-narou-search-ranking-and-site-selector.md
@@ -211,8 +215,8 @@ Yommy/
     │       ├── types.ts
     │       └── webviewDomBridge.ts
     ├── features/                      # 【3. Viewer & UI Layer（画面・機能別モジュール）】
-    │   ├── bookshelf/                 # SCR-01: 本棚一覧（空状態での検索/ランキング誘導・更新チェック・ソート）
-    │   ├── novel-detail/              # SCR-02: 作品詳細・目次一覧・取得操作・一括キャッシュ
+    │   ├── bookshelf/                 # SCR-01: 本棚一覧（空状態での検索/ランキング誘導・更新チェック・ソート・お気に入りトグル＆フィルタ）
+    │   ├── novel-detail/              # SCR-02: 作品詳細・目次一覧・お気に入りトグル・取得操作・一括キャッシュ
     │   ├── reader/                    # SCR-03: 小説リーダー（全画面100dvh・上下連動オーバーレイ＆RTLシークバー・縦書きCSSマルチカラム組版・2段階水平スライドアニメーション・音量キー送り・ルビ・しおり保存）
     │   ├── search/                    # SCR-06: 検索画面（カクヨム・小説家になろうサイト切替・作品検索・カードから本棚追加・SCR-02遷移）
     │   ├── ranking/                   # SCR-07: ランキング画面（カクヨム・小説家になろうサイト切替・期間/ジャンル別ランキング・カードから本棚追加・SCR-02遷移）
@@ -513,6 +517,7 @@ export interface NovelRepository {
     chapterIndex: number,
     scrollProgress: number,
   ): Promise<void>;
+  setFavorite(novelId: string, isFavorite: boolean): Promise<void>;
   deleteNovel(novelId: string): Promise<void>;
   clearNewUpdate(novelId: string): Promise<void>;
   updateLastCheckedAt(novelId: string, checkedAt: string): Promise<void>;
@@ -520,7 +525,11 @@ export interface NovelRepository {
   purgeDeletedNovels?(idList: string[]): Promise<void>;
   updateSyncMetadata?(
     novelId: string,
-    metadata: { isFavorite?: boolean; lastReadAt?: string | null },
+    metadata: {
+      isFavorite?: boolean;
+      lastReadAt?: string | null;
+      updatedAt?: string;
+    },
   ): Promise<void>;
   purgeExpiredDeletedNovels?(cutoffTimeMs: number): Promise<void>;
 }
@@ -789,11 +798,12 @@ export interface CloudSyncBridge {
   - Push 前の作品和集合およびフィールド単位マージ: `pushCurrentState` 実行時（`buildMergedSyncNovels`）、ローカルの `novels` のみでリモートを全上書きするのではなく、リモートに存在する `novels` と和集合をとってマージする（R1-10）。さらにローカルとリモートの双方に存在する作品（かつ新しい `deletedAt` で削除されていない作品）については、リモート値をローカル値で単純上書きせず、フィールド単位のマージ（`readChapterIds` の和集合、`lastReadAt` 比較による `bookmarkChapterIndex` / `lastReadAt` の LWW、`updatedAt` 比較による `isFavorite` / `updatedAt` の LWW）を実施して他端末の最新進捗消失を防止する（R2-01）。
   - 30日経過 Tombstone の自動パージ: 削除日時から30日（`TOMBSTONE_RETENTION_MS` = 30日）以上経過した古い Tombstone はローカル DB（`purgeExpiredDeletedNovels`）およびリモートへの Push 対象から自動的にパージし、同期データ容量の肥大化を防止する（R1-28）。
   - しおり話数のマージ: 同一作品が両端末にある場合、`lastReadAt` が新しい方の `bookmarkChapterIndex` を採用する（話数変更時はスクロール率を `0.0` にリセット、同一話数の場合は端末ローカルのスクロール率を維持）。
+  - お気に入り状態（`isFavorite`）の双方向 LWW マージ（`v0.8` Issue #266）: 同一作品が両端末にある場合の Pull マージ（`mergeExistingNovel`）において、`updateBookmark` がローカル `updated_at` を書き換える前に元の `localNovel.updatedAt` と `remoteNovel.updatedAt` を比較し、`Date.parse(remoteNovel.updatedAt) > Date.parse(localNovel.updatedAt)` の場合は `novelRepository.updateSyncMetadata(novelId, { isFavorite: remoteNovel.isFavorite === 1, updatedAt: remoteNovel.updatedAt })` を呼び出してローカルの `is_favorite` および `updated_at` をリモート側の最新状態へ更新する。これにより Push 時（`buildMergedSyncNovels`）および Pull 時（`mergeExistingNovel` / `mergeNewNovel`）の双方向でお気に入り状態の Last-Write-Wins（LWW）同期が保証される。
   - 既読状態のマージ: 両端末の既読エピソード ID の和集合（Union）を採用する。
 - **自動同期トリガーと排他・デバウンス制御**:
   - 未連携時のガード: `cloudSyncBridge.getAuthState()` が `connected` 状態でない場合、`pullAndMerge()` および `pushCurrentState()` は通信を行わず即座に安全にリターンする（R1-14）。
   - 自動 Pull: アプリ起動時、およびバックグラウンド復帰時（休止から5分以上経過）。未送信ローカル変更がある場合はマージ後に自動 Push。
-  - 自動 Push: 本棚作品追加・削除、およびリーダー話数遷移・既読更新時に 2〜3秒（2500ms）デバウンス付き非同期実行。
+  - 自動 Push: 本棚作品追加・削除、お気に入り（★）登録・解除（`SCR-01` / `SCR-02` での `toggleFavorite`）、およびリーダー話数遷移・既読更新時に 2〜3秒（2500ms）デバウンス付き非同期実行（`syncEngine.notifyChanged()`）。
   - 多重並行実行防止（排他制御・Single-flight）: `SyncEngine` 内部に排他制御機構（`isSyncing` フラグおよび FIFO キュー排他制御）を導入し、`pullAndMerge`、`pushCurrentState`、`sync` が同時に重なって実行されないよう安全にガードする。`sync()` が実行中に重複して呼び出された場合、実行中の Promise を再利用して単一実行に合流（Single-flight）させる。`scheduleDebouncedPush()` では生成した Promise に内部で `.catch(() => {})` を登録し、未処理例外（`UnhandledPromiseRejection`）を防止するとともに、`cancelDebouncedPush()` 実行時には保留中の Promise ハンドラーを漏れなく `resolve()` して呼び出し元のハングを防止する（R2-09）。
 
 #### 3.8.3 ネイティブ Google Identity Services と 5 層セキュリティ設計
