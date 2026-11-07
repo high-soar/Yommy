@@ -2,6 +2,7 @@ import React from "react";
 import type {
   NovelRankingPeriod,
   NovelRankingResultItem,
+  NovelRankingWorkVariation,
   NovelSiteType,
 } from "../../../parsers/types";
 import { SiteSelector } from "./SiteSelector";
@@ -17,6 +18,10 @@ export interface RankingPageProps {
   selectedPeriod: NovelRankingPeriod;
   /** 集計期間変更コールバック */
   onSelectPeriod: (period: NovelRankingPeriod) => void;
+  /** 選択中作品種別（すべて / 長編・連載 / 短編、省略時は "long"、v0.8 Issue #265） */
+  selectedWorkVariation?: NovelRankingWorkVariation;
+  /** 作品種別変更コールバック（v0.8 Issue #265） */
+  onSelectWorkVariation?: (workVariation: NovelRankingWorkVariation) => void;
   /** 選択中ジャンル（総合時は undefined または "all"） */
   selectedGenre?: string;
   /** ジャンル変更コールバック */
@@ -50,6 +55,8 @@ export const RankingPage: React.FC<RankingPageProps> = ({
   onSelectSite,
   selectedPeriod,
   onSelectPeriod,
+  selectedWorkVariation,
+  onSelectWorkVariation,
   selectedGenre,
   onSelectGenre,
   items,
@@ -61,6 +68,8 @@ export const RankingPage: React.FC<RankingPageProps> = ({
   onAddNovel,
   onSelectCard,
 }) => {
+  void selectedWorkVariation;
+  void onSelectWorkVariation;
   return (
     <div
       data-testid="ranking-page"

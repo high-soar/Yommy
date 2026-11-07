@@ -19,6 +19,8 @@ const meta: Meta<typeof RankingPage> = {
     onSelectSite: fn(),
     selectedPeriod: "weekly",
     onSelectPeriod: fn(),
+    selectedWorkVariation: "long",
+    onSelectWorkVariation: fn(),
     selectedGenre: undefined,
     onSelectGenre: fn(),
     items: [],
@@ -42,6 +44,7 @@ export const WeeklyOverall: Story = {
   name: "総合週間ランキング（初期表示）",
   args: {
     selectedPeriod: "weekly",
+    selectedWorkVariation: "long",
     selectedGenre: undefined,
     items: [
       sampleRankingItem1,
@@ -49,6 +52,21 @@ export const WeeklyOverall: Story = {
       sampleRankingItem3,
       sampleRankingItem4,
     ],
+    registeredWorkIds: new Set<string>(),
+    isLoading: false,
+  },
+};
+
+/**
+ * ランキング画面（短編・週間ランキング表示 / v0.8 Issue #265）
+ */
+export const ShortStoryRanking: Story = {
+  name: "短編週間ランキング表示",
+  args: {
+    selectedPeriod: "weekly",
+    selectedWorkVariation: "short",
+    selectedGenre: undefined,
+    items: [sampleRankingItem1],
     registeredWorkIds: new Set<string>(),
     isLoading: false,
   },

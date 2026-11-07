@@ -73,6 +73,7 @@ describe("RankingContainer コンポーネント", () => {
         expect.objectContaining({
           selectedSite: "kakuyomu",
           selectedPeriod: "weekly",
+          selectedWorkVariation: "long",
           selectedGenre: undefined,
         }),
         undefined,
@@ -266,6 +267,23 @@ describe("RankingContainer コンポーネント", () => {
       expect(pageSpy).toHaveBeenLastCalledWith(
         expect.objectContaining({
           selectedSite: "narou",
+        }),
+        undefined,
+      );
+    });
+
+    pageSpy.mockRestore();
+  });
+
+  it("RankingPage へ作品種別（selectedWorkVariation: 'long'）および変更コールバック（onSelectWorkVariation）が伝搬されること (AC-RK-10, Issue #265)", async () => {
+    const pageSpy = vi.spyOn(RankingPageModule, "RankingPage");
+    renderWithProviders();
+
+    await waitFor(() => {
+      expect(pageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selectedWorkVariation: "long",
+          onSelectWorkVariation: expect.any(Function),
         }),
         undefined,
       );
