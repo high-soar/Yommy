@@ -875,6 +875,101 @@ describe("NarouParser", () => {
       expect(emptyGenreUrl.searchParams.has("genre")).toBe(false);
     });
 
+    it("除外キーワード (excludeKeyword) が指定された場合に notword パラメータが付与されること", () => {
+      // 単一除外語
+      const single = new URL(
+        parser.buildSearchUrl("転生", { excludeKeyword: "ハーレム" }),
+      );
+      expect(single.searchParams.get("notword")).toBe("ハーレム");
+
+      // 複数語（スペース区切り）
+      const multi = new URL(
+        parser.buildSearchUrl("転生", {
+          excludeKeyword: "ハーレム チート",
+        }),
+      );
+      expect(multi.searchParams.get("notword")).toBe("ハーレム チート");
+
+      // 先頭ハイフン付き入力・連続空白・トリム正規化
+      const normalized = new URL(
+        parser.buildSearchUrl("転生", {
+          excludeKeyword: "  -ハーレム   --チート  ",
+        }),
+      );
+      expect(normalized.searchParams.get("notword")).toBe("ハーレム チート");
+
+      // 空白文字のみまたはハイフンのみの場合は notword パラメータが付与されないこと
+      const emptyExclude = new URL(
+        parser.buildSearchUrl("転生", { excludeKeyword: "  --  -  " }),
+      );
+      expect(emptyExclude.searchParams.has("notword")).toBe(false);
+
+      // 未指定の場合は notword パラメータが付与されないこと
+      const noExclude = new URL(parser.buildSearchUrl("転生", {}));
+      expect(noExclude.searchParams.has("notword")).toBe(false);
+    });
+
+    it("複数ジャンル (genres) が指定された場合、ハイフン結合で genre に設定され、genre より優先されること", () => {
+      // 複数小ジャンルコードのハイフン結合
+      const multiGenre = new URL(
+        parser.buildSearchUrl("テスト", {
+          genres: ["201", "202"],
+        }),
+      );
+      expect(multiGenre.searchParams.get("genre")).toBe("201-202");
+
+      // 前後空白・重複排除・空文字除去
+      const cleaned = new URL(
+        parser.buildSearchUrl("テスト", {
+          genres: [" 201 ", "201", "202", "", "   "],
+        }),
+      );
+      expect(cleaned.searchParams.get("genre")).toBe("201-202");
+
+      // 空配列指定時は genre パラメータが付与されないこと
+      const emptyGenres = new URL(
+        parser.buildSearchUrl("テスト", { genres: [] }),
+      );
+      expect(emptyGenres.searchParams.has("genre")).toBe(false);
+
+      // genres と genre の両方が指定された場合、genres が優先されること
+      const priority = new URL(
+        parser.buildSearchUrl("テスト", {
+          genres: ["202"],
+          genre: "201",
+        }),
+      );
+      expect(priority.searchParams.get("genre")).toBe("202");
+
+      // genres が未指定で genre が指定された場合、既存の単一指定としてフォールバックすること
+      const fallback = new URL(
+        parser.buildSearchUrl("テスト", {
+          genre: "201",
+        }),
+      );
+      expect(fallback.searchParams.get("genre")).toBe("201");
+    });
+
+    it("除外キーワードと複数ジャンルを含むすべてのオプションを組み合わせた検索 API URL を構築できること", () => {
+      const url = parser.buildSearchUrl("悪役令嬢", {
+        order: "popular",
+        serialStatus: "completed",
+        genres: ["101", "102"],
+        excludeKeyword: "追放 -溺愛",
+        page: 3,
+      });
+      const parsed = new URL(url);
+      expect(parsed.origin + parsed.pathname).toBe(
+        "https://api.syosetu.com/novelapi/api/",
+      );
+      expect(parsed.searchParams.get("word")).toBe("悪役令嬢");
+      expect(parsed.searchParams.get("notword")).toBe("追放 溺愛");
+      expect(parsed.searchParams.get("order")).toBe("hyoka");
+      expect(parsed.searchParams.get("type")).toBe("ter");
+      expect(parsed.searchParams.get("genre")).toBe("101-102");
+      expect(parsed.searchParams.get("st")).toBe("41");
+    });
+
     it("ページ番号 (page) に応じて開始位置 st が算出されること", () => {
       // 1ページ目または未指定 -> st 省略
       const page1 = new URL(parser.buildSearchUrl("テスト", { page: 1 }));

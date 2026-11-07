@@ -787,6 +787,102 @@ describe("KakuyomuParser", () => {
       expect(parsed.searchParams.get("genre_name")).toBe("romance");
       expect(parsed.searchParams.get("page")).toBe("3");
     });
+
+    it("除外キーワードが指定された場合、q パラメータに -語 として結合すること", () => {
+      // 単一除外語
+      const single = new URL(
+        parser.buildSearchUrl("異世界", { excludeKeyword: "ハーレム" }),
+      );
+      expect(single.searchParams.get("q")).toBe("異世界 -ハーレム");
+
+      // 複数語（スペース区切り）
+      const multi = new URL(
+        parser.buildSearchUrl("異世界", {
+          excludeKeyword: "ハーレム チート",
+        }),
+      );
+      expect(multi.searchParams.get("q")).toBe("異世界 -ハーレム -チート");
+
+      // 先頭ハイフン付き入力・連続空白・トリム正規化
+      const normalized = new URL(
+        parser.buildSearchUrl("異世界", {
+          excludeKeyword: "  -ハーレム   --チート  ",
+        }),
+      );
+      expect(normalized.searchParams.get("q")).toBe("異世界 -ハーレム -チート");
+
+      // メインキーワードが空で除外キーワードのみ指定された場合
+      const excludeOnly = new URL(
+        parser.buildSearchUrl("  ", { excludeKeyword: "ハーレム" }),
+      );
+      expect(excludeOnly.searchParams.get("q")).toBe("-ハーレム");
+
+      // 空白文字のみまたはハイフンのみの場合は除外語が付与されないこと
+      const emptyExclude = new URL(
+        parser.buildSearchUrl("異世界", { excludeKeyword: "  --  -  " }),
+      );
+      expect(emptyExclude.searchParams.get("q")).toBe("異世界");
+    });
+
+    it("複数ジャンル（genres）が指定された場合、カンマ区切り小文字スラッグとして genre_name に結合し、genre よりも優先すること", () => {
+      // 複数ジャンルのカンマ連結
+      const multiGenre = new URL(
+        parser.buildSearchUrl("テスト", {
+          genres: ["fantasy", "action"],
+        }),
+      );
+      expect(multiGenre.searchParams.get("genre_name")).toBe("fantasy,action");
+
+      // 大文字混在・トリム・重複排除・空文字除去
+      const cleaned = new URL(
+        parser.buildSearchUrl("テスト", {
+          genres: ["  FANTASY  ", "fantasy", "Action", "", "   "],
+        }),
+      );
+      expect(cleaned.searchParams.get("genre_name")).toBe("fantasy,action");
+
+      // 空配列指定時は genre_name を付与しないこと
+      const emptyGenres = new URL(
+        parser.buildSearchUrl("テスト", { genres: [] }),
+      );
+      expect(emptyGenres.searchParams.has("genre_name")).toBe(false);
+
+      // genres と genre の両方が指定された場合、genres が優先されること
+      const priority = new URL(
+        parser.buildSearchUrl("テスト", {
+          genres: ["action"],
+          genre: "fantasy",
+        }),
+      );
+      expect(priority.searchParams.get("genre_name")).toBe("action");
+
+      // genres が未指定で genre が指定された場合、既存の単一指定としてフォールバックすること
+      const fallback = new URL(
+        parser.buildSearchUrl("テスト", {
+          genre: "fantasy",
+        }),
+      );
+      expect(fallback.searchParams.get("genre_name")).toBe("fantasy");
+    });
+
+    it("除外キーワードと複数ジャンルを含むすべてのオプションを組み合わせた検索 URL を構築できること", () => {
+      const url = parser.buildSearchUrl("悪役令嬢", {
+        order: "popular",
+        serialStatus: "completed",
+        genres: ["romance", "love_story"],
+        excludeKeyword: "追放 -溺愛",
+        page: 3,
+      });
+      const parsed = new URL(url);
+      expect(parsed.origin + parsed.pathname).toBe(
+        "https://kakuyomu.jp/search",
+      );
+      expect(parsed.searchParams.get("q")).toBe("悪役令嬢 -追放 -溺愛");
+      expect(parsed.searchParams.get("order")).toBe("popular");
+      expect(parsed.searchParams.get("serial_status")).toBe("completed");
+      expect(parsed.searchParams.get("genre_name")).toBe("romance,love_story");
+      expect(parsed.searchParams.get("page")).toBe("3");
+    });
   });
 
   describe("検索結果の解析 (AC-09)", () => {
