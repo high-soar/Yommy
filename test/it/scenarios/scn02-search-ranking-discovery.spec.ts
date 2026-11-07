@@ -496,4 +496,85 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     expect(novelTitles).toContain("デイリー1位作品");
     expect(novelTitles).toContain("無職転生 - 異世界行ったら本気だす");
   });
+
+  test("検索画面で除外キーワード指定および複数ジャンル選択による高度絞り込み検索が正常に機能すること (AC-SE-11)", async ({
+    page,
+  }) => {
+    // 1. 検索画面へ移動
+    const tabSearch = page.getByTestId("tab-search");
+    await tabSearch.click();
+    await expect(page).toHaveURL("/search");
+    const searchPage = page.getByTestId("search-page");
+    await expect(searchPage).toBeVisible();
+
+    // 2. カクヨム: 除外キーワードトグルボタンを押下して入力欄を展開
+    const excludeToggle = page.getByTestId("search-exclude-toggle-button");
+    await expect(excludeToggle).toBeVisible();
+    await expect(excludeToggle).toHaveAttribute("aria-expanded", "false");
+    await excludeToggle.click();
+    await expect(excludeToggle).toHaveAttribute("aria-expanded", "true");
+
+    const excludeInput = page.getByTestId("search-exclude-input");
+    await expect(excludeInput).toBeVisible();
+
+    // 3. キーワードと除外キーワードを入力
+    const searchInput = page.getByTestId("search-input");
+    await searchInput.fill("異世界");
+    await excludeInput.fill("チート");
+
+    // 除外キーワードクリアボタンの存在確認
+    const excludeClearBtn = page.getByTestId("search-exclude-clear-button");
+    await expect(excludeClearBtn).toBeVisible();
+
+    // 4. カクヨム複数ジャンルピルを選択（異世界ファンタジー + 現代ファンタジー）
+    const fantasyPill = page.getByTestId("search-genre-fantasy");
+    const actionPill = page.getByTestId("search-genre-action");
+    const allPill = page.getByTestId("search-genre-all");
+
+    await fantasyPill.click();
+    await expect(fantasyPill).toHaveAttribute("aria-pressed", "true");
+    await expect(allPill).toHaveAttribute("aria-pressed", "false");
+
+    await actionPill.click();
+    await expect(actionPill).toHaveAttribute("aria-pressed", "true");
+    await expect(fantasyPill).toHaveAttribute("aria-pressed", "true");
+
+    // 5. 検索実行
+    const searchSubmit = page.getByTestId("search-submit-button");
+    await searchSubmit.click();
+
+    const searchList = page.getByTestId("search-results-list");
+    await expect(searchList).toBeVisible();
+    const searchCard1 = page.getByTestId(
+      "search-novel-card-16817330658027210001",
+    );
+    await expect(searchCard1).toBeVisible();
+
+    // 6. 小説家になろうへサイト切り替え（除外キーワードが維持され、ジャンルがリセットされること）
+    const siteNarouSearch = searchPage.getByTestId("site-selector-narou");
+    await siteNarouSearch.click();
+    await expect(siteNarouSearch).toHaveAttribute("aria-pressed", "true");
+
+    // 除外キーワードが維持されていること
+    await expect(excludeInput).toHaveValue("チート");
+
+    // なろうジャンルの「すべて」がアクティブであること
+    const narouAllPill = page.getByTestId("search-genre-all");
+    await expect(narouAllPill).toHaveAttribute("aria-pressed", "true");
+
+    // なろう小ジャンル（101 + 201）を複数選択
+    const narou101 = page.getByTestId("search-genre-101");
+    const narou201 = page.getByTestId("search-genre-201");
+    await narou101.click();
+    await expect(narou101).toHaveAttribute("aria-pressed", "true");
+    await expect(narouAllPill).toHaveAttribute("aria-pressed", "false");
+
+    await narou201.click();
+    await expect(narou201).toHaveAttribute("aria-pressed", "true");
+    await expect(narou101).toHaveAttribute("aria-pressed", "true");
+
+    // 7. 再検索実行
+    await searchSubmit.click();
+    await expect(searchList).toBeVisible();
+  });
 });

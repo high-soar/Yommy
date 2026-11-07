@@ -291,4 +291,22 @@ describe("SearchContainer コンポーネント", () => {
 
     pageSpy.mockRestore();
   });
+
+  it("SearchPage に excludeKeyword, onChangeExcludeKeyword, selectedGenres が正しくバインドされること (v0.8 Issue #264)", async () => {
+    const pageSpy = vi.spyOn(SearchPageModule, "SearchPage");
+    renderWithProviders();
+
+    await waitFor(() => {
+      expect(pageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          excludeKeyword: "",
+          onChangeExcludeKeyword: expect.any(Function),
+          selectedGenres: [],
+        }),
+        undefined,
+      );
+    });
+
+    pageSpy.mockRestore();
+  });
 });

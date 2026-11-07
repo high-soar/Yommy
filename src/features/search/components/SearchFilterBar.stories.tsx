@@ -70,3 +70,28 @@ export const NarouGenres: Story = {
     selectedGenre: "201",
   },
 };
+
+/**
+ * 検索絞り込みバー（カクヨム複数ジャンル選択 / v0.8 Issue #264）
+ */
+export const MultiGenresSelected: Story = {
+  name: "カクヨム複数ジャンル選択（ファンタジー・アクション）",
+  args: {
+    selectedOrder: "weekly_ranking",
+    selectedSerialStatus: "all",
+    selectedGenres: ["fantasy", "action"],
+  },
+};
+
+/**
+ * 検索絞り込みバー（小説家になろう複数小ジャンル選択 / v0.8 Issue #264）
+ */
+export const NarouMultiGenres: Story = {
+  name: "なろう複数小ジャンル選択（ハイファンタジー・ローファンタジー）",
+  args: {
+    selectedSite: "narou",
+    selectedOrder: "weekly_ranking",
+    selectedSerialStatus: "all",
+    selectedGenres: ["201", "202"],
+  },
+};

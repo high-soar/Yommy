@@ -3,9 +3,15 @@ import React from "react";
 export interface SearchInputBarProps {
   keyword: string;
   onChangeKeyword: (keyword: string) => void;
+  /** 除外キーワード文字列（省略時は ""、v0.8 Issue #264） */
+  excludeKeyword?: string;
+  /** 除外キーワード変更コールバック（v0.8 Issue #264） */
+  onChangeExcludeKeyword?: (excludeKeyword: string) => void;
   onSubmitSearch: () => void;
   /** 検索通信中フラグ（true時は検索ボタン無効化、テキスト入力はフォーカス・入力可能維持 / v0.7 Issue #238） */
   isLoading?: boolean;
+  /** 除外キーワード入力欄の初期展開状態（省略時は excludeKeyword が非空の場合に展開） */
+  defaultOpenExclude?: boolean;
 }
 
 /**

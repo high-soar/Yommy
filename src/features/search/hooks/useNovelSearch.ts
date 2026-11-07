@@ -18,6 +18,10 @@ export interface UseNovelSearchResult {
   keyword: string;
   /** キーワード入力更新 */
   setKeyword: (keyword: string) => void;
+  /** 除外キーワード（v0.8 Issue #264） */
+  excludeKeyword: string;
+  /** 除外キーワード入力更新（v0.8 Issue #264） */
+  setExcludeKeyword: (excludeKeyword: string) => void;
   /** 検索実行アクション */
   search: () => Promise<void>;
   /** 並び順 */
@@ -28,9 +32,11 @@ export interface UseNovelSearchResult {
   serialStatus: NovelSerialStatus;
   /** 連載状況変更 */
   setSerialStatus: (status: NovelSerialStatus) => void;
-  /** ジャンル（未指定時 undefined） */
+  /** 単一ジャンル（後方互換用: genres[0]） */
   genre: string | undefined;
-  /** ジャンル変更 */
+  /** 複数ジャンルID配列（v0.8 Issue #264） */
+  genres: string[];
+  /** ジャンルトグル変更（undefined時は全解除、v0.8 Issue #264） */
   setGenre: (genre: string | undefined) => void;
   /** 検索結果作品リスト */
   items: NovelSearchResultItem[];
@@ -422,12 +428,15 @@ export function useNovelSearch(): UseNovelSearchResult {
     setSelectedSite,
     keyword,
     setKeyword,
+    excludeKeyword: "",
+    setExcludeKeyword: () => {},
     search,
     order,
     setOrder,
     serialStatus,
     setSerialStatus,
     genre,
+    genres: [],
     setGenre,
     items,
     registeredWorkIds,

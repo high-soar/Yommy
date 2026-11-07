@@ -18,6 +18,7 @@ const {
   LoadingMore,
   ErrorState,
   NarouSelected,
+  WithAdvancedFilters,
 } = composeStories(stories);
 
 describe("SearchPage コンポーネント", () => {
@@ -394,5 +395,75 @@ describe("SearchPage コンポーネント", () => {
     const addBtn = screen.getByTestId("search-card-add-button");
     await user.click(addBtn);
     expect(handleAddNovel).toHaveBeenCalledWith(sampleSearchItem);
+  });
+
+  it("WithAdvancedFilters ストーリー: 除外キーワード展開および複数ジャンル指定が反映されていること (v0.8 Issue #264 / AC-SE-11)", () => {
+    render(<WithAdvancedFilters />);
+
+    expect(screen.getByTestId("search-exclude-input")).toBeInTheDocument();
+    expect(screen.getByTestId("search-exclude-input")).toHaveValue(
+      "ハーレム チート",
+    );
+    expect(screen.getByTestId("search-genre-fantasy")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByTestId("search-genre-action")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("親子分離: excludeKeyword, onChangeExcludeKeyword, selectedGenres が子コンポーネントへ正しく伝播すること (v0.8 Issue #264)", () => {
+    const inputBarSpy = vi.spyOn(searchInputBarModule, "SearchInputBar");
+    const filterBarSpy = vi.spyOn(searchFilterBarModule, "SearchFilterBar");
+    const handleExcludeChange = vi.fn();
+
+    render(
+      <SearchPage
+        selectedSite="kakuyomu"
+        onSelectSite={vi.fn()}
+        keyword="異世界"
+        onChangeKeyword={vi.fn()}
+        excludeKeyword="チート"
+        onChangeExcludeKeyword={handleExcludeChange}
+        onSubmitSearch={vi.fn()}
+        selectedOrder="weekly_ranking"
+        onSelectOrder={vi.fn()}
+        selectedSerialStatus="all"
+        onSelectSerialStatus={vi.fn()}
+        selectedGenre={undefined}
+        selectedGenres={["fantasy", "action"]}
+        onSelectGenre={vi.fn()}
+        items={[]}
+        registeredWorkIds={new Set()}
+        addingWorkId={null}
+        isLoading={false}
+        isLoadingMore={false}
+        hasNextPage={false}
+        onLoadMore={vi.fn()}
+        error={null}
+        onRetry={vi.fn()}
+        onAddNovel={vi.fn()}
+        onSelectCard={vi.fn()}
+      />,
+    );
+
+    expect(inputBarSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        excludeKeyword: "チート",
+        onChangeExcludeKeyword: handleExcludeChange,
+      }),
+      undefined,
+    );
+    expect(filterBarSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selectedGenres: ["fantasy", "action"],
+      }),
+      undefined,
+    );
+
+    inputBarSpy.mockRestore();
+    filterBarSpy.mockRestore();
   });
 });

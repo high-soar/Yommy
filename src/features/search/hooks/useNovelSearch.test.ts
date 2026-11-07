@@ -1643,4 +1643,229 @@ describe("useNovelSearch", () => {
       expect(result.current.selectedSite).toBe("kakuyomu");
     });
   });
+
+  describe("高度検索フィルタ（除外キーワード・複数ジャンル選択 / v0.8 Issue #264 / AC-SE-11）", () => {
+    it("excludeKeyword の初期値が空文字であり、setExcludeKeyword で更新され検索および loadMore に引き継がれること", async () => {
+      const getHtmlSpy = vi.spyOn(mockHttpClient, "getHtml");
+      const { result } = renderHook(() => useNovelSearch(), {
+        wrapper: createWrapper(),
+      });
+
+      expect(result.current.excludeKeyword).toBe("");
+
+      act(() => {
+        result.current.setKeyword("異世界");
+        result.current.setExcludeKeyword("ハーレム チート");
+      });
+
+      expect(result.current.excludeKeyword).toBe("ハーレム チート");
+
+      await act(async () => {
+        await result.current.search();
+      });
+
+      // 検索 URL に除外キーワードが含まれていること
+      expect(getHtmlSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: expect.stringContaining(
+            "q=%E7%95%B0%E4%B8%96%E7%95%8C+-%E3%83%8F%E3%83%BC%E3%83%AC%E3%83%A0+-%E3%83%81%E3%83%BC%E3%83%88",
+          ),
+        }),
+      );
+
+      // loadMore 実行時にも除外キーワードが引き継がれること
+      await act(async () => {
+        await result.current.loadMore();
+      });
+
+      expect(getHtmlSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          url: expect.stringMatching(/page=2/),
+        }),
+      );
+      expect(
+        getHtmlSpy.mock.calls[getHtmlSpy.mock.calls.length - 1][0].url,
+      ).toContain(
+        "q=%E7%95%B0%E4%B8%96%E7%95%8C+-%E3%83%8F%E3%83%BC%E3%83%AC%E3%83%A0+-%E3%83%81%E3%83%BC%E3%83%88",
+      );
+    });
+
+    it("genres の初期値が空配列で、setGenre による追加・トグル解除・全解除が正しく動作すること", async () => {
+      const { result } = renderHook(() => useNovelSearch(), {
+        wrapper: createWrapper(),
+      });
+
+      expect(result.current.genres).toEqual([]);
+      expect(result.current.genre).toBeUndefined();
+
+      // 1. fantasy を追加
+      act(() => {
+        result.current.setGenre("fantasy");
+      });
+      expect(result.current.genres).toEqual(["fantasy"]);
+      expect(result.current.genre).toBe("fantasy");
+
+      // 2. action を追加（複数選択）
+      act(() => {
+        result.current.setGenre("action");
+      });
+      expect(result.current.genres).toEqual(["fantasy", "action"]);
+      expect(result.current.genre).toBe("fantasy");
+
+      // 3. fantasy をトグル解除
+      act(() => {
+        result.current.setGenre("fantasy");
+      });
+      expect(result.current.genres).toEqual(["action"]);
+      expect(result.current.genre).toBe("action");
+
+      // 4. action をトグル解除（全解除）
+      act(() => {
+        result.current.setGenre("action");
+      });
+      expect(result.current.genres).toEqual([]);
+      expect(result.current.genre).toBeUndefined();
+
+      // 5. 個別ジャンル指定後に undefined 渡しで「すべて」リセット
+      act(() => {
+        result.current.setGenre("fantasy");
+      });
+      expect(result.current.genres).toEqual(["fantasy"]);
+
+      act(() => {
+        result.current.setGenre(undefined);
+      });
+      expect(result.current.genres).toEqual([]);
+      expect(result.current.genre).toBeUndefined();
+    });
+
+    it("hasSearched が true のとき、setGenre 呼び出しで新ジャンル条件により即時再検索が走ること", async () => {
+      const getHtmlSpy = vi.spyOn(mockHttpClient, "getHtml");
+      const { result } = renderHook(() => useNovelSearch(), {
+        wrapper: createWrapper(),
+      });
+
+      act(() => {
+        result.current.setKeyword("ファンタジー");
+      });
+
+      await act(async () => {
+        await result.current.search();
+      });
+
+      expect(getHtmlSpy).toHaveBeenCalledTimes(1);
+
+      // ジャンル追加で自動再検索
+      await act(async () => {
+        result.current.setGenre("action");
+      });
+
+      expect(getHtmlSpy).toHaveBeenCalledTimes(2);
+      expect(getHtmlSpy.mock.calls[1][0].url).toContain("genre_name=action");
+    });
+
+    it("サイト切り替え時に excludeKeyword は保持され、genres のみ空配列にリセットされること", async () => {
+      const getHtmlSpy = vi.spyOn(mockHttpClient, "getHtml");
+      const { result } = renderHook(() => useNovelSearch(), {
+        wrapper: createWrapper(),
+      });
+
+      act(() => {
+        result.current.setKeyword("異世界");
+        result.current.setExcludeKeyword("チート");
+        result.current.setGenre("fantasy");
+      });
+
+      expect(result.current.excludeKeyword).toBe("チート");
+      expect(result.current.genres).toEqual(["fantasy"]);
+
+      // なろうへサイト切り替え（未検索状態）
+      act(() => {
+        result.current.setSelectedSite("narou");
+      });
+
+      expect(result.current.selectedSite).toBe("narou");
+      expect(result.current.keyword).toBe("異世界");
+      expect(result.current.excludeKeyword).toBe("チート");
+      expect(result.current.genres).toEqual([]);
+      expect(result.current.genre).toBeUndefined();
+      expect(getHtmlSpy).not.toHaveBeenCalled();
+    });
+
+    it("hasSearched が true の状態でサイト切り替えを行った場合、リセットされたジャンルと保持された除外キーワードで新サイト再検索が走ること", async () => {
+      const getHtmlSpy = vi.spyOn(mockHttpClient, "getHtml");
+      const { result } = renderHook(() => useNovelSearch(), {
+        wrapper: createWrapper(),
+      });
+
+      act(() => {
+        result.current.setKeyword("魔法");
+        result.current.setExcludeKeyword("チート");
+        result.current.setGenre("fantasy");
+      });
+
+      await act(async () => {
+        await result.current.search();
+      });
+
+      expect(getHtmlSpy).toHaveBeenCalledTimes(1);
+
+      // なろうへサイト切り替え（検索実行済み）
+      await act(async () => {
+        result.current.setSelectedSite("narou");
+      });
+
+      expect(result.current.selectedSite).toBe("narou");
+      expect(result.current.genres).toEqual([]);
+      expect(result.current.excludeKeyword).toBe("チート");
+
+      // なろう API へのリクエストが飛び、notword=チート が含まれ genre パラメータは省略されていること
+      expect(getHtmlSpy).toHaveBeenCalledTimes(2);
+      const narouUrl = getHtmlSpy.mock.calls[1][0].url;
+      expect(narouUrl).toContain("https://api.syosetu.com/novelapi/api/");
+      expect(narouUrl).toContain("notword=%E3%83%81%E3%83%BC%E3%83%88");
+      expect(narouUrl).not.toContain("genre=");
+    });
+
+    it("通信中（isLoading または isLoadingMore）に setGenre を呼び出しても無視されること", async () => {
+      let resolveSearch: (res: HttpResponse) => void = () => {};
+      mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/search/, () => {
+        return new Promise<HttpResponse>((resolve) => {
+          resolveSearch = resolve;
+        });
+      });
+
+      const { result } = renderHook(() => useNovelSearch(), {
+        wrapper: createWrapper(),
+      });
+
+      let searchPromise: Promise<void>;
+      act(() => {
+        searchPromise = result.current.search();
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(true);
+      });
+
+      act(() => {
+        result.current.setGenre("fantasy");
+      });
+
+      expect(result.current.genres).toEqual([]);
+
+      await act(async () => {
+        resolveSearch({
+          status: 200,
+          url: "https://kakuyomu.jp/search",
+          headers: {},
+          html: searchApolloHtml,
+        });
+        await searchPromise!;
+      });
+
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.genres).toEqual([]);
+    });
+  });
 });

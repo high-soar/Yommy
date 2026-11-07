@@ -15,6 +15,8 @@ export interface SearchFilterBarProps {
   selectedSerialStatus: NovelSerialStatus;
   onSelectSerialStatus: (status: NovelSerialStatus) => void;
   selectedGenre?: string;
+  /** 複数選択中ジャンルID配列（空配列時は「すべて」選択状態、v0.8 Issue #264） */
+  selectedGenres?: string[];
   onSelectGenre: (genre?: string) => void;
   /** 通信中操作抑止フラグ（省略時は false / v0.7 Issue #238） */
   disabled?: boolean;
