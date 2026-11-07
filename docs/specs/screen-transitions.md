@@ -47,7 +47,7 @@ tags:
   - ho-31
   - ho-32
 related_specs:
-  - docs/specs/changes/issue-266-bookshelf-favorite-and-sync.md
+  - docs/specs/changes/archive/issue-266-bookshelf-favorite-and-sync.md
   - docs/specs/changes/archive/issue-265-work-variation-filter.md
   - docs/specs/changes/archive/issue-264-advanced-search-filter.md
   - docs/specs/changes/archive/issue-240-narou-search-ranking-and-site-selector.md

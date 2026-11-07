@@ -162,6 +162,10 @@ export function createDefaultMockHttpClient(): MockHttpClient {
       html = html
         .replaceAll("境界迷宮と異界の魔術師", "ランキング1位作品：最強の剣士")
         .replaceAll("小野崎", "ランキング1位作家");
+    } else if (options.url.includes("16817330658027210002")) {
+      html = html
+        .replaceAll("境界迷宮と異界の魔術師", "あいうえおの冒険")
+        .replaceAll("小野崎", "作者A");
     }
     return {
       status: 200,

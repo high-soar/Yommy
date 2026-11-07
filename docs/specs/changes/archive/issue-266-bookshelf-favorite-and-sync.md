@@ -3,7 +3,7 @@ type: spec-delta
 title: "作品のお気に入り（★）登録・クラウド同期連携と本棚お気に入りフィルタ機能の設計"
 description: "Issue #266 に対する差分仕様、本棚（SCR-01）および作品詳細（SCR-02）のお気に入り（★）トグルUI、本棚お気に入りフィルタとDB永続化、クラウド同期（SyncEngine）双方向LWWマージ、テスト計画、およびSub-issue分割計画。"
 issue: "#266"
-status: "Review (#266)"
+status: "Completed (Archived)"
 updated: "2026-11-07"
 tags:
   - delta
@@ -53,7 +53,7 @@ related_tests:
 - **愛読作品への素早いアクセスと更新チェック効率化**:
   本棚画面（`SCR-01`）に登録した作品数が増えると、特に愛読している連載作品を素早く絞り込んで閲覧・更新チェックしたいニーズが生じる。
 - **`is_favorite` 基盤の UI 貫通と双方向クラウド同期の完成**:
-  現在、SQLite の `novels.is_favorite` カラム（[docs/specs/db-schema.md](../db-schema.md)）および Google Drive クラウド同期構造 `SyncNovelData.isFavorite`（[docs/specs/architecture.md](../architecture.md)）は既に定義されているが、UI からお気に入り（★）を登録・解除する操作や本棚でのお気に入りフィルタリング機能が未実装であった（[docs/specs/features/bookshelf.md](../features/bookshelf.md) §1 対象外スコープ）。また、`SyncEngine` の Pull 処理（`mergeExistingNovel`）において既存作品に対するリモートのお気に入り変更（`updatedAt` LWW）をローカル DB へ反映する処理が未接続であった。
+  現在、SQLite の `novels.is_favorite` カラム（[docs/specs/db-schema.md](../../db-schema.md)）および Google Drive クラウド同期構造 `SyncNovelData.isFavorite`（[docs/specs/architecture.md](../../architecture.md)）は既に定義されているが、UI からお気に入り（★）を登録・解除する操作や本棚でのお気に入りフィルタリング機能が未実装であった（[docs/specs/features/bookshelf.md](../../features/bookshelf.md) §1 対象外スコープ）。また、`SyncEngine` の Pull 処理（`mergeExistingNovel`）において既存作品に対するリモートのお気に入り変更（`updatedAt` LWW）をローカル DB へ反映する処理が未接続であった。
 - そこで `SYS-REQ-04` および `SYS-REQ-06` を拡張し、本棚カード（`NovelCard`）および作品詳細ヘッダー（`NovelDetailHeader`）の双方からお気に入り（★）をワンタップで登録・解除できるようにするとともに、本棚画面でのお気に入り絞り込みフィルタ（DB 永続化・お気に入り 0 件時の専用空状態・フィルタ連動手動更新チェック）およびクラウド同期での双方向 LWW マージを完成させる。
 
 ---
@@ -64,7 +64,7 @@ Step 1 の `/grill-me` ヒアリングおよび既存コード調査で合意し
 
 ### 2.1 Storage Layer（`NovelRepository` / `schema.ts`）の拡張
 
-[docs/specs/architecture.md](../architecture.md) および [docs/specs/db-schema.md](../db-schema.md) の契約を以下の通り拡張します。
+[docs/specs/architecture.md](../../architecture.md) および [docs/specs/db-schema.md](../../db-schema.md) の契約を以下の通り拡張します。
 
 1. **`APP_SETTING_KEYS` および `app_settings` 初期行の拡張（`src/storage/schema.ts`）**:
    - `APP_SETTING_KEYS` に `BOOKSHELF_FAVORITE_ONLY: "bookshelf_favorite_only"` を追加する。
@@ -91,7 +91,7 @@ Step 1 の `/grill-me` ヒアリングおよび既存コード調査で合意し
 
 ### 2.2 Cloud Sync Layer（`SyncEngine`）の双方向 LWW マージ完成
 
-[docs/specs/architecture.md](../architecture.md) §3.8.2 および `src/features/cloud-sync/services/syncEngine.ts` を以下の通り拡張します。
+[docs/specs/architecture.md](../../architecture.md) §3.8.2 および `src/features/cloud-sync/services/syncEngine.ts` を以下の通り拡張します。
 
 1. **既存作品 Pull 時の `isFavorite` / `updatedAt` LWW マージ（`SyncEngine.mergeExistingNovel`）**:
    - `pullAndMerge()` 内の `mergeExistingNovel(novelId, remoteNovel, localNovel)` において、`updateBookmark` によるローカル `updated_at` の書き換え前に `Date.parse(remoteNovel.updatedAt) > Date.parse(localNovel.updatedAt)` を判定する。
@@ -102,7 +102,7 @@ Step 1 の `/grill-me` ヒアリングおよび既存コード調査で合意し
 
 ### 2.3 本棚画面（`SCR-01`）の UI・Hook 仕様拡張
 
-[docs/specs/features/bookshelf.md](../features/bookshelf.md) のコンポーネント契約および `useBookshelf` フック契約を以下の通り拡張します。
+[docs/specs/features/bookshelf.md](../../features/bookshelf.md) のコンポーネント契約および `useBookshelf` フック契約を以下の通り拡張します。
 
 1. **`NovelCard`（お気に入りトグルボタン追加）**:
    - **Props 拡張（`NovelCardProps`）**:
@@ -174,7 +174,7 @@ Step 1 の `/grill-me` ヒアリングおよび既存コード調査で合意し
 
 ### 2.4 作品詳細・目次画面（`SCR-02`）の UI・Hook 仕様拡張
 
-[docs/specs/features/novel-detail.md](../features/novel-detail.md) のコンポーネント契約および `useNovelDetail` フック契約を以下の通り拡張します。
+[docs/specs/features/novel-detail.md](../../features/novel-detail.md) のコンポーネント契約および `useNovelDetail` フック契約を以下の通り拡張します。
 
 1. **`NovelDetailHeader`（お気に入りトグルボタン追加）**:
    - **Props 拡張（`NovelDetailHeaderProps`）**:

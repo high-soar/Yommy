@@ -27,7 +27,7 @@ tags:
     ho-32,
   ]
 related_specs:
-  - docs/specs/changes/issue-266-bookshelf-favorite-and-sync.md
+  - docs/specs/changes/archive/issue-266-bookshelf-favorite-and-sync.md
   - docs/specs/changes/archive/issue-239-narou-parser-and-multi-page-toc.md
   - docs/specs/parsers/narou.md
   - docs/specs/changes/archive/issue-170-cache-management-and-capacity-visualization.md

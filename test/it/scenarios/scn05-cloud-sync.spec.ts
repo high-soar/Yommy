@@ -15,7 +15,7 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     );
   });
 
-  test("設定画面でのGoogle連携・端末Aでの作品閲覧自動Push・端末Bでの自動Pull復元・削除Tombstone伝播・401失効検知安全フォールバックが一連として正常に機能する", async ({
+  test("設定画面でのGoogle連携・端末Aでの作品閲覧とお気に入り変更自動Push・端末Bでの自動Pull復元とお気に入りLWWマージ・削除Tombstone伝播・401失効検知安全フォールバックが一連として正常に機能する", async ({
     page,
   }) => {
     // =========================================================================
@@ -110,18 +110,32 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
       page.getByText("無職転生 - 異世界行ったら本気だす"),
     ).toBeVisible();
 
-    // 4. カクヨム作品カードをクリックして作品詳細（SCR-02）へ遷移
-    const kakuyomuCardSelect = page
-      .locator('[data-testid="novel-card"]', {
-        hasText: "境界迷宮と異界の魔術師",
-      })
-      .getByTestId("novel-card-select");
+    // 4. カクヨム作品カード上でお気に入り（★）を登録（AC-BS-14）
+    const kakuyomuCard = page.locator('[data-testid="novel-card"]', {
+      hasText: "境界迷宮と異界の魔術師",
+    });
+    const kakuyomuFavBtn = kakuyomuCard.getByTestId(
+      "novel-card-favorite-button",
+    );
+    await expect(kakuyomuFavBtn).toBeVisible();
+    await expect(kakuyomuFavBtn).toHaveAttribute("aria-pressed", "false");
+    await kakuyomuFavBtn.click();
+    await expect(kakuyomuFavBtn).toHaveAttribute("aria-pressed", "true");
+
+    // 5. カクヨム作品カードをクリックして作品詳細（SCR-02）へ遷移
+    const kakuyomuCardSelect = kakuyomuCard.getByTestId("novel-card-select");
     await kakuyomuCardSelect.click();
     await expect(page).toHaveURL(
       /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
     );
 
-    // 5. 目次一覧から第2話エピソード行を選択して第2話へ進む（SCR-03）
+    // 作品詳細ヘッダーでお気に入り状態が「★ お気に入り済み」に反映されていることを確認 (AC-ND-23)
+    const detailFavBtn = page.getByTestId("detail-favorite-toggle-button");
+    await expect(detailFavBtn).toBeVisible();
+    await expect(detailFavBtn).toHaveAttribute("aria-pressed", "true");
+    await expect(detailFavBtn).toHaveText("★ お気に入り済み");
+
+    // 6. 目次一覧から第2話エピソード行を選択して第2話へ進む（SCR-03）
     const episodeItems = page.getByTestId("episode-item");
     await expect(episodeItems).toHaveCount(4);
     await episodeItems.nth(1).click();
@@ -136,7 +150,7 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     await expect(ch2Title).toBeVisible();
     await expect(ch2Title).toHaveText("第1話 見知らぬ空");
 
-    // 6. リーダーでスクロールし、第2話のしおり進捗を保存
+    // 7. リーダーでスクロールし、第2話のしおり進捗を保存
     await page.evaluate(() => {
       const el = document.querySelector('[data-testid="reader-view"]');
       if (el) {
@@ -145,7 +159,7 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
       }
     });
 
-    // 7. ブラウザ戻る操作で作品詳細へ戻る
+    // 8. ブラウザ戻る操作で作品詳細へ戻る
     await page.goBack();
     await expect(page).toHaveURL(
       /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
@@ -154,7 +168,7 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     await expect(resumeButton).toBeVisible();
     await expect(resumeButton).toContainText("続きから読む（第2話）");
 
-    // 8. 2.5秒のデバウンス auto-push が発火し、モック Drive のリモートデータにカクヨムおよびなろう作品（第4話しおり含む）が記録されるのを待機
+    // 9. 2.5秒のデバウンス auto-push が発火し、モック Drive のリモートデータにカクヨム（isFavorite: 1, 第2話しおり）およびなろう作品（isFavorite: 0, 第4話しおり）が記録されるのを待機 (AC-BS-13, AC-BS-14)
     await page.waitForFunction(
       () => {
         const raw = localStorage.getItem("yommy_mock_gdrive_file");
@@ -167,9 +181,13 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
           return (
             Boolean(kakuyomuNovel) &&
             kakuyomuNovel.bookmarkChapterIndex === 2 &&
+            kakuyomuNovel.isFavorite === 1 &&
+            typeof kakuyomuNovel.updatedAt === "string" &&
             kakuyomuNovel.title === "境界迷宮と異界の魔術師" &&
             Boolean(narouNovel) &&
             narouNovel.bookmarkChapterIndex === 4 &&
+            narouNovel.isFavorite === 0 &&
+            typeof narouNovel.updatedAt === "string" &&
             narouNovel.title === "無職転生 - 異世界行ったら本気だす"
           );
         } catch {
@@ -226,6 +244,14 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     await expect(narouCardB.getByTestId("novel-card-bookmark")).toHaveText(
       "しおり: 第4話",
     );
+
+    // リモートからの初回 Pull でのお気に入り状態反映を検証 (AC-BS-13, AC-BS-14)
+    await expect(
+      kakuyomuCardB.getByTestId("novel-card-favorite-button"),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      narouCardB.getByTestId("novel-card-favorite-button"),
+    ).toHaveAttribute("aria-pressed", "false");
 
     // 5. なろう作品カードをクリックして作品詳細へ遷移（複数ページ目次の全話復元および既読同期を検証）
     await narouCardB.getByTestId("novel-card-select").click();
@@ -303,10 +329,83 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     );
 
     // =========================================================================
+    // ステップ3.5: 既存作品に対するリモート側のお気に入り変更（新しい updatedAt）のローカルへの Pull（LWW）反映検証 (AC-BS-13, AC-ND-23)
+    // =========================================================================
+    // 1. リーダーから目次を経て本棚へ復帰
+    await page.goBack();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
+    );
+    await page.goBack();
+    await expect(page).toHaveURL("/");
+    await expect(page.getByTestId("bookshelf-page")).toBeVisible();
+
+    // 2. 他端末によるリモート側の同期データ更新をシミュレート
+    //    ・なろう作品: isFavorite を 0 → 1、updatedAt を未来時刻（現在+10秒）に設定
+    //    ・カクヨム作品: isFavorite を 1 → 0、updatedAt を未来時刻（現在+10秒）に設定
+    await page.evaluate(() => {
+      const raw = localStorage.getItem("yommy_mock_gdrive_file");
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      const futureTime = new Date(Date.now() + 10000).toISOString();
+      if (parsed.novels?.["narou:n9669bk"]) {
+        parsed.novels["narou:n9669bk"].isFavorite = 1;
+        parsed.novels["narou:n9669bk"].updatedAt = futureTime;
+      }
+      if (parsed.novels?.["kakuyomu:16817330658027210412"]) {
+        parsed.novels["kakuyomu:16817330658027210412"].isFavorite = 0;
+        parsed.novels["kakuyomu:16817330658027210412"].updatedAt = futureTime;
+      }
+      localStorage.setItem("yommy_mock_gdrive_file", JSON.stringify(parsed));
+    });
+
+    // 3. 設定画面へ遷移し、「今すぐ同期」を実行して Pull（LWW マージ）をトリガー
+    await page.getByTestId("tab-settings").click();
+    await expect(page).toHaveURL("/settings");
+    const syncNowBtnStep3 = page.getByTestId("cloud-sync-now-button");
+    await expect(syncNowBtnStep3).toBeVisible();
+    await syncNowBtnStep3.click();
+    await expect(syncNowBtnStep3).toHaveText("今すぐ同期", { timeout: 10000 });
+    await expect(syncNowBtnStep3).toBeEnabled();
+
+    // 4. 本棚へ戻り、既存作品に対するリモートのお気に入り変更がローカルに反映されたことを確認
+    await page.getByTestId("tab-bookshelf").click();
+    await expect(page).toHaveURL("/");
+    const cardKakuyomuLww = page.locator('[data-testid="novel-card"]', {
+      hasText: "境界迷宮と異界の魔術師",
+    });
+    const cardNarouLww = page.locator('[data-testid="novel-card"]', {
+      hasText: "無職転生 - 異世界行ったら本気だす",
+    });
+
+    // なろう作品が ★（aria-pressed="true"）に更新されていること
+    await expect(
+      cardNarouLww.getByTestId("novel-card-favorite-button"),
+    ).toHaveAttribute("aria-pressed", "true");
+    // カクヨム作品が ☆（aria-pressed="false"）に更新されていること
+    await expect(
+      cardKakuyomuLww.getByTestId("novel-card-favorite-button"),
+    ).toHaveAttribute("aria-pressed", "false");
+
+    // 5. なろう作品の詳細画面でもヘッダーのお気に入り状態が ★ に更新されていることを確認
+    await cardNarouLww.getByTestId("novel-card-select").click();
+    await expect(page).toHaveURL(/\/novels\/narou(%3A|:)n9669bk$/);
+    const detailFavBtnNarou = page.getByTestId("detail-favorite-toggle-button");
+    await expect(detailFavBtnNarou).toHaveAttribute("aria-pressed", "true");
+    await expect(detailFavBtnNarou).toHaveText("★ お気に入り済み");
+
+    // 本棚へ戻る
+    await page.goBack();
+    await expect(page).toHaveURL("/");
+
+    // =========================================================================
     // ステップ4: 端末 B でのカクヨム作品削除と端末 A への Tombstone 削除伝播確認（なろう作品は維持）
     // =========================================================================
-    // 1. 作品詳細画面に戻る
-    await page.goBack();
+    // 1. カクヨム作品詳細画面へ遷移
+    const kakuyomuCardToDelete = page.locator('[data-testid="novel-card"]', {
+      hasText: "境界迷宮と異界の魔術師",
+    });
+    await kakuyomuCardToDelete.getByTestId("novel-card-select").click();
     await expect(page).toHaveURL(
       /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
     );
@@ -372,6 +471,10 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
       page.getByText("無職転生 - 異世界行ったら本気だす"),
     ).toBeVisible();
     await expect(page.getByText("境界迷宮と異界の魔術師")).not.toBeVisible();
+    // 端末 A でもなろう作品のお気に入り状態（★）がリモートから LWW 反映されていること
+    await expect(
+      remainingCardsA.nth(0).getByTestId("novel-card-favorite-button"),
+    ).toHaveAttribute("aria-pressed", "true");
 
     // =========================================================================
     // ステップ5: 401 遠隔認可解除検知時の安全な未連携復帰確認

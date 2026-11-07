@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手動一括更新・5種ソート永続化シナリオ (HO-18, HO-19)", () => {
+test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手動一括更新・5種ソート永続化・お気に入りトグル/フィルタ/更新連動シナリオ (HO-18, HO-19, HO-32)", () => {
   test.beforeEach(async ({ page }) => {
     // ローカルストレージをクリアして初期状態から開始
     await page.goto("/");
@@ -13,7 +13,7 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
     );
   });
 
-  test("本棚自動更新チェック・NEWバッジ表示と詳細/リーダー遷移時解除・手動一括更新・5種ソート切替/永続化が正常に機能する", async ({
+  test("本棚自動更新チェック・NEWバッジ表示と詳細/リーダー遷移時解除・手動一括更新・5種ソート切替/永続化・お気に入りトグル/フィルタ/更新連動が正常に機能する", async ({
     page,
   }) => {
     // 1. 初期状態の空本棚確認
@@ -57,7 +57,7 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
       );
 
       // 作品2を直接 DB に登録（50音順で作品1より前になるタイトル: "あいうえおの冒険"）
-      const novel2Id = "kakuyomu:9999999999999999999";
+      const novel2Id = "kakuyomu:16817330658027210002";
       const now = new Date().toISOString();
       await services.databaseAdapter.execute(
         `INSERT INTO novels (
@@ -68,8 +68,8 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
         [
           novel2Id,
           "kakuyomu",
-          "9999999999999999999",
-          "https://kakuyomu.jp/works/9999999999999999999",
+          "16817330658027210002",
+          "https://kakuyomu.jp/works/16817330658027210002",
           "あいうえおの冒険",
           "作者A",
           "あいうえおの冒険あらすじ",
@@ -100,7 +100,7 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
           "1",
           null,
           "第1話 はじまり",
-          "https://kakuyomu.jp/works/9999999999999999999/episodes/1",
+          "https://kakuyomu.jp/works/16817330658027210002/episodes/1",
           "<p>冒険が始まる。</p>",
           100,
           0,
@@ -169,7 +169,7 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
       const services = window.__yommyServices!;
       await services.databaseAdapter.execute(
         "UPDATE novels SET has_new_update = 1 WHERE id = ?",
-        ["kakuyomu:9999999999999999999"],
+        ["kakuyomu:16817330658027210002"],
       );
     });
     await page.reload();
@@ -190,7 +190,7 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
     // 作品2の「第1話から読む」（novel-card-resume）をクリックしてリーダー画面へ遷移
     await novelCardWork2WithNew.getByTestId("novel-card-resume").click();
     await expect(page).toHaveURL(
-      /\/novels\/kakuyomu(%3A|:)9999999999999999999\/chapters\/1$/,
+      /\/novels\/kakuyomu(%3A|:)16817330658027210002\/chapters\/1$/,
     );
     await expect(page.getByTestId("reader-page")).toBeVisible();
     await expect(page.getByTestId("reader-view")).toBeVisible();
@@ -198,7 +198,7 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
     // リーダー画面からブラウザ戻る操作で論理階層（作品詳細）を経て本棚へ復帰（fromBookshelfResume仕様）
     await page.goBack();
     await expect(page).toHaveURL(
-      /\/novels\/kakuyomu(%3A|:)9999999999999999999$/,
+      /\/novels\/kakuyomu(%3A|:)16817330658027210002$/,
     );
     await page.goBack();
     await expect(page).toHaveURL("/");
@@ -315,5 +315,298 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
     expect(lastChecked).toBeTruthy();
     const checkedTime = new Date(lastChecked!).getTime();
     expect(Date.now() - checkedTime).toBeLessThan(30000);
+
+    // =========================================================================
+    // 8. 本棚カードおよび作品詳細ヘッダーでのお気に入り（★）登録・解除と画面間連動 (AC-BS-14, AC-ND-23, HO-32)
+    // =========================================================================
+    // (a) 本棚カード上の novel-card-favorite-button によるお気に入り登録・解除
+    const cardWork1 = page
+      .getByTestId("novel-card")
+      .filter({ hasText: "境界迷宮と異界の魔術師" });
+    const favButtonWork1 = cardWork1.getByTestId("novel-card-favorite-button");
+    await expect(favButtonWork1).toBeVisible();
+    await expect(favButtonWork1).toHaveAttribute("aria-pressed", "false");
+    await expect(favButtonWork1).toHaveAttribute(
+      "aria-label",
+      "境界迷宮と異界の魔術師をお気に入りに登録",
+    );
+
+    // 作品1をお気に入りに登録（クリックで詳細画面へ遷移せず、その場で切り替わること: stopPropagation）
+    await favButtonWork1.click();
+    await expect(page).toHaveURL("/");
+    await expect(favButtonWork1).toHaveAttribute("aria-pressed", "true");
+    await expect(favButtonWork1).toHaveAttribute(
+      "aria-label",
+      "境界迷宮と異界の魔術師のお気に入りを解除",
+    );
+
+    // DB に is_favorite = 1 と updated_at 更新が反映されていることを確認
+    const work1FavRow = await page.evaluate(async () => {
+      const services = window.__yommyServices!;
+      const rows = await services.databaseAdapter.query<{
+        is_favorite: number;
+        updated_at: string;
+      }>(
+        "SELECT is_favorite, updated_at FROM novels WHERE id = 'kakuyomu:16817330658027210412'",
+      );
+      return rows[0];
+    });
+    expect(work1FavRow?.is_favorite).toBe(1);
+
+    // (b) 作品詳細ヘッダーの detail-favorite-toggle-button によるお気に入り登録と本棚連動 (AC-ND-23)
+    const cardWork2 = page
+      .getByTestId("novel-card")
+      .filter({ hasText: "あいうえおの冒険" });
+    await cardWork2.getByTestId("novel-card-select").click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210002$/,
+    );
+
+    const detailFavBtn = page.getByTestId("detail-favorite-toggle-button");
+    await expect(detailFavBtn).toBeVisible();
+    await expect(detailFavBtn).toHaveAttribute("aria-pressed", "false");
+    await expect(detailFavBtn).toHaveText("☆ お気に入り");
+
+    // 作品詳細ヘッダーでお気に入り登録
+    await detailFavBtn.click();
+    await expect(detailFavBtn).toHaveAttribute("aria-pressed", "true");
+    await expect(detailFavBtn).toHaveText("★ お気に入り済み");
+
+    // ブラウザ戻るで本棚へ復帰し、作品2カードのお気に入り状態が ★（aria-pressed=true）になっていることを確認
+    await page.goBack();
+    await expect(page).toHaveURL("/");
+    const cardWork2Back = page
+      .getByTestId("novel-card")
+      .filter({ hasText: "あいうえおの冒険" });
+    const favButtonWork2 = cardWork2Back.getByTestId(
+      "novel-card-favorite-button",
+    );
+    await expect(favButtonWork2).toHaveAttribute("aria-pressed", "true");
+
+    // (c) 本棚カードから作品2のお気に入りを解除し、作品詳細へ再度遷移して反映を確認
+    await favButtonWork2.click();
+    await expect(favButtonWork2).toHaveAttribute("aria-pressed", "false");
+
+    await cardWork2Back.getByTestId("novel-card-select").click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210002$/,
+    );
+    await expect(
+      page.getByTestId("detail-favorite-toggle-button"),
+    ).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByTestId("detail-favorite-toggle-button")).toHaveText(
+      "☆ お気に入り",
+    );
+
+    await page.goBack();
+    await expect(page).toHaveURL("/");
+
+    // =========================================================================
+    // 9. 本棚ヘッダーお気に入りフィルタ（bookshelf-favorite-filter-button）による絞り込み表示とソート併用 (AC-BS-15, TR-16)
+    // =========================================================================
+    // 現在の状態: 作品1（境界迷宮）のみお気に入り（isFavorite=true）、作品2（あいうえお）は非お気に入り
+    const favFilterButton = page.getByTestId(
+      "bookshelf-favorite-filter-button",
+    );
+    await expect(favFilterButton).toBeVisible();
+    await expect(favFilterButton).toHaveAttribute("aria-pressed", "false");
+
+    // お気に入りフィルタを ON に切り替え
+    await favFilterButton.click();
+    await expect(favFilterButton).toHaveAttribute("aria-pressed", "true");
+
+    // お気に入りの作品1のみが表示され、作品2は除外されること
+    const filteredCards = page.getByTestId("novel-card");
+    await expect(filteredCards).toHaveCount(1);
+    await expect(
+      filteredCards.nth(0).getByTestId("novel-card-title"),
+    ).toHaveText("境界迷宮と異界の魔術師");
+
+    // ソートとの併用検証: 作品2もお気に入りに登録し、フィルタ ON の状態で2件が正しくソートされることを確認
+    // 一時的にお気に入りフィルタを OFF にして全件表示
+    await favFilterButton.click();
+    await expect(favFilterButton).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByTestId("novel-card")).toHaveCount(2);
+
+    // 作品2もお気に入りに登録
+    const cardWork2ForFilter = page
+      .getByTestId("novel-card")
+      .filter({ hasText: "あいうえおの冒険" });
+    await cardWork2ForFilter.getByTestId("novel-card-favorite-button").click();
+    await expect(
+      cardWork2ForFilter.getByTestId("novel-card-favorite-button"),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    // お気に入りフィルタを再度 ON にする
+    await favFilterButton.click();
+    await expect(favFilterButton).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("novel-card")).toHaveCount(2);
+
+    // ソート順を "title"（タイトル順）へ変更
+    const filterSortSelect = page.getByTestId("bookshelf-sort-select");
+    await filterSortSelect.selectOption("title");
+    const favSortedCards = page.getByTestId("novel-card");
+    await expect(
+      favSortedCards.nth(0).getByTestId("novel-card-title"),
+    ).toHaveText("あいうえおの冒険");
+    await expect(
+      favSortedCards.nth(1).getByTestId("novel-card-title"),
+    ).toHaveText("境界迷宮と異界の魔術師");
+
+    // ソート順を "created_at"（登録日順）へ変更
+    await filterSortSelect.selectOption("created_at");
+    const favSortedCardsCreated = page.getByTestId("novel-card");
+    await expect(
+      favSortedCardsCreated.nth(0).getByTestId("novel-card-title"),
+    ).toHaveText("境界迷宮と異界の魔術師");
+    await expect(
+      favSortedCardsCreated.nth(1).getByTestId("novel-card-title"),
+    ).toHaveText("あいうえおの冒険");
+
+    // 作品2のお気に入りを取り消して、作品1のみがお気に入り状態に戻す
+    const cardWork2InFav = page
+      .getByTestId("novel-card")
+      .filter({ hasText: "あいうえおの冒険" });
+    await cardWork2InFav.getByTestId("novel-card-favorite-button").click();
+    // フィルタ ON 中にお気に入り解除された作品2は即座に一覧から消去されること
+    await expect(page.getByTestId("novel-card")).toHaveCount(1);
+    await expect(
+      page.getByTestId("novel-card").nth(0).getByTestId("novel-card-title"),
+    ).toHaveText("境界迷宮と異界の魔術師");
+
+    // =========================================================================
+    // 10. ページリロード後もお気に入りフィルタ状態が復元・維持されること（bookshelf_favorite_only 永続化）
+    // =========================================================================
+    await page.reload();
+    await page.waitForFunction(
+      () =>
+        typeof window.__yommyServices !== "undefined" &&
+        window.__yommyServices.isReady === true,
+    );
+
+    const reloadedFavFilterBtn = page.getByTestId(
+      "bookshelf-favorite-filter-button",
+    );
+    await expect(reloadedFavFilterBtn).toBeVisible();
+    await expect(reloadedFavFilterBtn).toHaveAttribute("aria-pressed", "true");
+
+    const reloadedFavCards = page.getByTestId("novel-card");
+    await expect(reloadedFavCards).toHaveCount(1);
+    await expect(
+      reloadedFavCards.nth(0).getByTestId("novel-card-title"),
+    ).toHaveText("境界迷宮と異界の魔術師");
+
+    // =========================================================================
+    // 11. お気に入りフィルタ ON 中にお気に入りを解除して 0 件になった際の bookshelf-favorite-empty 描画と、「すべての作品を表示」押下による全作品再表示 (AC-BS-15, TR-16)
+    // =========================================================================
+    // 残る1件（作品1）のお気に入りボタンをクリックして解除
+    const lastFavCard = page.getByTestId("novel-card").nth(0);
+    await lastFavCard.getByTestId("novel-card-favorite-button").click();
+
+    // お気に入り該当作品が 0 件になり、専用空状態 bookshelf-favorite-empty が表示されること
+    const favEmptyState = page.getByTestId("bookshelf-favorite-empty");
+    await expect(favEmptyState).toBeVisible();
+    await expect(favEmptyState).toContainText(
+      "お気に入り登録された作品がありません",
+    );
+
+    // 通常の未登録空状態（bookshelf-empty）や作品リストは描画されないこと
+    await expect(page.getByTestId("bookshelf-empty")).toHaveCount(0);
+    await expect(page.getByTestId("novel-list")).toHaveCount(0);
+
+    // 「すべての作品を表示」（empty-clear-favorite-filter-button）ボタンが表示されていること
+    const clearFilterBtn = page.getByTestId(
+      "empty-clear-favorite-filter-button",
+    );
+    await expect(clearFilterBtn).toBeVisible();
+    await expect(clearFilterBtn).toHaveText("すべての作品を表示");
+
+    // 「すべての作品を表示」をクリックしてフィルタ解除
+    await clearFilterBtn.click();
+
+    // お気に入りフィルタボタンが aria-pressed="false" になり、全2作品が再表示されること
+    await expect(reloadedFavFilterBtn).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByTestId("novel-card")).toHaveCount(2);
+
+    // リロード後もフィルタ解除状態が維持されていることを確認
+    await page.reload();
+    await page.waitForFunction(
+      () =>
+        typeof window.__yommyServices !== "undefined" &&
+        window.__yommyServices.isReady === true,
+    );
+    await expect(
+      page.getByTestId("bookshelf-favorite-filter-button"),
+    ).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByTestId("novel-card")).toHaveCount(2);
+
+    // =========================================================================
+    // 12. お気に入りフィルタ ON 時の手動「更新」ボタン押下でお気に入り作品のみが更新対象となること (AC-BS-10, TR-17)
+    // =========================================================================
+    // 両作品の last_checked_at を過去の同一時刻（3時間前）にリセット
+    const threeHoursAgo = new Date(Date.now() - 3 * 3600 * 1000).toISOString();
+    await page.evaluate(async (pastTime) => {
+      const services = window.__yommyServices!;
+      await services.databaseAdapter.execute(
+        "UPDATE novels SET last_checked_at = ?",
+        [pastTime],
+      );
+    }, threeHoursAgo);
+
+    // 作品1をお気に入りに登録
+    const cardWork1ForUpdate = page
+      .getByTestId("novel-card")
+      .filter({ hasText: "境界迷宮と異界の魔術師" });
+    await cardWork1ForUpdate.getByTestId("novel-card-favorite-button").click();
+    await expect(
+      cardWork1ForUpdate.getByTestId("novel-card-favorite-button"),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    // お気に入りフィルタを ON にする（作品1のみ表示、作品2は非お気に入り）
+    const updateFavFilterBtn = page.getByTestId(
+      "bookshelf-favorite-filter-button",
+    );
+    await updateFavFilterBtn.click();
+    await expect(updateFavFilterBtn).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("novel-card")).toHaveCount(1);
+
+    // 手動更新ボタンを押下（お気に入りフィルタ ON 時は表示中のお気に入り1作品のみ対象）
+    const favRefreshBtn = page.getByTestId("bookshelf-refresh-button");
+    await expect(favRefreshBtn).toBeEnabled();
+    await favRefreshBtn.click();
+
+    // 1作品のため高速に完了: 進捗表示が消去され、更新ボタンが再活性化されることを待機 (TR-17)
+    await expect(
+      page.getByTestId("bookshelf-refresh-progress"),
+    ).not.toBeVisible({ timeout: 15000 });
+    await expect(favRefreshBtn).toBeEnabled();
+
+    // DB の各作品 last_checked_at を検証:
+    // 作品1（お気に入り・表示中）は更新され、作品2（非お気に入り・除外中）は threeHoursAgo のままであること！
+    const checkedRows = await page.evaluate(async () => {
+      const services = window.__yommyServices!;
+      const rows = await services.databaseAdapter.query<{
+        id: string;
+        last_checked_at: string;
+      }>("SELECT id, last_checked_at FROM novels ORDER BY id");
+      return rows;
+    });
+
+    const work1Row = checkedRows.find(
+      (r) => r.id === "kakuyomu:16817330658027210412",
+    );
+    const work2Row = checkedRows.find(
+      (r) => r.id === "kakuyomu:16817330658027210002",
+    );
+
+    expect(work1Row).toBeTruthy();
+    expect(work2Row).toBeTruthy();
+
+    // 作品1は更新された（30秒以内）
+    const work1Time = new Date(work1Row!.last_checked_at).getTime();
+    expect(Date.now() - work1Time).toBeLessThan(30000);
+
+    // 作品2は更新対象外（3時間前のまま変化なし）
+    expect(work2Row!.last_checked_at).toBe(threeHoursAgo);
   });
 });
