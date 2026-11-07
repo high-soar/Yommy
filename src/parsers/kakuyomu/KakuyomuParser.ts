@@ -117,6 +117,36 @@ function parseSerialStatus(raw?: string | null): {
 }
 
 /**
+ * 除外キーワード文字列をトークン分割し、先頭ハイフンを除去・正規化する (v0.8 Issue #264)
+ */
+function parseExcludeTokens(excludeKeyword?: string): string[] {
+  if (!excludeKeyword) {
+    return [];
+  }
+  return excludeKeyword
+    .split(/\s+/)
+    .map((token) => token.replace(/^-+/, "").trim())
+    .filter(Boolean);
+}
+
+/**
+ * カクヨム用の検索ジャンル配列を解決する（genres 優先、genre フォールバック、小文字化・重複排除） (v0.8 Issue #264)
+ */
+function resolveKakuyomuGenres(options?: NovelSearchOptions): string[] {
+  if (options?.genres !== undefined) {
+    return Array.from(
+      new Set(
+        options.genres.map((g) => g.trim().toLowerCase()).filter(Boolean),
+      ),
+    );
+  }
+  if (options?.genre && options.genre.trim()) {
+    return [options.genre.trim().toLowerCase()];
+  }
+  return [];
+}
+
+/**
  * ページ URL のクエリパラメータから現在のページ番号を抽出する
  */
 function extractCurrentPage(pageUrl: string): number {
@@ -741,7 +771,18 @@ export class KakuyomuParser implements NovelParser {
    */
   buildSearchUrl(query: string, options?: NovelSearchOptions): string {
     const url = new URL("https://kakuyomu.jp/search");
-    url.searchParams.set("q", query.trim());
+    const trimmedQuery = query.trim();
+    const excludeTokens = parseExcludeTokens(options?.excludeKeyword);
+
+    const qParts: string[] = [];
+    if (trimmedQuery) {
+      qParts.push(trimmedQuery);
+    }
+    for (const token of excludeTokens) {
+      qParts.push(`-${token}`);
+    }
+    url.searchParams.set("q", qParts.join(" "));
+
     url.searchParams.set("order", options?.order ?? "weekly_ranking");
     if (
       options?.serialStatus === "running" ||
@@ -749,9 +790,12 @@ export class KakuyomuParser implements NovelParser {
     ) {
       url.searchParams.set("serial_status", options.serialStatus);
     }
-    if (options?.genre) {
-      url.searchParams.set("genre_name", options.genre.toLowerCase());
+
+    const genres = resolveKakuyomuGenres(options);
+    if (genres.length > 0) {
+      url.searchParams.set("genre_name", genres.join(","));
     }
+
     if (options?.page !== undefined && options.page >= 2) {
       url.searchParams.set("page", String(options.page));
     }

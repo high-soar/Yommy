@@ -60,7 +60,12 @@ export type NovelSerialStatus = "all" | "running" | "completed";
 export interface NovelSearchOptions {
   order?: NovelSearchOrder;
   serialStatus?: NovelSerialStatus;
+  /** 単一ジャンル指定（後方互換用。genres 未指定時のフォールバック） */
   genre?: string;
+  /** 複数ジャンル（OR）指定（v0.8 Issue #264。指定時は genre より優先） */
+  genres?: string[];
+  /** 除外キーワード（スペース区切りで複数語指定可、v0.8 Issue #264） */
+  excludeKeyword?: string;
   page?: number;
 }
 

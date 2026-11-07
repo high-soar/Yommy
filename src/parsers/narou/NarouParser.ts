@@ -316,6 +316,34 @@ function parseNovelEntry(
 }
 
 /**
+ * 除外キーワード文字列をトークン分割し、先頭ハイフンを除去・正規化する (v0.8 Issue #264)
+ */
+function parseExcludeTokens(excludeKeyword?: string): string[] {
+  if (!excludeKeyword) {
+    return [];
+  }
+  return excludeKeyword
+    .split(/\s+/)
+    .map((token) => token.replace(/^-+/, "").trim())
+    .filter(Boolean);
+}
+
+/**
+ * なろう用の検索小ジャンルコード配列を解決する（genres 優先、genre フォールバック、重複排除） (v0.8 Issue #264)
+ */
+function resolveNarouGenres(options?: NovelSearchOptions): string[] {
+  if (options?.genres !== undefined) {
+    return Array.from(
+      new Set(options.genres.map((g) => g.trim()).filter(Boolean)),
+    );
+  }
+  if (options?.genre && options.genre.trim()) {
+    return [options.genre.trim()];
+  }
+  return [];
+}
+
+/**
  * 小説家になろう（ncode.syosetu.com）向け小説パーサー
  * DOMParser を用いた決定論的 DOM トラバーサル処理（外部ネットワーク通信なし）
  */
@@ -627,6 +655,11 @@ export class NarouParser implements NovelParser {
       url.searchParams.set("word", trimmedQuery);
     }
 
+    const excludeTokens = parseExcludeTokens(options?.excludeKeyword);
+    if (excludeTokens.length > 0) {
+      url.searchParams.set("notword", excludeTokens.join(" "));
+    }
+
     const orderMap: Record<NovelSearchOrder, string> = {
       weekly_ranking: "weeklypoint",
       popular: "hyoka",
@@ -643,8 +676,9 @@ export class NarouParser implements NovelParser {
       url.searchParams.set("type", "ter");
     }
 
-    if (options?.genre && options.genre.trim()) {
-      url.searchParams.set("genre", options.genre.trim());
+    const genres = resolveNarouGenres(options);
+    if (genres.length > 0) {
+      url.searchParams.set("genre", genres.join("-"));
     }
 
     if (options?.page !== undefined && options.page >= 2) {
