@@ -14,6 +14,8 @@ import { SqlNovelRepository } from "../../../storage/repositories/novelRepositor
 import { SqlChapterRepository } from "../../../storage/repositories/chapterRepository";
 import { MockHttpClient } from "../../../bridges/http/mockHttpClient";
 import type { HttpResponse } from "../../../bridges/http/types";
+import type { NovelRepository } from "../../../storage/types";
+import type { SyncEngine } from "../../cloud-sync/services/syncEngine";
 import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 import episodeContentHtml from "../../../parsers/kakuyomu/__fixtures__/episode_content.html?raw";
 import narouWorkIndexSerializedHtml from "../../../parsers/narou/__fixtures__/work_index_serialized.html?raw";
@@ -1891,6 +1893,167 @@ describe("useNovelDetail", () => {
 
         expect(result.current.isRefreshing).toBe(false);
       });
+    });
+  });
+
+  describe("お気に入り（★）トグルとクラウド同期連携 (Issue #266)", () => {
+    it("toggleFavorite 呼び出しで novelRepository.setFavorite が実行され、novel.isFavorite が反転し syncEngine.notifyChanged が呼ばれること", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 1);
+
+      const mockSyncEngine = {
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+        pullAndMerge: vi.fn().mockResolvedValue(undefined),
+        pushLocalChanges: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const { result } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          syncEngine: mockSyncEngine as unknown as SyncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.novel?.isFavorite).toBe(false);
+
+      let success = false;
+      await act(async () => {
+        success = await result.current.toggleFavorite();
+      });
+
+      expect(success).toBe(true);
+      expect(result.current.novel?.isFavorite).toBe(true);
+      expect(mockSyncEngine.notifyChanged).toHaveBeenCalledTimes(1);
+
+      // 解除トグル
+      await act(async () => {
+        success = await result.current.toggleFavorite();
+      });
+
+      expect(success).toBe(true);
+      expect(result.current.novel?.isFavorite).toBe(false);
+      expect(mockSyncEngine.notifyChanged).toHaveBeenCalledTimes(2);
+    });
+
+    it("更新中（isRefreshing === true）などの排他処理中は toggleFavorite がガードされ false を返すこと", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 1);
+
+      let resolveRefresh: () => void = () => {};
+      const httpClient = new MockHttpClient();
+      httpClient.setResponse(
+        seeded.canonicalUrl,
+        () =>
+          new Promise((resolve) => {
+            resolveRefresh = () =>
+              resolve({
+                status: 200,
+                url: seeded.canonicalUrl,
+                headers: {},
+                html: workIndexHtml,
+              });
+          }),
+      );
+
+      const { result } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          httpClient,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      let refreshPromise: Promise<boolean>;
+      act(() => {
+        refreshPromise = result.current.refreshToc();
+      });
+      expect(result.current.isRefreshing).toBe(true);
+
+      let favResult = true;
+      await act(async () => {
+        favResult = await result.current.toggleFavorite();
+      });
+      expect(favResult).toBe(false);
+
+      await act(async () => {
+        resolveRefresh();
+        await refreshPromise;
+      });
+      expect(result.current.isRefreshing).toBe(false);
+    });
+
+    it("novel === null のときは toggleFavorite が false を返すこと", async () => {
+      const customNovelRepo = {
+        getNovelById: vi.fn().mockResolvedValue(null),
+        listNovels: vi.fn().mockResolvedValue([]),
+        upsertNovelWithToc: vi.fn(),
+        updateBookmark: vi.fn(),
+        setFavorite: vi.fn(),
+        deleteNovel: vi.fn(),
+        clearNewUpdate: vi.fn(),
+        updateLastCheckedAt: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useNovelDetail("non-existent-id"), {
+        wrapper: createWrapper({
+          novelRepository: customNovelRepo as unknown as NovelRepository,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.novel).toBeNull();
+
+      let res = true;
+      await act(async () => {
+        res = await result.current.toggleFavorite();
+      });
+      expect(res).toBe(false);
+    });
+
+    it("setFavorite で例外が発生した場合は error が設定され false を返すこと", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 1);
+
+      vi.spyOn(novelRepo, "setFavorite").mockRejectedValue(
+        new Error("DB書き込みエラー"),
+      );
+
+      const { result } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      let res = true;
+      await act(async () => {
+        res = await result.current.toggleFavorite();
+      });
+
+      expect(res).toBe(false);
+      expect(result.current.error).toBe("DB書き込みエラー");
     });
   });
 });

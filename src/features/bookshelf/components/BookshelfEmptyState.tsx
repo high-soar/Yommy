@@ -3,6 +3,8 @@ import React from "react";
 export interface BookshelfEmptyStateProps {
   onNavigateSearch?: () => void;
   onNavigateRanking?: () => void;
+  isFavoriteFilterActive?: boolean;
+  onClearFavoriteFilter?: () => void;
 }
 
 /**
@@ -11,7 +13,39 @@ export interface BookshelfEmptyStateProps {
 export const BookshelfEmptyState: React.FC<BookshelfEmptyStateProps> = ({
   onNavigateSearch,
   onNavigateRanking,
+  isFavoriteFilterActive = false,
+  onClearFavoriteFilter,
 }) => {
+  if (isFavoriteFilterActive) {
+    return (
+      <div
+        data-testid="bookshelf-favorite-empty"
+        className="flex flex-col items-center justify-center p-8 text-center bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 shadow-xs max-w-md mx-auto my-12"
+      >
+        <div
+          aria-hidden="true"
+          className="w-16 h-16 mb-4 rounded-full bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center text-amber-500 dark:text-amber-400 text-2xl select-none"
+        >
+          ⭐
+        </div>
+        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">
+          お気に入り登録された作品がありません
+        </h3>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
+          作品カードの ☆ ボタンや作品詳細画面から、お気に入り（★）に登録できます
+        </p>
+        <button
+          type="button"
+          data-testid="empty-clear-favorite-filter-button"
+          onClick={onClearFavoriteFilter}
+          className="inline-flex items-center justify-center px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg shadow-xs transition-colors focus:outline-hidden focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 cursor-pointer"
+        >
+          すべての作品を表示
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div
       data-testid="bookshelf-empty"

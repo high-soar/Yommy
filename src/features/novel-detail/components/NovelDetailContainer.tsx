@@ -42,6 +42,7 @@ export const NovelDetailContainer: React.FC<NovelDetailContainerProps> = ({
     openClearCacheDialog,
     closeClearCacheDialog,
     confirmClearCache,
+    toggleFavorite,
   } = useNovelDetail(novelId);
 
   const handleBackToBookshelf = useCallback(() => {
@@ -85,6 +86,10 @@ export const NovelDetailContainer: React.FC<NovelDetailContainerProps> = ({
     }
   }, [confirmDeleteNovel, handleBackToBookshelf]);
 
+  const handleToggleFavorite = useCallback(async () => {
+    await toggleFavorite();
+  }, [toggleFavorite]);
+
   return (
     <NovelDetailPage
       novel={novel}
@@ -113,6 +118,7 @@ export const NovelDetailContainer: React.FC<NovelDetailContainerProps> = ({
       onOpenClearCacheDialog={openClearCacheDialog}
       onCloseClearCacheDialog={closeClearCacheDialog}
       onConfirmClearCache={confirmClearCache}
+      onToggleFavorite={handleToggleFavorite}
     />
   );
 };

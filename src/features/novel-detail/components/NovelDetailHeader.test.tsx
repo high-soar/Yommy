@@ -37,6 +37,8 @@ const {
   ExpandedSynopsis,
   BatchCaching,
   AllCached,
+  Favorite,
+  NotFavorite,
 } = composeStories(stories);
 
 describe("NovelDetailHeader", () => {
@@ -175,6 +177,22 @@ describe("NovelDetailHeader", () => {
       expect(synopsis).not.toHaveClass("line-clamp-2");
       expect(synopsis).toHaveClass("max-h-40");
       expect(synopsis).toHaveClass("overflow-y-auto");
+    });
+
+    it("Favorite ストーリーでお気に入り登録済み（★）ボタンが描画され、aria-pressed が true であること (Issue #266)", () => {
+      render(<Favorite />);
+      const favButton = screen.getByTestId("detail-favorite-toggle-button");
+      expect(favButton).toBeInTheDocument();
+      expect(favButton).toHaveAttribute("aria-pressed", "true");
+      expect(favButton).toHaveTextContent("★ お気に入り済み");
+    });
+
+    it("NotFavorite ストーリーでお気に入り未登録（☆）ボタンが描画され、aria-pressed が false であること (Issue #266)", () => {
+      render(<NotFavorite />);
+      const favButton = screen.getByTestId("detail-favorite-toggle-button");
+      expect(favButton).toBeInTheDocument();
+      expect(favButton).toHaveAttribute("aria-pressed", "false");
+      expect(favButton).toHaveTextContent("☆ お気に入り");
     });
   });
 
@@ -593,6 +611,48 @@ describe("NovelDetailHeader", () => {
           "open-clear-cache-dialog-button",
         );
         expect(clearCacheButton).toBeDisabled();
+      });
+    });
+
+    describe("お気に入り（★）トグルボタンの検証 (Issue #266)", () => {
+      it("お気に入りボタンをクリックしたときに onToggleFavorite が呼び出されること (Issue #266)", async () => {
+        const user = userEvent.setup();
+        const onToggleFavorite = vi.fn();
+
+        render(
+          <NovelDetailHeader
+            {...defaultProps}
+            onToggleFavorite={onToggleFavorite}
+          />,
+        );
+
+        const favButton = screen.getByTestId("detail-favorite-toggle-button");
+        await user.click(favButton);
+
+        expect(onToggleFavorite).toHaveBeenCalledTimes(1);
+      });
+
+      it("目次更新中（isRefreshing === true）のときお気に入りボタンが disabled であること (Issue #266)", () => {
+        render(<NovelDetailHeader {...defaultProps} isRefreshing={true} />);
+
+        const favButton = screen.getByTestId("detail-favorite-toggle-button");
+        expect(favButton).toBeDisabled();
+      });
+
+      it("一括キャッシュ中（isBatchCaching === true）のときお気に入りボタンが disabled であること (Issue #266)", () => {
+        render(<NovelDetailHeader {...defaultProps} isBatchCaching={true} />);
+
+        const favButton = screen.getByTestId("detail-favorite-toggle-button");
+        expect(favButton).toBeDisabled();
+      });
+
+      it("onToggleFavorite が省略された場合でもボタンクリックでエラーにならないこと (Issue #266)", async () => {
+        const user = userEvent.setup();
+
+        render(<NovelDetailHeader {...defaultProps} />);
+
+        const favButton = screen.getByTestId("detail-favorite-toggle-button");
+        await expect(user.click(favButton)).resolves.not.toThrow();
       });
     });
   });

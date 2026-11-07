@@ -100,6 +100,7 @@ const RouteObserverWrapper: React.FC<{
 
 describe("BookshelfContainer", () => {
   beforeEach(async () => {
+    localStorage.clear();
     await resetTestDb();
     window.history.pushState(null, "", "/");
   });
@@ -426,6 +427,85 @@ describe("BookshelfContainer", () => {
           "/novels/kakuyomu%3Anew-update-work-2/chapters/3",
         );
       });
+    });
+
+    it("ヘッダーのお気に入りフィルタボタンをクリックしたときにお気に入りフィルタが切り替わること (Issue #266)", async () => {
+      const user = userEvent.setup();
+      const now = new Date().toISOString();
+      const favNovel: NovelSummary = {
+        ...sampleNovels[0],
+        id: "kakuyomu:fav-1",
+        title: "お気に入り作品",
+        isFavorite: true,
+        lastCheckedAt: now,
+      };
+      const normalNovel: NovelSummary = {
+        ...sampleNovels[0],
+        id: "kakuyomu:norm-1",
+        title: "通常作品",
+        isFavorite: false,
+        lastCheckedAt: now,
+      };
+
+      const novelRepo = createMockNovelRepo([favNovel, normalNovel]);
+
+      render(
+        <ServiceProvider services={{ novelRepository: novelRepo }}>
+          <RouterProvider initialPath="/">
+            <RouteObserverWrapper />
+          </RouterProvider>
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getAllByTestId("novel-card")).toHaveLength(2);
+      });
+
+      const filterBtn = screen.getByTestId("bookshelf-favorite-filter-button");
+      await user.click(filterBtn);
+
+      await waitFor(() => {
+        expect(screen.getAllByTestId("novel-card")).toHaveLength(1);
+        expect(screen.getByTestId("novel-card-title")).toHaveTextContent(
+          "お気に入り作品",
+        );
+      });
+    });
+
+    it("作品カードのお気に入りボタンをクリックしたときにお気に入り状態がトグルされること (Issue #266)", async () => {
+      const user = userEvent.setup();
+      const normalNovel: NovelSummary = {
+        ...sampleNovels[0],
+        id: "kakuyomu:16817330658027210412",
+        isFavorite: false,
+        lastCheckedAt: new Date().toISOString(),
+      };
+
+      const setFavoriteSpy = vi.fn();
+      const novelRepo = {
+        ...createMockNovelRepo([normalNovel]),
+        setFavorite: setFavoriteSpy,
+      };
+
+      render(
+        <ServiceProvider services={{ novelRepository: novelRepo }}>
+          <RouterProvider initialPath="/">
+            <RouteObserverWrapper />
+          </RouterProvider>
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("novel-card")).toBeInTheDocument();
+      });
+
+      const favBtn = screen.getByTestId("novel-card-favorite-button");
+      await user.click(favBtn);
+
+      expect(setFavoriteSpy).toHaveBeenCalledWith(
+        "kakuyomu:16817330658027210412",
+        true,
+      );
     });
   });
 });

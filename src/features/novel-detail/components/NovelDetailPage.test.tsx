@@ -617,6 +617,23 @@ describe("NovelDetailPage", () => {
         expect(notice).toBeInTheDocument();
         expect(notice).toHaveTextContent("本文キャッシュを削除しました（2話）");
       });
+
+      it("onToggleFavorite が指定された場合、NovelDetailHeader のお気に入りボタン押下で呼び出されること (Issue #266)", async () => {
+        const user = userEvent.setup();
+        const onToggleFavorite = vi.fn();
+
+        render(
+          <NovelDetailPage
+            {...defaultPageProps}
+            onToggleFavorite={onToggleFavorite}
+          />,
+        );
+
+        const favBtn = screen.getByTestId("detail-favorite-toggle-button");
+        await user.click(favBtn);
+
+        expect(onToggleFavorite).toHaveBeenCalledTimes(1);
+      });
     });
   });
 });

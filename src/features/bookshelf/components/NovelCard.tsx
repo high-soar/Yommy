@@ -5,6 +5,7 @@ export interface NovelCardProps {
   novel: NovelSummary;
   onSelect: (novelId: string) => void;
   onResume: (novelId: string, chapterIndex: number) => void;
+  onToggleFavorite?: (novelId: string, nextIsFavorite: boolean) => void;
 }
 
 /**
@@ -14,6 +15,7 @@ export const NovelCard: React.FC<NovelCardProps> = ({
   novel,
   onSelect,
   onResume,
+  onToggleFavorite,
 }) => {
   const isBookmarked = novel.bookmarkChapterIndex !== null;
   const bookmarkLabel = isBookmarked
@@ -29,20 +31,25 @@ export const NovelCard: React.FC<NovelCardProps> = ({
     onResume(novel.id, targetChapter);
   };
 
+  const handleFavoriteClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    onToggleFavorite?.(novel.id, !novel.isFavorite);
+  };
+
   return (
     <div
       data-testid="novel-card"
       data-novel-id={novel.id}
       className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow"
     >
-      <button
-        type="button"
-        data-testid="novel-card-select"
-        onClick={() => onSelect(novel.id)}
-        className="cursor-pointer group flex-1 focus:outline-hidden focus:ring-2 focus:ring-blue-500 rounded-lg p-1 -m-1 text-left w-full"
-      >
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <button
+          type="button"
+          data-testid="novel-card-select"
+          onClick={() => onSelect(novel.id)}
+          className="cursor-pointer group flex-1 min-w-0 focus:outline-hidden focus:ring-2 focus:ring-blue-500 rounded-lg p-1 -m-1 text-left"
+        >
+          <div className="flex items-center gap-1.5 min-w-0 mb-2">
             {novel.hasNewUpdate && (
               <span
                 data-testid="novel-card-new-badge"
@@ -58,6 +65,23 @@ export const NovelCard: React.FC<NovelCardProps> = ({
               {novel.title}
             </h3>
           </div>
+
+          <p
+            data-testid="novel-card-author"
+            className="text-xs text-slate-600 dark:text-slate-400 mb-3"
+          >
+            {novel.author || "著者不明"}
+          </p>
+
+          <p
+            data-testid="novel-card-chapters"
+            className="text-xs text-slate-500 dark:text-slate-400 mb-4"
+          >
+            全 {novel.totalChapters} 話（取得済み {novel.cachedChapters} 話）
+          </p>
+        </button>
+
+        <div className="flex items-center gap-1.5 shrink-0">
           <span
             data-testid="novel-card-bookmark"
             className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
@@ -68,22 +92,26 @@ export const NovelCard: React.FC<NovelCardProps> = ({
           >
             {bookmarkLabel}
           </span>
+          <button
+            type="button"
+            data-testid="novel-card-favorite-button"
+            aria-pressed={novel.isFavorite}
+            aria-label={
+              novel.isFavorite
+                ? `${novel.title}のお気に入りを解除`
+                : `${novel.title}をお気に入りに登録`
+            }
+            onClick={handleFavoriteClick}
+            className={`inline-flex items-center justify-center w-7 h-7 text-sm rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-amber-500 cursor-pointer ${
+              novel.isFavorite
+                ? "bg-amber-50 dark:bg-amber-950/40 text-amber-500 border border-amber-300 dark:border-amber-700/60 hover:bg-amber-100 dark:hover:bg-amber-900/50"
+                : "bg-slate-50 dark:bg-slate-700/40 text-slate-400 border border-slate-200 dark:border-slate-600 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
+            }`}
+          >
+            {novel.isFavorite ? "★" : "☆"}
+          </button>
         </div>
-
-        <p
-          data-testid="novel-card-author"
-          className="text-xs text-slate-600 dark:text-slate-400 mb-3"
-        >
-          {novel.author || "著者不明"}
-        </p>
-
-        <p
-          data-testid="novel-card-chapters"
-          className="text-xs text-slate-500 dark:text-slate-400 mb-4"
-        >
-          全 {novel.totalChapters} 話（取得済み {novel.cachedChapters} 話）
-        </p>
-      </button>
+      </div>
 
       <div className="pt-3 border-t border-slate-100 dark:border-slate-700/60 mt-auto">
         <button

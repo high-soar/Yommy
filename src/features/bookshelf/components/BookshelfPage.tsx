@@ -5,11 +5,15 @@ import { NovelCard } from "./NovelCard";
 
 export interface BookshelfPageProps {
   novels: NovelSummary[];
+  totalNovelsCount?: number;
   isLoading: boolean;
   isCheckingUpdates?: boolean;
   updateCheckProgress?: { current: number; total: number } | null;
   sortOrder?: BookshelfSortOrder;
+  favoriteOnly?: boolean;
   onSortChange?: (order: BookshelfSortOrder) => void;
+  onToggleFavoriteFilter?: () => void;
+  onToggleFavoriteNovel?: (novelId: string, nextIsFavorite: boolean) => void;
   onCheckUpdates?: () => void;
   onNavigateSearch?: () => void;
   onNavigateRanking?: () => void;
@@ -25,17 +29,23 @@ export interface BookshelfPageProps {
  */
 export const BookshelfPage: React.FC<BookshelfPageProps> = ({
   novels,
+  totalNovelsCount = novels.length,
   isLoading,
   isCheckingUpdates = false,
   updateCheckProgress = null,
   sortOrder = "unread_first",
+  favoriteOnly = false,
   onSortChange,
+  onToggleFavoriteFilter,
+  onToggleFavoriteNovel,
   onCheckUpdates,
   onNavigateSearch,
   onNavigateRanking,
   onSelectNovel,
   onResumeNovel,
 }) => {
+  const isRefreshDisabled = isCheckingUpdates || novels.length === 0;
+
   return (
     <div
       data-testid="bookshelf-page"
@@ -62,6 +72,26 @@ export const BookshelfPage: React.FC<BookshelfPageProps> = ({
                 {updateCheckProgress.total})...
               </span>
             )}
+            <button
+              type="button"
+              data-testid="bookshelf-favorite-filter-button"
+              aria-pressed={favoriteOnly}
+              aria-label="お気に入りのみ表示"
+              onClick={onToggleFavoriteFilter}
+              className={`inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs md:text-sm font-medium transition-colors cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-amber-500 ${
+                favoriteOnly
+                  ? "bg-amber-50 dark:bg-amber-950/40 border-amber-400 dark:border-amber-600 text-amber-700 dark:text-amber-300 font-semibold"
+                  : "bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+              }`}
+            >
+              <span
+                className={favoriteOnly ? "text-amber-500" : "text-slate-400"}
+                aria-hidden="true"
+              >
+                {favoriteOnly ? "★" : "☆"}
+              </span>
+              <span>お気に入り</span>
+            </button>
             <select
               data-testid="bookshelf-sort-select"
               value={sortOrder}
@@ -81,10 +111,10 @@ export const BookshelfPage: React.FC<BookshelfPageProps> = ({
               type="button"
               data-testid="bookshelf-refresh-button"
               aria-label="一括更新チェック"
-              disabled={isCheckingUpdates}
+              disabled={isRefreshDisabled}
               onClick={onCheckUpdates}
               className={`inline-flex items-center justify-center px-2 py-1.5 md:px-2.5 md:py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-xs md:text-sm font-medium transition-colors ${
-                isCheckingUpdates
+                isRefreshDisabled
                   ? "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed"
                   : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"
               }`}
@@ -116,10 +146,17 @@ export const BookshelfPage: React.FC<BookshelfPageProps> = ({
             <p className="text-sm font-medium">作品一覧を読み込み中...</p>
           </div>
         ) : novels.length === 0 ? (
-          <BookshelfEmptyState
-            onNavigateSearch={onNavigateSearch}
-            onNavigateRanking={onNavigateRanking}
-          />
+          favoriteOnly && totalNovelsCount > 0 ? (
+            <BookshelfEmptyState
+              isFavoriteFilterActive={true}
+              onClearFavoriteFilter={onToggleFavoriteFilter}
+            />
+          ) : (
+            <BookshelfEmptyState
+              onNavigateSearch={onNavigateSearch}
+              onNavigateRanking={onNavigateRanking}
+            />
+          )
         ) : (
           <div
             data-testid="novel-list"
@@ -131,6 +168,7 @@ export const BookshelfPage: React.FC<BookshelfPageProps> = ({
                 novel={novel}
                 onSelect={onSelectNovel}
                 onResume={onResumeNovel}
+                onToggleFavorite={onToggleFavoriteNovel}
               />
             ))}
           </div>

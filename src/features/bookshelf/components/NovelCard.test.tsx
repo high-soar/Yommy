@@ -6,8 +6,14 @@ import * as stories from "./NovelCard.stories";
 import { NovelCard } from "./NovelCard";
 import type { NovelSummary } from "../../../storage/types";
 
-const { WithBookmark, Unread, UnknownAuthor, WithNewBadge } =
-  composeStories(stories);
+const {
+  WithBookmark,
+  Unread,
+  UnknownAuthor,
+  WithNewBadge,
+  Favorite,
+  Unfavorite,
+} = composeStories(stories);
 
 const dummyNovelWithBookmark: NovelSummary = {
   id: "kakuyomu:16817330658027210412",
@@ -87,6 +93,30 @@ describe("NovelCard", () => {
       expect(screen.getByTestId("novel-card-new-badge")).toHaveTextContent(
         "NEW",
       );
+    });
+
+    it("Favorite ストーリーでお気に入り登録済み（★）ボタンが描画され、aria-pressed が true であること (Issue #266)", () => {
+      render(<Favorite />);
+      const favButton = screen.getByTestId("novel-card-favorite-button");
+      expect(favButton).toBeInTheDocument();
+      expect(favButton).toHaveAttribute("aria-pressed", "true");
+      expect(favButton).toHaveAttribute(
+        "aria-label",
+        `${dummyNovelWithBookmark.title}のお気に入りを解除`,
+      );
+      expect(favButton).toHaveTextContent("★");
+    });
+
+    it("Unfavorite ストーリーでお気に入り未登録（☆）ボタンが描画され、aria-pressed が false であること (Issue #266)", () => {
+      render(<Unfavorite />);
+      const favButton = screen.getByTestId("novel-card-favorite-button");
+      expect(favButton).toBeInTheDocument();
+      expect(favButton).toHaveAttribute("aria-pressed", "false");
+      expect(favButton).toHaveAttribute(
+        "aria-label",
+        `${dummyNovelWithBookmark.title}をお気に入りに登録`,
+      );
+      expect(favButton).toHaveTextContent("☆");
     });
   });
 
@@ -179,6 +209,75 @@ describe("NovelCard", () => {
       expect(
         screen.queryByTestId("novel-card-new-badge"),
       ).not.toBeInTheDocument();
+    });
+
+    it("お気に入りボタンをクリックしたときに onToggleFavorite が反転後の値で呼び出され、onSelect が呼ばれないこと (Issue #266)", async () => {
+      const user = userEvent.setup();
+      const onSelect = vi.fn();
+      const onResume = vi.fn();
+      const onToggleFavorite = vi.fn();
+
+      render(
+        <NovelCard
+          novel={{ ...dummyNovelWithBookmark, isFavorite: false }}
+          onSelect={onSelect}
+          onResume={onResume}
+          onToggleFavorite={onToggleFavorite}
+        />,
+      );
+
+      const favButton = screen.getByTestId("novel-card-favorite-button");
+      await user.click(favButton);
+
+      expect(onToggleFavorite).toHaveBeenCalledWith(
+        dummyNovelWithBookmark.id,
+        true,
+      );
+      expect(onSelect).not.toHaveBeenCalled();
+      expect(onResume).not.toHaveBeenCalled();
+    });
+
+    it("お気に入り済み作品でお気に入りボタンをクリックしたときに false を引数に onToggleFavorite が呼び出されること (Issue #266)", async () => {
+      const user = userEvent.setup();
+      const onSelect = vi.fn();
+      const onResume = vi.fn();
+      const onToggleFavorite = vi.fn();
+
+      render(
+        <NovelCard
+          novel={{ ...dummyNovelWithBookmark, isFavorite: true }}
+          onSelect={onSelect}
+          onResume={onResume}
+          onToggleFavorite={onToggleFavorite}
+        />,
+      );
+
+      const favButton = screen.getByTestId("novel-card-favorite-button");
+      await user.click(favButton);
+
+      expect(onToggleFavorite).toHaveBeenCalledWith(
+        dummyNovelWithBookmark.id,
+        false,
+      );
+      expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it("onToggleFavorite が未指定の場合でもお気に入りボタンクリックでエラーにならないこと (Issue #266)", async () => {
+      const user = userEvent.setup();
+      const onSelect = vi.fn();
+      const onResume = vi.fn();
+
+      render(
+        <NovelCard
+          novel={dummyNovelWithBookmark}
+          onSelect={onSelect}
+          onResume={onResume}
+        />,
+      );
+
+      const favButton = screen.getByTestId("novel-card-favorite-button");
+      await expect(user.click(favButton)).resolves.not.toThrow();
+      expect(onSelect).not.toHaveBeenCalled();
     });
   });
 });
