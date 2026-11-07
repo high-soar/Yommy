@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Approved"
+status: "Review (#264)"
 updated: "2026-11-07"
 tags:
   - architecture
@@ -41,6 +41,7 @@ tags:
   - ho-30
   - ho-31
 related_specs:
+  - docs/specs/changes/issue-264-advanced-search-filter.md
   - docs/specs/changes/archive/issue-240-narou-search-ranking-and-site-selector.md
   - docs/specs/changes/archive/issue-239-narou-parser-and-multi-page-toc.md
   - docs/specs/parsers/narou.md
@@ -356,6 +357,8 @@ export interface NovelSearchOptions {
   order?: NovelSearchOrder;
   serialStatus?: NovelSerialStatus;
   genre?: string;
+  genres?: string[];
+  excludeKeyword?: string;
   page?: number;
 }
 

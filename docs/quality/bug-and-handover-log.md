@@ -2,10 +2,11 @@
 type: quality-log
 title: 品質記録・バグ記録票 ＆ 申し送り管理シート（Bug & Handover Log）
 description: 製品コードと支援成果物を分離したバグ記録（原因5分類 L/S/D/B/A）および後続タスクへの申し送り事項（HO-xx）を追跡する正本シート。
-status: "Approved"
+status: "Review (#264)"
 updated: "2026-11-07"
 tags: [quality, bug-log, handover, dre, kaizen]
 related_specs:
+  - docs/specs/changes/issue-264-advanced-search-filter.md
   - docs/quality/archive/v0.7-narou-site-support-and-loading-ux-log.md
   - docs/quality/reports/v0.7-narou-site-support-and-loading-ux.md
   - docs/specs/changes/archive/issue-240-narou-search-ranking-and-site-selector.md
@@ -102,9 +103,9 @@ related_tests: []
 
 現在、未解決（`Open`）の申し送り事項は 1 件（`HO-31`）です。次期作業中に発生した追加の申し送り事項は、本表へ `HO-32` より連番で登録します。
 
-|     ID      | 起票元 Issue / PR | 申し送り事項の内容                                                                                                     | 解決先（対象 Issue / 成果物） | 完了ゲート            | 状態 (`Open` / `Resolved`) |
-| :---------: | :---------------: | :--------------------------------------------------------------------------------------------------------------------- | :---------------------------- | :-------------------- | :------------------------: |
-| **`HO-31`** |    Issue #240     | 除外キーワード指定や複数ジャンル AND/OR モーダル等の高度な検索フィルタ機能の検討・実装（Issue #240 §3 対象外スコープ） | 将来 Milestone（`v0.8〜`）    | Milestone `v0.8` 以降 |           `Open`           |
+|     ID      | 起票元 Issue / PR | 申し送り事項の内容                                                                                                     | 解決先（対象 Issue / 成果物）                                                | 完了ゲート                                                                       | 状態 (`Open` / `Resolved`) |
+| :---------: | :---------------: | :--------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------- | :------------------------------------------------------------------------------- | :------------------------: |
+| **`HO-31`** |    Issue #240     | 除外キーワード指定や複数ジャンル AND/OR モーダル等の高度な検索フィルタ機能の検討・実装（Issue #240 §3 対象外スコープ） | Issue #264（Sub-issue #271, #272） / Milestone `v0.8` 実機検証（Issue #267） | 親 Issue #264 完了前（コード・IT精算） / Milestone `v0.8` 完了前（実機一括検証） |           `Open`           |
 
 ---
 
