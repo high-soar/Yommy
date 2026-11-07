@@ -4,7 +4,11 @@ import type {
   NovelRankingWorkVariation,
   NovelSiteType,
 } from "../../../parsers/types";
-import { RANKING_GENRES, RANKING_PERIODS } from "../types";
+import {
+  RANKING_GENRES,
+  RANKING_PERIODS,
+  RANKING_WORK_VARIATIONS,
+} from "../types";
 import { NAROU_RANKING_GENRES } from "../../../parsers/narou/genres";
 
 export interface RankingFilterBarProps {
@@ -23,7 +27,7 @@ export interface RankingFilterBarProps {
 }
 
 /**
- * ランキング集計期間・ジャンル切替バー（期間ピル、ジャンル横スクロールピル）
+ * ランキング集計期間・作品種別・ジャンル切替バー（期間ピル、作品種別ピル、ジャンル横スクロールピル）
  */
 export const RankingFilterBar: React.FC<RankingFilterBarProps> = ({
   selectedSite = "kakuyomu",
@@ -35,18 +39,18 @@ export const RankingFilterBar: React.FC<RankingFilterBarProps> = ({
   onSelectGenre,
   disabled = false,
 }) => {
-  void selectedWorkVariation;
-  void onSelectWorkVariation;
   const genres =
     selectedSite === "narou" ? NAROU_RANKING_GENRES : RANKING_GENRES;
+  const currentWorkVariation = selectedWorkVariation ?? "long";
 
   return (
     <div
       data-testid="ranking-filter-bar"
       className="flex flex-col gap-2 w-full py-1 text-xs sm:text-sm"
     >
-      {/* 上段: 集計期間ピル（4種: 日間 / 週間 / 月間 / 累計） */}
+      {/* 上段: 集計期間ピル（4種） & 作品種別ピル（3種） */}
       <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+        {/* 集計期間ピル */}
         <div
           role="group"
           aria-label="集計期間"
@@ -77,6 +81,42 @@ export const RankingFilterBar: React.FC<RankingFilterBarProps> = ({
                 }`}
               >
                 {period.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 作品種別ピル */}
+        <div
+          role="group"
+          aria-label="作品種別"
+          className="inline-flex rounded-lg p-0.5 bg-slate-100 dark:bg-slate-800 shrink-0"
+        >
+          {RANKING_WORK_VARIATIONS.map((opt) => {
+            const isSelected = currentWorkVariation === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                data-testid={`ranking-variation-${opt.value}`}
+                disabled={disabled}
+                aria-pressed={isSelected}
+                onClick={() => {
+                  if (!disabled) {
+                    onSelectWorkVariation?.(opt.value);
+                  }
+                }}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  isSelected
+                    ? `bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-400 shadow-xs ${
+                        disabled ? "cursor-not-allowed opacity-60" : ""
+                      }`
+                    : disabled
+                      ? "text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-60"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                }`}
+              >
+                {opt.label}
               </button>
             );
           })}
