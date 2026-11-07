@@ -5,7 +5,13 @@ import { composeStories } from "@storybook/react";
 import * as stories from "./SearchInputBar.stories";
 import { SearchInputBar } from "./SearchInputBar";
 
-const { Empty, WithKeyword, Loading } = composeStories(stories);
+const {
+  Empty,
+  WithKeyword,
+  Loading,
+  WithExcludeKeywordOpen,
+  WithExcludeKeywordActiveCollapsed,
+} = composeStories(stories);
 
 describe("SearchInputBar コンポーネント", () => {
   it("Empty ストーリー: 入力欄と検索ボタンが表示され、クリアボタンは非表示であること", () => {
@@ -144,5 +150,141 @@ describe("SearchInputBar コンポーネント", () => {
     // フォーム直接送信時も isLoading ガードにより onSubmitSearch が呼ばれないこと
     fireEvent.submit(screen.getByRole("search"));
     expect(handleSubmit).not.toHaveBeenCalled();
+  });
+
+  it("WithExcludeKeywordOpen ストーリー: 除外キーワード入力欄が展開され、入力値とクリアボタンが表示されること (v0.8 Issue #264 / AC-SE-11)", () => {
+    render(<WithExcludeKeywordOpen />);
+
+    const toggleBtn = screen.getByTestId("search-exclude-toggle-button");
+    expect(toggleBtn).toHaveAttribute("aria-expanded", "true");
+
+    const excludeInput = screen.getByTestId("search-exclude-input");
+    expect(excludeInput).toBeInTheDocument();
+    expect(excludeInput).toHaveValue("ハーレム チート");
+
+    const excludeClearBtn = screen.getByTestId("search-exclude-clear-button");
+    expect(excludeClearBtn).toBeInTheDocument();
+    expect(excludeClearBtn).toHaveAttribute(
+      "aria-label",
+      "除外キーワードをクリア",
+    );
+  });
+
+  it("WithExcludeKeywordActiveCollapsed ストーリー: パネルは閉じているが除外語トグルボタンが強調表示されること (v0.8 Issue #264 / AC-SE-11)", () => {
+    render(<WithExcludeKeywordActiveCollapsed />);
+
+    const toggleBtn = screen.getByTestId("search-exclude-toggle-button");
+    expect(toggleBtn).toHaveAttribute("aria-expanded", "false");
+    expect(toggleBtn).toHaveAttribute("data-active", "true");
+    expect(
+      screen.queryByTestId("search-exclude-input"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("除外語トグルボタン押下で入力欄が開閉すること", async () => {
+    const user = userEvent.setup();
+    render(
+      <SearchInputBar
+        keyword=""
+        onChangeKeyword={vi.fn()}
+        onSubmitSearch={vi.fn()}
+      />,
+    );
+
+    const toggleBtn = screen.getByTestId("search-exclude-toggle-button");
+    expect(toggleBtn).toHaveAttribute("aria-expanded", "false");
+    expect(
+      screen.queryByTestId("search-exclude-input"),
+    ).not.toBeInTheDocument();
+
+    // クリックで展開
+    await user.click(toggleBtn);
+    expect(toggleBtn).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("search-exclude-input")).toBeInTheDocument();
+
+    // 再度クリックで折りたたみ
+    await user.click(toggleBtn);
+    expect(toggleBtn).toHaveAttribute("aria-expanded", "false");
+    expect(
+      screen.queryByTestId("search-exclude-input"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("除外キーワード入力時に onChangeExcludeKeyword が呼び出されること", async () => {
+    const user = userEvent.setup();
+    const handleExcludeChange = vi.fn();
+
+    render(
+      <SearchInputBar
+        keyword=""
+        onChangeKeyword={vi.fn()}
+        onChangeExcludeKeyword={handleExcludeChange}
+        onSubmitSearch={vi.fn()}
+        defaultOpenExclude={true}
+      />,
+    );
+
+    const excludeInput = screen.getByTestId("search-exclude-input");
+    await user.type(excludeInput, "チート");
+
+    expect(handleExcludeChange).toHaveBeenCalled();
+  });
+
+  it("除外キーワードのクリアボタン押下時に onChangeExcludeKeyword('') が呼び出されること", async () => {
+    const user = userEvent.setup();
+    const handleExcludeChange = vi.fn();
+
+    render(
+      <SearchInputBar
+        keyword=""
+        onChangeKeyword={vi.fn()}
+        excludeKeyword="ハーレム"
+        onChangeExcludeKeyword={handleExcludeChange}
+        onSubmitSearch={vi.fn()}
+        defaultOpenExclude={true}
+      />,
+    );
+
+    const clearBtn = screen.getByTestId("search-exclude-clear-button");
+    await user.click(clearBtn);
+
+    expect(handleExcludeChange).toHaveBeenCalledWith("");
+  });
+
+  it("除外キーワード入力欄で Enter キー押下時に onSubmitSearch が発火すること", async () => {
+    const user = userEvent.setup();
+    const handleSubmit = vi.fn();
+
+    render(
+      <SearchInputBar
+        keyword="異世界"
+        onChangeKeyword={vi.fn()}
+        excludeKeyword="ハーレム"
+        onChangeExcludeKeyword={vi.fn()}
+        onSubmitSearch={handleSubmit}
+        defaultOpenExclude={true}
+      />,
+    );
+
+    const excludeInput = screen.getByTestId("search-exclude-input");
+    await user.type(excludeInput, "{Enter}");
+
+    expect(handleSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("初期描画時に excludeKeyword が非空で渡された場合、デフォルトで展開状態となること", () => {
+    render(
+      <SearchInputBar
+        keyword="異世界"
+        onChangeKeyword={vi.fn()}
+        excludeKeyword="ハーレム"
+        onChangeExcludeKeyword={vi.fn()}
+        onSubmitSearch={vi.fn()}
+      />,
+    );
+
+    const toggleBtn = screen.getByTestId("search-exclude-toggle-button");
+    expect(toggleBtn).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("search-exclude-input")).toBeInTheDocument();
   });
 });

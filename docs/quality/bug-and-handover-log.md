@@ -6,7 +6,7 @@ status: "Review (#264)"
 updated: "2026-11-07"
 tags: [quality, bug-log, handover, dre, kaizen]
 related_specs:
-  - docs/specs/changes/issue-264-advanced-search-filter.md
+  - docs/specs/changes/archive/issue-264-advanced-search-filter.md
   - docs/quality/archive/v0.7-narou-site-support-and-loading-ux-log.md
   - docs/quality/reports/v0.7-narou-site-support-and-loading-ux.md
   - docs/specs/changes/archive/issue-240-narou-search-ranking-and-site-selector.md
@@ -101,11 +101,11 @@ related_tests: []
 > - Milestone `v0.6` で解決済みの申し送り（`HO-26`〜`HO-28`）: [docs/quality/archive/v0.6-reader-animation-overlay-and-volume-key-log.md](archive/v0.6-reader-animation-overlay-and-volume-key-log.md)
 > - Milestone `v0.7` で解決済みの申し送り（`HO-29`, `HO-30`）: [docs/quality/archive/v0.7-narou-site-support-and-loading-ux-log.md](archive/v0.7-narou-site-support-and-loading-ux-log.md)
 
-現在、未解決（`Open`）の申し送り事項は 1 件（`HO-31`）です。次期作業中に発生した追加の申し送り事項は、本表へ `HO-32` より連番で登録します。
+現在、未解決（`Open`）の申し送り事項はありません（残存 0 件。`HO-31` は Issue #264 / #271, #272 にて精算完了）。次期作業中に発生した追加の申し送り事項は、本表へ `HO-32` より連番で登録します。
 
 |     ID      | 起票元 Issue / PR | 申し送り事項の内容                                                                                                     | 解決先（対象 Issue / 成果物）                                                | 完了ゲート                                                                       | 状態 (`Open` / `Resolved`) |
 | :---------: | :---------------: | :--------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------- | :------------------------------------------------------------------------------- | :------------------------: |
-| **`HO-31`** |    Issue #240     | 除外キーワード指定や複数ジャンル AND/OR モーダル等の高度な検索フィルタ機能の検討・実装（Issue #240 §3 対象外スコープ） | Issue #264（Sub-issue #271, #272） / Milestone `v0.8` 実機検証（Issue #267） | 親 Issue #264 完了前（コード・IT精算） / Milestone `v0.8` 完了前（実機一括検証） |           `Open`           |
+| **`HO-31`** |    Issue #240     | 除外キーワード指定や複数ジャンル AND/OR モーダル等の高度な検索フィルタ機能の検討・実装（Issue #240 §3 対象外スコープ） | Issue #264（Sub-issue #271, #272） / Milestone `v0.8` 実機検証（Issue #267） | 親 Issue #264 完了前（コード・IT精算） / Milestone `v0.8` 完了前（実機一括検証） |         `Resolved`         |
 
 ---
 

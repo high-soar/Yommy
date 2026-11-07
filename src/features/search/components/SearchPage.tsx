@@ -19,6 +19,10 @@ export interface SearchPageProps {
   keyword: string;
   /** キーワード変更コールバック */
   onChangeKeyword: (keyword: string) => void;
+  /** 入力中の除外キーワード文字列（省略時は ""、v0.8 Issue #264） */
+  excludeKeyword?: string;
+  /** 除外キーワード変更コールバック（v0.8 Issue #264） */
+  onChangeExcludeKeyword?: (excludeKeyword: string) => void;
   /** 検索実行コールバック */
   onSubmitSearch: () => void;
   /** 選択中並び順 */
@@ -31,6 +35,8 @@ export interface SearchPageProps {
   onSelectSerialStatus: (status: NovelSerialStatus) => void;
   /** 選択中ジャンル（未指定時 undefined） */
   selectedGenre?: string;
+  /** 複数選択中ジャンルID配列（空配列時は「すべて」、v0.8 Issue #264） */
+  selectedGenres?: string[];
   /** ジャンル変更コールバック */
   onSelectGenre: (genre?: string) => void;
   /** 検索結果作品リスト */
@@ -79,12 +85,15 @@ export const SearchPage: React.FC<SearchPageProps> = ({
   onSelectSite,
   keyword,
   onChangeKeyword,
+  excludeKeyword,
+  onChangeExcludeKeyword,
   onSubmitSearch,
   selectedOrder,
   onSelectOrder,
   selectedSerialStatus,
   onSelectSerialStatus,
   selectedGenre,
+  selectedGenres,
   onSelectGenre,
   items,
   registeredWorkIds,
@@ -123,6 +132,8 @@ export const SearchPage: React.FC<SearchPageProps> = ({
         <SearchInputBar
           keyword={keyword}
           onChangeKeyword={onChangeKeyword}
+          excludeKeyword={excludeKeyword}
+          onChangeExcludeKeyword={onChangeExcludeKeyword}
           onSubmitSearch={onSubmitSearch}
           isLoading={isInteractingDisabled}
         />
@@ -134,6 +145,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
           selectedSerialStatus={selectedSerialStatus}
           onSelectSerialStatus={onSelectSerialStatus}
           selectedGenre={selectedGenre}
+          selectedGenres={selectedGenres}
           onSelectGenre={onSelectGenre}
           disabled={isInteractingDisabled}
         />

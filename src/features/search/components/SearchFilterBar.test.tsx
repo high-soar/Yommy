@@ -5,7 +5,14 @@ import { composeStories } from "@storybook/react";
 import * as stories from "./SearchFilterBar.stories";
 import { SearchFilterBar } from "./SearchFilterBar";
 
-const { Default, Filtered, Disabled, NarouGenres } = composeStories(stories);
+const {
+  Default,
+  Filtered,
+  Disabled,
+  NarouGenres,
+  MultiGenresSelected,
+  NarouMultiGenres,
+} = composeStories(stories);
 
 describe("SearchFilterBar コンポーネント", () => {
   it("Default ストーリー: デフォルトの並び順・連載状況・ジャンル（すべて）が選択されていること", () => {
@@ -194,5 +201,56 @@ describe("SearchFilterBar コンポーネント", () => {
     const narouPill = screen.getByTestId("search-genre-201");
     await user.click(narouPill);
     expect(handleGenre).not.toHaveBeenCalled();
+  });
+
+  it("MultiGenresSelected ストーリー: カクヨムで複数ジャンルが同時アクティブとなり「すべて」が非アクティブとなること (v0.8 Issue #264 / AC-SE-04, AC-SE-11)", () => {
+    render(<MultiGenresSelected />);
+
+    const allPill = screen.getByTestId("search-genre-all");
+    expect(allPill).toHaveAttribute("aria-pressed", "false");
+
+    const fantasyPill = screen.getByTestId("search-genre-fantasy");
+    expect(fantasyPill).toHaveAttribute("aria-pressed", "true");
+
+    const actionPill = screen.getByTestId("search-genre-action");
+    expect(actionPill).toHaveAttribute("aria-pressed", "true");
+
+    const sfPill = screen.getByTestId("search-genre-sf");
+    expect(sfPill).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("NarouMultiGenres ストーリー: 小説家になろうで複数小ジャンルが同時アクティブとなること (v0.8 Issue #264 / AC-SE-04, AC-SE-11)", () => {
+    render(<NarouMultiGenres />);
+
+    const allPill = screen.getByTestId("search-genre-all");
+    expect(allPill).toHaveAttribute("aria-pressed", "false");
+
+    const highFantasyPill = screen.getByTestId("search-genre-201");
+    expect(highFantasyPill).toHaveAttribute("aria-pressed", "true");
+
+    const lowFantasyPill = screen.getByTestId("search-genre-202");
+    expect(lowFantasyPill).toHaveAttribute("aria-pressed", "true");
+
+    const pureRomancePill = screen.getByTestId("search-genre-102");
+    expect(pureRomancePill).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("selectedGenres が空配列の場合、「すべて」ピルがアクティブとなり他は非アクティブとなること", () => {
+    render(
+      <SearchFilterBar
+        selectedOrder="weekly_ranking"
+        onSelectOrder={vi.fn()}
+        selectedSerialStatus="all"
+        onSelectSerialStatus={vi.fn()}
+        selectedGenres={[]}
+        onSelectGenre={vi.fn()}
+      />,
+    );
+
+    const allPill = screen.getByTestId("search-genre-all");
+    expect(allPill).toHaveAttribute("aria-pressed", "true");
+
+    const fantasyPill = screen.getByTestId("search-genre-fantasy");
+    expect(fantasyPill).toHaveAttribute("aria-pressed", "false");
   });
 });

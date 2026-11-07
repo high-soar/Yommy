@@ -48,3 +48,27 @@ export const Loading: Story = {
     isLoading: true,
   },
 };
+
+/**
+ * 検索キーワード入力バー（除外キーワード展開中 / v0.8 Issue #264）
+ */
+export const WithExcludeKeywordOpen: Story = {
+  name: "除外キーワード入力欄展開中",
+  args: {
+    keyword: "異世界",
+    excludeKeyword: "ハーレム チート",
+    defaultOpenExclude: true,
+  },
+};
+
+/**
+ * 検索キーワード入力バー（除外キーワード適用中・折りたたみ状態 / v0.8 Issue #264）
+ */
+export const WithExcludeKeywordActiveCollapsed: Story = {
+  name: "除外キーワード適用中（折りたたみ・トグル強調）",
+  args: {
+    keyword: "異世界",
+    excludeKeyword: "ハーレム",
+    defaultOpenExclude: false,
+  },
+};

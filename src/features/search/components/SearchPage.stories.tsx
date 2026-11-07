@@ -154,3 +154,17 @@ export const NarouSelected: Story = {
     isLoading: false,
   },
 };
+
+/**
+ * 検索画面（高度検索フィルタ適用状態: 除外キーワード展開・複数ジャンル選択 / v0.8 Issue #264）
+ */
+export const WithAdvancedFilters: Story = {
+  name: "高度検索フィルタ適用状態（除外語・複数ジャンル）",
+  args: {
+    keyword: "異世界",
+    excludeKeyword: "ハーレム チート",
+    selectedGenres: ["fantasy", "action"],
+    hasSearched: true,
+    items: [sampleSearchItem],
+  },
+};
