@@ -295,6 +295,13 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     await expect(monthlyPeriodBtn).toHaveAttribute("aria-pressed", "true");
     await expect(rankingList).toBeVisible();
 
+    // 作品種別を「短編」へ切り替え（AC-RK-10, Issue #265）
+    const shortVariationBtn = page.getByTestId("ranking-variation-short");
+    await expect(shortVariationBtn).toBeVisible();
+    await shortVariationBtn.click();
+    await expect(shortVariationBtn).toHaveAttribute("aria-pressed", "true");
+    await expect(rankingList).toBeVisible();
+
     // 3. ジャンルを切り替え（AC-RK-03, AC-RK-08）
     const fantasyGenreBtn = page.getByTestId("ranking-genre-fantasy");
     await expect(fantasyGenreBtn).toBeVisible();
@@ -321,10 +328,15 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     await expect(orderSelect).toHaveValue("popular");
     await expect(searchList).toBeVisible();
 
-    // 連載状態フィルタ変更による再取得（AC-SE-04, AC-SE-09, R1-24）
+    // 連載状態フィルタ変更による再取得（AC-SE-04, AC-SE-09, R1-24, Issue #265）
     const serialCompleteBtn = page.getByTestId("search-serial-completed");
     await serialCompleteBtn.click();
     await expect(serialCompleteBtn).toHaveAttribute("aria-pressed", "true");
+    await expect(searchList).toBeVisible();
+
+    const serialShortBtn = page.getByTestId("search-serial-short");
+    await serialShortBtn.click();
+    await expect(serialShortBtn).toHaveAttribute("aria-pressed", "true");
     await expect(searchList).toBeVisible();
 
     // ジャンルピル変更による再取得（AC-SE-05, AC-SE-09, R1-24）
@@ -575,6 +587,84 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
 
     // 7. 再検索実行
     await searchSubmit.click();
+    await expect(searchList).toBeVisible();
+  });
+
+  test("ランキングおよび検索画面で作品種別（短編・長編・すべて）の切替とサイト切替時の状態保持が正常に機能すること (AC-RK-10, AC-SE-12, Issue #265)", async ({
+    page,
+  }) => {
+    // 1. ランキング画面へ移動
+    const tabRanking = page.getByTestId("tab-ranking");
+    await tabRanking.click();
+    await expect(page).toHaveURL("/ranking");
+
+    const rankingList = page.getByTestId("ranking-results-list");
+    await expect(rankingList).toBeVisible();
+
+    // デフォルトで「長編・連載」が選択されていること
+    const variationLong = page.getByTestId("ranking-variation-long");
+    const variationShort = page.getByTestId("ranking-variation-short");
+    const variationAll = page.getByTestId("ranking-variation-all");
+    await expect(variationLong).toHaveAttribute("aria-pressed", "true");
+    await expect(variationShort).toHaveAttribute("aria-pressed", "false");
+    await expect(variationAll).toHaveAttribute("aria-pressed", "false");
+
+    // 「短編」を選択
+    await variationShort.click();
+    await expect(variationShort).toHaveAttribute("aria-pressed", "true");
+    await expect(variationLong).toHaveAttribute("aria-pressed", "false");
+    await expect(rankingList).toBeVisible();
+
+    // なろうへサイト切り替え -> 作品種別「短編」が維持されていること
+    const siteNarouRanking = page.getByTestId("site-selector-narou");
+    await siteNarouRanking.click();
+    await expect(siteNarouRanking).toHaveAttribute("aria-pressed", "true");
+    await expect(variationShort).toHaveAttribute("aria-pressed", "true");
+    await expect(rankingList).toBeVisible();
+
+    // なろうで「すべて」を選択
+    await variationAll.click();
+    await expect(variationAll).toHaveAttribute("aria-pressed", "true");
+    await expect(rankingList).toBeVisible();
+
+    // カクヨムへサイト切り替え -> 作品種別「すべて」が維持されていること
+    const siteKakuyomuRanking = page.getByTestId("site-selector-kakuyomu");
+    await siteKakuyomuRanking.click();
+    await expect(siteKakuyomuRanking).toHaveAttribute("aria-pressed", "true");
+    await expect(variationAll).toHaveAttribute("aria-pressed", "true");
+    await expect(rankingList).toBeVisible();
+
+    // 2. 検索画面へ移動
+    const tabSearch = page.getByTestId("tab-search");
+    await tabSearch.click();
+    await expect(page).toHaveURL("/search");
+
+    // デフォルトで連載状況「すべて」が選択されていること
+    const serialAll = page.getByTestId("search-serial-all");
+    const serialShort = page.getByTestId("search-serial-short");
+    await expect(serialAll).toHaveAttribute("aria-pressed", "true");
+    await expect(serialShort).toHaveAttribute("aria-pressed", "false");
+
+    // キーワード入力
+    const searchInput = page.getByTestId("search-input");
+    await searchInput.fill("異世界");
+
+    // 「短編」ピルを選択して検索実行
+    await serialShort.click();
+    await expect(serialShort).toHaveAttribute("aria-pressed", "true");
+    await expect(serialAll).toHaveAttribute("aria-pressed", "false");
+
+    const searchSubmit = page.getByTestId("search-submit-button");
+    await searchSubmit.click();
+
+    const searchList = page.getByTestId("search-results-list");
+    await expect(searchList).toBeVisible();
+
+    // なろうへサイト切り替え -> 連載状況「短編」が維持されていること
+    const siteNarouSearch = page.getByTestId("site-selector-narou");
+    await siteNarouSearch.click();
+    await expect(siteNarouSearch).toHaveAttribute("aria-pressed", "true");
+    await expect(serialShort).toHaveAttribute("aria-pressed", "true");
     await expect(searchList).toBeVisible();
   });
 });
