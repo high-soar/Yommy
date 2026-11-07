@@ -2,10 +2,11 @@
 type: quality-log
 title: 品質記録・バグ記録票 ＆ 申し送り管理シート（Bug & Handover Log）
 description: 製品コードと支援成果物を分離したバグ記録（原因5分類 L/S/D/B/A）および後続タスクへの申し送り事項（HO-xx）を追跡する正本シート。
-status: "Review (#264)"
+status: "Review (#265)"
 updated: "2026-11-07"
 tags: [quality, bug-log, handover, dre, kaizen]
 related_specs:
+  - docs/specs/changes/issue-265-work-variation-filter.md
   - docs/specs/changes/archive/issue-264-advanced-search-filter.md
   - docs/quality/archive/v0.7-narou-site-support-and-loading-ux-log.md
   - docs/quality/reports/v0.7-narou-site-support-and-loading-ux.md
@@ -80,9 +81,10 @@ related_tests: []
 >
 > 次期作業中の **Milestone `v0.8`** で検出されたバグ記録は、本表へ No. 234 より連番で記入します。
 
-| No. | Issue / PR | 検出フェーズ・手段 | 成果物区分 (`製品コード` / `支援成果物`) | 対象箇所 | 原因 (`L`/`S`/`D`/`B`/`A`) | 不備の概要と是正内容（原因 `D` は設計書同期コミット併記） |
-| :-: | :--------: | :----------------- | :--------------------------------------: | :------- | :------------------------: | :-------------------------------------------------------- |
-|  -  |     -      | -                  |                    -                     | -        |             -              | （次期 Milestone v0.8 作業開始時に No. 234 より記入）     |
+| No. | Issue / PR  | 検出フェーズ・手段         | 成果物区分 (`製品コード` / `支援成果物`) | 対象箇所                                                       | 原因 (`L`/`S`/`D`/`B`/`A`) | 不備の概要と是正内容（原因 `D` は設計書同期コミット併記）                                                                                                                                                          |
+| :-: | :---------: | :------------------------- | :--------------------------------------: | :------------------------------------------------------------- | :------------------------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 234 | #265 / #278 | PRレビュー (`pr-reviewer`) |               `支援成果物`               | `docs/specs/features/ranking.md`, `docs/specs/requirements.md` |            `D`             | `[P2]` `AC-RK-10` および `SYS-REQ-18` の Markdown テーブルセル内のインラインコードに未エスケープの `\|` が含まれ、GFM 表カラムが分割されていた不備。`/` 区切りおよび個別バッククォート表記に置換して表構造を是正。 |
+| 235 | #265 / #278 | PRレビュー (`pr-reviewer`) |               `支援成果物`               | `docs/specs/parsers/kakuyomu.md`                               |            `D`             | `[P3]` §2.1 URL パターン表のランキング URL 形式が `work_variation=long` 固定のまま残存していた不備。§6.1 に合わせて `https://kakuyomu.jp/rankings/{target}/{period}?work_variation={workVariation}` に統一。       |
 
 ---
 
