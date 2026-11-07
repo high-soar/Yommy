@@ -54,12 +54,12 @@ related_tests:
 
 ### 2.1 URL パターン
 
-| 種類                   | URL 形式                                                             | 例                                                                           |
-| :--------------------- | :------------------------------------------------------------------- | :--------------------------------------------------------------------------- |
-| **作品トップ（目次）** | `https://kakuyomu.jp/works/{workId}`                                 | `https://kakuyomu.jp/works/1177354054881162325`                              |
-| **各話エピソード**     | `https://kakuyomu.jp/works/{workId}/episodes/{episodeId}`            | `https://kakuyomu.jp/works/1177354054881162325/episodes/1177354054881162326` |
-| **作品検索**           | `https://kakuyomu.jp/search?q={query}&order={order}...`              | `https://kakuyomu.jp/search?q=追放&order=weekly_ranking`                     |
-| **ランキング**         | `https://kakuyomu.jp/rankings/{target}/{period}?work_variation=long` | `https://kakuyomu.jp/rankings/all/weekly?work_variation=long`                |
+| 種類                   | URL 形式                                                                        | 例                                                                           |
+| :--------------------- | :------------------------------------------------------------------------------ | :--------------------------------------------------------------------------- |
+| **作品トップ（目次）** | `https://kakuyomu.jp/works/{workId}`                                            | `https://kakuyomu.jp/works/1177354054881162325`                              |
+| **各話エピソード**     | `https://kakuyomu.jp/works/{workId}/episodes/{episodeId}`                       | `https://kakuyomu.jp/works/1177354054881162325/episodes/1177354054881162326` |
+| **作品検索**           | `https://kakuyomu.jp/search?q={query}&order={order}...`                         | `https://kakuyomu.jp/search?q=追放&order=weekly_ranking`                     |
+| **ランキング**         | `https://kakuyomu.jp/rankings/{target}/{period}?work_variation={workVariation}` | `https://kakuyomu.jp/rankings/all/weekly?work_variation=long`                |
 
 ### 2.2 メソッド契約
 
