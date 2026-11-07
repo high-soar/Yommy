@@ -57,11 +57,15 @@ const meta: Meta<typeof BookshelfPage> = {
   ],
   args: {
     novels: sampleNovels,
+    totalNovelsCount: sampleNovels.length,
     isLoading: false,
     isCheckingUpdates: false,
     updateCheckProgress: null,
     sortOrder: "unread_first",
+    favoriteOnly: false,
     onSortChange: fn(),
+    onToggleFavoriteFilter: fn(),
+    onToggleFavoriteNovel: fn(),
     onCheckUpdates: fn(),
     onNavigateSearch: fn(),
     onNavigateRanking: fn(),
@@ -128,5 +132,34 @@ export const SortedByLatestPublished: Story = {
     novels: sampleNovels,
     isLoading: false,
     sortOrder: "latest_published",
+  },
+};
+
+/**
+ * お気に入りフィルタ有効状態（絞り込み表示中）
+ */
+export const FavoriteFilterActive: Story = {
+  name: "お気に入りフィルタ有効（絞り込み）",
+  args: {
+    novels: [
+      {
+        ...sampleNovels[0],
+        isFavorite: true,
+      },
+    ],
+    totalNovelsCount: 2,
+    favoriteOnly: true,
+  },
+};
+
+/**
+ * お気に入りフィルタ有効かつ該当0件状態
+ */
+export const FavoriteFilterEmpty: Story = {
+  name: "お気に入りフィルタ0件（該当なし）",
+  args: {
+    novels: [],
+    totalNovelsCount: 2,
+    favoriteOnly: true,
   },
 };

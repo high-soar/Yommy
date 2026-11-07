@@ -60,6 +60,7 @@ const meta: Meta<typeof NovelCard> = {
     novel: sampleNovelWithBookmark,
     onSelect: fn(),
     onResume: fn(),
+    onToggleFavorite: fn(),
   },
 };
 
@@ -103,5 +104,31 @@ export const WithNewBadge: Story = {
   name: "NEWバッジあり（新着検知）",
   args: {
     novel: sampleNovelWithNewBadge,
+  },
+};
+
+/**
+ * お気に入り登録（★）状態の作品カード
+ */
+export const Favorite: Story = {
+  name: "お気に入り登録済み（★）",
+  args: {
+    novel: {
+      ...sampleNovelWithBookmark,
+      isFavorite: true,
+    },
+  },
+};
+
+/**
+ * お気に入り未登録（☆）状態の作品カード
+ */
+export const Unfavorite: Story = {
+  name: "お気に入り未登録（☆）",
+  args: {
+    novel: {
+      ...sampleNovelWithBookmark,
+      isFavorite: false,
+    },
   },
 };

@@ -10,12 +10,17 @@ export interface UseBookshelfOptions {
 
 export interface UseBookshelfResult {
   novels: NovelSummary[];
+  totalNovelsCount: number;
   isLoading: boolean;
   isCheckingUpdates: boolean;
   updateCheckProgress: { current: number; total: number } | null;
   sortOrder: BookshelfSortOrder;
+  favoriteOnly: boolean;
   error: string | null;
   setSortOrder: (order: BookshelfSortOrder) => Promise<void>;
+  setFavoriteOnly: (favoriteOnly: boolean) => Promise<void>;
+  toggleFavoriteFilter: () => Promise<void>;
+  toggleFavorite: (novelId: string, nextIsFavorite?: boolean) => Promise<void>;
   checkUpdates: (forceAll?: boolean) => Promise<void>;
   reloadNovels: () => Promise<void>;
   clearNovelUpdate: (novelId: string) => Promise<void>;
@@ -435,12 +440,17 @@ export function useBookshelf(
 
   return {
     novels,
+    totalNovelsCount: novels.length,
     isLoading,
     isCheckingUpdates,
     updateCheckProgress,
     sortOrder,
+    favoriteOnly: false,
     error,
     setSortOrder,
+    setFavoriteOnly: async () => {},
+    toggleFavoriteFilter: async () => {},
+    toggleFavorite: async () => {},
     checkUpdates,
     reloadNovels,
     clearNovelUpdate,

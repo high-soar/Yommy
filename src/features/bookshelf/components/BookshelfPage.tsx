@@ -5,11 +5,15 @@ import { NovelCard } from "./NovelCard";
 
 export interface BookshelfPageProps {
   novels: NovelSummary[];
+  totalNovelsCount?: number;
   isLoading: boolean;
   isCheckingUpdates?: boolean;
   updateCheckProgress?: { current: number; total: number } | null;
   sortOrder?: BookshelfSortOrder;
+  favoriteOnly?: boolean;
   onSortChange?: (order: BookshelfSortOrder) => void;
+  onToggleFavoriteFilter?: () => void;
+  onToggleFavoriteNovel?: (novelId: string, nextIsFavorite: boolean) => void;
   onCheckUpdates?: () => void;
   onNavigateSearch?: () => void;
   onNavigateRanking?: () => void;

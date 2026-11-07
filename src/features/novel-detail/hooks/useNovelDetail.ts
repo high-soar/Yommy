@@ -558,6 +558,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     openClearCacheDialog,
     closeClearCacheDialog,
     confirmClearCache,
+    toggleFavorite: async () => false,
     reloadDetail,
   };
 }

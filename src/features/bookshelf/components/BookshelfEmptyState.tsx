@@ -3,6 +3,8 @@ import React from "react";
 export interface BookshelfEmptyStateProps {
   onNavigateSearch?: () => void;
   onNavigateRanking?: () => void;
+  isFavoriteFilterActive?: boolean;
+  onClearFavoriteFilter?: () => void;
 }
 
 /**

@@ -902,5 +902,43 @@ describe("NovelDetailContainer", () => {
         "本文キャッシュを削除しました（1話）",
       );
     });
+
+    it("お気に入りトグルボタンを押下したときに作品のお気に入り状態がトグルされること (Issue #266)", async () => {
+      const user = userEvent.setup();
+      const setFavoriteMock = vi.fn().mockResolvedValue(undefined);
+      const novelRepo = {
+        ...createMockNovelRepo({
+          ...sampleNovel,
+          isFavorite: false,
+        }),
+        setFavorite: setFavoriteMock,
+      };
+
+      render(
+        <ServiceProvider
+          services={{
+            novelRepository: novelRepo,
+            chapterRepository: createMockChapterRepo(sampleChapters),
+          }}
+        >
+          <RouterProvider initialPath={`/novels/${sampleNovel.id}`}>
+            <NovelDetailContainer novelId={sampleNovel.id} />
+          </RouterProvider>
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("detail-favorite-toggle-button"),
+        ).toBeInTheDocument();
+      });
+
+      const favBtn = screen.getByTestId("detail-favorite-toggle-button");
+      expect(favBtn).toHaveAttribute("aria-pressed", "false");
+
+      await user.click(favBtn);
+
+      expect(setFavoriteMock).toHaveBeenCalledWith(sampleNovel.id, true);
+    });
   });
 });

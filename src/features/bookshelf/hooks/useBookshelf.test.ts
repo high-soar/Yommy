@@ -1788,4 +1788,294 @@ describe("useBookshelf", () => {
       expect(passedIndex.chapters[3].partTitle).toBe("第2章 少年期"); // 2ページ目先頭への引き継ぎ
     });
   });
+
+  describe("お気に入り登録・フィルタ・クラウド同期連携 (Issue #266)", () => {
+    const novel1Fav: NovelSummary = {
+      id: "kakuyomu:111",
+      siteType: "kakuyomu",
+      remoteWorkId: "111",
+      canonicalUrl: "https://kakuyomu.jp/works/111",
+      title: "お気に入り作品A",
+      author: "作者A",
+      totalChapters: 10,
+      cachedChapters: 2,
+      totalByteSize: 1000,
+      bookmarkChapterIndex: 1,
+      bookmarkScrollProgress: 0,
+      isFavorite: true,
+      lastCheckedAt: null,
+      lastReadAt: "2026-01-01T00:00:00Z",
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+    };
+
+    const novel2NotFav: NovelSummary = {
+      id: "kakuyomu:222",
+      siteType: "kakuyomu",
+      remoteWorkId: "222",
+      canonicalUrl: "https://kakuyomu.jp/works/222",
+      title: "通常作品B",
+      author: "作者B",
+      totalChapters: 5,
+      cachedChapters: 0,
+      totalByteSize: 0,
+      bookmarkChapterIndex: null,
+      bookmarkScrollProgress: 0,
+      isFavorite: false,
+      lastCheckedAt: null,
+      lastReadAt: null,
+      createdAt: "2026-01-02T00:00:00Z",
+      updatedAt: "2026-01-02T00:00:00Z",
+    };
+
+    it("app_settings に bookshelf_favorite_only = 'true' が保存されている場合、初回ロード時に favoriteOnly = true となりお気に入りのみ返されること", async () => {
+      const customAppSettingsRepo = {
+        getSetting: vi.fn().mockImplementation(async (key: string) => {
+          if (key === "bookshelf_favorite_only") return "true";
+          if (key === "bookshelf_sort_order") return "unread_first";
+          return null;
+        }),
+        setSetting: vi.fn().mockResolvedValue(undefined),
+      };
+      const customNovelRepo = {
+        listNovels: vi.fn().mockResolvedValue([novel1Fav, novel2NotFav]),
+        getNovelById: vi.fn().mockResolvedValue(null),
+        upsertNovelWithToc: vi.fn(),
+        updateBookmark: vi.fn(),
+        setFavorite: vi.fn(),
+        deleteNovel: vi.fn(),
+        clearNewUpdate: vi.fn(),
+        updateLastCheckedAt: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          appSettingsRepository: customAppSettingsRepo,
+          novelRepository: customNovelRepo as unknown as NovelRepository,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(customAppSettingsRepo.getSetting).toHaveBeenCalledWith(
+        "bookshelf_favorite_only",
+      );
+      expect(result.current.favoriteOnly).toBe(true);
+      expect(result.current.totalNovelsCount).toBe(2);
+      expect(result.current.novels).toHaveLength(1);
+      expect(result.current.novels[0].id).toBe(novel1Fav.id);
+    });
+
+    it("toggleFavoriteFilter / setFavoriteOnly でフィルタが切り替わり、app_settings に永続化されること", async () => {
+      const customAppSettingsRepo = {
+        getSetting: vi.fn().mockResolvedValue("false"),
+        setSetting: vi.fn().mockResolvedValue(undefined),
+      };
+      const customNovelRepo = {
+        listNovels: vi.fn().mockResolvedValue([novel1Fav, novel2NotFav]),
+        getNovelById: vi.fn().mockResolvedValue(null),
+        upsertNovelWithToc: vi.fn(),
+        updateBookmark: vi.fn(),
+        setFavorite: vi.fn(),
+        deleteNovel: vi.fn(),
+        clearNewUpdate: vi.fn(),
+        updateLastCheckedAt: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          appSettingsRepository: customAppSettingsRepo,
+          novelRepository: customNovelRepo as unknown as NovelRepository,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.favoriteOnly).toBe(false);
+      expect(result.current.novels).toHaveLength(2);
+
+      // トグル実行 -> true
+      await act(async () => {
+        await result.current.toggleFavoriteFilter();
+      });
+
+      expect(customAppSettingsRepo.setSetting).toHaveBeenCalledWith(
+        "bookshelf_favorite_only",
+        "true",
+      );
+      expect(result.current.favoriteOnly).toBe(true);
+      expect(result.current.novels).toHaveLength(1);
+      expect(result.current.novels[0].id).toBe(novel1Fav.id);
+
+      // setFavoriteOnly(false)
+      await act(async () => {
+        await result.current.setFavoriteOnly(false);
+      });
+
+      expect(customAppSettingsRepo.setSetting).toHaveBeenCalledWith(
+        "bookshelf_favorite_only",
+        "false",
+      );
+      expect(result.current.favoriteOnly).toBe(false);
+      expect(result.current.novels).toHaveLength(2);
+    });
+
+    it("toggleFavorite で novelRepository.setFavorite が呼ばれ、内部 state が即時更新され、syncEngine.notifyChanged が呼ばれること", async () => {
+      const mockSyncEngine = {
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+        pullAndMerge: vi.fn().mockResolvedValue(undefined),
+        pushLocalChanges: vi.fn().mockResolvedValue(undefined),
+      } as unknown as SyncEngine;
+
+      const customNovelRepo = {
+        listNovels: vi.fn().mockResolvedValue([{ ...novel2NotFav }]),
+        getNovelById: vi.fn().mockResolvedValue(null),
+        upsertNovelWithToc: vi.fn(),
+        updateBookmark: vi.fn(),
+        setFavorite: vi.fn().mockResolvedValue(undefined),
+        deleteNovel: vi.fn(),
+        clearNewUpdate: vi.fn(),
+        updateLastCheckedAt: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          novelRepository: customNovelRepo as unknown as NovelRepository,
+          syncEngine: mockSyncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.novels[0].isFavorite).toBe(false);
+
+      // お気に入り登録
+      await act(async () => {
+        await result.current.toggleFavorite(novel2NotFav.id);
+      });
+
+      expect(customNovelRepo.setFavorite).toHaveBeenCalledWith(
+        novel2NotFav.id,
+        true,
+      );
+      expect(result.current.novels[0].isFavorite).toBe(true);
+      expect(mockSyncEngine.notifyChanged).toHaveBeenCalledTimes(1);
+
+      // 明示的 false
+      await act(async () => {
+        await result.current.toggleFavorite(novel2NotFav.id, false);
+      });
+
+      expect(customNovelRepo.setFavorite).toHaveBeenCalledWith(
+        novel2NotFav.id,
+        false,
+      );
+      expect(result.current.novels[0].isFavorite).toBe(false);
+      expect(mockSyncEngine.notifyChanged).toHaveBeenCalledTimes(2);
+    });
+
+    it("favoriteOnly === true のときにお気に入りを解除した場合、即座に novels から除外されること", async () => {
+      const customAppSettingsRepo = {
+        getSetting: vi.fn().mockImplementation(async (key: string) => {
+          if (key === "bookshelf_favorite_only") return "true";
+          return null;
+        }),
+        setSetting: vi.fn().mockResolvedValue(undefined),
+      };
+      const customNovelRepo = {
+        listNovels: vi
+          .fn()
+          .mockResolvedValue([{ ...novel1Fav }, { ...novel2NotFav }]),
+        getNovelById: vi.fn().mockResolvedValue(null),
+        upsertNovelWithToc: vi.fn(),
+        updateBookmark: vi.fn(),
+        setFavorite: vi.fn().mockResolvedValue(undefined),
+        deleteNovel: vi.fn(),
+        clearNewUpdate: vi.fn(),
+        updateLastCheckedAt: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          appSettingsRepository: customAppSettingsRepo,
+          novelRepository: customNovelRepo as unknown as NovelRepository,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.novels).toHaveLength(1);
+      expect(result.current.novels[0].id).toBe(novel1Fav.id);
+
+      // お気に入り解除
+      await act(async () => {
+        await result.current.toggleFavorite(novel1Fav.id);
+      });
+
+      expect(result.current.novels).toHaveLength(0);
+      expect(result.current.totalNovelsCount).toBe(2);
+    });
+
+    it("favoriteOnly === true のときの手動更新チェック（checkUpdates(true)）はお気に入り作品のみを対象とすること", async () => {
+      const httpClient = new MockHttpClient();
+      httpClient.setResponse(novel1Fav.canonicalUrl, {
+        status: 200,
+        url: novel1Fav.canonicalUrl,
+        headers: {},
+        html: workIndexHtml,
+      });
+
+      const customAppSettingsRepo = {
+        getSetting: vi.fn().mockImplementation(async (key: string) => {
+          if (key === "bookshelf_favorite_only") return "true";
+          return null;
+        }),
+        setSetting: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const customNovelRepo = {
+        listNovels: vi.fn().mockResolvedValue([
+          { ...novel1Fav, lastCheckedAt: new Date().toISOString() },
+          { ...novel2NotFav, lastCheckedAt: new Date().toISOString() },
+        ]),
+        getNovelById: vi.fn().mockResolvedValue(null),
+        upsertNovelWithToc: vi.fn().mockResolvedValue({ id: novel1Fav.id }),
+        updateBookmark: vi.fn(),
+        setFavorite: vi.fn(),
+        deleteNovel: vi.fn(),
+        clearNewUpdate: vi.fn(),
+        updateLastCheckedAt: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          httpClient,
+          appSettingsRepository: customAppSettingsRepo,
+          novelRepository: customNovelRepo as unknown as NovelRepository,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.favoriteOnly).toBe(true);
+
+      // 手動更新実行
+      await act(async () => {
+        await result.current.checkUpdates(true);
+      });
+
+      // お気に入りの novel1Fav のみ upsertNovelWithToc が呼ばれ、novel2NotFav は呼ばれないこと
+      expect(customNovelRepo.upsertNovelWithToc).toHaveBeenCalledTimes(1);
+    });
+  });
 });

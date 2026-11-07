@@ -26,6 +26,7 @@ export interface UseNovelDetailResult {
   openClearCacheDialog: () => void;
   closeClearCacheDialog: () => void;
   confirmClearCache: (options: { onlyRead: boolean }) => Promise<number>;
+  toggleFavorite: () => Promise<boolean>;
   reloadDetail: () => Promise<void>;
 }
 
@@ -47,6 +48,7 @@ export interface NovelDetailHeaderProps {
   onCancelBatchCache: () => void;
   onOpenDeleteDialog: () => void;
   onOpenClearCacheDialog?: () => void;
+  onToggleFavorite?: () => void | Promise<void>;
 }
 
 /**
@@ -121,6 +123,7 @@ export interface NovelDetailPageProps {
   onConfirmClearCache?: (options: {
     onlyRead: boolean;
   }) => void | Promise<void | number>;
+  onToggleFavorite?: () => void | Promise<void>;
 }
 
 /**

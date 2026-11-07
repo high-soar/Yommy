@@ -41,6 +41,7 @@ const meta: Meta<typeof NovelDetailHeader> = {
     onCancelBatchCache: fn(),
     onOpenDeleteDialog: fn(),
     onOpenClearCacheDialog: fn(),
+    onToggleFavorite: fn(),
   },
 };
 
@@ -102,6 +103,32 @@ export const Refreshing: Story = {
   name: "目次更新中",
   args: {
     isRefreshing: true,
+  },
+};
+
+/**
+ * お気に入り登録済み（★）状態
+ */
+export const Favorite: Story = {
+  name: "お気に入り登録済み（★）",
+  args: {
+    novel: {
+      ...sampleNovel,
+      isFavorite: true,
+    },
+  },
+};
+
+/**
+ * お気に入り未登録（☆）状態
+ */
+export const NotFavorite: Story = {
+  name: "お気に入り未登録（☆）",
+  args: {
+    novel: {
+      ...sampleNovel,
+      isFavorite: false,
+    },
   },
 };
 

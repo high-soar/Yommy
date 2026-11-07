@@ -6,8 +6,15 @@ import * as stories from "./BookshelfPage.stories";
 import { BookshelfPage } from "./BookshelfPage";
 import type { NovelSummary } from "../../../storage/types";
 
-const { WithNovels, Empty, Loading, CheckingUpdates, SortedByLatestPublished } =
-  composeStories(stories);
+const {
+  WithNovels,
+  Empty,
+  Loading,
+  CheckingUpdates,
+  SortedByLatestPublished,
+  FavoriteFilterActive,
+  FavoriteFilterEmpty,
+} = composeStories(stories);
 
 const sampleNovels: NovelSummary[] = [
   {
@@ -100,6 +107,30 @@ describe("BookshelfPage", () => {
       expect(screen.getByTestId("bookshelf-sort-select")).toHaveValue(
         "latest_published",
       );
+    });
+
+    it("FavoriteFilterActive ストーリーでお気に入りフィルタボタンが aria-pressed=true で強調表示され、絞り込まれた作品のみ描画されること (Issue #266)", () => {
+      render(<FavoriteFilterActive />);
+      const filterButton = screen.getByTestId(
+        "bookshelf-favorite-filter-button",
+      );
+      expect(filterButton).toBeInTheDocument();
+      expect(filterButton).toHaveAttribute("aria-pressed", "true");
+      expect(filterButton).toHaveTextContent("★");
+      expect(screen.getByTestId("novel-list")).toBeInTheDocument();
+      expect(screen.getAllByTestId("novel-card")).toHaveLength(1);
+    });
+
+    it("FavoriteFilterEmpty ストーリーでお気に入りフィルタ0件時の BookshelfEmptyState が描画されること (Issue #266)", () => {
+      render(<FavoriteFilterEmpty />);
+      expect(
+        screen.getByTestId("bookshelf-favorite-empty"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId("empty-clear-favorite-filter-button"),
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId("bookshelf-empty")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("novel-list")).not.toBeInTheDocument();
     });
   });
 
@@ -276,6 +307,111 @@ describe("BookshelfPage", () => {
 
       const progress = screen.getByTestId("bookshelf-refresh-progress");
       expect(progress).toHaveTextContent("更新中 (2/5)...");
+    });
+
+    it("表示対象作品が0件（novels.length === 0）のときは手動更新ボタンが disabled になること (Issue #266)", () => {
+      render(
+        <BookshelfPage
+          novels={[]}
+          isLoading={false}
+          isCheckingUpdates={false}
+          onSelectNovel={vi.fn()}
+          onResumeNovel={vi.fn()}
+        />,
+      );
+
+      const refreshBtn = screen.getByTestId("bookshelf-refresh-button");
+      expect(refreshBtn).toBeDisabled();
+    });
+
+    it("ヘッダーのお気に入りフィルタボタンをクリックしたときに onToggleFavoriteFilter が呼び出されること (Issue #266)", async () => {
+      const user = userEvent.setup();
+      const onToggleFavoriteFilter = vi.fn();
+
+      render(
+        <BookshelfPage
+          novels={sampleNovels}
+          isLoading={false}
+          favoriteOnly={false}
+          onToggleFavoriteFilter={onToggleFavoriteFilter}
+          onSelectNovel={vi.fn()}
+          onResumeNovel={vi.fn()}
+        />,
+      );
+
+      const filterBtn = screen.getByTestId("bookshelf-favorite-filter-button");
+      expect(filterBtn).toHaveAttribute("aria-pressed", "false");
+      expect(filterBtn).toHaveTextContent("☆");
+
+      await user.click(filterBtn);
+      expect(onToggleFavoriteFilter).toHaveBeenCalledTimes(1);
+    });
+
+    it("favoriteOnly === true かつ totalNovelsCount > 0 かつ novels.length === 0 のとき、bookshelf-favorite-empty が表示され解除ボタン押下で onToggleFavoriteFilter が呼ばれること (Issue #266)", async () => {
+      const user = userEvent.setup();
+      const onToggleFavoriteFilter = vi.fn();
+
+      render(
+        <BookshelfPage
+          novels={[]}
+          totalNovelsCount={3}
+          favoriteOnly={true}
+          isLoading={false}
+          onToggleFavoriteFilter={onToggleFavoriteFilter}
+          onSelectNovel={vi.fn()}
+          onResumeNovel={vi.fn()}
+        />,
+      );
+
+      expect(
+        screen.getByTestId("bookshelf-favorite-empty"),
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId("bookshelf-empty")).not.toBeInTheDocument();
+
+      const clearBtn = screen.getByTestId("empty-clear-favorite-filter-button");
+      await user.click(clearBtn);
+      expect(onToggleFavoriteFilter).toHaveBeenCalledTimes(1);
+    });
+
+    it("favoriteOnly === true でも totalNovelsCount === 0 のときは通常空状態（bookshelf-empty）が表示されること (Issue #266)", () => {
+      render(
+        <BookshelfPage
+          novels={[]}
+          totalNovelsCount={0}
+          favoriteOnly={true}
+          isLoading={false}
+          onSelectNovel={vi.fn()}
+          onResumeNovel={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByTestId("bookshelf-empty")).toBeInTheDocument();
+      expect(
+        screen.queryByTestId("bookshelf-favorite-empty"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("NovelCard のお気に入りボタンをクリックしたときに onToggleFavoriteNovel が呼び出されること (Issue #266)", async () => {
+      const user = userEvent.setup();
+      const onToggleFavoriteNovel = vi.fn();
+
+      render(
+        <BookshelfPage
+          novels={sampleNovels}
+          isLoading={false}
+          onToggleFavoriteNovel={onToggleFavoriteNovel}
+          onSelectNovel={vi.fn()}
+          onResumeNovel={vi.fn()}
+        />,
+      );
+
+      const favButtons = screen.getAllByTestId("novel-card-favorite-button");
+      await user.click(favButtons[0]);
+
+      expect(onToggleFavoriteNovel).toHaveBeenCalledWith(
+        sampleNovels[0].id,
+        true,
+      );
     });
   });
 });

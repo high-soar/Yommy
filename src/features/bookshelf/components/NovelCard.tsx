@@ -5,6 +5,7 @@ export interface NovelCardProps {
   novel: NovelSummary;
   onSelect: (novelId: string) => void;
   onResume: (novelId: string, chapterIndex: number) => void;
+  onToggleFavorite?: (novelId: string, nextIsFavorite: boolean) => void;
 }
 
 /**
