@@ -979,15 +979,25 @@ describe("ReaderContainer", () => {
         expect(pageSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             isLoading: false,
+            novel: expect.objectContaining({ id: sampleNovel.id }),
             chapter: expect.objectContaining({ chapterIndex: 1 }),
           }),
           undefined,
         );
       });
 
-      const lastProps = pageSpy.mock.lastCall?.[0];
+      const matchingCall = pageSpy.mock.calls
+        .slice()
+        .reverse()
+        .find(
+          (call) =>
+            call[0]?.isLoading === false &&
+            call[0]?.novel?.id === sampleNovel.id &&
+            call[0]?.chapter?.chapterIndex === 1,
+        );
+      const props = matchingCall?.[0];
       await act(async () => {
-        lastProps?.onScrollProgressChange?.(0.5);
+        props?.onScrollProgressChange?.(0.5);
       });
 
       await waitFor(
