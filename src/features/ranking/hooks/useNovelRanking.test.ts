@@ -1045,6 +1045,7 @@ describe("useNovelRanking", () => {
       databaseAdapter: {} as never,
       novelRepository: undefined as never,
       chapterRepository: {} as never,
+      queueRepository: {} as never,
       settingsRepository: {} as never,
       appSettingsRepository: {} as never,
       appBridge: {} as never,

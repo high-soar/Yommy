@@ -128,6 +128,10 @@ export class SqlChapterRepository implements ChapterRepository {
     );
   }
 
+  /**
+   * 指定作品の本文キャッシュを削除し、同時に download_queue の該当レコードもクリーンアップする（Issue #268）。
+   * （クラウド同期 LWW タイムスタンプ保護規約 R1-01 に従い、novels.updated_at は更新しない）
+   */
   async deleteCachedBodies(
     novelId: string,
     options?: { onlyRead?: boolean },
@@ -142,19 +146,32 @@ export class SqlChapterRepository implements ChapterRepository {
         [novelId],
       );
       const count = countRows[0].count;
-      if (count === 0) {
-        return 0;
+      if (count > 0) {
+        await this.db.execute(
+          `UPDATE chapters
+           SET body_html = NULL, byte_size = 0, downloaded_at = NULL
+           WHERE ${condition};`,
+          [novelId],
+        );
+
+        // キャッシュ削除時は作品メタデータ不変のため updated_at を更新せず容量と話数のみ更新 (R1-01)
+        await this.recalculateNovelStats(novelId);
       }
 
-      await this.db.execute(
-        `UPDATE chapters
-         SET body_html = NULL, byte_size = 0, downloaded_at = NULL
-         WHERE ${condition};`,
-        [novelId],
-      );
-
-      // キャッシュ削除時は作品メタデータ不変のため updated_at を更新せず容量と話数のみ更新 (R1-01)
-      await this.recalculateNovelStats(novelId);
+      if (options?.onlyRead) {
+        await this.db.execute(
+          `DELETE FROM download_queue
+           WHERE novel_id = ? AND chapter_index IN (
+             SELECT chapter_index FROM chapters WHERE novel_id = ? AND is_read = 1
+           );`,
+          [novelId, novelId],
+        );
+      } else {
+        await this.db.execute(
+          "DELETE FROM download_queue WHERE novel_id = ?;",
+          [novelId],
+        );
+      }
 
       return count;
     });
@@ -182,6 +199,10 @@ export class SqlChapterRepository implements ChapterRepository {
     };
   }
 
+  /**
+   * 全作品の本文キャッシュを一括削除し、同時に download_queue の該当レコードもクリーンアップする（Issue #268）。
+   * （クラウド同期 LWW タイムスタンプ保護規約 R1-01 に従い、novels.updated_at は更新しない）
+   */
   async deleteAllCachedBodies(options?: {
     onlyRead?: boolean;
   }): Promise<number> {
@@ -194,23 +215,35 @@ export class SqlChapterRepository implements ChapterRepository {
         `SELECT COUNT(*) AS count FROM chapters WHERE ${condition};`,
       );
       const count = countRows[0].count;
-      if (count === 0) {
-        return 0;
+      if (count > 0) {
+        const novelRows = await this.db.query<{ novel_id: string }>(
+          `SELECT DISTINCT novel_id FROM chapters WHERE ${condition};`,
+        );
+
+        await this.db.execute(
+          `UPDATE chapters
+           SET body_html = NULL, byte_size = 0, downloaded_at = NULL
+           WHERE ${condition};`,
+        );
+
+        // キャッシュ削除時は作品メタデータ不変のため updated_at を更新せず容量と話数のみ更新 (R1-01)
+        for (const row of novelRows) {
+          await this.recalculateNovelStats(row.novel_id);
+        }
       }
 
-      const novelRows = await this.db.query<{ novel_id: string }>(
-        `SELECT DISTINCT novel_id FROM chapters WHERE ${condition};`,
-      );
-
-      await this.db.execute(
-        `UPDATE chapters
-         SET body_html = NULL, byte_size = 0, downloaded_at = NULL
-         WHERE ${condition};`,
-      );
-
-      // キャッシュ削除時は作品メタデータ不変のため updated_at を更新せず容量と話数のみ更新 (R1-01)
-      for (const row of novelRows) {
-        await this.recalculateNovelStats(row.novel_id);
+      if (options?.onlyRead) {
+        await this.db.execute(
+          `DELETE FROM download_queue
+           WHERE EXISTS (
+             SELECT 1 FROM chapters
+             WHERE chapters.novel_id = download_queue.novel_id
+               AND chapters.chapter_index = download_queue.chapter_index
+               AND chapters.is_read = 1
+           );`,
+        );
+      } else {
+        await this.db.execute("DELETE FROM download_queue;");
       }
 
       return count;

@@ -27,6 +27,9 @@ const MetaComponent: React.FC = () => {
         AppSettingsRepository:{" "}
         {services.appSettingsRepository ? "present" : "missing"}
       </div>
+      <div data-testid="service-queue-repo">
+        QueueRepository: {services.queueRepository ? "present" : "missing"}
+      </div>
     </div>
   );
 };

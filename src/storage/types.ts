@@ -160,3 +160,80 @@ export interface SettingsRepository {
   getCloudSyncAccountEmail?(): Promise<string | null>;
   setCloudSyncAccountEmail?(email: string | null): Promise<void>;
 }
+
+export type DownloadQueueStatus =
+  "pending" | "downloading" | "completed" | "failed";
+
+export interface DownloadQueueItem {
+  id: number;
+  novelId: string;
+  chapterIndex: number;
+  targetUrl: string;
+  status: DownloadQueueStatus;
+  retryCount: number;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EnqueueChapterInput {
+  chapterIndex: number;
+  targetUrl: string;
+}
+
+export interface QueueRepository {
+  /**
+   * 対象エピソード群をダウンロードキューへ一括登録（Upsert）する。
+   * 既に同一 (novel_id, chapter_index) のレコードが存在する場合は、
+   * target_url を更新し、status = 'pending', last_error = NULL, updated_at = nowIso にリセットする（retry_count は保持）。
+   */
+  enqueueChapters(
+    novelId: string,
+    items: EnqueueChapterInput[],
+    nowIso?: string,
+  ): Promise<void>;
+
+  /**
+   * 指定作品のダウンロードキュー一覧を chapter_index 昇順で取得する。
+   */
+  listByNovelId(novelId: string): Promise<DownloadQueueItem[]>;
+
+  /**
+   * 指定エピソードのキューステータスを更新する。
+   * options.incrementRetry === true の場合は retry_count = retry_count + 1 に加算し、
+   * options.lastError が指定された場合は last_error を更新する（status === 'completed' または 'pending' 時は省略時 NULL クリア）。
+   */
+  updateStatus(
+    novelId: string,
+    chapterIndex: number,
+    status: DownloadQueueStatus,
+    options?: {
+      lastError?: string | null;
+      incrementRetry?: boolean;
+      nowIso?: string;
+    },
+  ): Promise<void>;
+
+  /**
+   * 画面アンマウントやアプリ再起動時に残存している 'downloading' 状態のレコードを 'pending' に戻す。
+   */
+  resetInterruptedToPending(novelId: string, nowIso?: string): Promise<void>;
+
+  /**
+   * 指定作品の特定話数リストに該当するキューレコードを削除する（個別話閲覧・先読み完了時の整理用）。
+   */
+  deleteByNovelAndChapters(
+    novelId: string,
+    chapterIndexes: number[],
+  ): Promise<void>;
+
+  /**
+   * 指定作品の全キューレコードを削除する（全話キャッシュ完了時・作品キャッシュ削除時用）。
+   */
+  clearNovelQueue(novelId: string): Promise<void>;
+
+  /**
+   * 全作品の全キューレコードを削除する（設定画面での全キャッシュ一括削除時用）。
+   */
+  clearAllQueue(): Promise<void>;
+}
