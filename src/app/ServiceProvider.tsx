@@ -34,6 +34,7 @@ import { CapacitorCloudSyncBridge } from "../bridges/cloud-sync/capacitorCloudSy
 import type { VolumeKeyBridge } from "../bridges/volume-key/types";
 import { MockVolumeKeyBridge } from "../bridges/volume-key/mockVolumeKeyBridge";
 import { CapacitorVolumeKeyBridge } from "../bridges/volume-key/capacitorVolumeKeyBridge";
+import type { WebViewDomBridge } from "../bridges/webview/types";
 import { SyncEngine } from "../features/cloud-sync/services/syncEngine";
 import { fetchFullNovelIndex } from "../parsers/fetchFullNovelIndex";
 import workIndexHtml from "../parsers/kakuyomu/__fixtures__/work_index.html?raw";
@@ -63,6 +64,7 @@ export interface ServiceContextValue {
   appBridge: AppBridge;
   cloudSyncBridge: CloudSyncBridge;
   volumeKeyBridge: VolumeKeyBridge;
+  webViewDomBridge?: WebViewDomBridge;
   syncEngine?: SyncEngine;
   fetchFullNovelIndex?: typeof fetchFullNovelIndex;
   isReady: boolean;
