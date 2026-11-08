@@ -72,6 +72,7 @@ export const BookshelfPage: React.FC<BookshelfPageProps> = ({
                 {updateCheckProgress.total})...
               </span>
             )}
+            {/* R2-20: 375px幅での進捗表示時の改行崩れ・右端ボタン見切れを防ぐためアイコンのみ＋shrink-0固定 */}
             <button
               type="button"
               data-testid="bookshelf-favorite-filter-button"

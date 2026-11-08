@@ -45,6 +45,7 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
     >
       {/* 管理アクションバー（右寄せ） */}
       <div className="flex items-center justify-end gap-2 flex-wrap">
+        {/* R2-01/R2-19: ON/OFF切替時の2px高さちらつきと横幅伸縮を防ぐため常時1px borderと固定文言を維持 */}
         <button
           type="button"
           data-testid="detail-favorite-toggle-button"
@@ -52,10 +53,10 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
           aria-label="お気に入り"
           onClick={onToggleFavorite}
           disabled={isRefreshing || isBatchCaching}
-          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-amber-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed ${
+          className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors focus:outline-hidden focus:ring-2 focus:ring-amber-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed ${
             novel.isFavorite
-              ? "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 hover:bg-amber-100 dark:hover:bg-amber-900/50"
-              : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-600"
+              ? "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700/60 hover:bg-amber-100 dark:hover:bg-amber-900/50"
+              : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-600"
           }`}
         >
           {novel.isFavorite ? "★ お気に入り" : "☆ お気に入り"}

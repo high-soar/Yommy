@@ -96,6 +96,7 @@ export function useBookshelf(
 
   const isMountedRef = useRef<boolean>(true);
   const isCheckingUpdatesRef = useRef<boolean>(false);
+  // R2-08: お気に入りトグル（作品ID単位）およびフィルタトグルの非同期処理中連打排他ガード
   const togglingFavoriteIdsRef = useRef<Set<string>>(new Set());
   const isTogglingFilterRef = useRef<boolean>(false);
   const sortOrderRef = useRef<BookshelfSortOrder>(DEFAULT_SORT_ORDER);
