@@ -3,6 +3,8 @@ import {
   CapacitorWebViewDomBridge,
   MockWebViewDomBridge,
   WebViewDomNative,
+  isValidHttpUrl,
+  createUnsafeSchemeError,
 } from "./index";
 
 describe("bridges/webview/index", () => {
@@ -10,5 +12,7 @@ describe("bridges/webview/index", () => {
     expect(CapacitorWebViewDomBridge).toBeDefined();
     expect(MockWebViewDomBridge).toBeDefined();
     expect(WebViewDomNative).toBeDefined();
+    expect(isValidHttpUrl).toBeDefined();
+    expect(createUnsafeSchemeError).toBeDefined();
   });
 });

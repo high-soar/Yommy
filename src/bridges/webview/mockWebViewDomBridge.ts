@@ -3,6 +3,7 @@ import type {
   OpenWebViewOptions,
   WebViewDomBridge,
 } from "./types";
+import { createUnsafeSchemeError, isValidHttpUrl } from "./urlUtils";
 
 const DEFAULT_MOCK_PAGE: CapturedDomResult = {
   html: "<!DOCTYPE html><html><head><title>カクヨム作品モック</title></head><body><div id='workTitle'>異世界転生モック</div><div class='widget-episodeBody'>モック本文</div></body></html>",
@@ -52,15 +53,7 @@ export class MockWebViewDomBridge implements WebViewDomBridge {
    * 指定 URL が http: または https: の安全なスキームか検証する。
    */
   canHandle(url: string): boolean {
-    if (!url || typeof url !== "string") {
-      return false;
-    }
-    try {
-      const parsed = new URL(url.trim());
-      return parsed.protocol === "http:" || parsed.protocol === "https:";
-    } catch {
-      return false;
-    }
+    return isValidHttpUrl(url);
   }
 
   /**
@@ -68,10 +61,13 @@ export class MockWebViewDomBridge implements WebViewDomBridge {
    */
   async open(options: OpenWebViewOptions): Promise<void> {
     if (!this.canHandle(options.url)) {
-      throw new Error(`Invalid or unsafe URL scheme: ${options.url}`);
+      throw createUnsafeSchemeError(options.url);
     }
     this.opened = true;
-    this.currentOptions = options;
+    this.currentOptions = {
+      ...options,
+      url: options.url.trim(),
+    };
   }
 
   /**

@@ -9,3 +9,4 @@ export {
   type WebViewDomNativePlugin,
 } from "./capacitorWebViewDomBridge";
 export { MockWebViewDomBridge } from "./mockWebViewDomBridge";
+export { isValidHttpUrl, createUnsafeSchemeError } from "./urlUtils";

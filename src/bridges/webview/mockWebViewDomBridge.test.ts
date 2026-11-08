@@ -41,13 +41,16 @@ describe("MockWebViewDomBridge", () => {
 
     it("open を呼び出すと isOpened が true となり options が保持されること", async () => {
       const options: OpenWebViewOptions = {
-        url: "https://kakuyomu.jp/works/123",
+        url: "  https://kakuyomu.jp/works/123  ",
         title: "テスト小説",
       };
       await bridge.open(options);
 
       expect(bridge.isOpened()).toBe(true);
-      expect(bridge.getCurrentOptions()).toEqual(options);
+      expect(bridge.getCurrentOptions()).toEqual({
+        url: "https://kakuyomu.jp/works/123",
+        title: "テスト小説",
+      });
     });
 
     it("危険なURLで open を呼び出すとエラーをスローし isOpened は false のままであること", async () => {
