@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(CloudSyncPlugin.class);
         registerPlugin(VolumeKeyPlugin.class);
+        registerPlugin(WebViewDomPlugin.class);
         super.onCreate(savedInstanceState);
     }
 

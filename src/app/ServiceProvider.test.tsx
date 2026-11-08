@@ -25,6 +25,10 @@ import {
   MockVolumeKeyBridge,
   CapacitorVolumeKeyBridge,
 } from "../bridges/volume-key";
+import {
+  MockWebViewDomBridge,
+  CapacitorWebViewDomBridge,
+} from "../bridges/webview";
 import type { QueueRepository } from "../storage/types";
 import { SqlQueueRepository } from "../storage/repositories/queueRepository";
 
@@ -747,29 +751,34 @@ describe("ServiceProvider", () => {
         </ServiceProvider>,
       );
 
-      await waitFor(() => {
-        expect((serviceValue as ServiceContextValue | null)?.isReady).toBe(
-          true,
-        );
-      });
-      expect(
-        (serviceValue as ServiceContextValue | null)?.httpClient,
-      ).toBeDefined();
-      expect(
-        (serviceValue as ServiceContextValue | null)?.databaseAdapter,
-      ).toBeDefined();
-      expect(
-        (serviceValue as ServiceContextValue | null)?.appBridge,
-      ).toBeInstanceOf(CapacitorAppBridge);
-      expect(
-        (serviceValue as ServiceContextValue | null)?.cloudSyncBridge,
-      ).toBeInstanceOf(CapacitorCloudSyncBridge);
-      expect(
-        (serviceValue as ServiceContextValue | null)?.volumeKeyBridge,
-      ).toBeInstanceOf(CapacitorVolumeKeyBridge);
-
-      createConnectionSpy.mockRestore();
-      isNativeSpy.mockRestore();
+      try {
+        await waitFor(() => {
+          expect((serviceValue as ServiceContextValue | null)?.isReady).toBe(
+            true,
+          );
+        });
+        expect(
+          (serviceValue as ServiceContextValue | null)?.httpClient,
+        ).toBeDefined();
+        expect(
+          (serviceValue as ServiceContextValue | null)?.databaseAdapter,
+        ).toBeDefined();
+        expect(
+          (serviceValue as ServiceContextValue | null)?.appBridge,
+        ).toBeInstanceOf(CapacitorAppBridge);
+        expect(
+          (serviceValue as ServiceContextValue | null)?.cloudSyncBridge,
+        ).toBeInstanceOf(CapacitorCloudSyncBridge);
+        expect(
+          (serviceValue as ServiceContextValue | null)?.volumeKeyBridge,
+        ).toBeInstanceOf(CapacitorVolumeKeyBridge);
+        expect(
+          (serviceValue as ServiceContextValue | null)?.webViewDomBridge,
+        ).toBeInstanceOf(CapacitorWebViewDomBridge);
+      } finally {
+        createConnectionSpy.mockRestore();
+        isNativeSpy.mockRestore();
+      }
     });
 
     it("Web 環境（isNativePlatform === false）でデフォルトの MockAppBridge が初期化されること (AC-AB-01)", async () => {
@@ -864,6 +873,55 @@ describe("ServiceProvider", () => {
       expect(
         (serviceValue as ServiceContextValue | null)?.volumeKeyBridge,
       ).toBe(customVolumeKeyBridge);
+    });
+
+    it("Web 環境（isNativePlatform === false）でデフォルトの MockWebViewDomBridge が初期化されること (AC-WV-03)", async () => {
+      let serviceValue: ServiceContextValue | null = null;
+      const TestConsumer: React.FC = () => {
+        serviceValue = useServices();
+        return <div>Web 実行テスト</div>;
+      };
+
+      render(
+        <ServiceProvider>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect((serviceValue as ServiceContextValue | null)?.isReady).toBe(
+          true,
+        );
+      });
+      expect(
+        (serviceValue as ServiceContextValue | null)?.webViewDomBridge,
+      ).toBeInstanceOf(MockWebViewDomBridge);
+    });
+
+    it("外部からカスタム webViewDomBridge が提供された場合に優先して注入されること", async () => {
+      const customWebViewDomBridge = new MockWebViewDomBridge();
+      let serviceValue: ServiceContextValue | null = null;
+      const TestConsumer: React.FC = () => {
+        serviceValue = useServices();
+        return <div>DI 注入テスト</div>;
+      };
+
+      render(
+        <ServiceProvider
+          services={{ webViewDomBridge: customWebViewDomBridge }}
+        >
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect((serviceValue as ServiceContextValue | null)?.isReady).toBe(
+          true,
+        );
+      });
+      expect(
+        (serviceValue as ServiceContextValue | null)?.webViewDomBridge,
+      ).toBe(customWebViewDomBridge);
     });
 
     it("初期化完了時に結合テスト用に window.__yommyServices が公開されること", async () => {

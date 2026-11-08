@@ -293,4 +293,60 @@ describe("Android ビルド設定および署名・バージョン管理検証 (
       expect(content).toMatch(/event\.getRepeatCount\(\)\s*==\s*0/);
     });
   });
+
+  describe("WebViewDomPlugin.java および MainActivity.java 内蔵ブラウザ・DOMキャプチャ連携検証 (AC-WV-03, Issue #269)", () => {
+    const webViewDomPluginPath = path.resolve(
+      rootDir,
+      "android/app/src/main/java/com/yommy/app/WebViewDomPlugin.java",
+    );
+    const mainActivityPath = path.resolve(
+      rootDir,
+      "android/app/src/main/java/com/yommy/app/MainActivity.java",
+    );
+
+    it('WebViewDomPlugin.java が存在し、@CapacitorPlugin(name = "WebViewDom") が定義されていること', () => {
+      expect(fs.existsSync(webViewDomPluginPath)).toBe(true);
+      const content = fs.readFileSync(webViewDomPluginPath, "utf-8");
+
+      expect(content).toMatch(
+        /@CapacitorPlugin\s*\(\s*name\s*=\s*"WebViewDom"\s*\)/,
+      );
+    });
+
+    it("WebViewDomPlugin.java の load() および handleOnDestroy() でリソース解放・クリーンアップが行われていること", () => {
+      const content = fs.readFileSync(webViewDomPluginPath, "utf-8");
+
+      expect(content).toMatch(/public\s+void\s+load\s*\(\s*\)/);
+      expect(content).toMatch(/protected\s+void\s+handleOnDestroy\s*\(\s*\)/);
+      expect(content).toMatch(/webView\.destroy\(\)/);
+    });
+
+    it("MainActivity.java の onCreate 内で registerPlugin(WebViewDomPlugin.class) が登録されていること", () => {
+      expect(fs.existsSync(mainActivityPath)).toBe(true);
+      const content = fs.readFileSync(mainActivityPath, "utf-8");
+
+      expect(content).toMatch(
+        /onCreate\s*\([\s\S]*?registerPlugin\s*\(\s*WebViewDomPlugin\.class\s*\)/,
+      );
+    });
+
+    it("WebViewDomPlugin.java の open メソッドで危険なスキーム（javascript:, data:, file:, intent: 等）を遮断していること", () => {
+      const content = fs.readFileSync(webViewDomPluginPath, "utf-8");
+
+      expect(content).toMatch(
+        /public\s+void\s+open\s*\(\s*PluginCall\s+call\s*\)/,
+      );
+      expect(content).toMatch(/shouldOverrideUrlLoading/);
+    });
+
+    it("WebViewDomPlugin.java の captureDom メソッドで evaluateJavascript を実行して outerHTML を抽出していること", () => {
+      const content = fs.readFileSync(webViewDomPluginPath, "utf-8");
+
+      expect(content).toMatch(
+        /public\s+void\s+captureDom\s*\(\s*PluginCall\s+call\s*\)/,
+      );
+      expect(content).toMatch(/evaluateJavascript/);
+      expect(content).toMatch(/document\.documentElement\.outerHTML/);
+    });
+  });
 });

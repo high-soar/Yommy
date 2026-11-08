@@ -1051,6 +1051,7 @@ describe("useNovelRanking", () => {
       appBridge: {} as never,
       cloudSyncBridge: {} as never,
       volumeKeyBridge: {} as never,
+      webViewDomBridge: {} as never,
       isReady: true,
       error: null,
     });

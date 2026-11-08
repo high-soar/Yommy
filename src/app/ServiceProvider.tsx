@@ -34,6 +34,9 @@ import { CapacitorCloudSyncBridge } from "../bridges/cloud-sync/capacitorCloudSy
 import type { VolumeKeyBridge } from "../bridges/volume-key/types";
 import { MockVolumeKeyBridge } from "../bridges/volume-key/mockVolumeKeyBridge";
 import { CapacitorVolumeKeyBridge } from "../bridges/volume-key/capacitorVolumeKeyBridge";
+import type { WebViewDomBridge } from "../bridges/webview/types";
+import { MockWebViewDomBridge } from "../bridges/webview/mockWebViewDomBridge";
+import { CapacitorWebViewDomBridge } from "../bridges/webview/capacitorWebViewDomBridge";
 import { SyncEngine } from "../features/cloud-sync/services/syncEngine";
 import { fetchFullNovelIndex } from "../parsers/fetchFullNovelIndex";
 import workIndexHtml from "../parsers/kakuyomu/__fixtures__/work_index.html?raw";
@@ -63,6 +66,7 @@ export interface ServiceContextValue {
   appBridge: AppBridge;
   cloudSyncBridge: CloudSyncBridge;
   volumeKeyBridge: VolumeKeyBridge;
+  webViewDomBridge: WebViewDomBridge;
   syncEngine?: SyncEngine;
   fetchFullNovelIndex?: typeof fetchFullNovelIndex;
   isReady: boolean;
@@ -340,6 +344,12 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
             ? new CapacitorVolumeKeyBridge()
             : new MockVolumeKeyBridge());
 
+        const webViewDomBridge =
+          services?.webViewDomBridge ??
+          (isNative
+            ? new CapacitorWebViewDomBridge()
+            : new MockWebViewDomBridge());
+
         const syncEngine =
           services?.syncEngine ??
           new SyncEngine({
@@ -363,6 +373,7 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           appBridge,
           cloudSyncBridge,
           volumeKeyBridge,
+          webViewDomBridge,
           syncEngine,
           fetchFullNovelIndex:
             services?.fetchFullNovelIndex ?? fetchFullNovelIndex,
@@ -395,6 +406,8 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
               services?.cloudSyncBridge ?? new MockCloudSyncBridge(),
             volumeKeyBridge:
               services?.volumeKeyBridge ?? new MockVolumeKeyBridge(),
+            webViewDomBridge:
+              services?.webViewDomBridge ?? new MockWebViewDomBridge(),
             syncEngine: undefined,
             fetchFullNovelIndex:
               services?.fetchFullNovelIndex ?? fetchFullNovelIndex,
@@ -445,6 +458,8 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
             services?.cloudSyncBridge ?? new MockCloudSyncBridge(),
           volumeKeyBridge:
             services?.volumeKeyBridge ?? new MockVolumeKeyBridge(),
+          webViewDomBridge:
+            services?.webViewDomBridge ?? new MockWebViewDomBridge(),
           syncEngine: services?.syncEngine,
           fetchFullNovelIndex:
             services?.fetchFullNovelIndex ?? fetchFullNovelIndex,
