@@ -18,6 +18,7 @@ import { ParserRegistry } from "../../../parsers/parserRegistry";
 import { MockAppBridge } from "../../../bridges/app";
 import { MockCloudSyncBridge } from "../../../bridges/cloud-sync/mockCloudSyncBridge";
 import { MockVolumeKeyBridge } from "../../../bridges/volume-key/mockVolumeKeyBridge";
+import { MockWebViewDomBridge } from "../../../bridges/webview/mockWebViewDomBridge";
 import { useStorageCache } from "./useStorageCache";
 
 function createMockServices(
@@ -51,6 +52,7 @@ function createMockServices(
     appBridge: new MockAppBridge(),
     cloudSyncBridge: new MockCloudSyncBridge(),
     volumeKeyBridge: new MockVolumeKeyBridge(),
+    webViewDomBridge: new MockWebViewDomBridge(),
     isReady: true,
     error: null,
     ...overrides,
