@@ -48,12 +48,12 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
         new Date().toISOString(),
       );
 
-      // 作品1の last_checked_at を 2時間前（自動更新チェック対象: 1時間以上経過）に設定、has_new_update = 0 に設定
+      // 作品1の last_checked_at および updated_at を 2時間前（自動更新チェック対象: 1時間以上経過）に設定、has_new_update = 0 に設定 (R2-05)
       const work1Id = `${parsedIndex.siteType}:${parsedIndex.remoteWorkId}`;
       const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
       await services.databaseAdapter.execute(
-        "UPDATE novels SET last_checked_at = ?, has_new_update = 0 WHERE id = ?",
-        [twoHoursAgo, work1Id],
+        "UPDATE novels SET last_checked_at = ?, updated_at = ?, has_new_update = 0 WHERE id = ?",
+        [twoHoursAgo, twoHoursAgo, work1Id],
       );
 
       // 作品2を直接 DB に登録（50音順で作品1より前になるタイトル: "あいうえおの冒険"）
@@ -287,6 +287,23 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
     ).toHaveText("あいうえおの冒険");
 
     // 7. 手動一括更新ボタンの押下と進捗表示・結果反映 (AC-BS-10, TR-17)
+    // R2-05 (R1-01 / No.236 回帰保証): 自動更新チェック・詳細閲覧・リーダー閲覧（しおり更新）を経ても、両作品の updated_at が変化していないことを検証
+    const updatedAtBeforeManualRefresh = await page.evaluate(async () => {
+      const services = window.__yommyServices!;
+      return await services.databaseAdapter.query<{
+        id: string;
+        updated_at: string;
+      }>("SELECT id, updated_at FROM novels ORDER BY id");
+    });
+    const work2BeforeRefresh = updatedAtBeforeManualRefresh.find(
+      (r) => r.id === "kakuyomu:16817330658027210002",
+    );
+    const work1BeforeRefresh = updatedAtBeforeManualRefresh.find(
+      (r) => r.id === "kakuyomu:16817330658027210412",
+    );
+    expect(work2BeforeRefresh?.updated_at).toBe("2026-10-27T00:00:00Z");
+    expect(work1BeforeRefresh?.updated_at).toBeTruthy();
+
     const refreshButton = page.getByTestId("bookshelf-refresh-button");
     await expect(refreshButton).toBeVisible();
     await expect(refreshButton).toBeEnabled();
@@ -302,22 +319,30 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
     await expect(refreshProgress).not.toBeVisible({ timeout: 15000 });
     await expect(refreshButton).toBeEnabled();
 
-    // TR-17 の結果反映: 作品1の更新確認日時 (last_checked_at) が更新されていること
-    const lastChecked = await page.evaluate(async () => {
+    // TR-17 の結果反映: 作品1の更新確認日時 (last_checked_at) が更新され、かつ updated_at は保護されて変化していないこと (R2-05)
+    const rowsAfterManualRefresh = await page.evaluate(async () => {
       const services = window.__yommyServices!;
-      const rows = await services.databaseAdapter.query<{
+      return await services.databaseAdapter.query<{
+        id: string;
         last_checked_at: string;
-      }>(
-        "SELECT last_checked_at FROM novels WHERE id = 'kakuyomu:16817330658027210412'",
-      );
-      return rows[0]?.last_checked_at;
+        updated_at: string;
+      }>("SELECT id, last_checked_at, updated_at FROM novels ORDER BY id");
     });
-    expect(lastChecked).toBeTruthy();
-    const checkedTime = new Date(lastChecked!).getTime();
+    const work1AfterRefresh = rowsAfterManualRefresh.find(
+      (r) => r.id === "kakuyomu:16817330658027210412",
+    );
+    const work2AfterRefresh = rowsAfterManualRefresh.find(
+      (r) => r.id === "kakuyomu:16817330658027210002",
+    );
+    expect(work1AfterRefresh?.last_checked_at).toBeTruthy();
+    const checkedTime = new Date(work1AfterRefresh!.last_checked_at).getTime();
     expect(Date.now() - checkedTime).toBeLessThan(30000);
+    // 手動一括更新チェック（upsertNovelWithToc）前後で updated_at が変化しないこと (R1-01 / R2-05)
+    expect(work1AfterRefresh?.updated_at).toBe(work1BeforeRefresh?.updated_at);
+    expect(work2AfterRefresh?.updated_at).toBe("2026-10-27T00:00:00Z");
 
     // =========================================================================
-    // 8. 本棚カードおよび作品詳細ヘッダーでのお気に入り（★）登録・解除と画面間連動 (AC-BS-14, AC-ND-23, HO-32)
+    // 8. 本棚カードおよび作品詳細ヘッダーでのお気に入り（★）登録・解除と画面間連動 (AC-BS-14, AC-ND-23, HO-32, R2-05, R2-19)
     // =========================================================================
     // (a) 本棚カード上の novel-card-favorite-button によるお気に入り登録・解除
     const cardWork1 = page
@@ -340,7 +365,7 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
       "境界迷宮と異界の魔術師のお気に入り",
     );
 
-    // DB に is_favorite = 1 と updated_at 更新が反映されていることを確認
+    // DB に is_favorite = 1 と updated_at の増加が反映されていることを確認 (AC-BS-14, R2-05)
     const work1FavRow = await page.evaluate(async () => {
       const services = window.__yommyServices!;
       const rows = await services.databaseAdapter.query<{
@@ -352,8 +377,11 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
       return rows[0];
     });
     expect(work1FavRow?.is_favorite).toBe(1);
+    expect(Date.parse(work1FavRow!.updated_at)).toBeGreaterThan(
+      Date.parse(work1BeforeRefresh!.updated_at),
+    );
 
-    // (b) 作品詳細ヘッダーの detail-favorite-toggle-button によるお気に入り登録と本棚連動 (AC-ND-23)
+    // (b) 作品詳細ヘッダーの detail-favorite-toggle-button によるお気に入り登録と本棚連動 (AC-ND-23, R2-05, R2-19)
     const cardWork2 = page
       .getByTestId("novel-card")
       .filter({ hasText: "あいうえおの冒険" });
@@ -370,7 +398,23 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
     // 作品詳細ヘッダーでお気に入り登録
     await detailFavBtn.click();
     await expect(detailFavBtn).toHaveAttribute("aria-pressed", "true");
-    await expect(detailFavBtn).toHaveText("★ お気に入り済み");
+    await expect(detailFavBtn).toHaveText("★ お気に入り");
+
+    // 作品詳細でのお気に入りトグルでも DB の updated_at が実際に新しい日時へ増加していることを確認 (AC-ND-23, R2-05)
+    const work2FavRow = await page.evaluate(async () => {
+      const services = window.__yommyServices!;
+      const rows = await services.databaseAdapter.query<{
+        is_favorite: number;
+        updated_at: string;
+      }>(
+        "SELECT is_favorite, updated_at FROM novels WHERE id = 'kakuyomu:16817330658027210002'",
+      );
+      return rows[0];
+    });
+    expect(work2FavRow?.is_favorite).toBe(1);
+    expect(Date.parse(work2FavRow!.updated_at)).toBeGreaterThan(
+      Date.parse("2026-10-27T00:00:00Z"),
+    );
 
     // ブラウザ戻るで本棚へ復帰し、作品2カードのお気に入り状態が ★（aria-pressed=true）になっていることを確認
     await page.goBack();
@@ -402,7 +446,7 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
     await expect(page).toHaveURL("/");
 
     // =========================================================================
-    // 9. 本棚ヘッダーお気に入りフィルタ（bookshelf-favorite-filter-button）による絞り込み表示とソート併用 (AC-BS-15, TR-16)
+    // 9. 本棚ヘッダーお気に入りフィルタ（bookshelf-favorite-filter-button）による絞り込み表示とソート併用 (AC-BS-15, TR-16, R2-20)
     // =========================================================================
     // 現在の状態: 作品1（境界迷宮）のみお気に入り（isFavorite=true）、作品2（あいうえお）は非お気に入り
     const favFilterButton = page.getByTestId(
@@ -410,10 +454,12 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
     );
     await expect(favFilterButton).toBeVisible();
     await expect(favFilterButton).toHaveAttribute("aria-pressed", "false");
+    await expect(favFilterButton).toHaveText("☆");
 
     // お気に入りフィルタを ON に切り替え
     await favFilterButton.click();
     await expect(favFilterButton).toHaveAttribute("aria-pressed", "true");
+    await expect(favFilterButton).toHaveText("★");
 
     // お気に入りの作品1のみが表示され、作品2は除外されること
     const filteredCards = page.getByTestId("novel-card");
@@ -570,19 +616,31 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
     await expect(updateFavFilterBtn).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByTestId("novel-card")).toHaveCount(1);
 
-    // 手動更新ボタンを押下（お気に入りフィルタ ON 時は表示中のお気に入り1作品のみ対象）
+    // 手動更新ボタンを押下（お気に入りフィルタ ON 時は表示中のお気に入り1作品のみ対象: AC-BS-10, R2-06）
+    // 1件更新時の進捗表示（総件数が1件であること）およびボタン disabled 遷移を決定論的に捕捉するため、httpClient.getHtml に軽微な遅延を挟む
+    await page.evaluate(() => {
+      const services = window.__yommyServices!;
+      const client = services.httpClient as unknown as {
+        getHtml: (options: { url: string }) => Promise<unknown>;
+      };
+      const origGetHtml = client.getHtml.bind(client);
+      client.getHtml = async (options: { url: string }) => {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        return origGetHtml(options);
+      };
+    });
+
     const favRefreshBtn = page.getByTestId("bookshelf-refresh-button");
+    const favRefreshProgress = page.getByTestId("bookshelf-refresh-progress");
     await expect(favRefreshBtn).toBeEnabled();
     await favRefreshBtn.click();
 
-    // 更新完了後に進捗表示が非表示となり、更新ボタンが再活性化されることを待機 (TR-17)
-    await expect(favRefreshBtn).toBeEnabled({ timeout: 15000 });
-    await expect(
-      page.getByTestId("bookshelf-refresh-progress"),
-    ).not.toBeVisible();
+    // 更新実行中は進捗表示に総件数 1 件（"(0/1)" または "(1/1)"）が表示され、更新ボタンが無効化されることを確認 (R2-06)
+    await expect(favRefreshProgress).toBeVisible();
+    await expect(favRefreshProgress).toContainText(/\/1\)/);
+    await expect(favRefreshBtn).toBeDisabled();
 
-    // DB の各作品 last_checked_at を検証:
-    // expect.poll で作品1（お気に入り・表示中）の last_checked_at が更新されることをポーリング待機 (R1-14)
+    // expect.poll で作品1（お気に入り・表示中）の last_checked_at が更新されることをポーリング待機 (R1-14, R2-06)
     await expect
       .poll(
         async () => {
@@ -602,6 +660,10 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
         { timeout: 15000 },
       )
       .toBeLessThan(30000);
+
+    // 更新処理が完全に終了して進捗表示が非表示となり、更新ボタンが再活性化されたことを確認してから作品2の否定アサーションを行う (TR-17, R2-06)
+    await expect(favRefreshProgress).not.toBeVisible({ timeout: 15000 });
+    await expect(favRefreshBtn).toBeEnabled({ timeout: 15000 });
 
     const checkedRows = await page.evaluate(async () => {
       const services = window.__yommyServices!;
