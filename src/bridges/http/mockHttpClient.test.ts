@@ -151,6 +151,16 @@ describe("MockHttpClient", () => {
       expect(res1.html).toBe("first");
       expect(res2.html).toBe("second");
     });
+
+    it("包括的なRegExpパターンの後に個別URLが登録された場合、後から登録された個別URLが優先されること", async () => {
+      client.setResponse(/https:\/\/example\.com\/.*/, { html: "catch-all" });
+      client.setResponse("https://example.com/specific", { html: "specific" });
+
+      const res = await client.getHtml({
+        url: "https://example.com/specific",
+      });
+      expect(res.html).toBe("specific");
+    });
   });
 
   describe("エラー系とリセット機能", () => {

@@ -44,12 +44,16 @@ export class MockHttpClient implements HttpClientBridge {
       throw options.signal.reason;
     }
 
-    const matched = this.routes.find((route) => {
-      if (typeof route.pattern === "string") {
-        return route.pattern === options.url;
-      }
-      return route.pattern.test(options.url);
-    });
+    // 文字列による完全一致ルールを RegExp パターンよりも優先して検索する
+    const matched =
+      this.routes.find(
+        (route) =>
+          typeof route.pattern === "string" && route.pattern === options.url,
+      ) ??
+      this.routes.find(
+        (route) =>
+          route.pattern instanceof RegExp && route.pattern.test(options.url),
+      );
 
     if (!matched) {
       throw new Error(

@@ -31,8 +31,8 @@ docs/
 │   │   ├── kakuyomu.md                # カクヨム パーサー・スクレイピング仕様書（kakuyomu.jp）
 │   │   └── narou.md                   # 小説家になろう パーサー・スクレイピング仕様書（ncode.syosetu.com）
 │   └── changes/                       # [差分仕様 (Delta Specs)] 要望（親Issue）ごとの設計差分・テスト計画・Sub-issue分割
-│       ├── issue-268-persistent-download-queue.md # 永続ダウンロードキュー（QueueRepository / download_queue）の実装と一括キャッシュ中断再開・再試行統合の差分仕様 (#268)
 │       └── archive/                   # 完了済みの差分仕様アーカイブ（親Issueクローズ時に git mv で移動）
+│           ├── issue-268-persistent-download-queue.md # [Archived] 永続ダウンロードキュー（QueueRepository / download_queue）の実装と一括キャッシュ中断再開・再試行統合の差分仕様 (#268)
 │           ├── issue-266-bookshelf-favorite-and-sync.md # [Archived] 作品のお気に入り（★）登録・クラウド同期連携と本棚お気に入りフィルタ機能の差分仕様 (#266)
 │           ├── issue-265-work-variation-filter.md # [Archived] ランキング・検索画面（SCR-07 / SCR-06）における作品種別（長編/連載・短編）フィルタ切替対応の差分仕様 (#265)
 │           ├── issue-264-advanced-search-filter.md # [Archived] 検索画面（SCR-06）の高度検索フィルタ機能（除外キーワード・複数ジャンル）の差分仕様 (#264)

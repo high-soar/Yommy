@@ -3,7 +3,7 @@ type: spec-delta
 title: "永続ダウンロードキュー（QueueRepository / download_queue）の実装と一括キャッシュ中断再開・再試行統合"
 description: "Issue #268 に対する差分仕様。SQLite download_queue テーブルを操作する QueueRepository の実装、ServiceProvider DI 統合、および作品詳細画面（SCR-02）での一括キャッシュ中断再開・失敗話スキップ継続・再試行・取得失敗バッジ表示の設計。"
 issue: "#268"
-status: "Review (#268)"
+status: "Completed (Archived)"
 updated: "2026-11-08"
 tags:
   [

@@ -6,7 +6,7 @@ status: "Approved"
 updated: "2026-11-08"
 tags: [quality, bug-log, handover, dre, kaizen, ho-34]
 related_specs:
-  - docs/specs/changes/issue-268-persistent-download-queue.md
+  - docs/specs/changes/archive/issue-268-persistent-download-queue.md
   - docs/quality/archive/v0.8-discovery-filter-and-bookshelf-favorite-ux-log.md
   - docs/quality/reports/v0.8-discovery-filter-and-bookshelf-favorite-ux.md
   - docs/specs/changes/archive/issue-266-bookshelf-favorite-and-sync.md
