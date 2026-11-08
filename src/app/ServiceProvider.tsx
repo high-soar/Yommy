@@ -138,6 +138,10 @@ export function persistDatabaseBinary(
   }
 }
 
+const NAROU_RANKING_ONLY_ORDERS = new Set(["dailypoint", "monthlypoint"]);
+const NAROU_SEARCH_ONLY_ORDERS = new Set(["new", "generalfirstup"]);
+const NAROU_SEARCH_TYPES = new Set(["r", "er", "t", "ter"]);
+
 export function createDefaultMockHttpClient(): MockHttpClient {
   const client = new MockHttpClient();
   client.setResponse(/^https:\/\/kakuyomu\.jp\/search/, (options) => ({
@@ -218,17 +222,18 @@ export function createDefaultMockHttpClient(): MockHttpClient {
       const urlObj = new URL(options.url);
       const order = urlObj.searchParams.get("order") ?? "";
       const type = urlObj.searchParams.get("type") ?? "";
+      const isRankingRequest =
+        window.location.pathname.startsWith("/ranking") ||
+        NAROU_RANKING_ONLY_ORDERS.has(order);
       const hasSearchKeywords =
         urlObj.searchParams.has("word") || urlObj.searchParams.has("notword");
       const hasSearchOnlyParams =
-        order === "new" ||
-        order === "generalfirstup" ||
-        type === "r" ||
-        type === "er" ||
-        type === "ter" ||
+        NAROU_SEARCH_ONLY_ORDERS.has(order) ||
+        NAROU_SEARCH_TYPES.has(type) ||
         (urlObj.searchParams.get("genre") ?? "").includes("-");
 
-      const isSearch = hasSearchKeywords || hasSearchOnlyParams;
+      const isSearch =
+        !isRankingRequest && (hasSearchKeywords || hasSearchOnlyParams);
 
       return {
         status: 200,

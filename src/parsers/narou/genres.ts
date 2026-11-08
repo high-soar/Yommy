@@ -1,6 +1,6 @@
 /**
  * なろう公式小ジャンル（全21種）の定義とヘルパー
- * docs/specs/parsers/narou.md §5.2 および docs/specs/changes/issue-240-narou-search-ranking-and-site-selector.md §2.2 に準拠
+ * docs/specs/parsers/narou.md §5.2 および docs/specs/changes/archive/issue-240-narou-search-ranking-and-site-selector.md §2.2 に準拠
  */
 
 export interface NarouGenreItem {
