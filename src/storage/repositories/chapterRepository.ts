@@ -128,6 +128,10 @@ export class SqlChapterRepository implements ChapterRepository {
     );
   }
 
+  /**
+   * 指定作品の本文キャッシュを削除し、同時に download_queue の該当レコードもクリーンアップする（Issue #268）。
+   * （クラウド同期 LWW タイムスタンプ保護規約 R1-01 に従い、novels.updated_at は更新しない）
+   */
   async deleteCachedBodies(
     novelId: string,
     options?: { onlyRead?: boolean },
@@ -195,6 +199,10 @@ export class SqlChapterRepository implements ChapterRepository {
     };
   }
 
+  /**
+   * 全作品の本文キャッシュを一括削除し、同時に download_queue の該当レコードもクリーンアップする（Issue #268）。
+   * （クラウド同期 LWW タイムスタンプ保護規約 R1-01 に従い、novels.updated_at は更新しない）
+   */
   async deleteAllCachedBodies(options?: {
     onlyRead?: boolean;
   }): Promise<number> {
