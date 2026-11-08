@@ -49,7 +49,7 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
       return { label: "全話キャッシュ済み", disabled: true };
     }
     if (pendingCacheCount > 0) {
-      const remainingTotal = pendingCacheCount + (failedCacheCount ?? 0);
+      const remainingTotal = pendingCacheCount + failedCacheCount;
       return {
         label: `キャッシュを再開（残り${remainingTotal}話）`,
         disabled: isRefreshing,

@@ -127,8 +127,6 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
       currentNovelId: string,
       currentChapters: ChapterSummary[],
     ): Promise<void> => {
-      if (!queueRepository) return;
-
       // 1. 中断された downloading を pending にリセット
       await queueRepository.resetInterruptedToPending(currentNovelId);
 
@@ -345,9 +343,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
       .sort((a, b) => a.chapterIndex - b.chapterIndex);
 
     if (targetChapters.length === 0) {
-      if (queueRepository) {
-        await queueRepository.clearNovelQueue(novelId);
-      }
+      await queueRepository.clearNovelQueue(novelId);
       setPendingCacheCount(0);
       setFailedCacheCount(0);
       setFailedChapterIndexes([]);
@@ -367,8 +363,10 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     setError(null);
     setRefreshMessage(null);
 
-    // 開始時に中断された downloading を pending に戻し、有効キャッシュ済み話を整理
-    if (queueRepository) {
+    let isAborted = false;
+
+    try {
+      // 開始時に中断された downloading を pending に戻し、有効キャッシュ済み話を整理
       await queueRepository.resetInterruptedToPending(novelId);
       const nowTs = Date.now();
       const freshIndexes = chapters
@@ -384,11 +382,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
         targetUrl: ch.url,
       }));
       await queueRepository.enqueueChapters(novelId, targetInputs);
-    }
 
-    let isAborted = false;
-
-    try {
       const parser = parserRegistry.requireParser(novel.canonicalUrl);
 
       for (let i = 0; i < targetChapters.length; i++) {
@@ -398,15 +392,13 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
           ? SHORT_TIMEOUT_MS
           : STANDARD_TIMEOUT_MS;
 
-        if (queueRepository) {
-          await queueRepository.updateStatus(
-            novelId,
-            target.chapterIndex,
-            "downloading",
-          );
-        }
+        await queueRepository.updateStatus(
+          novelId,
+          target.chapterIndex,
+          "downloading",
+        );
 
-        let html: string;
+        let html: string | null = null;
         try {
           const response = await httpClient.getHtml({
             url: target.url,
@@ -417,153 +409,27 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
             throw new Error(`HTTP ${response.status}`);
           }
           html = response.html;
-        } catch (err: unknown) {
+        } catch (fetchErr: unknown) {
           if (signal.aborted) {
-            if (queueRepository) {
-              await queueRepository.updateStatus(
-                novelId,
-                target.chapterIndex,
-                "pending",
-              );
-            }
+            await queueRepository.updateStatus(
+              novelId,
+              target.chapterIndex,
+              "pending",
+            );
             isAborted = true;
             break;
           }
 
           if (hasStaleCache) {
             // 7日経過キャッシュ存在時の短タイムアウト失敗は既存キャッシュへフォールバックして completed とし次話へ
-            if (queueRepository) {
-              await queueRepository.updateStatus(
-                novelId,
-                target.chapterIndex,
-                "completed",
-              );
-            }
-            setBatchCacheProgress({
-              current: i + 1,
-              total: targetChapters.length,
-            });
-            if (i < targetChapters.length - 1) {
-              try {
-                await delay(PREFETCH_INTERVAL_MS, signal);
-              } catch {
-                isAborted = true;
-                break;
-              }
-            }
-            continue;
-          }
-
-          // 未キャッシュ話の失敗時はループを中断せず failed 記録し後続話を継続
-          const errMsg = extractErrorMessage(err, "通信エラー");
-          if (queueRepository) {
-            await queueRepository.updateStatus(
-              novelId,
-              target.chapterIndex,
-              "failed",
-              {
-                lastError: errMsg,
-                incrementRetry: true,
-              },
-            );
-          }
-          setFailedChapterIndexes((prev) =>
-            Array.from(new Set([...prev, target.chapterIndex])).sort(
-              (a, b) => a - b,
-            ),
-          );
-
-          setBatchCacheProgress({
-            current: i + 1,
-            total: targetChapters.length,
-          });
-
-          if (i < targetChapters.length - 1) {
-            try {
-              await delay(PREFETCH_INTERVAL_MS, signal);
-            } catch {
-              isAborted = true;
-              break;
-            }
-          }
-          continue;
-        }
-
-        try {
-          const parsedContent = parser.parseChapterContent(html, target.url);
-          const downloadedAt = new Date().toISOString();
-
-          await chapterRepository.saveChapterBody(
-            novelId,
-            target.chapterIndex,
-            parsedContent,
-            downloadedAt,
-          );
-
-          if (queueRepository) {
             await queueRepository.updateStatus(
               novelId,
               target.chapterIndex,
               "completed",
             );
-          }
-
-          setChapters((prev) =>
-            prev.map((ch) =>
-              ch.chapterIndex === target.chapterIndex
-                ? { ...ch, downloadedAt, byteSize: parsedContent.byteSize }
-                : ch,
-            ),
-          );
-
-          // R2-16: 一括キャッシュ進行中は novels.updated_at 保護規約（R1-01）と整合させ updatedAt を保持する
-          setNovel((prev) => {
-            const isNewCache = target.downloadedAt === null;
-            const oldSize = target.byteSize;
-            return {
-              ...prev!,
-              cachedChapters: isNewCache
-                ? prev!.cachedChapters + 1
-                : prev!.cachedChapters,
-              totalByteSize: Math.max(
-                0,
-                prev!.totalByteSize - oldSize + parsedContent.byteSize,
-              ),
-            };
-          });
-
-          setFailedChapterIndexes((prev) =>
-            prev.filter((idx) => idx !== target.chapterIndex),
-          );
-
-          setBatchCacheProgress({
-            current: i + 1,
-            total: targetChapters.length,
-          });
-
-          if (i < targetChapters.length - 1) {
-            try {
-              await delay(PREFETCH_INTERVAL_MS, signal);
-            } catch {
-              isAborted = true;
-              break;
-            }
-          }
-        } catch (err: unknown) {
-          if (signal.aborted) {
-            if (queueRepository) {
-              await queueRepository.updateStatus(
-                novelId,
-                target.chapterIndex,
-                "pending",
-              );
-            }
-            isAborted = true;
-            break;
-          }
-
-          const errMsg = extractErrorMessage(err, "パースエラー");
-          if (queueRepository) {
+          } else {
+            // 未キャッシュ話の失敗時はループを中断せず failed 記録し後続話を継続
+            const errMsg = extractErrorMessage(fetchErr, "通信エラー");
             await queueRepository.updateStatus(
               novelId,
               target.chapterIndex,
@@ -573,84 +439,150 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
                 incrementRetry: true,
               },
             );
+            setFailedChapterIndexes((prev) =>
+              Array.from(new Set([...prev, target.chapterIndex])).sort(
+                (a, b) => a - b,
+              ),
+            );
           }
-          setFailedChapterIndexes((prev) =>
-            Array.from(new Set([...prev, target.chapterIndex])).sort(
-              (a, b) => a - b,
-            ),
-          );
+        }
 
-          setBatchCacheProgress({
-            current: i + 1,
-            total: targetChapters.length,
-          });
+        if (html !== null) {
+          try {
+            const parsedContent = parser.parseChapterContent(html, target.url);
+            const downloadedAt = new Date().toISOString();
 
-          if (i < targetChapters.length - 1) {
-            try {
-              await delay(PREFETCH_INTERVAL_MS, signal);
-            } catch {
+            await chapterRepository.saveChapterBody(
+              novelId,
+              target.chapterIndex,
+              parsedContent,
+              downloadedAt,
+            );
+
+            await queueRepository.updateStatus(
+              novelId,
+              target.chapterIndex,
+              "completed",
+            );
+
+            setChapters((prev) =>
+              prev.map((ch) =>
+                ch.chapterIndex === target.chapterIndex
+                  ? { ...ch, downloadedAt, byteSize: parsedContent.byteSize }
+                  : ch,
+              ),
+            );
+
+            // R2-16: 一括キャッシュ進行中は novels.updated_at 保護規約（R1-01）と整合させ updatedAt を保持する
+            setNovel((prev) => {
+              const isNewCache = target.downloadedAt === null;
+              const oldSize = target.byteSize;
+              return {
+                ...prev!,
+                cachedChapters: isNewCache
+                  ? prev!.cachedChapters + 1
+                  : prev!.cachedChapters,
+                totalByteSize: Math.max(
+                  0,
+                  prev!.totalByteSize - oldSize + parsedContent.byteSize,
+                ),
+              };
+            });
+
+            setFailedChapterIndexes((prev) =>
+              prev.filter((idx) => idx !== target.chapterIndex),
+            );
+          } catch (parseErr: unknown) {
+            if (signal.aborted) {
+              await queueRepository.updateStatus(
+                novelId,
+                target.chapterIndex,
+                "pending",
+              );
               isAborted = true;
               break;
             }
+
+            const errMsg = extractErrorMessage(parseErr, "パースエラー");
+            await queueRepository.updateStatus(
+              novelId,
+              target.chapterIndex,
+              "failed",
+              {
+                lastError: errMsg,
+                incrementRetry: true,
+              },
+            );
+            setFailedChapterIndexes((prev) =>
+              Array.from(new Set([...prev, target.chapterIndex])).sort(
+                (a, b) => a - b,
+              ),
+            );
+          }
+        }
+
+        setBatchCacheProgress({
+          current: i + 1,
+          total: targetChapters.length,
+        });
+
+        if (i < targetChapters.length - 1) {
+          try {
+            await delay(PREFETCH_INTERVAL_MS, signal);
+          } catch {
+            isAborted = true;
+            break;
           }
         }
       }
 
       if (isAborted || signal.aborted) {
-        if (queueRepository) {
-          await queueRepository.resetInterruptedToPending(novelId);
-          const remainingItems = await queueRepository.listByNovelId(novelId);
-          const pCount = remainingItems.filter(
-            (item) => item.status === "pending",
-          ).length;
-          const fItems = remainingItems.filter(
-            (item) => item.status === "failed",
-          );
-          setPendingCacheCount(pCount);
-          setFailedCacheCount(fItems.length);
-          setFailedChapterIndexes(
-            fItems.map((i) => i.chapterIndex).sort((a, b) => a - b),
-          );
-        }
+        await queueRepository.resetInterruptedToPending(novelId);
+        const remainingItems = await queueRepository.listByNovelId(novelId);
+        const pCount = remainingItems.filter(
+          (item) => item.status === "pending",
+        ).length;
+        const fItems = remainingItems.filter(
+          (item) => item.status === "failed",
+        );
+        setPendingCacheCount(pCount);
+        setFailedCacheCount(fItems.length);
+        setFailedChapterIndexes(
+          fItems.map((i) => i.chapterIndex).sort((a, b) => a - b),
+        );
       } else {
-        if (queueRepository) {
-          const remainingItems = await queueRepository.listByNovelId(novelId);
-          const failedItems = remainingItems.filter(
-            (item) => item.status === "failed",
-          );
-          const completedItems = remainingItems.filter(
-            (item) => item.status === "completed",
-          );
+        const remainingItems = await queueRepository.listByNovelId(novelId);
+        const failedItems = remainingItems.filter(
+          (item) => item.status === "failed",
+        );
+        const completedItems = remainingItems.filter(
+          (item) => item.status === "completed",
+        );
 
-          if (failedItems.length === 0) {
-            await queueRepository.clearNovelQueue(novelId);
-            setPendingCacheCount(0);
-            setFailedCacheCount(0);
-            setFailedChapterIndexes([]);
-            setRefreshMessage("全話のキャッシュを取得しました");
-            setError(null);
-            const latestNovel = await novelRepository.getNovelById(novelId);
-            if (latestNovel) {
-              setNovel(latestNovel);
-            }
-          } else {
-            if (completedItems.length > 0) {
-              await queueRepository.deleteByNovelAndChapters(
-                novelId,
-                completedItems.map((i) => i.chapterIndex),
-              );
-            }
-            setPendingCacheCount(0);
-            setFailedCacheCount(failedItems.length);
-            setFailedChapterIndexes(
-              failedItems.map((i) => i.chapterIndex).sort((a, b) => a - b),
-            );
-            setError(
-              `${failedItems.length}話の取得に失敗しました（再試行可能）`,
-            );
+        if (failedItems.length === 0) {
+          await queueRepository.clearNovelQueue(novelId);
+          setPendingCacheCount(0);
+          setFailedCacheCount(0);
+          setFailedChapterIndexes([]);
+          setRefreshMessage("全話のキャッシュを取得しました");
+          setError(null);
+          const latestNovel = await novelRepository.getNovelById(novelId);
+          if (latestNovel) {
+            setNovel(latestNovel);
           }
         } else {
-          setRefreshMessage("全話のキャッシュを取得しました");
+          if (completedItems.length > 0) {
+            await queueRepository.deleteByNovelAndChapters(
+              novelId,
+              completedItems.map((i) => i.chapterIndex),
+            );
+          }
+          setPendingCacheCount(0);
+          setFailedCacheCount(failedItems.length);
+          setFailedChapterIndexes(
+            failedItems.map((i) => i.chapterIndex).sort((a, b) => a - b),
+          );
+          setError(`${failedItems.length}話の取得に失敗しました（再試行可能）`);
         }
       }
     } catch (err: unknown) {
