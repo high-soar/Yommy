@@ -4,8 +4,9 @@ title: 品質記録・バグ記録票 ＆ 申し送り管理シート（Bug & Ha
 description: 製品コードと支援成果物を分離したバグ記録（原因5分類 L/S/D/B/A）および後続タスクへの申し送り事項（HO-xx）を追跡する正本シート。
 status: "Approved"
 updated: "2026-11-08"
-tags: [quality, bug-log, handover, dre, kaizen]
+tags: [quality, bug-log, handover, dre, kaizen, ho-34]
 related_specs:
+  - docs/specs/changes/issue-268-persistent-download-queue.md
   - docs/quality/archive/v0.8-discovery-filter-and-bookshelf-favorite-ux-log.md
   - docs/quality/reports/v0.8-discovery-filter-and-bookshelf-favorite-ux.md
   - docs/specs/changes/archive/issue-266-bookshelf-favorite-and-sync.md
@@ -107,11 +108,11 @@ related_tests: []
 > - Milestone `v0.7` で解決済みの申し送り（`HO-29`, `HO-30`）: [docs/quality/archive/v0.7-narou-site-support-and-loading-ux-log.md](archive/v0.7-narou-site-support-and-loading-ux-log.md)
 > - Milestone `v0.8` で解決済みの申し送り（`HO-31`〜`HO-33`）: [docs/quality/archive/v0.8-discovery-filter-and-bookshelf-favorite-ux-log.md](archive/v0.8-discovery-filter-and-bookshelf-favorite-ux-log.md)
 
-現在、未解決（`Open`）の申し送り事項は **0 件** です。次期作業中に発生した申し送り事項は、本表へ `HO-34` より連番で登録します。
+現在、未解決（`Open`）の申し送り事項は **1 件（`HO-34`）** です。
 
-| ID  | 起票元 Issue / PR | 申し送り事項の内容 | 解決先（対象 Issue / 成果物） | 完了ゲート | 状態 (`Open` / `Resolved`) |
-| :-: | :---------------: | :----------------- | :---------------------------- | :--------- | :------------------------: |
-|  -  |         -         | なし               | -                             | -          |             -              |
+|   ID    | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                                                                                                                                                                                                                                                   | 解決先（対象 Issue / 成果物）                             | 完了ゲート              | 状態 (`Open` / `Resolved`) |
+| :-----: | :---------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------- | :---------------------- | :------------------------: |
+| `HO-34` |      `#268`       | Android 実機（`@capacitor-community/sqlite` ＋ `CapacitorHttp`）における永続ダウンロードキュー（`download_queue`）を用いた未取得話一括キャッシュ、中断・画面離脱・アプリ再起動後の再開（`キャッシュを再開（残りN話）`）、通信エラー発生時のスキップ継続と `取得失敗` バッジ・再試行（`失敗した話を再試行（N話）`）、および本文キャッシュ削除時のキュー整理の実機確認 | Milestone `v0.9` 完了承認 Issue #270（Step 2-2 実機検証） | `Milestone v0.9 完了前` |           `Open`           |
 
 ---
 
