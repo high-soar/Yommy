@@ -4,8 +4,10 @@ title: 品質記録・バグ記録票 ＆ 申し送り管理シート（Bug & Ha
 description: 製品コードと支援成果物を分離したバグ記録（原因5分類 L/S/D/B/A）および後続タスクへの申し送り事項（HO-xx）を追跡する正本シート。
 status: "Approved"
 updated: "2026-11-08"
-tags: [quality, bug-log, handover, dre, kaizen, ho-34]
+tags: [quality, bug-log, handover, dre, kaizen, ho-34, ho-35]
 related_specs:
+  - docs/specs/changes/issue-269-webview-fallback-and-dom-import.md
+  - docs/specs/features/webview-import.md
   - docs/specs/changes/archive/issue-268-persistent-download-queue.md
   - docs/quality/archive/v0.8-discovery-filter-and-bookshelf-favorite-ux-log.md
   - docs/quality/reports/v0.8-discovery-filter-and-bookshelf-favorite-ux.md
@@ -86,9 +88,11 @@ related_tests: []
 >
 > 次期作業中の **Milestone `v0.9`** で検出されたバグ記録は、本表へ No. 280 より連番で記入します。
 
-| No. | Issue / PR | 検出フェーズ・手段 | 成果物区分 (`製品コード` / `支援成果物`) | 対象箇所 | 原因 (`L`/`S`/`D`/`B`/`A`) | 不備の概要と是正内容（原因 `D` は設計書同期コミット併記） |
-| :-: | :--------: | :----------------- | :--------------------------------------: | :------- | :------------------------: | :-------------------------------------------------------- |
-|  -  |     -      | -                  |                    -                     | -        |             -              | なし（Milestone `v0.9` 作業開始前）                       |
+| No. | Issue / PR | 検出フェーズ・手段          | 成果物区分 (`製品コード` / `支援成果物`) | 対象箇所                                                | 原因 (`L`/`S`/`D`/`B`/`A`) | 不備の概要と是正内容（原因 `D` は設計書同期コミット併記）                                                                                                                         |
+| :-: | :--------: | :-------------------------- | :--------------------------------------: | :------------------------------------------------------ | :------------------------: | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 280 |  PR #303   | AI レビュー (`pr-reviewer`) |               `支援成果物`               | `docs/specs/features/webview-import.md`                 |            `D`             | `related_specs` における起票元差分仕様書（issue-269）参照の欠落。差分仕様書パスを追記し双方向トレーサビリティを確立（コミット `0749c8d`）。                                       |
+| 281 |  PR #303   | AI レビュー (`pr-reviewer`) |               `支援成果物`               | `docs/quality/bug-and-handover-log.md`                  |            `D`             | フロントマターにおける `ho-35` タグおよび `issue-269` 関連仕様書参照の欠落。`tags` および `related_specs` に追記（コミット `0749c8d`）。                                          |
+| 282 |  PR #303   | AI レビュー (`pr-reviewer`) |               `支援成果物`               | `docs/specs/features/novel-detail.md`, `reader-view.md` |            `D`             | `NovelDetailPageProps` / `NovelDetailContainerProps` / `ReaderContainerProps` のテーブルにおける `onOpenWebView` 定義の欠落。プロパティ契約テーブルに追記（コミット `0749c8d`）。 |
 
 ---
 
@@ -108,11 +112,12 @@ related_tests: []
 > - Milestone `v0.7` で解決済みの申し送り（`HO-29`, `HO-30`）: [docs/quality/archive/v0.7-narou-site-support-and-loading-ux-log.md](archive/v0.7-narou-site-support-and-loading-ux-log.md)
 > - Milestone `v0.8` で解決済みの申し送り（`HO-31`〜`HO-33`）: [docs/quality/archive/v0.8-discovery-filter-and-bookshelf-favorite-ux-log.md](archive/v0.8-discovery-filter-and-bookshelf-favorite-ux-log.md)
 
-現在、未解決（`Open`）の申し送り事項は **1 件（`HO-34`）** です。
+現在、未解決（`Open`）の申し送り事項は **2 件（`HO-34`, `HO-35`）** です。
 
 |   ID    | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                                                                                                                                                                                                                                                   | 解決先（対象 Issue / 成果物）                             | 完了ゲート              | 状態 (`Open` / `Resolved`) |
 | :-----: | :---------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------- | :---------------------- | :------------------------: |
 | `HO-34` |      `#268`       | Android 実機（`@capacitor-community/sqlite` ＋ `CapacitorHttp`）における永続ダウンロードキュー（`download_queue`）を用いた未取得話一括キャッシュ、中断・画面離脱・アプリ再起動後の再開（`キャッシュを再開（残りN話）`）、通信エラー発生時のスキップ継続と `取得失敗` バッジ・再試行（`失敗した話を再試行（N話）`）、および本文キャッシュ削除時のキュー整理の実機確認 | Milestone `v0.9` 完了承認 Issue #270（Step 2-2 実機検証） | `Milestone v0.9 完了前` |           `Open`           |
+| `HO-35` |      `#269`       | Android 実機（`android.webkit.WebView` ＋ `evaluateJavascript` ＋ `WebViewDomPlugin.java`）における全画面内蔵ブラウザダイアログの表示、Web ページ閲覧・Cloudflare/ログイン操作、DOM キャプチャ取り込み（作品目次 vs 各話本文の自動判別・DB保存）、および作品詳細（`TR-09`）・リーダー（`TR-10`）・完了後遷移（`TR-11`）・OS バックキー論理復帰の実機確認             | Milestone `v0.9` 完了承認 Issue #270（Step 2-2 実機検証） | `Milestone v0.9 完了前` |           `Open`           |
 
 ---
 

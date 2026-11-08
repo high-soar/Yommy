@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Approved (#268)"
+status: "Review (#269)"
 updated: "2026-11-08"
 tags:
   - architecture
@@ -38,6 +38,11 @@ tags:
   - multi-page-toc
   - favorite
   - bookshelf-filter
+  - webview-import
+  - webview-bridge
+  - scr-04
+  - fallback
+  - dom-import
   - ho-23
   - ho-24
   - ho-25
@@ -47,7 +52,10 @@ tags:
   - ho-31
   - ho-32
   - ho-34
+  - ho-35
 related_specs:
+  - docs/specs/changes/issue-269-webview-fallback-and-dom-import.md
+  - docs/specs/features/webview-import.md
   - docs/specs/changes/archive/issue-268-persistent-download-queue.md
   - docs/specs/changes/archive/issue-266-bookshelf-favorite-and-sync.md
   - docs/specs/changes/archive/issue-265-work-variation-filter.md
@@ -216,13 +224,21 @@ Yommy/
     │   │   ├── types.ts               # HttpClientBridge インターフェース定義
     │   │   ├── capacitorHttpClient.ts # CapacitorHttp 実装（CORS回避・User-Agent・タイムアウト制御）
     │   │   └── mockHttpClient.ts      # UT / Storybook / IT 用フィクスチャ応答クライアント
-    │   └── webview/                   # 【WebViewDomBridge】内蔵WebView DOMキャプチャ（v0.9〜予定）
-    │       ├── types.ts
-    │       └── webviewDomBridge.ts
+    │   └── webview/                   # 【WebViewDomBridge】内蔵WebView DOMキャプチャ・フォールバック（Issue #269）
+    │       ├── types.ts               # WebViewDomBridge, CapturedDomResult, OpenWebViewOptions 定義
+    │       ├── capacitorWebViewDomBridge.ts # Android ネイティブプラグイン（WebViewDomPlugin）連携
+    │       ├── mockWebViewDomBridge.ts # UT / Storybook / IT 用モック実装（setMockPage）
+    │       └── index.ts               # ブリッジ生成・エクスポート
     ├── features/                      # 【3. Viewer & UI Layer（画面・機能別モジュール）】
     │   ├── bookshelf/                 # SCR-01: 本棚一覧（空状態での検索/ランキング誘導・更新チェック・ソート・お気に入りトグル＆フィルタ）
-    │   ├── novel-detail/              # SCR-02: 作品詳細・目次一覧・お気に入りトグル・取得操作・一括キャッシュ
-    │   ├── reader/                    # SCR-03: 小説リーダー（全画面100dvh・上下連動オーバーレイ＆RTLシークバー・縦書きCSSマルチカラム組版・2段階水平スライドアニメーション・音量キー送り・ルビ・しおり保存）
+    │   ├── novel-detail/              # SCR-02: 作品詳細・目次一覧・お気に入りトグル・取得操作・一括キャッシュ・内蔵ブラウザ導線（TR-09）
+    │   ├── reader/                    # SCR-03: 小説リーダー（全画面100dvh・上下連動オーバーレイ＆RTLシークバー・縦書きCSSマルチカラム組版・2段階水平スライドアニメーション・音量キー送り・ルビ・しおり保存・取得エラー時内蔵ブラウザフォールバック導線 TR-10）
+    │   ├── webview-import/            # SCR-04: 内蔵ブラウザ・DOMインポート画面（URLバー・ネイティブWebView起動・DOMキャプチャ保存・作品詳細/リーダー遷移・Issue #269）
+    │   │   ├── types.ts
+    │   │   ├── hooks/useWebViewImport.ts
+    │   │   └── components/
+    │   │       ├── WebViewImportPage.tsx
+    │   │       └── WebViewImportContainer.tsx
     │   ├── search/                    # SCR-06: 検索画面（カクヨム・小説家になろうサイト切替・作品検索・カードから本棚追加・SCR-02遷移）
     │   ├── ranking/                   # SCR-07: ランキング画面（カクヨム・小説家になろうサイト切替・期間/ジャンル別ランキング・カードから本棚追加・SCR-02遷移）
     │   ├── settings/                  # SCR-05: 設定画面（組版・テーマ・フォント・余白・音量キー送り設定・サンプル文章プレビュー・クラウド同期・キャッシュ管理）
@@ -957,12 +973,80 @@ export interface VolumeKeyBridge {
 
 ---
 
+### 3.13 Bridge Layer 契約：WebViewDomBridge Interface（src/bridges/webview/）
+
+対象サイトの DOM 構造変更、Cloudflare 等の Bot 対策認証画面、または年齢確認・ログイン必須ページに直面した際、内蔵ブラウザでページを表示して表示中の DOM（HTML 文字列・最終 URL）をキャプチャし、ローカルキャッシュ DB へ安全に取り込むためのブリッジ抽象インターフェースです（Issue #269）。
+
+#### 3.13.1 TypeScript インターフェース契約（`src/bridges/webview/types.ts`）
+
+```ts
+export interface CapturedDomResult {
+  html: string;
+  url: string;
+  title: string;
+}
+
+export interface OpenWebViewOptions {
+  url: string;
+  title?: string;
+}
+
+export interface WebViewDomBridge {
+  /**
+   * ネイティブ WebView ダイアログまたは内蔵ブラウザを開く。
+   */
+  open(options: OpenWebViewOptions): Promise<void>;
+
+  /**
+   * 開いている WebView を閉じる。
+   */
+  close(): Promise<void>;
+
+  /**
+   * 現在表示中のページの DOM (outerHTML), 最終 URL, タイトルをキャプチャする。
+   */
+  captureDom(): Promise<CapturedDomResult>;
+
+  /**
+   * 指定 URL が http: または https: の安全なスキームか検証する。
+   */
+  canHandle(url: string): boolean;
+}
+```
+
+#### 3.13.2 Android ネイティブ層（`WebViewDomPlugin.java` & `MainActivity.java`）仕様
+
+1. **`WebViewDomPlugin`（`@CapacitorPlugin(name = "WebViewDom")`）**:
+   - `android.app.Dialog` 上に全画面 `android.webkit.WebView` と操作バー（URL 表示、戻る/進む/リロード、「取り込み」確定ボタン、閉じるボタン）を展開。
+   - `evaluateJavascript("(function(){return document.documentElement.outerHTML;})()", ...)` を実行し、表示中 DOM を抽出して React 側へ返却。
+   - **スキーム検証とセキュリティ保護**: `WebViewClient.shouldOverrideUrlLoading` で `http:` / `https:` 以外の危険なスキーム（`javascript:`, `data:`, `file:`, `intent:` 等）を即時遮断。
+   - **ライフサイクル破棄保護**: `handleOnDestroy()` およびダイアログ閉塞時に `webView.destroy()` を実行しリソースリークを防止。
+2. **`MainActivity.java`**:
+   - `registerPlugin(WebViewDomPlugin.class);` を登録。
+3. **ブラウザ／テスト用モック（`MockWebViewDomBridge`）**:
+   - `setMockPage(result: CapturedDomResult)` メソッドを提供し、Storybook や Vitest UT、Playwright IT で決定論的な HTML・URL・タイトルを返却可能にする。
+
+---
+
+### 3.14 Feature Layer 契約：内蔵ブラウザ・DOMインポート画面（SCR-04: src/features/webview-import/）
+
+- **`useWebViewImport`**:
+  - `initialUrl`, `initialNovelId`, `initialChapterIndex` を受け取り、URL バリデーション、DOM キャプチャ、および作品トップ vs 各話エピソードの自動判別保存を実行。
+  - 作品トップ目次解析時: `parseNovelIndex` → `upsertNovelWithToc`（なろう短編時は本文も同時保存）→ `TR-11`（`/novels/:novelId` 遷移）。
+  - 各話本文解析時: `parseChapterContent` → `saveChapterBody`（未登録時は目次自動補完試行）→ `TR-11`（`/novels/:novelId/chapters/:chapterIndex` 遷移）。
+- **`WebViewImportPage`**:
+  - 100dvh 全画面シェル、固定 URL バー、操作ボタン（「内蔵ブラウザで直接操作」「表示中ページを取り込む」）、非対応 URL 警告トースト、下部 4 タブバー。
+- **`WebViewImportContainer`**:
+  - `useWebViewImport` とルーター（`navigate`）、`ServiceProvider` を接続。
+
+---
+
 ## 4. テスト環境での DI（依存性注入）と決定論的初期化
 
-- `src/app/ServiceProvider.tsx` を介して `HttpClientBridge`、`AppBridge`、`CloudSyncBridge`、`VolumeKeyBridge`、各 `Repository`（および基底の `DatabaseAdapter`）を React Context 経由で提供する。
-- **Android / iOS ネイティブ実行時**: `Capacitor.isNativePlatform()` によりネイティブ環境を自動検知し、`CapacitorHttpClient`、`CapacitorAppBridge`、`CapacitorCloudSyncBridge`、`CapacitorVolumeKeyBridge`、および `createDefaultNativeSqliteAdapter`（`CapacitorSqliteAdapter` ＋ `src/storage/schema.ts` の DDL 初期化）を注入する。
-- **Web ブラウザ / Dev 実行時**: `createInMemoryDb`（`sql.js`）および `localStorage` への Base64 バイナリバックアップ（`yommy_sqlite_db_backup`）によるハイブリッド永続化を提供し、`createDefaultMockHttpClient`、`MockAppBridge`、`MockCloudSyncBridge`、および `MockVolumeKeyBridge` を使用する。既存 DB バイナリからの復元時にも `initializeDatabaseSchema` によるスキーママイグレーションを確実に実行する。
-- **UT（Vitest）/ Storybook / Playwright IT 実行時**: `MockHttpClient` ＋ `MockAppBridge` ＋ `MockCloudSyncBridge` ＋ `MockVolumeKeyBridge` ＋ `InMemoryDatabaseAdapter` を注入し、各テストの開始前に `resetTestDb()` を呼び出して 100% 決定論的な状態で検証する。
+- `src/app/ServiceProvider.tsx` を介して `HttpClientBridge`、`AppBridge`、`CloudSyncBridge`、`VolumeKeyBridge`、`WebViewDomBridge`、各 `Repository`（および基底の `DatabaseAdapter`）を React Context 経由で提供する。
+- **Android / iOS ネイティブ実行時**: `Capacitor.isNativePlatform()` によりネイティブ環境を自動検知し、`CapacitorHttpClient`、`CapacitorAppBridge`、`CapacitorCloudSyncBridge`、`CapacitorVolumeKeyBridge`、`CapacitorWebViewDomBridge`、および `createDefaultNativeSqliteAdapter`（`CapacitorSqliteAdapter` ＋ `src/storage/schema.ts` の DDL 初期化）を注入する。
+- **Web ブラウザ / Dev 実行時**: `createInMemoryDb`（`sql.js`）および `localStorage` への Base64 バイナリバックアップ（`yommy_sqlite_db_backup`）によるハイブリッド永続化を提供し、`createDefaultMockHttpClient`、`MockAppBridge`、`MockCloudSyncBridge`、`MockVolumeKeyBridge`、および `MockWebViewDomBridge` を使用する。既存 DB バイナリからの復元時にも `initializeDatabaseSchema` によるスキーママイグレーションを確実に実行する。
+- **UT（Vitest）/ Storybook / Playwright IT 実行時**: `MockHttpClient` ＋ `MockAppBridge` ＋ `MockCloudSyncBridge` ＋ `MockVolumeKeyBridge` ＋ `MockWebViewDomBridge` ＋ `InMemoryDatabaseAdapter` を注入し、各テストの開始前に `resetTestDb()` を呼び出して 100% 決定論的な状態で検証する。
 - **Worktree 運用・環境変数非依存設計**: すべてのテスト（Vitest, Storybook VRT, Playwright IT）およびビルドは、`.env.local` の有無に関わらず 100% 決定論的に PASS する設計（`ServiceProvider` による DI モック分離と安全なフォールバック）を必須とし、テスト実行時に環境変数未定義によるスキップや挙動のブレを生じさせない。
 
 ---
