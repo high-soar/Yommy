@@ -2901,6 +2901,57 @@ describe("useReader", () => {
           "エピソードの取得に失敗しました (HTTP 500)",
         );
       });
+
+      it("goToChapter で未キャッシュ話への遷移時に通信エラーが発生した場合、エラーを設定しつつ対象話メタデータを保持すること (TR-10)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 3,
+          cachedCount: 1,
+        });
+
+        const ch2 = await chapterRepo.getChapter(seeded.id, 2);
+        expect(ch2).not.toBeNull();
+
+        const httpClient = createMockHttpClient();
+        httpClient.setResponse(ch2!.url, {
+          status: 500,
+          headers: {},
+          html: "",
+        });
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              httpClient,
+            }),
+          },
+        );
+
+        await act(async () => {
+          await Promise.resolve();
+        });
+
+        expect(result.current.isLoading).toBe(false);
+        expect(result.current.chapter?.chapterIndex).toBe(1);
+
+        let success = true;
+        await act(async () => {
+          success = await result.current.goToChapter(2);
+        });
+
+        expect(success).toBe(false);
+        expect(result.current.isLoading).toBe(false);
+        expect(result.current.error).toContain(
+          "エピソードの取得に失敗しました (HTTP 500)",
+        );
+        expect(result.current.chapter?.chapterIndex).toBe(2);
+        expect(result.current.chapter?.url).toBe(ch2!.url);
+      });
     });
 
     describe("読書中5話自動先読み (AC-RD-12)", () => {
