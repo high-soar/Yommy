@@ -97,6 +97,7 @@ Step 1 の `/grill-me` ヒアリングおよび既存コード調査で合意し
    - `pullAndMerge()` 内の `mergeExistingNovel(novelId, remoteNovel, localNovel)` において、`updateBookmark` によるローカル `updated_at` の書き換え前に `Date.parse(remoteNovel.updatedAt) > Date.parse(localNovel.updatedAt)` を判定する。
    - リモートの `updatedAt` の方が新しい場合、`novelRepository.updateSyncMetadata(novelId, { isFavorite: remoteNovel.isFavorite === 1, updatedAt: remoteNovel.updatedAt })` を呼び出し、リモートで変更されたお気に入り状態（登録 `1` または解除 `0`）と更新日時をローカル DB へ反映する。
    - なお、`remoteLastRead > localLastRead` により `updateBookmark` が実行された場合でも、リモートの `updatedAt` の方が新しい場合は最終的に `updated_at` が下がらないよう整合性を保つ。
+   - ※注記（Milestone v0.8 横断レビュー `R1-01` / `R2-02` 反映）: 定常的なしおり更新（`updateBookmark`）や目次更新（`upsertNovelWithToc`）では `novels.updated_at` を更新せず既存値を保持し、また新規作品 Pull 復元時（`mergeNewNovel`）には `createdAt` と `updatedAt` の双方を復元する仕様へ正本（[docs/specs/architecture.md](../../architecture.md)、[docs/specs/db-schema.md](../../db-schema.md)）が改訂された（R2-14）。
 2. **お気に入り変更時のデバウンス自動 Push トリガー**:
    - 本棚画面（`useBookshelf.toggleFavorite`）および作品詳細画面（`useNovelDetail.toggleFavorite`）において、`novelRepository.setFavorite` 完了後に `syncEngine?.notifyChanged()` を呼び出し、2.5秒デバウンス付き自動 Push をスケジュールする。
 
@@ -108,7 +109,7 @@ Step 1 の `/grill-me` ヒアリングおよび既存コード調査で合意し
    - **Props 拡張（`NovelCardProps`）**:
      - `onToggleFavorite?: (novelId: string, nextIsFavorite: boolean) => void` を追加する。
    - **UI 構造とセマンティック属性**:
-     - HTML 仕様上 `<button>` 要素の入れ子（`novel-card-select` 内のボタン配置）を避けるため、カード上部に独立したお気に入りトグルボタン `<button type="button" data-testid="novel-card-favorite-button" aria-pressed={novel.isFavorite} aria-label={novel.isFavorite ? `${novel.title}のお気に入りを解除`:`${novel.title}をお気に入りに登録`}>` を配置する。
+     - HTML 仕様上 `<button>` 要素の入れ子（`novel-card-select` 内のボタン配置）を避けるため、カード上部に独立したお気に入りトグルボタン `<button type="button" data-testid="novel-card-favorite-button" aria-pressed={novel.isFavorite} aria-label={novel.isFavorite ? `${novel.title}のお気に入りを解除`:`${novel.title}をお気に入りに登録`}>` を配置する（※Milestone v0.8 レビュー `R1-10` / `R2-01` にて、正本 [docs/specs/features/bookshelf.md](../../features/bookshelf.md) では固定ラベル `aria-label="${novel.title}のお気に入り"` ＋ `aria-pressed` へ改訂済み、R2-14）。
      - 表示ラベル/アイコン: `novel.isFavorite === true` のときは塗りつぶし星 `★`（アンバー強調スタイル）、`false` のときは白抜き星 `☆`（スレート色スタイル）を表示する。
      - クリック時に `e.stopPropagation()` を行い、`onToggleFavorite?.(novel.id, !novel.isFavorite)` を呼び出す（`onSelect` は発火させない）。
 2. **`BookshelfEmptyState`（お気に入りフィルタ 0 件時の専用モード対応）**:
@@ -126,7 +127,7 @@ Step 1 の `/grill-me` ヒアリングおよび既存コード調査で合意し
      - `onToggleFavoriteNovel?: (novelId: string, nextIsFavorite: boolean) => void`（各作品カードの ★ トグル押下時コールバック）
    - **ヘッダー UI**:
      - ソート選択セレクター（`bookshelf-sort-select`）の左隣（または横並び）に、**お気に入りフィルタトグルボタン `<button type="button" data-testid="bookshelf-favorite-filter-button" aria-pressed={favoriteOnly} aria-label="お気に入りのみ表示">`** を配置する。
-     - ラベル: `★`（モバイル幅でも圧迫しないようアイコン＋`お気に入り`、ON 時はアンバー背景・枠線の強調スタイル、OFF 時は通常枠線スタイル）。
+     - ラベル: `★`（モバイル幅でも圧迫しないようアイコン＋`お気に入り`、ON 時はアンバー背景・枠線の強調スタイル、OFF 時は通常枠線スタイル。※Milestone v0.8 実機検証 `R2-20` にて、正本 [docs/specs/features/bookshelf.md](../../features/bookshelf.md) ではモバイル狭幅での折り返し防止のため `★` / `☆` アイコンのみ表示へ改訂済み、R2-14）。
      - 手動更新ボタン（`bookshelf-refresh-button`）は、`isCheckingUpdates === true` のときに加え、表示対象作品が 0 件（`novels.length === 0`）のときも `disabled` とする。
    - **メイン領域の排他描画ルール**:
      1. `isLoading === true` の場合: `data-testid="bookshelf-loading"` を描画。
@@ -163,7 +164,7 @@ Step 1 の `/grill-me` ヒアリングおよび既存コード調査で合意し
      - 初回ロード時に `appSettingsRepository.getSetting("bookshelf_sort_order")` と並行して `appSettingsRepository.getSetting("bookshelf_favorite_only")` を取得し、`"true"` の場合は `favoriteOnly = true`、それ以外は `false` に初期化する。
      - 内部 State では全登録作品リスト（`allNovels`）を保持し、`favoriteOnly === true` の場合は `allNovels.filter((n) => n.isFavorite)` を `novels` として返却し、`totalNovelsCount = allNovels.length` を提供する。
    - **お気に入りフィルタ切替と永続化（`setFavoriteOnly` / `toggleFavoriteFilter`）**:
-     - 状態変更時に即座に `favoriteOnly` State を更新して表示一覧を切り替え、`appSettingsRepository.setSetting("bookshelf_favorite_only", String(nextValue))` で DB へ永続化する。
+     - 状態変更時に即座に `favoriteOnly` State を更新して表示一覧を切り替え、`appSettingsRepository.setSetting("bookshelf_favorite_only", String(nextValue))` で DB へ永続化する（※Milestone v0.8 レビュー `R1-12` / `R2-08` にて、正本 [docs/specs/features/bookshelf.md](../../features/bookshelf.md) では排他ガード `isTogglingFilterRef` 付きで DB 永続化成功後に State 更新する順序へ改訂済み、R2-14）。
    - **作品のお気に入りトグル（`toggleFavorite`）**:
      - 対象作品の現在値を反転（または `nextIsFavorite` を適用）し、`novelRepository.setFavorite(novelId, targetValue)` を実行する。
      - ローカル State の該当作品の `isFavorite`（および `updatedAt`）を即時更新する（お気に入りフィルタ ON 中にお気に入り解除された作品は即座にフィルタ結果から除外される）。
@@ -181,7 +182,7 @@ Step 1 の `/grill-me` ヒアリングおよび既存コード調査で合意し
      - `onToggleFavorite?: () => void | Promise<void>` を追加する。
    - **UI 構造とセマンティック属性**:
      - 管理アクションバー（右寄せボタン群の先頭）に、**お気に入りトグルボタン `<button type="button" data-testid="detail-favorite-toggle-button" aria-pressed={novel.isFavorite}>`** を配置する。
-     - ラベル: `novel.isFavorite === true` のときは `★ お気に入り済み`（アンバー強調スタイル）、`false` のときは `☆ お気に入り`（通常ボタン枠スタイル）。
+     - ラベル: `novel.isFavorite === true` のときは `★ お気に入り済み`（アンバー強調スタイル）、`false` のときは `☆ お気に入り`（通常ボタン枠スタイル）（※Milestone v0.8 レビュー `R1-10` / `R2-01` および実機検証 `R2-19` にて、正本 [docs/specs/features/novel-detail.md](../../features/novel-detail.md) では `aria-label="お気に入り"`、固定テキスト `★ お気に入り` / `☆ お気に入り`、常時 1px `border` 維持へ改訂済み、R2-14）。
      - `isRefreshing === true` または `isBatchCaching === true` の間は `disabled` とする。
      - クリック時に `onToggleFavorite?.()` を呼び出す。
 2. **`NovelDetailPage` / `NovelDetailContainer` / `useNovelDetail` の拡張**:

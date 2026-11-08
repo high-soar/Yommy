@@ -144,7 +144,7 @@ flowchart TB
     end
 
     subgraph StorageLayer ["2. Storage Layer (src/storage/*)"]
-        Repos["Repositories<br>(NovelRepository, ChapterRepository, SettingsRepository, AppSettingsRepository, QueueRepository［v0.8〜予定］)"]
+        Repos["Repositories<br>(NovelRepository, ChapterRepository, SettingsRepository, AppSettingsRepository, QueueRepository［v0.9〜予定］)"]
         DbAdapter["DatabaseAdapter Interface"]
         SqliteImpl["CapacitorSqliteAdapter<br>(Android 実機用)"]
         MemImpl["InMemoryDatabaseAdapter<br>(UT / Storybook / Playwright IT 用・resetTestDb())"]
@@ -212,7 +212,7 @@ Yommy/
     │   │   ├── types.ts               # HttpClientBridge インターフェース定義
     │   │   ├── capacitorHttpClient.ts # CapacitorHttp 実装（CORS回避・User-Agent・タイムアウト制御）
     │   │   └── mockHttpClient.ts      # UT / Storybook / IT 用フィクスチャ応答クライアント
-    │   └── webview/                   # 【WebViewDomBridge】内蔵WebView DOMキャプチャ（v0.8〜予定）
+    │   └── webview/                   # 【WebViewDomBridge】内蔵WebView DOMキャプチャ（v0.9〜予定）
     │       ├── types.ts
     │       └── webviewDomBridge.ts
     ├── features/                      # 【3. Viewer & UI Layer（画面・機能別モジュール）】
@@ -252,7 +252,7 @@ Yommy/
     │       ├── chapterRepository.ts   # chapters テーブル操作（本文キャッシュ保存・削除・容量集計）
     │       ├── settingsRepository.ts  # reader_settings 操作
     │       ├── appSettingsRepository.ts # app_settings 操作（ソート順等永続化）
-    │       └── queueRepository.ts     # download_queue テーブル操作（v0.8〜予定）
+    │       └── queueRepository.ts     # download_queue テーブル操作（v0.9〜予定）
     └── shared/                        # 複数機能で共有する汎用 UI コンポーネント・ユーティリティ
         ├── constants/                 # キャッシュ・レートリミット・タイポグラフィ等の共有定数（cache.ts, typography.ts）
         ├── utils/                     # キャッシュ判定・容量フォーマット等の共有ユーティリティ（cache.ts, formatByteSize.ts）
@@ -529,6 +529,7 @@ export interface NovelRepository {
     metadata: {
       isFavorite?: boolean;
       lastReadAt?: string | null;
+      createdAt?: string;
       updatedAt?: string;
     },
   ): Promise<void>;
@@ -793,13 +794,13 @@ export interface CloudSyncBridge {
   - 未登録作品の自動目次取得（`upsertNovelWithToc`）前に、`canonicalUrl` を `parseNovelUrl`（`https://kakuyomu.jp/works/<id>` および `https://ncode.syosetu.com/<ncode>/` のマルチサイトホワイトリスト検証、Issue #239）にかけ、不正な URL や未知ドメイン（`novel18.syosetu.com` 含む）へのリクエスト（SSRF）を遮断する。さらに `canonicalUrl` から抽出した `siteType` / `workId` とリモート作品データの整合性を検証し、正規化 URL および `fetchFullNovelIndex`（複数ページ目次対応）で通信を行う。
   - 401 Unauthorized エラーの判定は、作品 URL や作品 ID に偶然 `401` が含まれている場合の誤爆を防ぐため、HTTP ステータスコード 401、または単語境界を考慮した正規表現（`/\b401\s+Unauthorized\b/i` 等）を用いて厳格に行う（R1-13, R2-14）。
 - **競合解決（マージ）ルール**:
-  - 新規作品の自動目次補完: リモートにのみ存在する作品は `canonicalUrl` から目次を自動取得してローカル DB に登録し、リモートのしおり話数・既読状態、および最終読了日時（`lastReadAt`）・お気に入りフラグ（`isFavorite`）を正しく復元・反映する（`novelRepository.updateSyncMetadata`、R1-12）。
+  - 新規作品の自動目次補完: リモートにのみ存在する作品は `canonicalUrl` から目次を自動取得してローカル DB に登録し、リモートのしおり話数・既読状態、および最終読了日時（`lastReadAt`）・お気に入りフラグ（`isFavorite`）・初回登録日時（`createdAt`）・更新日時（`updatedAt`）を正しく復元・反映する（`novelRepository.updateSyncMetadata`、R1-12, R2-02）。
   - 作品単位のエラーハンドリング: リモート作品の目次取得・保存処理は作品単位で `try/catch` され、通信障害やパーサー不整合等で 1 作品の取り込みに失敗した場合でも警告ログを出力してスキップし、他の正常な作品の同期処理を継続する（R1-05）。
-  - 作品削除の伝播（Tombstone）と再登録保護: `deletedNovels` の削除日時がローカル作品の登録/更新日時より新しければローカル DB からカスケード削除する。ローカルで削除された作品は、削除後に他端末で明示的に再追加された場合（リモートの `createdAt` がローカルの `deletedAt` より後である場合）にのみ復元を許可し、単なる `updatedAt` の更新による意図しない削除作品の復活を防止する（R1-11）。本棚へ作品が再登録された際は `deleted_novels` テーブルから該当作品 ID の Tombstone を即座に削除する（R1-28）。
+  - 作品削除の伝播（Tombstone）と再登録保護: `deletedNovels` の削除日時がローカル作品の登録/更新日時より新しければローカル DB からカスケード削除する。ローカルで削除された作品は、削除後に他端末で明示的に再追加された場合（リモートの `createdAt` がローカルの `deletedAt` より後である場合）にのみ復元を許可し、単なる `updatedAt` の更新による意図しない削除作品の復活を防止する（R1-11）。また新規作品 Pull 復元時（`mergeNewNovel`）に `remoteNovel.createdAt` および `remoteNovel.updatedAt` をローカル DB に同期保持することで、Pull 実行時のローカル現在時刻（`now`）によって後続の未 Push Tombstone 削除判定（`remoteDeletedAt > Math.max(created_at, updated_at)`）が妨げられる復活バグを防止する（R2-02）。本棚へ作品が再登録された際は `deleted_novels` テーブルから該当作品 ID の Tombstone を即座に削除する（R1-28）。
   - Push 前の作品和集合およびフィールド単位マージ: `pushCurrentState` 実行時（`buildMergedSyncNovels`）、ローカルの `novels` のみでリモートを全上書きするのではなく、リモートに存在する `novels` と和集合をとってマージする（R1-10）。さらにローカルとリモートの双方に存在する作品（かつ新しい `deletedAt` で削除されていない作品）については、リモート値をローカル値で単純上書きせず、フィールド単位のマージ（`readChapterIds` の和集合、`lastReadAt` 比較による `bookmarkChapterIndex` / `lastReadAt` の LWW、`updatedAt` 比較による `isFavorite` / `updatedAt` の LWW）を実施して他端末の最新進捗消失を防止する（R2-01）。
   - 30日経過 Tombstone の自動パージ: 削除日時から30日（`TOMBSTONE_RETENTION_MS` = 30日）以上経過した古い Tombstone はローカル DB（`purgeExpiredDeletedNovels`）およびリモートへの Push 対象から自動的にパージし、同期データ容量の肥大化を防止する（R1-28）。
   - しおり話数のマージ: 同一作品が両端末にある場合、`lastReadAt` が新しい方の `bookmarkChapterIndex` を採用する（話数変更時はスクロール率を `0.0` にリセット、同一話数の場合は端末ローカルのスクロール率を維持）。
-  - お気に入り状態（`isFavorite`）の双方向 LWW マージと `updated_at` 保護規約（`v0.8` Issue #266 / R1-01）: 同一作品が両端末にある場合の Pull マージ（`mergeExistingNovel`）において、ローカル `localNovel.updatedAt` と `remoteNovel.updatedAt` を比較し、`Date.parse(remoteNovel.updatedAt) > Date.parse(localNovel.updatedAt)` の場合は `novelRepository.updateSyncMetadata(novelId, { isFavorite: remoteNovel.isFavorite === 1, updatedAt: remoteNovel.updatedAt })` を呼び出してローカルの `is_favorite` および `updated_at` をリモート側の最新状態へ更新する。また新規作品の Pull マージ（`mergeNewNovel`）時も `updateSyncMetadata` へリモート `updatedAt` を伝播する（R1-19）。さらに、定常的な目次更新チェック（`upsertNovelWithToc`）、読書時のしおり更新（`updateBookmark`）、本文キャッシュ保存・再集計（`saveChapterBody`, `recalculateNovelStats`）、キャッシュ削除（`deleteCachedBodies`）では `novels.updated_at` を更新せず既存値を保持する規律を徹底し、ローカルの定常動作によって `updated_at` が不当に進んで他端末の最新お気に入り状態が上書き消失する競合を防止する（R1-01）。これにより Push 時（`buildMergedSyncNovels`）および Pull 時の双方向でお気に入り状態の確実な Last-Write-Wins（LWW）同期が保証される。
+  - お気に入り状態（`isFavorite`）の双方向 LWW マージと `updated_at` 保護規約（`v0.8` Issue #266 / R1-01 / R2-02）: 同一作品が両端末にある場合の Pull マージ（`mergeExistingNovel`）において、ローカル `localNovel.updatedAt` と `remoteNovel.updatedAt` を比較し、`Date.parse(remoteNovel.updatedAt) > Date.parse(localNovel.updatedAt)` の場合は `novelRepository.updateSyncMetadata(novelId, { isFavorite: remoteNovel.isFavorite === 1, updatedAt: remoteNovel.updatedAt })` を呼び出してローカルの `is_favorite` および `updated_at` をリモート側の最新状態へ更新する。また新規作品の Pull マージ（`mergeNewNovel`）時も `updateSyncMetadata` へリモート `createdAt` および `updatedAt` を伝播する（R1-19, R2-02）。さらに、定常的な目次更新チェック（`upsertNovelWithToc`）、読書時のしおり更新（`updateBookmark`）、本文キャッシュ保存・再集計（`saveChapterBody`, `recalculateNovelStats`）、キャッシュ削除（`deleteCachedBodies`）では `novels.updated_at` を更新せず既存値を保持する規律を徹底し、ローカルの定常動作によって `updated_at` が不当に進んで他端末の最新お気に入り状態が上書き消失する競合を防止する（R1-01）。これにより Push 時（`buildMergedSyncNovels`）および Pull 時の双方向でお気に入り状態の確実な Last-Write-Wins（LWW）同期が保証される。
   - 既読状態のマージ: 両端末の既読エピソード ID の和集合（Union）を採用する。
 - **自動同期トリガーと排他・デバウンス制御**:
   - 未連携時のガード: `cloudSyncBridge.getAuthState()` が `connected` 状態でない場合、`pullAndMerge()` および `pushCurrentState()` は通信を行わず即座に安全にリターンする（R1-14）。

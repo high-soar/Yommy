@@ -150,7 +150,7 @@ src/features/bookshelf/
 - **操作アクション**:
   - **お気に入り（★）トグルボタン（`v0.8` Issue #266）**: `data-testid="novel-card-favorite-button"`
     - `<button>` の入れ子を避けるため、`novel-card-select` ボタンとは独立した兄弟要素としてカード右上（しおり位置バッジの横）に配置する。
-    - セマンティック属性: `aria-pressed={novel.isFavorite}`、`aria-label={novel.isFavorite ? `${novel.title}のお気に入りを解除`:`${novel.title}をお気に入りに登録`}`。
+    - セマンティック属性: 固定ラベル `aria-label="${novel.title}のお気に入り"` ＋ `aria-pressed={Boolean(novel.isFavorite)}`（状態変化による `aria-label` の動的書き換えは行わず、`aria-pressed` で状態通知する、R1-10 / R2-01）。
     - 表示: `novel.isFavorite === true` のときは `★`（アンバー色強調）、`false` のときは `☆`（スレート色）。
     - クリック時に `e.stopPropagation()` を行い、`onToggleFavorite?.(novel.id, !novel.isFavorite)` を呼び出す（`onSelect` と二重発火しないこと）。
   - **カード詳細遷移ボタン/領域**: `data-testid="novel-card-select"`
@@ -219,8 +219,8 @@ src/features/bookshelf/
 - **ヘッダー**:
   - タイトル: 「📚 本棚」を固定表示。
   - **お気に入りフィルタトグルボタン（`v0.8` Issue #266）**: `data-testid="bookshelf-favorite-filter-button"`
-    - `aria-pressed={favoriteOnly}`、`aria-label="お気に入りのみ表示"`
-    - 表示ラベル: `favoriteOnly === true` のときは `★`＋`お気に入り`（アンバー色背景・枠線の強調スタイル）、`false` のときは `☆`＋`お気に入り`（通常枠線スタイル）。
+    - セマンティック属性: `aria-pressed={favoriteOnly}`、`aria-label="お気に入りのみ表示"`。
+    - 表示とレイアウト: モバイル狭幅画面（360px〜375px）でのヘッダー横幅圧迫・折り返しを防ぐため、`favoriteOnly === true` のときは `★`、`false` のときは `☆` の **アイコンのみ表示** とする（`shrink-0 whitespace-nowrap`、R2-20）。また ON/OFF 双方で常時 1px `border` を維持し、切替時の高さ変化を防ぐ。
     - クリック時に `onToggleFavoriteFilter?.()` を呼び出す。
   - **ソート選択セレクター**: `data-testid="bookshelf-sort-select"`
     - 5 つの `<option>` を提供：
@@ -297,8 +297,9 @@ export interface UseBookshelfResult {
    - ヘッダーの更新ボタン押下時、1時間経過条件にかかわらず、お気に入りフィルタが ON（`favoriteOnly === true`）のときは **お気に入り登録作品のみ** を対象とし、OFF のときは **全登録作品** を対象にバックグラウンド順次更新チェックを開始する。
 4. **ソート順およびお気に入りフィルタ変更と永続化（`setSortOrder` / `setFavoriteOnly` / `toggleFavoriteFilter`）**:
    - ソート順変更時、即時に `appSettingsRepository.setSetting("bookshelf_sort_order", order)` で DB に永続化し、指定順序で `novelRepository.listNovels(order)` を再取得して画面を更新する。
-   - お気に入りフィルタ変更時（`setFavoriteOnly` / `toggleFavoriteFilter`）、まず `appSettingsRepository.setSetting("bookshelf_favorite_only", String(nextFavoriteOnly))` で DB へ永続化し、成功時に State を更新して表示一覧を切り替える。永続化失敗時は State を維持してエラーを設定する（R1-12）。
+   - お気に入りフィルタ変更時（`setFavoriteOnly` / `toggleFavoriteFilter`）、排他ガード `isTogglingFilterRef` により永続化完了前の連打・重複実行を抑止した上で（R2-08）、まず `appSettingsRepository.setSetting("bookshelf_favorite_only", String(nextFavoriteOnly))` で DB へ永続化し、成功時に State を更新して表示一覧を切り替える。永続化失敗時は State を維持してエラーを設定する（R1-12）。
 5. **作品のお気に入り登録・解除（`toggleFavorite`、`v0.8` Issue #266）**:
+   - 作品 ID ごとの排他ガード `togglingFavoriteIdsRef`（`Set<string>`）により、同一作品に対する非同期更新中の連打・重複呼び出しを抑止する（R2-08）。
    - `novelRepository.setFavorite(novelId, nextIsFavorite)` を呼び出し、SQLite の `novels.is_favorite` と `novels.updated_at`（現在時刻 ISO 8601）を同時更新する。
    - ローカル State の該当作品の `isFavorite` および `updatedAt` を即時更新する（`favoriteOnly === true` のときにお気に入り解除すると即座に表示一覧から除外される）。
    - `syncEngine` が存在する場合は `syncEngine.notifyChanged()` を呼び出し、デバウンス自動 Push をスケジュールする。
