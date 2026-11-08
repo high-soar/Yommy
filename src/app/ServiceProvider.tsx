@@ -25,6 +25,7 @@ import type {
 } from "../storage/types";
 import { SqlNovelRepository } from "../storage/repositories/novelRepository";
 import { SqlChapterRepository } from "../storage/repositories/chapterRepository";
+import { SqlQueueRepository } from "../storage/repositories/queueRepository";
 import { SqlSettingsRepository } from "../storage/repositories/settingsRepository";
 import { SqlAppSettingsRepository } from "../storage/repositories/appSettingsRepository";
 import type { CloudSyncBridge } from "../bridges/cloud-sync/types";
@@ -313,6 +314,9 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
         const chapterRepository =
           services?.chapterRepository ??
           new SqlChapterRepository(databaseAdapter as DatabaseAdapter);
+        const queueRepository =
+          services?.queueRepository ??
+          new SqlQueueRepository(databaseAdapter as DatabaseAdapter);
         const settingsRepository =
           services?.settingsRepository ??
           new SqlSettingsRepository(databaseAdapter as DatabaseAdapter);
@@ -353,8 +357,7 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           databaseAdapter,
           novelRepository,
           chapterRepository,
-          queueRepository: (services?.queueRepository ??
-            undefined) as unknown as QueueRepository,
+          queueRepository,
           settingsRepository,
           appSettingsRepository,
           appBridge,
