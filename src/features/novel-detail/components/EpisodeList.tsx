@@ -10,6 +10,7 @@ export type { EpisodeListProps } from "../types";
 export const EpisodeList: React.FC<EpisodeListProps> = ({
   chapters,
   bookmarkChapterIndex,
+  failedChapterIndexes,
   onSelectEpisode,
 }) => {
   if (chapters.length === 0) {
@@ -53,6 +54,9 @@ export const EpisodeList: React.FC<EpisodeListProps> = ({
             <EpisodeListItem
               chapter={chapter}
               isBookmarked={bookmarkChapterIndex === chapter.chapterIndex}
+              isDownloadFailed={failedChapterIndexes?.includes(
+                chapter.chapterIndex,
+              )}
               onSelectEpisode={onSelectEpisode}
             />
           </React.Fragment>

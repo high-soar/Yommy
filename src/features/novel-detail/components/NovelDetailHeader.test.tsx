@@ -36,6 +36,8 @@ const {
   FallbackAuthorAndSynopsis,
   ExpandedSynopsis,
   BatchCaching,
+  ResumePending,
+  RetryFailed,
   AllCached,
   Favorite,
   NotFavorite,
@@ -382,6 +384,27 @@ describe("NovelDetailHeader", () => {
         expect(screen.getByTestId("open-delete-dialog-button")).toBeDisabled();
       });
 
+      it("ResumePending ストーリーで「キャッシュを再開（残り7話）」ボタンが表示されること (AC-ND-24)", () => {
+        render(<ResumePending />);
+        const batchButton = screen.getByTestId("batch-cache-button");
+        expect(batchButton).toBeInTheDocument();
+        expect(batchButton).toHaveTextContent("キャッシュを再開（残り7話）");
+        expect(batchButton).not.toBeDisabled();
+      });
+
+      it("RetryFailed ストーリーで「失敗した話を再試行（3話）」ボタンおよびエラーメッセージが表示されること (AC-ND-25)", () => {
+        render(<RetryFailed />);
+        const batchButton = screen.getByTestId("batch-cache-button");
+        expect(batchButton).toBeInTheDocument();
+        expect(batchButton).toHaveTextContent("失敗した話を再試行（3話）");
+        expect(batchButton).not.toBeDisabled();
+
+        const errorEl = screen.getByTestId("novel-detail-error");
+        expect(errorEl).toHaveTextContent(
+          "3話の取得に失敗しました（再試行可能）",
+        );
+      });
+
       it("AllCached ストーリーで「全話キャッシュ済み」ボタンが disabled 表示されること (AC-ND-13)", () => {
         render(<AllCached />);
 
@@ -458,6 +481,112 @@ describe("NovelDetailHeader", () => {
 
         const batchButton = screen.getByTestId("batch-cache-button");
         expect(batchButton).toHaveTextContent("未取得話を一括キャッシュ");
+        expect(batchButton).toBeDisabled();
+      });
+
+      it("pendingCacheCount > 0 のとき「キャッシュを再開（残りN話）」と表示され、failedCacheCount が未指定の場合は pendingCacheCount のみで計算されること (AC-ND-24)", async () => {
+        const user = userEvent.setup();
+        const onStartBatchCache = vi.fn();
+
+        render(
+          <NovelDetailHeader
+            novel={sampleNovel}
+            isRefreshing={false}
+            isBatchCaching={false}
+            batchCacheProgress={null}
+            isAllCached={false}
+            pendingCacheCount={4}
+            onStartFromBeginning={vi.fn()}
+            onResumeBookmark={vi.fn()}
+            onRefreshToc={vi.fn()}
+            onStartBatchCache={onStartBatchCache}
+            onCancelBatchCache={vi.fn()}
+            onOpenDeleteDialog={vi.fn()}
+          />,
+        );
+
+        const batchButton = screen.getByTestId("batch-cache-button");
+        expect(batchButton).toHaveTextContent("キャッシュを再開（残り4話）");
+        expect(batchButton).not.toBeDisabled();
+
+        await user.click(batchButton);
+        expect(onStartBatchCache).toHaveBeenCalledTimes(1);
+      });
+
+      it("pendingCacheCount === 0 かつ failedCacheCount > 0 のとき「失敗した話を再試行（N話）」と表示され、クリック時に onStartBatchCache が呼ばれること (AC-ND-25)", async () => {
+        const user = userEvent.setup();
+        const onStartBatchCache = vi.fn();
+
+        render(
+          <NovelDetailHeader
+            novel={sampleNovel}
+            isRefreshing={false}
+            isBatchCaching={false}
+            batchCacheProgress={null}
+            isAllCached={false}
+            pendingCacheCount={0}
+            failedCacheCount={2}
+            onStartFromBeginning={vi.fn()}
+            onResumeBookmark={vi.fn()}
+            onRefreshToc={vi.fn()}
+            onStartBatchCache={onStartBatchCache}
+            onCancelBatchCache={vi.fn()}
+            onOpenDeleteDialog={vi.fn()}
+          />,
+        );
+
+        const batchButton = screen.getByTestId("batch-cache-button");
+        expect(batchButton).toHaveTextContent("失敗した話を再試行（2話）");
+        expect(batchButton).not.toBeDisabled();
+
+        await user.click(batchButton);
+        expect(onStartBatchCache).toHaveBeenCalledTimes(1);
+      });
+
+      it("再開待ち（pendingCacheCount > 0）時でも isRefreshing === true の場合はボタンが disabled となること (AC-ND-24)", () => {
+        render(
+          <NovelDetailHeader
+            novel={sampleNovel}
+            isRefreshing={true}
+            isBatchCaching={false}
+            batchCacheProgress={null}
+            isAllCached={false}
+            pendingCacheCount={3}
+            onStartFromBeginning={vi.fn()}
+            onResumeBookmark={vi.fn()}
+            onRefreshToc={vi.fn()}
+            onStartBatchCache={vi.fn()}
+            onCancelBatchCache={vi.fn()}
+            onOpenDeleteDialog={vi.fn()}
+          />,
+        );
+
+        const batchButton = screen.getByTestId("batch-cache-button");
+        expect(batchButton).toHaveTextContent("キャッシュを再開（残り3話）");
+        expect(batchButton).toBeDisabled();
+      });
+
+      it("再試行待ち（failedCacheCount > 0）時でも isRefreshing === true の場合はボタンが disabled となること (AC-ND-25)", () => {
+        render(
+          <NovelDetailHeader
+            novel={sampleNovel}
+            isRefreshing={true}
+            isBatchCaching={false}
+            batchCacheProgress={null}
+            isAllCached={false}
+            pendingCacheCount={0}
+            failedCacheCount={1}
+            onStartFromBeginning={vi.fn()}
+            onResumeBookmark={vi.fn()}
+            onRefreshToc={vi.fn()}
+            onStartBatchCache={vi.fn()}
+            onCancelBatchCache={vi.fn()}
+            onOpenDeleteDialog={vi.fn()}
+          />,
+        );
+
+        const batchButton = screen.getByTestId("batch-cache-button");
+        expect(batchButton).toHaveTextContent("失敗した話を再試行（1話）");
         expect(batchButton).toBeDisabled();
       });
 

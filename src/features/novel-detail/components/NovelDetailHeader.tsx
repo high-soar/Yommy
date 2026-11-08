@@ -17,6 +17,8 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
   isBatchCaching,
   batchCacheProgress,
   isAllCached,
+  pendingCacheCount = 0,
+  failedCacheCount = 0,
   refreshMessage,
   error,
   onStartFromBeginning,
@@ -37,6 +39,32 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
     novel.synopsis && novel.synopsis.trim().length > 0,
   );
   const synopsisText = hasSynopsis ? novel.synopsis : "あらすじはありません。";
+
+  // 一括キャッシュ・再開・再試行ボタンの動的ラベルと活性制御 (AC-ND-11, AC-ND-13, AC-ND-24, AC-ND-25)
+  const getBatchCacheButtonInfo = (): { label: string; disabled: boolean } => {
+    if (novel.totalChapters === 0) {
+      return { label: "未取得話を一括キャッシュ", disabled: true };
+    }
+    if (isAllCached) {
+      return { label: "全話キャッシュ済み", disabled: true };
+    }
+    if (pendingCacheCount > 0) {
+      const remainingTotal = pendingCacheCount + failedCacheCount;
+      return {
+        label: `キャッシュを再開（残り${remainingTotal}話）`,
+        disabled: isRefreshing,
+      };
+    }
+    if (pendingCacheCount === 0 && failedCacheCount > 0) {
+      return {
+        label: `失敗した話を再試行（${failedCacheCount}話）`,
+        disabled: isRefreshing,
+      };
+    }
+    return { label: "未取得話を一括キャッシュ", disabled: isRefreshing };
+  };
+
+  const batchButtonInfo = getBatchCacheButtonInfo();
 
   return (
     <header
@@ -85,10 +113,10 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
             type="button"
             data-testid="batch-cache-button"
             onClick={onStartBatchCache}
-            disabled={isRefreshing || isAllCached || novel.totalChapters === 0}
+            disabled={batchButtonInfo.disabled}
             className="px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
           >
-            {isAllCached ? "全話キャッシュ済み" : "未取得話を一括キャッシュ"}
+            {batchButtonInfo.label}
           </button>
         )}
         <button

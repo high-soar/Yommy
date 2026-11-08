@@ -16,6 +16,7 @@ const formatEpisodeDate = (dateStr: string): string => {
 export const EpisodeListItem: React.FC<EpisodeListItemProps> = ({
   chapter,
   isBookmarked,
+  isDownloadFailed = false,
   onSelectEpisode,
 }) => {
   const isCached = chapter.downloadedAt !== null || chapter.byteSize > 0;
@@ -46,6 +47,13 @@ export const EpisodeListItem: React.FC<EpisodeListItemProps> = ({
               className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
             >
               取得済み
+            </span>
+          ) : isDownloadFailed ? (
+            <span
+              data-testid="episode-failed-badge"
+              className="text-xs px-2 py-0.5 rounded-full font-medium bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300"
+            >
+              取得失敗
             </span>
           ) : (
             <span

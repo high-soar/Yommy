@@ -83,6 +83,29 @@ export const BatchCaching: Story = {
 };
 
 /**
+ * 一括キャッシュ中断後の再開待ち状態（「キャッシュを再開（残りN話）」ボタン表示）
+ */
+export const ResumePending: Story = {
+  name: "キャッシュ再開待ち",
+  args: {
+    pendingCacheCount: 5,
+    failedCacheCount: 2,
+  },
+};
+
+/**
+ * 一括キャッシュ失敗話の再試行待ち状態（「失敗した話を再試行（N話）」ボタン表示）
+ */
+export const RetryFailed: Story = {
+  name: "失敗話の再試行待ち",
+  args: {
+    pendingCacheCount: 0,
+    failedCacheCount: 3,
+    error: "3話の取得に失敗しました（再試行可能）",
+  },
+};
+
+/**
  * 全話キャッシュ済み状態（ボタンdisabled）
  */
 export const AllCached: Story = {

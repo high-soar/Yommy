@@ -166,6 +166,30 @@ export const BatchCaching: Story = {
 };
 
 /**
+ * 一括キャッシュ中断後の再開待ち表示
+ */
+export const ResumePending: Story = {
+  name: "キャッシュ再開待ち",
+  args: {
+    pendingCacheCount: 2,
+    failedCacheCount: 0,
+  },
+};
+
+/**
+ * 一括キャッシュ失敗話の再試行待ち・取得失敗バッジ表示
+ */
+export const RetryFailed: Story = {
+  name: "失敗話の再試行待ち",
+  args: {
+    pendingCacheCount: 0,
+    failedCacheCount: 1,
+    failedChapterIndexes: [2],
+    error: "1話の取得に失敗しました（再試行可能）",
+  },
+};
+
+/**
  * 全話キャッシュ済み表示
  */
 export const AllCached: Story = {

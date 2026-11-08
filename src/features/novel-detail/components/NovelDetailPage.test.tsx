@@ -5,6 +5,7 @@ import { composeStories } from "@storybook/react";
 import * as stories from "./NovelDetailPage.stories";
 import { NovelDetailPage } from "./NovelDetailPage";
 import * as NovelDetailHeaderModule from "./NovelDetailHeader";
+import * as EpisodeListModule from "./EpisodeList";
 import type { NovelRecord, ChapterSummary } from "../../../storage/types";
 
 const {
@@ -16,6 +17,8 @@ const {
   Refreshing,
   WithError,
   BatchCaching,
+  ResumePending,
+  RetryFailed,
   AllCached,
   WithClearCacheDialog,
   WithClearCacheNotice,
@@ -439,6 +442,27 @@ describe("NovelDetailPage", () => {
         expect(container.className).toContain("pointer-events-none");
       });
 
+      it("ResumePending ストーリーで「キャッシュを再開（残り2話）」ボタンが表示されること (AC-ND-24)", () => {
+        render(<ResumePending />);
+
+        const batchButton = screen.getByTestId("batch-cache-button");
+        expect(batchButton).toBeInTheDocument();
+        expect(batchButton).toHaveTextContent("キャッシュを再開（残り2話）");
+      });
+
+      it("RetryFailed ストーリーで「失敗した話を再試行（1話）」ボタンおよび取得失敗バッジが表示されること (AC-ND-25)", () => {
+        render(<RetryFailed />);
+
+        const batchButton = screen.getByTestId("batch-cache-button");
+        expect(batchButton).toBeInTheDocument();
+        expect(batchButton).toHaveTextContent("失敗した話を再試行（1話）");
+
+        const failedBadge = screen.getByTestId("episode-failed-badge");
+        expect(failedBadge).toBeInTheDocument();
+        expect(failedBadge).toHaveTextContent("取得失敗");
+        expect(failedBadge.closest("[data-chapter-index='2']")).not.toBeNull();
+      });
+
       it("AllCached ストーリーでヘッダーに全話キャッシュ済みが表示されること (AC-ND-13)", () => {
         render(<AllCached />);
 
@@ -645,6 +669,41 @@ describe("NovelDetailPage", () => {
         expect(onToggleFavorite).toHaveBeenCalledTimes(1);
 
         headerSpy.mockRestore();
+      });
+
+      it("pendingCacheCount, failedCacheCount が NovelDetailHeader へ、failedChapterIndexes が EpisodeList へ正しく伝搬されること (AC-ND-24, AC-ND-25)", () => {
+        const headerSpy = vi.spyOn(
+          NovelDetailHeaderModule,
+          "NovelDetailHeader",
+        );
+        const episodeListSpy = vi.spyOn(EpisodeListModule, "EpisodeList");
+
+        render(
+          <NovelDetailPage
+            {...defaultPageProps}
+            pendingCacheCount={3}
+            failedCacheCount={1}
+            failedChapterIndexes={[2]}
+          />,
+        );
+
+        expect(headerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            pendingCacheCount: 3,
+            failedCacheCount: 1,
+          }),
+          undefined,
+        );
+
+        expect(episodeListSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            failedChapterIndexes: [2],
+          }),
+          undefined,
+        );
+
+        headerSpy.mockRestore();
+        episodeListSpy.mockRestore();
       });
     });
   });

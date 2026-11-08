@@ -6,7 +6,8 @@ import * as stories from "./EpisodeList.stories";
 import { EpisodeList } from "./EpisodeList";
 import type { ChapterSummary } from "../../../storage/types";
 
-const { Default, Empty, WithoutPartTitle } = composeStories(stories);
+const { Default, Empty, WithoutPartTitle, WithFailedChapters } =
+  composeStories(stories);
 
 const testChapters: ChapterSummary[] = [
   {
@@ -99,6 +100,16 @@ describe("EpisodeList", () => {
       const items = screen.getAllByTestId("episode-item");
       expect(items).toHaveLength(2);
     });
+
+    it("WithFailedChapters ストーリーで取得失敗話に取得失敗バッジが表示されること (AC-ND-25)", () => {
+      render(<WithFailedChapters />);
+      expect(screen.getByTestId("episode-list")).toBeInTheDocument();
+
+      const failedBadge = screen.getByTestId("episode-failed-badge");
+      expect(failedBadge).toBeInTheDocument();
+      expect(failedBadge).toHaveTextContent("取得失敗");
+      expect(failedBadge.closest("[data-chapter-index='3']")).not.toBeNull();
+    });
   });
 
   describe("章見出し境界判定および親子イベント・プロパティ連携の検証", () => {
@@ -152,6 +163,32 @@ describe("EpisodeList", () => {
       expect(bookmarkBadges).toHaveLength(1);
       expect(
         bookmarkBadges[0].closest("[data-chapter-index='2']"),
+      ).not.toBeNull();
+    });
+
+    it("failedChapterIndexes に含まれる話数に isDownloadFailed が伝達されて取得失敗バッジが表示されること (AC-ND-25)", () => {
+      const uncachedChapters: ChapterSummary[] = testChapters.map((c) => ({
+        ...c,
+        byteSize: 0,
+        downloadedAt: null,
+      }));
+
+      render(
+        <EpisodeList
+          chapters={uncachedChapters}
+          bookmarkChapterIndex={null}
+          failedChapterIndexes={[1, 4]}
+          onSelectEpisode={vi.fn()}
+        />,
+      );
+
+      const failedBadges = screen.getAllByTestId("episode-failed-badge");
+      expect(failedBadges).toHaveLength(2);
+      expect(
+        failedBadges[0].closest("[data-chapter-index='1']"),
+      ).not.toBeNull();
+      expect(
+        failedBadges[1].closest("[data-chapter-index='4']"),
       ).not.toBeNull();
     });
   });

@@ -63,6 +63,23 @@ export const Cached: Story = {
 };
 
 /**
+ * 取得失敗状態のエピソード行（未キャッシュ・取得失敗バッジ表示）
+ */
+export const DownloadFailed: Story = {
+  name: "取得失敗",
+  args: {
+    chapter: {
+      ...sampleChapter,
+      downloadedAt: null,
+      byteSize: 0,
+      isRead: false,
+    },
+    isDownloadFailed: true,
+    isBookmarked: false,
+  },
+};
+
+/**
  * 取得済み・既読状態のエピソード行
  */
 export const ReadAndCached: Story = {
