@@ -9,7 +9,6 @@ import {
   matchRoute,
   safeDecodeURIComponent,
   resolveInitialPath,
-  type RouterContextValue,
 } from "./router";
 
 const {
@@ -292,22 +291,8 @@ describe("router", () => {
   });
 
   describe("画面遷移ナビゲーションと History API 同期検証", () => {
-    interface ExtendedRouterContextValue extends RouterContextValue {
-      browserOrigin?: string | null;
-      navigateToBrowser?: (
-        url: string,
-        options?: {
-          novelId?: string;
-          chapterIndex?: number;
-          originPath?: string;
-          replace?: boolean;
-        },
-      ) => void;
-    }
-
     const TestConsumer: React.FC = () => {
       const router = useRouter();
-      const extendedRouter = router as unknown as ExtendedRouterContextValue;
       return (
         <div>
           <span data-testid="path-display">{router.currentPath}</span>
@@ -319,7 +304,7 @@ describe("router", () => {
             {router.novelOrigin ?? "null"}
           </span>
           <span data-testid="browser-origin-display">
-            {extendedRouter.browserOrigin ?? "null"}
+            {router.browserOrigin ?? "null"}
           </span>
           <button
             data-testid="btn-bookshelf"
@@ -384,7 +369,7 @@ describe("router", () => {
           <button
             data-testid="btn-browser"
             onClick={() =>
-              extendedRouter.navigateToBrowser?.(
+              router.navigateToBrowser(
                 "https://kakuyomu.jp/works/16817330658027210412",
                 {
                   novelId: "kakuyomu:16817330658027210412",

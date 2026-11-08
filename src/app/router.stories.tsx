@@ -31,6 +31,26 @@ const RouterStateInspector: React.FC = () => {
             </div>
           </>
         )}
+        {router.route.name === "browser" && (
+          <>
+            <div data-testid="route-browser-url">URL: {router.route.url}</div>
+            {router.route.novelId && (
+              <div data-testid="route-novel-id">
+                Novel ID: {router.route.novelId}
+              </div>
+            )}
+            {router.route.chapterIndex !== undefined && (
+              <div data-testid="route-chapter-index">
+                Chapter: {router.route.chapterIndex}
+              </div>
+            )}
+            {router.route.originPath && (
+              <div data-testid="route-origin-path">
+                Origin: {router.route.originPath}
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2 pt-2">
@@ -85,6 +105,22 @@ const RouterStateInspector: React.FC = () => {
           className="px-3 py-1.5 bg-amber-600 text-white rounded text-xs font-medium hover:bg-amber-700"
         >
           設定へ
+        </button>
+        <button
+          type="button"
+          data-testid="nav-browser-button"
+          onClick={() =>
+            router.navigateToBrowser(
+              "https://kakuyomu.jp/works/16817330658027210412",
+              {
+                novelId: "kakuyomu:16817330658027210412",
+                chapterIndex: 2,
+              },
+            )
+          }
+          className="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs font-medium hover:bg-indigo-700"
+        >
+          内蔵ブラウザへ
         </button>
         <button
           type="button"

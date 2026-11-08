@@ -14,11 +14,26 @@ export type AppRoute =
   | { name: "reader"; path: string; novelId: string; chapterIndex: number }
   | { name: "settings"; path: "/settings" }
   | { name: "search"; path: "/search" }
-  | { name: "ranking"; path: "/ranking" };
+  | { name: "ranking"; path: "/ranking" }
+  | {
+      name: "browser";
+      path: string;
+      url: string;
+      novelId?: string;
+      chapterIndex?: number;
+      originPath?: string;
+    };
 
 export interface NavigateToReaderOptions {
   replace?: boolean;
   fromBookshelfResume?: boolean;
+}
+
+export interface NavigateToBrowserOptions {
+  novelId?: string;
+  chapterIndex?: number;
+  originPath?: string;
+  replace?: boolean;
 }
 
 export interface RouterContextValue {
@@ -26,6 +41,7 @@ export interface RouterContextValue {
   previousPath?: string;
   novelOrigin: string | null;
   settingsOrigin: string | null;
+  browserOrigin: string | null;
   route: AppRoute;
   navigate: (path: string) => void;
   navigateToBookshelf: () => void;
@@ -38,6 +54,7 @@ export interface RouterContextValue {
     options?: NavigateToReaderOptions,
   ) => void;
   navigateToSettings: () => void;
+  navigateToBrowser: (url: string, options?: NavigateToBrowserOptions) => void;
   back: () => void;
 }
 
@@ -84,23 +101,61 @@ export function matchRoute(path: string): AppRoute {
     return { name: "bookshelf", path: "/" };
   }
 
+  // クエリパラメータを分離してパス名を照合
+  const [pathnameRaw, searchRaw] = normalized.split("?");
+  const pathname =
+    pathnameRaw.length > 1 && pathnameRaw.endsWith("/")
+      ? pathnameRaw.slice(0, -1)
+      : pathnameRaw;
+
+  // SCR-04: 内蔵ブラウザ画面 (/browser)
+  if (pathname === "/browser") {
+    const params = new URLSearchParams(searchRaw ?? "");
+    const url = params.get("url") ?? "";
+    const rawNovelId = params.get("novelId");
+    const novelId = rawNovelId
+      ? safeDecodeURIComponent(rawNovelId).trim()
+      : undefined;
+    const rawChapter = params.get("chapterIndex");
+    const parsedChapter = rawChapter ? parseInt(rawChapter, 10) : undefined;
+    const chapterIndex =
+      parsedChapter !== undefined &&
+      Number.isFinite(parsedChapter) &&
+      parsedChapter > 0
+        ? parsedChapter
+        : undefined;
+    const rawOrigin = params.get("originPath");
+    const originPath = rawOrigin
+      ? safeDecodeURIComponent(rawOrigin).trim()
+      : undefined;
+
+    return {
+      name: "browser",
+      path: normalized,
+      url,
+      ...(novelId && novelId.length > 0 ? { novelId } : {}),
+      ...(chapterIndex !== undefined ? { chapterIndex } : {}),
+      ...(originPath && originPath.length > 0 ? { originPath } : {}),
+    };
+  }
+
   // SCR-05: 設定画面 (/settings)
-  if (normalized === "/settings") {
+  if (pathname === "/settings") {
     return { name: "settings", path: "/settings" };
   }
 
   // SCR-06: 検索画面 (/search)
-  if (normalized === "/search") {
+  if (pathname === "/search") {
     return { name: "search", path: "/search" };
   }
 
   // SCR-07: ランキング画面 (/ranking)
-  if (normalized === "/ranking") {
+  if (pathname === "/ranking") {
     return { name: "ranking", path: "/ranking" };
   }
 
   // SCR-03: リーダー画面 (/novels/:novelId/chapters/:chapterIndex)
-  const readerMatch = normalized.match(READER_ROUTE_REGEX);
+  const readerMatch = pathname.match(READER_ROUTE_REGEX);
   if (readerMatch) {
     const chapterIndex = parseInt(readerMatch[2], 10);
     const novelId = safeDecodeURIComponent(readerMatch[1]).trim();
@@ -115,7 +170,7 @@ export function matchRoute(path: string): AppRoute {
   }
 
   // SCR-02: 作品詳細画面 (/novels/:novelId)
-  const detailMatch = normalized.match(NOVEL_DETAIL_ROUTE_REGEX);
+  const detailMatch = pathname.match(NOVEL_DETAIL_ROUTE_REGEX);
   if (detailMatch) {
     const novelId = safeDecodeURIComponent(detailMatch[1]).trim();
     if (novelId.length > 0) {
@@ -167,7 +222,12 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
   initialPath,
 }) => {
   const [currentPath, setCurrentPath] = useState<string>(() =>
-    resolveInitialPath(initialPath, window.location.pathname),
+    resolveInitialPath(
+      initialPath,
+      typeof window !== "undefined"
+        ? `${window.location.pathname}${window.location.search}`
+        : undefined,
+    ),
   );
   const currentPathRef = useRef<string>(currentPath);
   const [previousPath, setPreviousPath] = useState<string | undefined>(
@@ -177,6 +237,8 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
   const novelOriginRef = useRef<string | null>(null);
   const [settingsOrigin, setSettingsOrigin] = useState<string | null>(null);
   const settingsOriginRef = useRef<string | null>(null);
+  const [browserOrigin, setBrowserOrigin] = useState<string | null>(null);
+  const browserOriginRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (initialPath !== undefined) {
@@ -187,13 +249,17 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
       }
       settingsOriginRef.current = null;
       setSettingsOrigin(null);
+      if (!initialPath.startsWith("/browser")) {
+        browserOriginRef.current = null;
+        setBrowserOrigin(null);
+      }
       setCurrentPath(initialPath);
     }
   }, [initialPath]);
 
   useEffect(() => {
     const handlePopState = () => {
-      const nextPath = window.location.pathname;
+      const nextPath = `${window.location.pathname}${window.location.search}`;
       currentPathRef.current = nextPath;
       if (!nextPath.startsWith("/novels/")) {
         novelOriginRef.current = null;
@@ -202,6 +268,10 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
       if (nextPath !== "/settings") {
         settingsOriginRef.current = null;
         setSettingsOrigin(null);
+      }
+      if (!nextPath.startsWith("/browser")) {
+        browserOriginRef.current = null;
+        setBrowserOrigin(null);
       }
       setCurrentPath((prev) => {
         setPreviousPath(prev);
@@ -235,6 +305,18 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
       setSettingsOrigin(null);
     }
 
+    // browserOrigin (TR-12 復帰元) 管理:
+    // to が /browser の場合: 直前が /browser 以外であれば保持
+    if (to.startsWith("/browser")) {
+      if (!current.startsWith("/browser")) {
+        browserOriginRef.current = current;
+        setBrowserOrigin(current);
+      }
+    } else if (to !== "/settings") {
+      browserOriginRef.current = null;
+      setBrowserOrigin(null);
+    }
+
     // novelOrigin (TR-07 探索元) 管理:
     // to が /novels/ の場合: 直前が /search または /ranking であれば探索元としてセット
     // ※ただし、/settings から /novels/ への復帰時は novelOrigin を上書きしない
@@ -243,8 +325,8 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
         novelOriginRef.current = current;
         setNovelOrigin(current);
       }
-    } else if (to !== "/settings") {
-      // /settings への一時退避以外で /novels/ から離脱した場合は探索元をクリア
+    } else if (to !== "/settings" && !to.startsWith("/browser")) {
+      // /settings や /browser への一時退避以外で /novels/ から離脱した場合は探索元をクリア
       novelOriginRef.current = null;
       setNovelOrigin(null);
     }
@@ -316,6 +398,43 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
     navigate("/settings");
   }, [navigate]);
 
+  const navigateToBrowser = useCallback(
+    (url: string, options?: NavigateToBrowserOptions) => {
+      const params = new URLSearchParams();
+      params.set("url", url);
+      if (options?.novelId) {
+        params.set("novelId", options.novelId);
+      }
+      if (options?.chapterIndex !== undefined) {
+        params.set("chapterIndex", String(options.chapterIndex));
+      }
+      if (options?.originPath) {
+        params.set("originPath", options.originPath);
+      }
+      const targetPath = `/browser?${params.toString()}`;
+
+      if (options?.originPath) {
+        browserOriginRef.current = options.originPath;
+        setBrowserOrigin(options.originPath);
+      } else if (!currentPathRef.current.startsWith("/browser")) {
+        browserOriginRef.current = currentPathRef.current;
+        setBrowserOrigin(currentPathRef.current);
+      }
+
+      if (options?.replace) {
+        window.history.replaceState(null, "", targetPath);
+        currentPathRef.current = targetPath;
+        setCurrentPath((prev) => {
+          setPreviousPath(prev);
+          return targetPath;
+        });
+      } else {
+        navigate(targetPath);
+      }
+    },
+    [navigate],
+  );
+
   const route = useMemo(() => matchRoute(currentPath), [currentPath]);
 
   const back = useCallback(() => {
@@ -364,7 +483,19 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
       return;
     }
 
-    // 5. 本棚画面 (SCR-01: bookshelf) -> ルート（何もしない、TR-13）
+    // 5. 内蔵ブラウザ画面 (SCR-04: browser) -> 直前画面（originPath / browserOrigin / 作品詳細 SCR-02 / ホーム本棚 SCR-01）(TR-12)
+    if (route.name === "browser") {
+      const target =
+        route.originPath ??
+        browserOriginRef.current ??
+        (route.novelId ? `/novels/${encodeURIComponent(route.novelId)}` : "/");
+      browserOriginRef.current = null;
+      setBrowserOrigin(null);
+      navigate(target);
+      return;
+    }
+
+    // 6. 本棚画面 (SCR-01: bookshelf) -> ルート（何もしない、TR-13）
   }, [route, navigate]);
 
   const contextValue = useMemo<RouterContextValue>(
@@ -373,6 +504,7 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
       previousPath,
       novelOrigin,
       settingsOrigin,
+      browserOrigin,
       route,
       navigate,
       navigateToBookshelf,
@@ -381,6 +513,7 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
       navigateToNovelDetail,
       navigateToReader,
       navigateToSettings,
+      navigateToBrowser,
       back,
     }),
     [
@@ -388,6 +521,7 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
       previousPath,
       novelOrigin,
       settingsOrigin,
+      browserOrigin,
       route,
       navigate,
       navigateToBookshelf,
@@ -396,6 +530,7 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
       navigateToNovelDetail,
       navigateToReader,
       navigateToSettings,
+      navigateToBrowser,
       back,
     ],
   );
