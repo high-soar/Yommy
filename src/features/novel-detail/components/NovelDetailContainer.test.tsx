@@ -1089,5 +1089,54 @@ describe("NovelDetailContainer", () => {
 
       pageSpy.mockRestore();
     });
+
+    it("onOpenWebView が省略された場合、デフォルトで router.navigate により /browser へ遷移すること (Issue #269, TR-09)", async () => {
+      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+
+      const Harness: React.FC = () => {
+        const router = useRouter();
+        return (
+          <div>
+            <div data-testid="observed-current-path">{router.currentPath}</div>
+            <ServiceProvider
+              services={{
+                novelRepository: createMockNovelRepo(sampleNovel),
+                chapterRepository: createMockChapterRepo(sampleChapters),
+              }}
+            >
+              <NovelDetailContainer novelId={sampleNovel.id} />
+            </ServiceProvider>
+          </div>
+        );
+      };
+
+      render(
+        <RouterProvider initialPath={`/novels/${sampleNovel.id}`}>
+          <Harness />
+        </RouterProvider>,
+      );
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            onOpenWebView: expect.any(Function),
+          }),
+          undefined,
+        );
+      });
+
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onOpenWebView?.(sampleNovel.canonicalUrl);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+          `/browser?url=${encodeURIComponent(sampleNovel.canonicalUrl)}&novelId=${encodeURIComponent(sampleNovel.id)}`,
+        );
+      });
+
+      pageSpy.mockRestore();
+    });
   });
 });
