@@ -193,6 +193,7 @@ describe("SearchInputBar コンポーネント", () => {
 
     const toggleBtn = screen.getByTestId("search-exclude-toggle-button");
     expect(toggleBtn).toHaveAttribute("aria-expanded", "false");
+    expect(toggleBtn).not.toHaveAttribute("aria-controls");
     expect(
       screen.queryByTestId("search-exclude-input"),
     ).not.toBeInTheDocument();
@@ -200,11 +201,15 @@ describe("SearchInputBar コンポーネント", () => {
     // クリックで展開
     await user.click(toggleBtn);
     expect(toggleBtn).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByTestId("search-exclude-input")).toBeInTheDocument();
+    const excludeInput = screen.getByTestId("search-exclude-input");
+    expect(excludeInput).toBeInTheDocument();
+    expect(excludeInput.id).toBeTruthy();
+    expect(toggleBtn).toHaveAttribute("aria-controls", excludeInput.id);
 
     // 再度クリックで折りたたみ
     await user.click(toggleBtn);
     expect(toggleBtn).toHaveAttribute("aria-expanded", "false");
+    expect(toggleBtn).not.toHaveAttribute("aria-controls");
     expect(
       screen.queryByTestId("search-exclude-input"),
     ).not.toBeInTheDocument();

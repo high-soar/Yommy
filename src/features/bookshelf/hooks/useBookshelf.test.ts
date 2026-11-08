@@ -2165,5 +2165,128 @@ describe("useBookshelf", () => {
       });
       expect(result.current.error).toBe("非Errorお気に入り保存エラー");
     });
+
+    it("toggleFavorite 処理中に同一 novelId で連打された場合は重複実行がガードされ、別 novelId は並行実行可能であること (R2-08)", async () => {
+      const fav1Resolvers: Array<() => void> = [];
+      const customNovelRepo = {
+        listNovels: vi
+          .fn()
+          .mockResolvedValue([{ ...novel1Fav }, { ...novel2NotFav }]),
+        getNovelById: vi.fn().mockResolvedValue(null),
+        upsertNovelWithToc: vi.fn(),
+        updateBookmark: vi.fn(),
+        setFavorite: vi.fn().mockImplementation((id: string) => {
+          if (id === novel1Fav.id) {
+            return new Promise<void>((resolve) => {
+              fav1Resolvers.push(resolve);
+            });
+          }
+          return Promise.resolve();
+        }),
+        deleteNovel: vi.fn(),
+        clearNewUpdate: vi.fn(),
+        updateLastCheckedAt: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          novelRepository: customNovelRepo as unknown as NovelRepository,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      let firstCallPromise!: Promise<void>;
+      let secondCallPromise!: Promise<void>;
+      act(() => {
+        firstCallPromise = result.current.toggleFavorite(novel1Fav.id);
+        secondCallPromise = result.current.toggleFavorite(novel1Fav.id);
+      });
+
+      // 同一 novelId の2回目連打はガードされること
+      expect(customNovelRepo.setFavorite).toHaveBeenCalledTimes(1);
+
+      // 別 novelId は並行して実行可能であること
+      await act(async () => {
+        await result.current.toggleFavorite(novel2NotFav.id);
+      });
+      expect(customNovelRepo.setFavorite).toHaveBeenCalledTimes(2);
+      expect(customNovelRepo.setFavorite).toHaveBeenLastCalledWith(
+        novel2NotFav.id,
+        true,
+      );
+
+      // 1回目を完了させた後は再度同一 novelId で実行可能になること
+      await act(async () => {
+        fav1Resolvers.forEach((r) => r());
+        await Promise.all([firstCallPromise, secondCallPromise]);
+      });
+
+      customNovelRepo.setFavorite.mockResolvedValueOnce(undefined);
+      await act(async () => {
+        await result.current.toggleFavorite(novel1Fav.id);
+      });
+      expect(customNovelRepo.setFavorite).toHaveBeenCalledTimes(3);
+    });
+
+    it("setFavoriteOnly 処理中に連打された場合は重複実行がガードされること (R2-08)", async () => {
+      const setSettingResolvers: Array<() => void> = [];
+      const customAppSettingsRepo = {
+        getSetting: vi.fn().mockResolvedValue("false"),
+        setSetting: vi.fn().mockImplementation(
+          () =>
+            new Promise<void>((resolve) => {
+              setSettingResolvers.push(resolve);
+            }),
+        ),
+      };
+      const customNovelRepo = {
+        listNovels: vi.fn().mockResolvedValue([novel1Fav, novel2NotFav]),
+        getNovelById: vi.fn().mockResolvedValue(null),
+        upsertNovelWithToc: vi.fn(),
+        updateBookmark: vi.fn(),
+        setFavorite: vi.fn(),
+        deleteNovel: vi.fn(),
+        clearNewUpdate: vi.fn(),
+        updateLastCheckedAt: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          appSettingsRepository: customAppSettingsRepo,
+          novelRepository: customNovelRepo as unknown as NovelRepository,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      let firstFilterPromise!: Promise<void>;
+      let secondFilterPromise!: Promise<void>;
+      act(() => {
+        firstFilterPromise = result.current.setFavoriteOnly(true);
+        secondFilterPromise = result.current.setFavoriteOnly(false);
+      });
+
+      // 処理中の2回目呼び出しはガードされること
+      expect(customAppSettingsRepo.setSetting).toHaveBeenCalledTimes(1);
+
+      // 完了後は再度実行可能であること
+      await act(async () => {
+        setSettingResolvers.forEach((r) => r());
+        await Promise.all([firstFilterPromise, secondFilterPromise]);
+      });
+      expect(result.current.favoriteOnly).toBe(true);
+
+      customAppSettingsRepo.setSetting.mockResolvedValueOnce(undefined);
+      await act(async () => {
+        await result.current.setFavoriteOnly(false);
+      });
+      expect(customAppSettingsRepo.setSetting).toHaveBeenCalledTimes(2);
+      expect(result.current.favoriteOnly).toBe(false);
+    });
   });
 });
