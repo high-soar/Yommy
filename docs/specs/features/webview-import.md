@@ -22,7 +22,7 @@ tags:
     ho-35,
   ]
 related_specs:
-  - docs/specs/changes/issue-269-webview-fallback-and-dom-import.md
+  - docs/specs/changes/archive/issue-269-webview-fallback-and-dom-import.md
   - docs/specs/requirements.md
   - docs/specs/architecture.md
   - docs/specs/screen-transitions.md

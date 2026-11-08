@@ -50,7 +50,7 @@ tags:
   - ho-30
   - ho-35
 related_specs:
-  - docs/specs/changes/issue-269-webview-fallback-and-dom-import.md
+  - docs/specs/changes/archive/issue-269-webview-fallback-and-dom-import.md
   - docs/specs/features/webview-import.md
   - docs/specs/parsers/narou.md
   - docs/specs/changes/archive/issue-239-narou-parser-and-multi-page-toc.md
