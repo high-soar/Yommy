@@ -224,9 +224,7 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
   const [currentPath, setCurrentPath] = useState<string>(() =>
     resolveInitialPath(
       initialPath,
-      typeof window !== "undefined"
-        ? `${window.location.pathname}${window.location.search}`
-        : undefined,
+      `${window.location.pathname}${window.location.search}`,
     ),
   );
   const currentPathRef = useRef<string>(currentPath);
@@ -306,9 +304,17 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
     }
 
     // browserOrigin (TR-12 復帰元) 管理:
-    // to が /browser の場合: 直前が /browser 以外であれば保持
+    // to が /browser の場合: originPath クエリがあればそれを優先、なければ直前パス（/browser 以外）を保持
     if (to.startsWith("/browser")) {
-      if (!current.startsWith("/browser")) {
+      const searchStr = to.split("?")[1] ?? "";
+      const originParam = new URLSearchParams(searchStr).get("originPath");
+      const explicitOrigin = originParam
+        ? safeDecodeURIComponent(originParam).trim()
+        : undefined;
+      if (explicitOrigin) {
+        browserOriginRef.current = explicitOrigin;
+        setBrowserOrigin(explicitOrigin);
+      } else if (!current.startsWith("/browser")) {
         browserOriginRef.current = current;
         setBrowserOrigin(current);
       }
@@ -319,9 +325,13 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
 
     // novelOrigin (TR-07 探索元) 管理:
     // to が /novels/ の場合: 直前が /search または /ranking であれば探索元としてセット
-    // ※ただし、/settings から /novels/ への復帰時は novelOrigin を上書きしない
+    // ※ただし、/settings から /novels/ への復帰時や明示的に origin が設定済みの場合は上書きしない
     if (to.startsWith("/novels/")) {
-      if (!current.startsWith("/novels/") && current !== "/settings") {
+      if (
+        !novelOriginRef.current &&
+        !current.startsWith("/novels/") &&
+        current !== "/settings"
+      ) {
         novelOriginRef.current = current;
         setNovelOrigin(current);
       }
@@ -413,15 +423,14 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
       }
       const targetPath = `/browser?${params.toString()}`;
 
-      if (options?.originPath) {
-        browserOriginRef.current = options.originPath;
-        setBrowserOrigin(options.originPath);
-      } else if (!currentPathRef.current.startsWith("/browser")) {
-        browserOriginRef.current = currentPathRef.current;
-        setBrowserOrigin(currentPathRef.current);
-      }
-
       if (options?.replace) {
+        if (options?.originPath) {
+          browserOriginRef.current = options.originPath;
+          setBrowserOrigin(options.originPath);
+        } else if (!currentPathRef.current.startsWith("/browser")) {
+          browserOriginRef.current = currentPathRef.current;
+          setBrowserOrigin(currentPathRef.current);
+        }
         window.history.replaceState(null, "", targetPath);
         currentPathRef.current = targetPath;
         setCurrentPath((prev) => {

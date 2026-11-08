@@ -9,6 +9,7 @@ import {
   matchRoute,
   safeDecodeURIComponent,
   resolveInitialPath,
+  type RouterContextValue,
 } from "./router";
 
 const {
@@ -236,6 +237,15 @@ describe("router", () => {
         name: "browser",
         path: "/browser",
         url: "",
+      });
+    });
+
+    it("内蔵ブラウザパスで末尾スラッシュとクエリがある場合も正しくマッチすること", () => {
+      const result = matchRoute("/browser/?url=https%3A%2F%2Fexample.com");
+      expect(result).toEqual({
+        name: "browser",
+        path: "/browser/?url=https%3A%2F%2Fexample.com",
+        url: "https://example.com",
       });
     });
 
@@ -542,6 +552,218 @@ describe("router", () => {
       expect(screen.getByTestId("browser-origin-display")).toHaveTextContent(
         "/novels/sample-work",
       );
+    });
+
+    it("navigateToBrowser で originPath を指定した場合、クエリパラメータおよび browserOrigin に反映されること", () => {
+      const routerRef: { current: RouterContextValue | null } = {
+        current: null,
+      };
+      const RouterCapture: React.FC = () => {
+        routerRef.current = useRouter();
+        return null;
+      };
+
+      render(
+        <RouterProvider initialPath="/novels/sample-work">
+          <RouterCapture />
+        </RouterProvider>,
+      );
+
+      act(() => {
+        routerRef.current?.navigateToBrowser("https://example.com/work", {
+          originPath: "/custom-origin",
+        });
+      });
+
+      expect(routerRef.current?.currentPath).toBe(
+        "/browser?url=https%3A%2F%2Fexample.com%2Fwork&originPath=%2Fcustom-origin",
+      );
+      expect(routerRef.current?.browserOrigin).toBe("/custom-origin");
+      expect(routerRef.current?.route.name).toBe("browser");
+      if (routerRef.current?.route.name === "browser") {
+        expect(routerRef.current.route.originPath).toBe("/custom-origin");
+      }
+    });
+
+    it("navigateToBrowser で replace: true を指定した場合、history.replaceState が呼ばれること", () => {
+      const replaceSpy = vi.spyOn(window.history, "replaceState");
+      const routerRef: { current: RouterContextValue | null } = {
+        current: null,
+      };
+      const RouterCapture: React.FC = () => {
+        routerRef.current = useRouter();
+        return null;
+      };
+
+      render(
+        <RouterProvider initialPath="/novels/sample-work">
+          <RouterCapture />
+        </RouterProvider>,
+      );
+
+      act(() => {
+        routerRef.current?.navigateToBrowser("https://example.com/work", {
+          replace: true,
+        });
+      });
+
+      expect(replaceSpy).toHaveBeenCalledWith(
+        null,
+        "",
+        "/browser?url=https%3A%2F%2Fexample.com%2Fwork",
+      );
+      expect(routerRef.current?.currentPath).toBe(
+        "/browser?url=https%3A%2F%2Fexample.com%2Fwork",
+      );
+      expect(routerRef.current?.previousPath).toBe("/novels/sample-work");
+    });
+
+    it("すでに /browser にいる状態で navigateToBrowser を呼んだ場合、既存の browserOrigin が上書きされないこと", () => {
+      const routerRef: { current: RouterContextValue | null } = {
+        current: null,
+      };
+      const RouterCapture: React.FC = () => {
+        routerRef.current = useRouter();
+        return null;
+      };
+
+      render(
+        <RouterProvider initialPath="/novels/initial-origin">
+          <RouterCapture />
+        </RouterProvider>,
+      );
+
+      act(() => {
+        routerRef.current?.navigateToBrowser("https://example.com/page1");
+      });
+      expect(routerRef.current?.browserOrigin).toBe("/novels/initial-origin");
+
+      act(() => {
+        routerRef.current?.navigateToBrowser("https://example.com/page2");
+      });
+      expect(routerRef.current?.browserOrigin).toBe("/novels/initial-origin");
+    });
+
+    it("navigateToBrowser を options なしで呼び出した場合、url のみのクエリで /browser へ遷移すること", () => {
+      const routerRef: { current: RouterContextValue | null } = {
+        current: null,
+      };
+      const RouterCapture: React.FC = () => {
+        routerRef.current = useRouter();
+        return null;
+      };
+
+      render(
+        <RouterProvider initialPath="/">
+          <RouterCapture />
+        </RouterProvider>,
+      );
+
+      act(() => {
+        routerRef.current?.navigateToBrowser("https://example.com/raw");
+      });
+
+      expect(routerRef.current?.currentPath).toBe(
+        "/browser?url=https%3A%2F%2Fexample.com%2Fraw",
+      );
+      expect(routerRef.current?.route).toEqual({
+        name: "browser",
+        path: "/browser?url=https%3A%2F%2Fexample.com%2Fraw",
+        url: "https://example.com/raw",
+      });
+    });
+
+    it("navigateToBrowser で replace: true と originPath を同時に指定した場合、browserOrigin が更新されて replaceState が呼ばれること", () => {
+      const replaceSpy = vi.spyOn(window.history, "replaceState");
+      const routerRef: { current: RouterContextValue | null } = {
+        current: null,
+      };
+      const RouterCapture: React.FC = () => {
+        routerRef.current = useRouter();
+        return null;
+      };
+
+      render(
+        <RouterProvider initialPath="/novels/sample-work">
+          <RouterCapture />
+        </RouterProvider>,
+      );
+
+      act(() => {
+        routerRef.current?.navigateToBrowser("https://example.com/work", {
+          replace: true,
+          originPath: "/replace-origin",
+        });
+      });
+
+      expect(replaceSpy).toHaveBeenCalledWith(
+        null,
+        "",
+        "/browser?url=https%3A%2F%2Fexample.com%2Fwork&originPath=%2Freplace-origin",
+      );
+      expect(routerRef.current?.browserOrigin).toBe("/replace-origin");
+    });
+
+    it("navigate でクエリなしの /browser へ遷移した場合、browserOrigin が記録され searchStr は空文字として処理されること", () => {
+      const routerRef: { current: RouterContextValue | null } = {
+        current: null,
+      };
+      const RouterCapture: React.FC = () => {
+        routerRef.current = useRouter();
+        return null;
+      };
+
+      render(
+        <RouterProvider initialPath="/novels/origin-test">
+          <RouterCapture />
+        </RouterProvider>,
+      );
+
+      act(() => {
+        routerRef.current?.navigate("/browser");
+      });
+
+      expect(routerRef.current?.currentPath).toBe("/browser");
+      expect(routerRef.current?.browserOrigin).toBe("/novels/origin-test");
+    });
+
+    it("navigateToNovelDetail で origin を直接指定した場合に novelOrigin に反映されること", () => {
+      const routerRef: { current: RouterContextValue | null } = {
+        current: null,
+      };
+      const RouterCapture: React.FC = () => {
+        routerRef.current = useRouter();
+        return null;
+      };
+
+      render(
+        <RouterProvider initialPath="/">
+          <RouterCapture />
+        </RouterProvider>,
+      );
+
+      act(() => {
+        routerRef.current?.navigateToNovelDetail("custom-id", "/search");
+      });
+
+      expect(routerRef.current?.novelOrigin).toBe("/search");
+      expect(routerRef.current?.currentPath).toBe("/novels/custom-id");
+    });
+
+    it("popstate イベントで /search へ戻った際に novelOrigin がリセットされること", () => {
+      render(
+        <RouterProvider initialPath="/novels/sample">
+          <TestConsumer />
+        </RouterProvider>,
+      );
+
+      act(() => {
+        window.history.pushState(null, "", "/search");
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      });
+
+      expect(screen.getByTestId("path-display")).toHaveTextContent("/search");
+      expect(screen.getByTestId("origin-display")).toHaveTextContent("null");
     });
 
     it("popstate イベント発火時にブラウザの pathname と同期すること", () => {
