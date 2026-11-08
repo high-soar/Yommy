@@ -882,9 +882,7 @@ describe("SqlNovelRepository", () => {
       // createdAt および updatedAt の更新 (R2-02)
       const targetCreatedAt = "2026-10-01T09:00:00.000Z";
       const targetUpdatedAt = "2026-11-05T18:00:00.000Z";
-      await (
-        repository as import("../types").NovelRepository
-      ).updateSyncMetadata?.(created.id, {
+      await repository.updateSyncMetadata?.(created.id, {
         createdAt: targetCreatedAt,
         updatedAt: targetUpdatedAt,
         isFavorite: true,
