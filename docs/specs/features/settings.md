@@ -2,7 +2,7 @@
 type: spec-feature
 title: "設定画面仕様書（SCR-05: Settings）"
 description: 小説リーダーの組版設定（縦書き/横書き、ページ送りモード、4カラーテーマ、文字サイズ、行間、フォント種別、画面余白、ハードウェア音量キー送り）の一括カスタマイズ・永続化、ルビ・傍点を含むサンプル文章プレビュー、Google Drive クラウド同期連携、ストレージ・本文キャッシュ管理、および下部タブ・OSバックキー連携を提供する設定画面（SCR-05）の正本仕様。
-status: "Review (#268)"
+status: "Approved (#268)"
 updated: "2026-11-08"
 tags:
   [
@@ -31,7 +31,7 @@ tags:
     ho-34,
   ]
 related_specs:
-  - docs/specs/changes/issue-268-persistent-download-queue.md
+  - docs/specs/changes/archive/issue-268-persistent-download-queue.md
   - docs/specs/changes/archive/issue-203-volume-key-paging.md
   - docs/specs/changes/archive/issue-202-reader-top-overlay-and-seekbar.md
   - docs/specs/changes/archive/issue-169-font-and-margin-customization.md

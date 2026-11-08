@@ -116,16 +116,160 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     await expect(cancelBtn).toBeVisible();
     await cancelBtn.click();
 
-    // 4. 進捗表示が消え、ボタンが「未取得話を一括キャッシュ」に戻ること
+    // 4. 進捗表示が消え、ボタンが「キャッシュを再開（残りN話）」に切り替わること (AC-ND-24)
     await expect(page.getByTestId("batch-cache-progress")).not.toBeVisible();
     await expect(batchButton).toBeVisible();
     await expect(batchButton).toBeEnabled();
+    await expect(batchButton).toHaveText(/キャッシュを再開（残り[1-4]話）/);
 
     // 排他ロックが解除されていること
     await expect(
       page.getByTestId("detail-read-first-button"),
     ).not.toBeDisabled();
     await expect(page.getByTestId("refresh-toc-button")).not.toBeDisabled();
+
+    // 5. 画面リロード後も download_queue の永続状態から「キャッシュを再開（残りN話）」が復元されること
+    await page.reload();
+    await page.waitForFunction(
+      () =>
+        typeof window.__yommyServices !== "undefined" &&
+        window.__yommyServices.isReady,
+    );
+    await expect(batchButton).toBeVisible();
+    await expect(batchButton).toBeEnabled();
+    await expect(batchButton).toHaveText(/キャッシュを再開（残り[1-4]話）/);
+
+    // 6. 「キャッシュを再開」をクリックして全件取得完了すること
+    await batchButton.click();
+    await expect(batchButton).toHaveText("全話キャッシュ済み", {
+      timeout: 20000,
+    });
+    await expect(batchButton).toBeDisabled();
+
+    // 7. download_queue が空にクリーンアップされていること
+    const queueLength = await page.evaluate(async () => {
+      const services = window.__yommyServices!;
+      const items = await services.queueRepository.listByNovelId(
+        "kakuyomu:16817330658027210412",
+      );
+      return items.length;
+    });
+    expect(queueLength).toBe(0);
+  });
+
+  test("一括キャッシュ中の特定話通信エラー時に後続話の取得を継続し、取得失敗バッジ・再試行ボタン表示を経て再試行で全話完了およびキューがクリーンアップされること (AC-ND-25, SYS-REQ-02, SYS-REQ-03, TR-18)", async ({
+    page,
+  }) => {
+    // 1. サンプル作品（全4話、未取得状態）をシード登録
+    await page.evaluate(async () => {
+      const services = window.__yommyServices!;
+      const sampleUrl = "https://kakuyomu.jp/works/16817330658027210412";
+      const response = await services.httpClient.getHtml({ url: sampleUrl });
+      const parser = services.parserRegistry.requireParser(sampleUrl);
+      const parsedIndex = parser.parseNovelIndex(response.html, sampleUrl);
+      await services.novelRepository.upsertNovelWithToc(
+        parsedIndex,
+        new Date().toISOString(),
+      );
+    });
+    await page.reload();
+    await page.waitForFunction(
+      () =>
+        typeof window.__yommyServices !== "undefined" &&
+        window.__yommyServices.isReady,
+    );
+
+    // 2. 作品詳細画面へ遷移
+    await page.getByTestId("novel-card-select").click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
+    );
+
+    // 遷移後のページで第2話のURLを HTTP 500 エラーに設定
+    await page.evaluate(async () => {
+      const services = window.__yommyServices!;
+      const chapters = await services.chapterRepository.listChaptersByNovelId(
+        "kakuyomu:16817330658027210412",
+      );
+      const ch2 = chapters.find((c) => c.chapterIndex === 2);
+      if (ch2) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (services.httpClient as any).setResponse(ch2.url, () => {
+          throw new Error("HTTP 500 Internal Server Error");
+        });
+      }
+    });
+
+    const batchButton = page.getByTestId("batch-cache-button");
+    await expect(batchButton).toBeVisible();
+    await expect(batchButton).toHaveText("未取得話を一括キャッシュ");
+    await batchButton.click();
+
+    // 3. 取得ループが完了し、ヘッダーにエラー通知が表示されるまで待機（後続話の取得がスキップ継続されるため）
+    const errorNotice = page.getByTestId("novel-detail-error");
+    await expect(errorNotice).toBeVisible({ timeout: 20000 });
+    await expect(errorNotice).toContainText(
+      "1話の取得に失敗しました（再試行可能）",
+    );
+
+    // 4. ボタンが「失敗した話を再試行（1話）」に切り替わっていること
+    await expect(batchButton).toBeVisible();
+    await expect(batchButton).toBeEnabled();
+    await expect(batchButton).toHaveText("失敗した話を再試行（1話）");
+
+    // 5. 第2話のエピソード行に「取得失敗」バッジが表示され、第1, 3, 4話は「取得済み」になっていること
+    const failedBadges = page.getByTestId("episode-failed-badge");
+    await expect(failedBadges).toHaveCount(1);
+
+    const ep2Item = page.locator('[data-chapter-index="2"]');
+    await expect(ep2Item.getByTestId("episode-failed-badge")).toBeVisible();
+    await expect(ep2Item.getByTestId("episode-failed-badge")).toHaveText(
+      "取得失敗",
+    );
+
+    const cachedBadges = page.getByTestId("episode-cached-badge");
+    await expect(cachedBadges).toHaveCount(3);
+
+    // 6. 第2話の通信エラーを解除（200 正常レスポンスを復元）
+    await page.evaluate(async () => {
+      const services = window.__yommyServices!;
+      const chapters = await services.chapterRepository.listChaptersByNovelId(
+        "kakuyomu:16817330658027210412",
+      );
+      const ch2 = chapters.find((c) => c.chapterIndex === 2);
+      if (ch2) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (services.httpClient as any).setResponse(ch2.url, {
+          status: 200,
+          url: ch2.url,
+          html: '<div class="widget-episodeBody"><p>第2話本文の再試行取得成功</p></div>',
+          headers: {},
+        });
+      }
+    });
+
+    // 7. 「失敗した話を再試行（1話）」をクリック
+    await batchButton.click();
+
+    // 8. 再試行が成功し、「全話キャッシュ済み」になること
+    await expect(batchButton).toHaveText("全話キャッシュ済み", {
+      timeout: 20000,
+    });
+    await expect(batchButton).toBeDisabled();
+
+    // 9. 全話（4話）が取得済みになり、失敗バッジが 0 件になること
+    await expect(cachedBadges).toHaveCount(4);
+    await expect(failedBadges).toHaveCount(0);
+
+    // 10. download_queue が空にクリーンアップされていること
+    const queueLength = await page.evaluate(async () => {
+      const services = window.__yommyServices!;
+      const items = await services.queueRepository.listByNovelId(
+        "kakuyomu:16817330658027210412",
+      );
+      return items.length;
+    });
+    expect(queueLength).toBe(0);
   });
 
   test("リーダー第1話表示後にバックグラウンドで後続5話が自動先読みされ（上限超は未取得）、第2話へ遷移した際に即時描画されること (HO-20, AC-RD-12, AC-RD-13, R1-18)", async ({
