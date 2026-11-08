@@ -2,8 +2,8 @@
 type: spec-feature
 title: "小説リーダー画面仕様書（SCR-03: Novel Reader）"
 description: "小説本文の全画面（100dvh）縦書き・横書き組版表示、ページめくり（タップ/Kindle様式スワイプ送り）と連続スクロール切替、ハードウェア音量キー操作連携、エピソード端シームレス遷移、上下連動オーバーレイ（ReaderTopOverlay: 作品名・サブタイトル1行固定省略・目次導線 / ReaderBottomOverlay: RTLページシークバー・前後話ナビ・下部タブ）、ルビ・傍点描画、4カラーテーマ・文字サイズ・行間設定の永続化、前後エピソード遷移、未キャッシュ話のオンデマンド取得、既読・しおり・進捗率の自動保存/復元、およびSCN-01統合シナリオの正本仕様。"
-status: "Approved"
-updated: "2026-11-07"
+status: "Review (#269)"
+updated: "2026-11-08"
 tags:
   - reader
   - scr-03
@@ -39,13 +39,19 @@ tags:
   - slide
   - volume-key
   - hardware-key
+  - webview-import
+  - fallback
+  - dom-import
   - ho-23
   - ho-25
   - ho-26
   - ho-27
   - ho-28
   - ho-30
+  - ho-35
 related_specs:
+  - docs/specs/changes/issue-269-webview-fallback-and-dom-import.md
+  - docs/specs/features/webview-import.md
   - docs/specs/parsers/narou.md
   - docs/specs/changes/archive/issue-239-narou-parser-and-multi-page-toc.md
   - docs/specs/changes/archive/issue-238-loading-ux-clarification.md
@@ -125,9 +131,10 @@ related_tests:
   - `TR-04`（作品詳細・目次画面 `SCR-02` のエピソード選択または読書開始ボタンから `SCR-03` への遷移）
   - `TR-05`（下部オーバーレイの「前の話へ」「次の話へ」操作、エピソード境界でのシームレス遷移［ラバーバンドドラッグ離上 / 端2段階タップ / 本文先頭・末尾ボタン / 2段階スクロール / 音量キー2段階操作］による同一作品の前後エピソード `chapterIndex ± 1` への遷移）
   - `TR-06`（OS バックキーまたは上部オーバーレイ「← 目次」ボタン押下、または下部オーバーレイの4タブ遷移によりスクロール進捗率を保存して `SCR-02` `/novels/:novelId`、または各タブへ遷移）
+  - `TR-10`（本文取得エラー画面内の「内蔵ブラウザで開いて取り込む」ボタン押下による `SCR-04` `/browser?url=...&novelId=...&chapterIndex=...` へのフォールバック遷移、`v0.9` Issue #269）
 - **対象外スコープ（後続 Milestone）**:
   - 3D カール等の過剰な描画エフェクト（2D 横スライドアニメーションを採用）
-  - 取得失敗時の内蔵 WebView フォールバック遷移 `TR-10`（Milestone `v0.9〜予定`：`SYS-REQ-13`）
+  - 汎用 Web ブラウザとしてのマルチタブ・ブックマーク管理（小説フォールバック表示・DOM インポートに特化）
 
 ---
 
@@ -391,6 +398,7 @@ src/features/reader/
 | `onScrollProgressChange` | `(progress: number) => void`   | 必須 | 本文スクロール／ページ進捗変化時                                                                                  |
 | `onSelectTab`            | `(tab: BottomTab) => void`     | 任意 | 下部タブ押下時                                                                                                    |
 | `onBackToToc`            | `() => void`                   | 任意 | 上部オーバーレイ「← 目次」ボタン押下時コールバック（`TR-06`、v0.6 Issue #202）                                    |
+| `onOpenWebView`          | `() => void`                   | 任意 | エラー画面内「内蔵ブラウザで開いて取り込む」押下時コールバック（`TR-10`、`v0.9` Issue #269）                      |
 | `initialOverlayOpen`     | `boolean`                      | 任意 | `false`（エラー/空状態時は `true`）                                                                               |
 | `initialSlideOffsetPx`   | `number`                       | 任意 | 初期スライド変位量（px、Storybook/VRT/テスト用）                                                                  |
 | `initialBoundaryHint`    | `string \| null`               | 任意 | 初期境界案内ヒントメッセージ（Storybook/VRT/テスト用）                                                            |
@@ -456,7 +464,7 @@ src/features/reader/
 - **自動非表示（Auto-Hide）**:
   - オーバーレイ表示中に「本文エリアのスクロール／ページ送り操作」「本文エリアの再タップ」「前後話への移動」が行われた場合は、自動的にオーバーレイを閉じる（※シークバー操作時は除く）。
 - **メイン表示領域の排他描画ルール**:
-  1. `error` が非 null の場合: エラー表示要素 `data-testid="reader-error"`（`role="alert"`）を描画し、**上下オーバーレイを最初から開いた状態とする**。
+  1. `error` が非 null の場合: エラー表示要素 `data-testid="reader-error"`（`role="alert"`）を描画し、**上下オーバーレイを最初から開いた状態とする**。また、エラー要素内に「内蔵ブラウザで開いて取り込む」ボタン（`data-testid="reader-open-webview-button"`）を配置し、タップ時に `onOpenWebView` を呼び出して内蔵ブラウザ画面（`SCR-04`: `/browser?url=...&novelId=...&chapterIndex=...`）へフォールバック遷移（`TR-10`）できること。
   2. `error === null` かつ `isLoading === true` かつ表示可能な本文（`chapter?.bodyHtml`）が未取得の場合: ローディング表示要素 `data-testid="reader-loading"` を描画する。
   3. `error === null` かつ `isLoading === false` かつ（`novel === null` または `chapter === null` または `chapter.bodyHtml === null`）の場合: 空状態要素 `data-testid="reader-empty"` を描画し、**上下オーバーレイを最初から開いた状態とする**。
   4. 上記以外（`novel !== null` かつ `chapter?.bodyHtml` が存在する場合）: 全画面 `ReaderView` を描画し、オーバーレイは初期非表示（画面中央タップまたは最下部タッチで開閉可能）とする。
@@ -637,10 +645,11 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
 | **`AC-RD-26`** | 音量キーによるページ送り・スクロール送り連携（v0.6 Issue #203）                          | `enableVolumeKeyPaging === true` のとき、リーダー画面（`SCR-03`）で音量［ー］（Volume Down）押下により次ページ（または約85%順方向スクロール）、音量［＋］（Volume Up）押下により前ページ（または約85%逆方向スクロール）へ移動すること。縦書きページめくり時は2段階水平スライドアニメーションが適用されること。設定が OFF のときは音量キー操作でページ送り・スクロールが行われないこと。                                                                                                                                                                                                                                                                                                                                                                                                                 | `SYS-REQ-11` / `SCR-03`                                            |
 | **`AC-RD-27`** | 音量キー操作におけるエピソード端2段階遷移およびオーバーレイ自動非表示（v0.6 Issue #203） | 最終ページ（またはスクロール末尾）で音量［ー］を押した際、1回目で案内ヒント（`reader-episode-boundary-hint`）が表示され、2.5秒以内の2回目押下で次エピソードへ遷移すること（第1ページでの音量［＋］も同様）。また上下オーバーレイ展開中に音量キー操作を行った際、自動的にオーバーレイが閉じること。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `SYS-REQ-11` / `SCR-03`, `TR-05`                                   |
 | **`AC-RD-28`** | 未キャッシュ話遷移時のローディング明示（新規）                                           | 前後エピソード遷移において、対象エピソードがローカル未キャッシュ（`bodyHtml === null`）で Web アクセスが発生する際、直前のエピソード本文を画面上に残留させず `data-testid="reader-loading"` を明示的に表示すること。通信完了時に新エピソード本文へ切り替わり、通信失敗時は `reader-error` が表示されること。すでに本文がキャッシュ済みのエピソードへの遷移ではローディングスピナーを描画せず即座に表示を切り替えること（v0.7 Issue #238）。                                                                                                                                                                                                                                                                                                                                                             | `SYS-REQ-02, 11` / `TR-05`                                         |
+| **`AC-RD-29`** | 未キャッシュ話本文取得失敗時の内蔵ブラウザフォールバック導線（v0.9 Issue #269）          | 未キャッシュ話への遷移やリーダー読み込み時に本文取得エラーが発生した際、エラー表示要素（`data-testid="reader-error"`）内に「内蔵ブラウザで開いて取り込む」ボタン（`data-testid="reader-open-webview-button"`）が表示され、タップ時に該当話 URL と `novelId`, `chapterIndex` をパラメータとして内蔵ブラウザ画面（`SCR-04`: `/browser?url=...&novelId=...&chapterIndex=...`）へフォールバック遷移（`TR-10`）できること。                                                                                                                                                                                                                                                                                                                                                                                  | `SYS-REQ-13` / `TR-10`                                             |
 
 ---
 
-## 7. Playwright システム結合テストシナリオ仕様（`SCN-01` / `SCN-06`）
+## 7. Playwright システム結合テストシナリオ仕様（`SCN-01` / `SCN-06` / `SCN-07`）
 
 ### 7.1 `SCN-01` 結合シナリオ仕様（`test/it/scenarios/scn01-poc-vertical-reader.spec.ts`）
 
@@ -671,3 +680,13 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
   4. 第1話の最終ページで音量［ー］を1回押下すると境界ヒント（`reader-episode-boundary-hint`: `もう一度操作で次の話へ`）が表示され、2.5秒以内の2回目押下で第2話へ遷移すること、および第2話の第1ページで音量［＋］を2回押下すると第1話末尾ページへ戻ることを確認（`AC-RD-27`）。
   5. 設定画面で「連続スクロール」に切り替えてリーダー画面へ戻り、音量［ー］/［＋］で約85%スクロール移動すること、およびスクロール末尾到達後の音量［ー］2段階操作で第2話へ遷移することを確認（`AC-RD-26`, `AC-RD-27`）。
   6. 設定画面で「音量キーでページ送り」トグルを OFF に戻し、リーダー画面で音量キー操作を行ってもページ移動やスクロールが発生しないことを確認（`AC-RD-26`）。
+
+### 7.3 `SCN-07` 結合シナリオ仕様（`test/it/scenarios/scn07-webview-import-fallback.spec.ts`）
+
+- **シナリオ ID**: `SCN-07`
+- **目的**: 未キャッシュ話への遷移時やリーダー読み込み時に本文通信エラーが発生した際、エラー表示画面（`reader-error`）内の「内蔵ブラウザで開いて取り込む」ボタン（`reader-open-webview-button`, `TR-10`）から内蔵ブラウザ画面（`SCR-04`）へフォールバック遷移し、DOM インポート完了後にリーダー画面（`SCR-03`）へ直接復帰（`TR-11`）して縦書き本文・ルビが即座に描画され読書を再開できることを検証する（`AC-RD-29`, `AC-WV-06`）。
+- **検証ステップ**:
+  1. リーダー画面で未キャッシュエピソードを開き、HTTP 取得エラー（403/500/ネットワーク切断）を発生させて `reader-error` および「内蔵ブラウザで開いて取り込む」ボタンが表示されることを確認。
+  2. ボタンを押下して `SCR-04: /browser?url=...&novelId=...&chapterIndex=...` へ遷移（`TR-10`）することを確認。
+  3. 内蔵ブラウザ画面で DOM インポートを実行し、本文保存完了後に自動で `SCR-03: /novels/:novelId/chapters/:chapterIndex` へ遷移（`TR-11`）することを確認。
+  4. ローディングスピナーを経て保存された本文が縦書きで描画され、読書が再開できることを確認。

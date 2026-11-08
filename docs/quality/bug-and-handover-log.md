@@ -108,11 +108,12 @@ related_tests: []
 > - Milestone `v0.7` で解決済みの申し送り（`HO-29`, `HO-30`）: [docs/quality/archive/v0.7-narou-site-support-and-loading-ux-log.md](archive/v0.7-narou-site-support-and-loading-ux-log.md)
 > - Milestone `v0.8` で解決済みの申し送り（`HO-31`〜`HO-33`）: [docs/quality/archive/v0.8-discovery-filter-and-bookshelf-favorite-ux-log.md](archive/v0.8-discovery-filter-and-bookshelf-favorite-ux-log.md)
 
-現在、未解決（`Open`）の申し送り事項は **1 件（`HO-34`）** です。
+現在、未解決（`Open`）の申し送り事項は **2 件（`HO-34`, `HO-35`）** です。
 
 |   ID    | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                                                                                                                                                                                                                                                   | 解決先（対象 Issue / 成果物）                             | 完了ゲート              | 状態 (`Open` / `Resolved`) |
 | :-----: | :---------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------- | :---------------------- | :------------------------: |
 | `HO-34` |      `#268`       | Android 実機（`@capacitor-community/sqlite` ＋ `CapacitorHttp`）における永続ダウンロードキュー（`download_queue`）を用いた未取得話一括キャッシュ、中断・画面離脱・アプリ再起動後の再開（`キャッシュを再開（残りN話）`）、通信エラー発生時のスキップ継続と `取得失敗` バッジ・再試行（`失敗した話を再試行（N話）`）、および本文キャッシュ削除時のキュー整理の実機確認 | Milestone `v0.9` 完了承認 Issue #270（Step 2-2 実機検証） | `Milestone v0.9 完了前` |           `Open`           |
+| `HO-35` |      `#269`       | Android 実機（`android.webkit.WebView` ＋ `evaluateJavascript` ＋ `WebViewDomPlugin.java`）における全画面内蔵ブラウザダイアログの表示、Web ページ閲覧・Cloudflare/ログイン操作、DOM キャプチャ取り込み（作品目次 vs 各話本文の自動判別・DB保存）、および作品詳細（`TR-09`）・リーダー（`TR-10`）・完了後遷移（`TR-11`）・OS バックキー論理復帰の実機確認             | Milestone `v0.9` 完了承認 Issue #270（Step 2-2 実機検証） | `Milestone v0.9 完了前` |           `Open`           |
 
 ---
 
