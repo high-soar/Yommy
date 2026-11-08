@@ -353,38 +353,39 @@ src/features/novel-detail/
 
 #### プロパティ契約（`NovelDetailPageProps`）
 
-| プロパティ名              | 型                                                                    | 必須 | 説明                                               |
-| :------------------------ | :-------------------------------------------------------------------- | :--- | :------------------------------------------------- |
-| `novel`                   | `NovelRecord \| null`                                                 | 必須 | 作品レコード（未取得・存在しない場合は `null`）    |
-| `chapters`                | `ChapterSummary[]`                                                    | 必須 | エピソード目次一覧                                 |
-| `isLoading`               | `boolean`                                                             | 必須 | 初回データ読み込み中フラグ                         |
-| `isRefreshing`            | `boolean`                                                             | 必須 | 目次再取得（更新）通信中フラグ                     |
-| `isBatchCaching`          | `boolean`                                                             | 必須 | 未取得話一括キャッシュ実行中フラグ (`v0.3`)        |
-| `batchCacheProgress`      | `{ current: number; total: number } \| null`                          | 必須 | 一括キャッシュ進行状況 (`v0.3`)                    |
-| `isAllCached`             | `boolean`                                                             | 必須 | 全話キャッシュ済み判定フラグ (`v0.3`)              |
-| `pendingCacheCount`       | `number`                                                              | 任意 | キュー内の未完了 `'pending'` 話数 (`v0.9`)         |
-| `failedCacheCount`        | `number`                                                              | 任意 | キュー内の取得失敗 `'failed'` 話数 (`v0.9`)        |
-| `failedChapterIndexes`    | `number[]`                                                            | 任意 | 取得失敗状態の `chapterIndex` 配列 (`v0.9`)        |
-| `isDeleteDialogOpen`      | `boolean`                                                             | 必須 | 作品削除確認ダイアログの開閉状態                   |
-| `isDeleting`              | `boolean`                                                             | 必須 | 作品削除実行中フラグ                               |
-| `isClearCacheDialogOpen`  | `boolean`                                                             | 任意 | 本文キャッシュ削除ダイアログ開閉 (`v0.5`)          |
-| `isClearingCache`         | `boolean`                                                             | 任意 | 本文キャッシュ削除実行中フラグ (`v0.5`)            |
-| `refreshMessage`          | `string \| null`                                                      | 任意 | 目次再取得・一括キャッシュ完了時の通知文字列       |
-| `error`                   | `string \| null`                                                      | 任意 | エラーメッセージ文字列                             |
-| `onBackToBookshelf`       | `() => void`                                                          | 必須 | 「本棚へ戻る」押下時（未検出エラー画面での復帰用） |
-| `onStartFromBeginning`    | `() => void`                                                          | 必須 | 「最初から読む（第1話）」押下時（`TR-04`）         |
-| `onResumeBookmark`        | `(chapterIndex: number) => void`                                      | 必須 | 「続きから読む（第N話）」押下時（`TR-04`）         |
-| `onSelectEpisode`         | `(chapterIndex: number) => void`                                      | 必須 | 個別エピソード行タップ時（`TR-04`）                |
-| `onRefreshToc`            | () => void \| Promise<void>                                           | 必須 | 「目次を更新」押下時                               |
-| `onStartBatchCache`       | () => void \| Promise<void>                                           | 必須 | 「未取得話を一括キャッシュ」押下時 (`v0.3`)        |
-| `onCancelBatchCache`      | `() => void`                                                          | 必須 | 一括キャッシュ「中断」押下時 (`v0.3`)              |
-| `onOpenDeleteDialog`      | `() => void`                                                          | 必須 | 「作品を削除」押下時                               |
-| `onCloseDeleteDialog`     | `() => void`                                                          | 必須 | 削除確認ダイアログのキャンセル時                   |
-| `onConfirmDelete`         | () => void \| Promise<void>                                           | 必須 | 削除確認ダイアログの「削除する」確定時（`TR-07`）  |
-| `onOpenClearCacheDialog`  | `() => void`                                                          | 任意 | 「本文キャッシュ整理」押下時 (`v0.5`)              |
-| `onCloseClearCacheDialog` | `() => void`                                                          | 任意 | キャッシュ削除ダイアログキャンセル時 (`v0.5`)      |
-| `onConfirmClearCache`     | `(options: { onlyRead: boolean }) => void \| Promise<void \| number>` | 任意 | キャッシュ削除確定時 (`v0.5`)                      |
-| `onToggleFavorite`        | `() => void \| Promise<void>`                                         | 任意 | お気に入り（★）トグル押下時 (`v0.8` Issue #266)    |
+| プロパティ名              | 型                                                                    | 必須 | 説明                                                                                        |
+| :------------------------ | :-------------------------------------------------------------------- | :--- | :------------------------------------------------------------------------------------------ |
+| `novel`                   | `NovelRecord \| null`                                                 | 必須 | 作品レコード（未取得・存在しない場合は `null`）                                             |
+| `chapters`                | `ChapterSummary[]`                                                    | 必須 | エピソード目次一覧                                                                          |
+| `isLoading`               | `boolean`                                                             | 必須 | 初回データ読み込み中フラグ                                                                  |
+| `isRefreshing`            | `boolean`                                                             | 必須 | 目次再取得（更新）通信中フラグ                                                              |
+| `isBatchCaching`          | `boolean`                                                             | 必須 | 未取得話一括キャッシュ実行中フラグ (`v0.3`)                                                 |
+| `batchCacheProgress`      | `{ current: number; total: number } \| null`                          | 必須 | 一括キャッシュ進行状況 (`v0.3`)                                                             |
+| `isAllCached`             | `boolean`                                                             | 必須 | 全話キャッシュ済み判定フラグ (`v0.3`)                                                       |
+| `pendingCacheCount`       | `number`                                                              | 任意 | キュー内の未完了 `'pending'` 話数 (`v0.9`)                                                  |
+| `failedCacheCount`        | `number`                                                              | 任意 | キュー内の取得失敗 `'failed'` 話数 (`v0.9`)                                                 |
+| `failedChapterIndexes`    | `number[]`                                                            | 任意 | 取得失敗状態の `chapterIndex` 配列 (`v0.9`)                                                 |
+| `isDeleteDialogOpen`      | `boolean`                                                             | 必須 | 作品削除確認ダイアログの開閉状態                                                            |
+| `isDeleting`              | `boolean`                                                             | 必須 | 作品削除実行中フラグ                                                                        |
+| `isClearCacheDialogOpen`  | `boolean`                                                             | 任意 | 本文キャッシュ削除ダイアログ開閉 (`v0.5`)                                                   |
+| `isClearingCache`         | `boolean`                                                             | 任意 | 本文キャッシュ削除実行中フラグ (`v0.5`)                                                     |
+| `refreshMessage`          | `string \| null`                                                      | 任意 | 目次再取得・一括キャッシュ完了時の通知文字列                                                |
+| `error`                   | `string \| null`                                                      | 任意 | エラーメッセージ文字列                                                                      |
+| `onBackToBookshelf`       | `() => void`                                                          | 必須 | 「本棚へ戻る」押下時（未検出エラー画面での復帰用）                                          |
+| `onStartFromBeginning`    | `() => void`                                                          | 必須 | 「最初から読む（第1話）」押下時（`TR-04`）                                                  |
+| `onResumeBookmark`        | `(chapterIndex: number) => void`                                      | 必須 | 「続きから読む（第N話）」押下時（`TR-04`）                                                  |
+| `onSelectEpisode`         | `(chapterIndex: number) => void`                                      | 必須 | 個別エピソード行タップ時（`TR-04`）                                                         |
+| `onRefreshToc`            | () => void \| Promise<void>                                           | 必須 | 「目次を更新」押下時                                                                        |
+| `onStartBatchCache`       | () => void \| Promise<void>                                           | 必須 | 「未取得話を一括キャッシュ」押下時 (`v0.3`)                                                 |
+| `onCancelBatchCache`      | `() => void`                                                          | 必須 | 一括キャッシュ「中断」押下時 (`v0.3`)                                                       |
+| `onOpenDeleteDialog`      | `() => void`                                                          | 必須 | 「作品を削除」押下時                                                                        |
+| `onCloseDeleteDialog`     | `() => void`                                                          | 必須 | 削除確認ダイアログのキャンセル時                                                            |
+| `onConfirmDelete`         | () => void \| Promise<void>                                           | 必須 | 削除確認ダイアログの「削除する」確定時（`TR-07`）                                           |
+| `onOpenClearCacheDialog`  | `() => void`                                                          | 任意 | 「本文キャッシュ整理」押下時 (`v0.5`)                                                       |
+| `onCloseClearCacheDialog` | `() => void`                                                          | 任意 | キャッシュ削除ダイアログキャンセル時 (`v0.5`)                                               |
+| `onConfirmClearCache`     | `(options: { onlyRead: boolean }) => void \| Promise<void \| number>` | 任意 | キャッシュ削除確定時 (`v0.5`)                                                               |
+| `onToggleFavorite`        | `() => void \| Promise<void>`                                         | 任意 | お気に入り（★）トグル押下時 (`v0.8` Issue #266)                                             |
+| `onOpenWebView`           | `(url: string) => void`                                               | 任意 | 内蔵ブラウザ画面（SCR-04）へフォールバック遷移（TR-09）するコールバック (`v0.9` Issue #269) |
 
 #### セマンティック属性とレイアウト・排他描画ルール
 
@@ -412,11 +413,12 @@ src/features/novel-detail/
 
 #### プロパティ契約（`NovelDetailContainerProps`）
 
-| プロパティ名        | 型                                                | 必須 | 説明                                                                                             |
-| :------------------ | :------------------------------------------------ | :--- | :----------------------------------------------------------------------------------------------- |
-| `novelId`           | `string`                                          | 必須 | ルート `/novels/:novelId` から渡される対象作品 ID                                                |
-| `onBackToBookshelf` | `() => void`                                      | 任意 | 探索元（または本棚）へ戻る遷移コールバック（省略時は直前の探索元へ復帰、履歴なし時は本棚へ復帰） |
-| `onSelectEpisode`   | `(novelId: string, chapterIndex: number) => void` | 任意 | リーダー画面への遷移コールバック（省略時は `useRouter().navigateToReader` を使用）               |
+| プロパティ名        | 型                                                | 必須 | 説明                                                                                                                   |
+| :------------------ | :------------------------------------------------ | :--- | :--------------------------------------------------------------------------------------------------------------------- |
+| `novelId`           | `string`                                          | 必須 | ルート `/novels/:novelId` から渡される対象作品 ID                                                                      |
+| `onBackToBookshelf` | `() => void`                                      | 任意 | 探索元（または本棚）へ戻る遷移コールバック（省略時は直前の探索元へ復帰、履歴なし時は本棚へ復帰）                       |
+| `onSelectEpisode`   | `(novelId: string, chapterIndex: number) => void` | 任意 | リーダー画面への遷移コールバック（省略時は `useRouter().navigateToReader` を使用）                                     |
+| `onOpenWebView`     | `(url: string) => void`                           | 任意 | 内蔵ブラウザ画面への遷移コールバック（省略時は `useRouter().navigateToBrowser(url)` を使用、TR-09、`v0.9` Issue #269） |
 
 ---
 

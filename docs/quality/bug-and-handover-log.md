@@ -4,8 +4,10 @@ title: 品質記録・バグ記録票 ＆ 申し送り管理シート（Bug & Ha
 description: 製品コードと支援成果物を分離したバグ記録（原因5分類 L/S/D/B/A）および後続タスクへの申し送り事項（HO-xx）を追跡する正本シート。
 status: "Approved"
 updated: "2026-11-08"
-tags: [quality, bug-log, handover, dre, kaizen, ho-34]
+tags: [quality, bug-log, handover, dre, kaizen, ho-34, ho-35]
 related_specs:
+  - docs/specs/changes/issue-269-webview-fallback-and-dom-import.md
+  - docs/specs/features/webview-import.md
   - docs/specs/changes/archive/issue-268-persistent-download-queue.md
   - docs/quality/archive/v0.8-discovery-filter-and-bookshelf-favorite-ux-log.md
   - docs/quality/reports/v0.8-discovery-filter-and-bookshelf-favorite-ux.md

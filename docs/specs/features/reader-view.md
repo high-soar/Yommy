@@ -477,16 +477,17 @@ src/features/reader/
 
 #### プロパティ契約（`ReaderContainerProps`）
 
-| プロパティ名         | 型                                                | 必須 | 説明                                                                                                          |
-| :------------------- | :------------------------------------------------ | :--- | :------------------------------------------------------------------------------------------------------------ |
-| `novelId`            | `string`                                          | 任意 | ルート `/novels/:novelId/chapters/:chapterIndex` から渡される対象作品 ID                                      |
-| `chapterIndex`       | `number`                                          | 任意 | ルートから渡される対象エピソード連番（1始まり、省略時は `1`）                                                 |
-| `initialWorkUrl`     | `string`                                          | 任意 | 単体検証・手動取得時の対象作品 URL（既定値: 検証用カクヨム作品 URL）                                          |
-| `activeTab`          | `BottomTab`                                       | 任意 | リーダー画面のアクティブタブ（省略時: `"bookshelf"`）                                                         |
-| `onBackToBookshelf`  | `() => void`                                      | 任意 | 「本棚へ戻る」（`/`）コールバック（省略時はルーター環境下で `navigateToBookshelf` を使用）                    |
-| `onNavigateSettings` | `() => void`                                      | 任意 | 「設定へ」（`/settings`）コールバック（省略時はルーター環境下で `navigateToSettings`）                        |
-| `onNavigateChapter`  | `(novelId: string, chapterIndex: number) => void` | 任意 | 前後話遷移コールバック（省略時はルーター環境下で `navigateToReader` を使用し、内部話数も同期）                |
-| `onBackToToc`        | `() => void`                                      | 任意 | 「← 目次」押下時のコールバック（省略時は `flushBookmark` 実行後に `navigateToNovelDetail` を呼び出す、TR-06） |
+| プロパティ名         | 型                                                | 必須 | 説明                                                                                                                             |
+| :------------------- | :------------------------------------------------ | :--- | :------------------------------------------------------------------------------------------------------------------------------- |
+| `novelId`            | `string`                                          | 任意 | ルート `/novels/:novelId/chapters/:chapterIndex` から渡される対象作品 ID                                                         |
+| `chapterIndex`       | `number`                                          | 任意 | ルートから渡される対象エピソード連番（1始まり、省略時は `1`）                                                                    |
+| `initialWorkUrl`     | `string`                                          | 任意 | 単体検証・手動取得時の対象作品 URL（既定値: 検証用カクヨム作品 URL）                                                             |
+| `activeTab`          | `BottomTab`                                       | 任意 | リーダー画面のアクティブタブ（省略時: `"bookshelf"`）                                                                            |
+| `onBackToBookshelf`  | `() => void`                                      | 任意 | 「本棚へ戻る」（`/`）コールバック（省略時はルーター環境下で `navigateToBookshelf` を使用）                                       |
+| `onNavigateSettings` | `() => void`                                      | 任意 | 「設定へ」（`/settings`）コールバック（省略時はルーター環境下で `navigateToSettings`）                                           |
+| `onNavigateChapter`  | `(novelId: string, chapterIndex: number) => void` | 任意 | 前後話遷移コールバック（省略時はルーター環境下で `navigateToReader` を使用し、内部話数も同期）                                   |
+| `onBackToToc`        | `() => void`                                      | 任意 | 「← 目次」押下時のコールバック（省略時は `flushBookmark` 実行後に `navigateToNovelDetail` を呼び出す、TR-06）                    |
+| `onOpenWebView`      | `(url: string) => void`                           | 任意 | エラー画面等からの内蔵ブラウザ遷移コールバック（省略時は `useRouter().navigateToBrowser(url)` を使用、TR-10、`v0.9` Issue #269） |
 
 ---
 
