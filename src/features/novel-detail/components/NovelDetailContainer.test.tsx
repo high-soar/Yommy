@@ -22,8 +22,15 @@ import type { HttpClientBridge } from "../../../bridges/http/types";
 import type { ParserRegistry } from "../../../parsers/parserRegistry";
 import type { NovelParser } from "../../../parsers/types";
 
-const { Default, WithBookmark, Loading, NotFound, WithCustomCallbacks } =
-  composeStories(stories);
+const {
+  Default,
+  WithBookmark,
+  Loading,
+  NotFound,
+  WithCustomCallbacks,
+  ResumePending,
+  RetryFailed,
+} = composeStories(stories);
 
 const sampleNovel: NovelRecord = {
   id: "kakuyomu:16817330658027210412",
@@ -288,6 +295,28 @@ describe("NovelDetailContainer", () => {
       await waitFor(() => {
         expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
       });
+    });
+
+    it("ResumePending ストーリーで「キャッシュを再開」ボタンが表示されること (AC-ND-24)", async () => {
+      render(<ResumePending />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("batch-cache-button")).toBeInTheDocument();
+      });
+      expect(screen.getByTestId("batch-cache-button")).toHaveTextContent(
+        "キャッシュを再開（残り2話）",
+      );
+    });
+
+    it("RetryFailed ストーリーで「失敗した話を再試行」ボタンが表示されること (AC-ND-25)", async () => {
+      render(<RetryFailed />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("batch-cache-button")).toBeInTheDocument();
+      });
+      expect(screen.getByTestId("batch-cache-button")).toHaveTextContent(
+        "失敗した話を再試行（1話）",
+      );
     });
   });
 
@@ -947,6 +976,80 @@ describe("NovelDetailContainer", () => {
       });
 
       expect(setFavoriteMock).toHaveBeenCalledWith(sampleNovel.id, true);
+
+      pageSpy.mockRestore();
+    });
+
+    it("useNovelDetail から得た pendingCacheCount, failedCacheCount, failedChapterIndexes が NovelDetailPage に伝達されること (AC-ND-24, AC-ND-25)", async () => {
+      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+
+      const db = await resetTestDb();
+      const { SqlNovelRepository } =
+        await import("../../../storage/repositories/novelRepository");
+      const { SqlChapterRepository } =
+        await import("../../../storage/repositories/chapterRepository");
+      const { SqlQueueRepository } =
+        await import("../../../storage/repositories/queueRepository");
+
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const queueRepo = new SqlQueueRepository(db);
+
+      const seeded = await novelRepo.upsertNovelWithToc(
+        {
+          siteType: "kakuyomu",
+          remoteWorkId: sampleNovel.remoteWorkId,
+          canonicalUrl: sampleNovel.canonicalUrl,
+          title: sampleNovel.title,
+          author: sampleNovel.author,
+          synopsis: sampleNovel.synopsis,
+          chapters: sampleChapters.map((c) => ({
+            chapterIndex: c.chapterIndex,
+            remoteChapterId: c.remoteChapterId,
+            partTitle: c.partTitle,
+            title: c.title,
+            url: c.url,
+            publishedAt: c.publishedAt,
+          })),
+          nextTocPageUrl: null,
+        },
+        "2026-10-25T10:00:00Z",
+      );
+
+      // キューに pending と failed を投入
+      await queueRepo.enqueueChapters(seeded.id, [
+        { chapterIndex: 2, targetUrl: sampleChapters[1].url },
+        { chapterIndex: 3, targetUrl: sampleChapters[2].url },
+      ]);
+      await queueRepo.updateStatus(seeded.id, 3, "failed", {
+        lastError: "通信タイムアウト",
+        incrementRetry: true,
+      });
+
+      render(
+        <ServiceProvider
+          services={{
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+            queueRepository: queueRepo,
+          }}
+        >
+          <RouterProvider initialPath={`/novels/${seeded.id}`}>
+            <NovelDetailContainer novelId={seeded.id} />
+          </RouterProvider>
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            pendingCacheCount: 1,
+            failedCacheCount: 1,
+            failedChapterIndexes: [3],
+          }),
+          undefined,
+        );
+      });
 
       pageSpy.mockRestore();
     });

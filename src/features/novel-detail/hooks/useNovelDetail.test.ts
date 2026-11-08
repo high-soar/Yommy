@@ -12,6 +12,7 @@ import {
 import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
 import { SqlNovelRepository } from "../../../storage/repositories/novelRepository";
 import { SqlChapterRepository } from "../../../storage/repositories/chapterRepository";
+import { SqlQueueRepository } from "../../../storage/repositories/queueRepository";
 import { MockHttpClient } from "../../../bridges/http/mockHttpClient";
 import type { HttpResponse } from "../../../bridges/http/types";
 import type { NovelRepository } from "../../../storage/types";
@@ -1383,24 +1384,54 @@ describe("useNovelDetail", () => {
       });
     });
 
-    describe("エラーハンドリングと排他制御 (AC-ND-11, AC-ND-12)", () => {
-      it("エピソード取得時にHTTPエラーが発生した場合、インラインエラーが設定され一括キャッシュが停止すること", async () => {
+    describe("エラーハンドリングと排他制御 (AC-ND-11, AC-ND-12, AC-ND-25)", () => {
+      it("特定エピソード取得時にHTTPエラーが発生した場合でもループを中断せず残りの話を取得し、失敗話が failed に記録されエラーメッセージが設定されること (AC-ND-25)", async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
         const db = await resetTestDb();
         const novelRepo = new SqlNovelRepository(db);
         const chapterRepo = new SqlChapterRepository(db);
-        const seeded = await seedSampleNovel(novelRepo, 2);
+        const queueRepo = new SqlQueueRepository(db);
+        const seeded = await seedSampleNovel(novelRepo, 3);
 
         const httpClient = new MockHttpClient();
-        httpClient.setResponse(/kakuyomu\.jp\/works\/.*\/episodes\/.*/, {
-          status: 500,
-          headers: {},
-          html: "Internal Server Error",
-        });
+        // 第1話は失敗（500）
+        httpClient.setResponse(
+          new RegExp(
+            `kakuyomu\\.jp/works/.*/episodes/${KAKUYOMU_EPISODE_IDS[0]}`,
+          ),
+          {
+            status: 500,
+            headers: {},
+            html: "Internal Server Error",
+          },
+        );
+        // 第2話・第3話は成功
+        httpClient.setResponse(
+          new RegExp(
+            `kakuyomu\\.jp/works/.*/episodes/${KAKUYOMU_EPISODE_IDS[1]}`,
+          ),
+          {
+            status: 200,
+            headers: {},
+            html: episodeContentHtml,
+          },
+        );
+        httpClient.setResponse(
+          new RegExp(
+            `kakuyomu\\.jp/works/.*/episodes/${KAKUYOMU_EPISODE_IDS[2]}`,
+          ),
+          {
+            status: 200,
+            headers: {},
+            html: episodeContentHtml,
+          },
+        );
 
         const { result } = renderHook(() => useNovelDetail(seeded.id), {
           wrapper: createWrapper({
             novelRepository: novelRepo,
             chapterRepository: chapterRepo,
+            queueRepository: queueRepo,
             httpClient,
           }),
         });
@@ -1409,14 +1440,44 @@ describe("useNovelDetail", () => {
           expect(result.current.isLoading).toBe(false);
         });
 
+        let batchPromise: Promise<void>;
+        act(() => {
+          batchPromise = result.current.startBatchCache();
+        });
+
+        // 1話目失敗後、1.5秒進めて2話目・3話目へ
         await act(async () => {
-          await result.current.startBatchCache();
+          await vi.advanceTimersByTimeAsync(1600);
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1600);
+        });
+
+        await act(async () => {
+          await batchPromise;
         });
 
         expect(result.current.isBatchCaching).toBe(false);
-        expect(result.current.error).toContain(
-          "第1話の取得に失敗したためキャッシュを中断しました",
+        expect(result.current.error).toBe(
+          "1話の取得に失敗しました（再試行可能）",
         );
+        expect(result.current.failedCacheCount).toBe(1);
+        expect(result.current.pendingCacheCount).toBe(0);
+        expect(result.current.failedChapterIndexes).toEqual([1]);
+
+        // 第1話は未取得、第2話・第3話は取得済み
+        expect(result.current.chapters[0].downloadedAt).toBeNull();
+        expect(result.current.chapters[1].downloadedAt).not.toBeNull();
+        expect(result.current.chapters[2].downloadedAt).not.toBeNull();
+
+        // キューテーブルの確認: 第1話のみ failed で残存し、第2話・第3話の completed は削除されていること
+        const queueItems = await queueRepo.listByNovelId(seeded.id);
+        expect(queueItems).toHaveLength(1);
+        expect(queueItems[0].chapterIndex).toBe(1);
+        expect(queueItems[0].status).toBe("failed");
+        expect(queueItems[0].retryCount).toBe(1);
+
+        vi.useRealTimers();
       });
 
       it("一括キャッシュ実行中の startBatchCache 多重実行や refreshToc, confirmDeleteNovel が防止されること", async () => {
@@ -2054,6 +2115,342 @@ describe("useNovelDetail", () => {
 
       expect(res).toBe(false);
       expect(result.current.error).toBe("DB書き込みエラー");
+    });
+  });
+
+  describe("永続ダウンロードキュー統合・中断再開・失敗話再試行 (AC-ND-24, AC-ND-25)", () => {
+    const createDummyContent = (
+      index: number,
+      bodyHtml: string = "<p>本文</p>",
+      byteSize: number = 100,
+    ) => ({
+      remoteChapterId: KAKUYOMU_EPISODE_IDS[index - 1] ?? `ep-${index}`,
+      title: `第${index}話`,
+      bodyHtml,
+      byteSize,
+      prevChapterUrl: null,
+      nextChapterUrl: null,
+    });
+
+    it("初回ロード時に downloading 状態のレコードが pending にリセットされ、State に反映されること (AC-ND-24)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const queueRepo = new SqlQueueRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 3);
+
+      // 中断された downloading レコードを作成
+      await queueRepo.enqueueChapters(seeded.id, [
+        { chapterIndex: 2, targetUrl: "https://example.com/2" },
+      ]);
+      await queueRepo.updateStatus(seeded.id, 2, "downloading");
+
+      const { result } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          queueRepository: queueRepo,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // downloading が pending に戻り、pendingCacheCount = 1
+      expect(result.current.pendingCacheCount).toBe(1);
+      expect(result.current.failedCacheCount).toBe(0);
+      expect(result.current.failedChapterIndexes).toEqual([]);
+
+      const items = await queueRepo.listByNovelId(seeded.id);
+      expect(items[0].status).toBe("pending");
+    });
+
+    it("初回ロード時に既に有効キャッシュ済み（Fresh）の話または completed レコードがキューから自動除外されること (AC-ND-24)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const queueRepo = new SqlQueueRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 2);
+
+      // 第1話を有効キャッシュ済みとする
+      await chapterRepo.saveChapterBody(
+        seeded.id,
+        1,
+        createDummyContent(1, "<p>本文</p>", 100),
+        new Date().toISOString(),
+      );
+
+      // キューには第1話（completed）と第2話（failed）を登録
+      await queueRepo.enqueueChapters(seeded.id, [
+        { chapterIndex: 1, targetUrl: "https://example.com/1" },
+        { chapterIndex: 2, targetUrl: "https://example.com/2" },
+      ]);
+      await queueRepo.updateStatus(seeded.id, 1, "completed");
+      await queueRepo.updateStatus(seeded.id, 2, "failed", {
+        lastError: "エラー",
+      });
+
+      const { result } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          queueRepository: queueRepo,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // 第1話は除外され、第2話の failed のみ残る
+      expect(result.current.pendingCacheCount).toBe(0);
+      expect(result.current.failedCacheCount).toBe(1);
+      expect(result.current.failedChapterIndexes).toEqual([2]);
+
+      const items = await queueRepo.listByNovelId(seeded.id);
+      expect(items).toHaveLength(1);
+      expect(items[0].chapterIndex).toBe(2);
+    });
+
+    it("全話が有効キャッシュ済みの場合、キューが自動クリーンアップ（clearNovelQueue）されること (AC-ND-24)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const queueRepo = new SqlQueueRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 1);
+
+      await chapterRepo.saveChapterBody(
+        seeded.id,
+        1,
+        createDummyContent(1, "<p>本文</p>", 100),
+        new Date().toISOString(),
+      );
+
+      await queueRepo.enqueueChapters(seeded.id, [
+        { chapterIndex: 1, targetUrl: "https://example.com/1" },
+      ]);
+
+      const { result } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          queueRepository: queueRepo,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.isAllCached).toBe(true);
+      expect(result.current.pendingCacheCount).toBe(0);
+      expect(result.current.failedCacheCount).toBe(0);
+
+      const items = await queueRepo.listByNovelId(seeded.id);
+      expect(items).toHaveLength(0);
+    });
+
+    it("一括キャッシュ中断時に downloading が pending に戻り、再開時に残り話数を分母として進捗が進むこと (AC-ND-24)", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const queueRepo = new SqlQueueRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 3);
+
+      const httpClient = new MockHttpClient();
+      httpClient.setResponse(/kakuyomu\.jp\/works\/.*\/episodes\/.*/, {
+        status: 200,
+        headers: {},
+        html: episodeContentHtml,
+      });
+
+      const { result } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          queueRepository: queueRepo,
+          httpClient,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // 1回目: 開始
+      let batchPromise1: Promise<void>;
+      act(() => {
+        batchPromise1 = result.current.startBatchCache();
+      });
+
+      // 第1話取得完了直後に中断
+      await waitFor(() => {
+        expect(result.current.chapters[0].downloadedAt).not.toBeNull();
+      });
+
+      act(() => {
+        result.current.cancelBatchCache();
+      });
+
+      await act(async () => {
+        await batchPromise1;
+      });
+
+      expect(result.current.isBatchCaching).toBe(false);
+      // 残り2話が pending
+      expect(result.current.pendingCacheCount).toBe(2);
+
+      // 2回目: 再開（残り2話）
+      let batchPromise2: Promise<void>;
+      act(() => {
+        batchPromise2 = result.current.startBatchCache();
+      });
+
+      expect(result.current.isBatchCaching).toBe(true);
+      expect(result.current.batchCacheProgress?.total).toBe(2);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1600);
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1600);
+      });
+
+      await act(async () => {
+        await batchPromise2;
+      });
+
+      expect(result.current.isBatchCaching).toBe(false);
+      expect(result.current.isAllCached).toBe(true);
+      expect(result.current.pendingCacheCount).toBe(0);
+      expect(result.current.failedCacheCount).toBe(0);
+
+      const queueItems = await queueRepo.listByNovelId(seeded.id);
+      expect(queueItems).toHaveLength(0);
+
+      vi.useRealTimers();
+    });
+
+    it("失敗話が存在する状態で再試行（startBatchCache）を実行すると、pending にリセットされて再取得が成功しキューが全削除されること (AC-ND-25)", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const queueRepo = new SqlQueueRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 2);
+
+      // 第1話は取得済み
+      await chapterRepo.saveChapterBody(
+        seeded.id,
+        1,
+        createDummyContent(1, "<p>本文</p>", 100),
+        new Date().toISOString(),
+      );
+
+      // 第2話は失敗でキューに残っている
+      await queueRepo.enqueueChapters(seeded.id, [
+        { chapterIndex: 2, targetUrl: "https://example.com/2" },
+      ]);
+      await queueRepo.updateStatus(seeded.id, 2, "failed", {
+        lastError: "タイムアウト",
+        incrementRetry: true,
+      });
+
+      const httpClient = new MockHttpClient();
+      httpClient.setResponse(/kakuyomu\.jp\/works\/.*\/episodes\/.*/, {
+        status: 200,
+        headers: {},
+        html: episodeContentHtml,
+      });
+
+      const { result } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          queueRepository: queueRepo,
+          httpClient,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.failedCacheCount).toBe(1);
+      expect(result.current.failedChapterIndexes).toEqual([2]);
+
+      // 再試行
+      let batchPromise: Promise<void>;
+      act(() => {
+        batchPromise = result.current.startBatchCache();
+      });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1600);
+      });
+
+      await act(async () => {
+        await batchPromise;
+      });
+
+      expect(result.current.isBatchCaching).toBe(false);
+      expect(result.current.isAllCached).toBe(true);
+      expect(result.current.failedCacheCount).toBe(0);
+      expect(result.current.failedChapterIndexes).toEqual([]);
+
+      const items = await queueRepo.listByNovelId(seeded.id);
+      expect(items).toHaveLength(0);
+
+      vi.useRealTimers();
+    });
+
+    it("本文キャッシュ削除（confirmClearCache）実行後に download_queue の状態が再取得されて State に反映されること (AC-ND-22, AC-ND-24)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const queueRepo = new SqlQueueRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 2);
+
+      await chapterRepo.saveChapterBody(
+        seeded.id,
+        1,
+        createDummyContent(1, "<p>第1話本文</p>", 100),
+        new Date().toISOString(),
+      );
+
+      // 第2話は失敗でキューに残存
+      await queueRepo.enqueueChapters(seeded.id, [
+        { chapterIndex: 2, targetUrl: "https://example.com/2" },
+      ]);
+      await queueRepo.updateStatus(seeded.id, 2, "failed", {
+        lastError: "通信エラー",
+      });
+
+      const { result } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          queueRepository: queueRepo,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.failedCacheCount).toBe(1);
+
+      // 全キャッシュ削除を実行（ChapterRepository は deleteCachedBodies でキューも削除する）
+      await act(async () => {
+        await result.current.confirmClearCache({ onlyRead: false });
+      });
+
+      // キャッシュ削除後にキュー状態が再取得され、failedCacheCount = 0 になること
+      expect(result.current.failedCacheCount).toBe(0);
+      expect(result.current.failedChapterIndexes).toEqual([]);
+      expect(result.current.pendingCacheCount).toBe(0);
     });
   });
 });

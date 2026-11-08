@@ -11,6 +11,9 @@ export interface UseNovelDetailResult {
   isBatchCaching: boolean;
   batchCacheProgress: { current: number; total: number } | null;
   isAllCached: boolean;
+  pendingCacheCount: number;
+  failedCacheCount: number;
+  failedChapterIndexes: number[];
   isDeleteDialogOpen: boolean;
   isDeleting: boolean;
   isClearCacheDialogOpen: boolean;
@@ -39,6 +42,8 @@ export interface NovelDetailHeaderProps {
   isBatchCaching: boolean;
   batchCacheProgress: { current: number; total: number } | null;
   isAllCached: boolean;
+  pendingCacheCount?: number;
+  failedCacheCount?: number;
   refreshMessage?: string | null;
   error?: string | null;
   onStartFromBeginning: () => void;
@@ -57,6 +62,7 @@ export interface NovelDetailHeaderProps {
 export interface EpisodeListItemProps {
   chapter: ChapterSummary;
   isBookmarked: boolean;
+  isDownloadFailed?: boolean;
   onSelectEpisode: (chapterIndex: number) => void;
 }
 
@@ -66,6 +72,7 @@ export interface EpisodeListItemProps {
 export interface EpisodeListProps {
   chapters: ChapterSummary[];
   bookmarkChapterIndex: number | null;
+  failedChapterIndexes?: number[];
   onSelectEpisode: (chapterIndex: number) => void;
 }
 
@@ -102,6 +109,9 @@ export interface NovelDetailPageProps {
   isBatchCaching: boolean;
   batchCacheProgress: { current: number; total: number } | null;
   isAllCached: boolean;
+  pendingCacheCount?: number;
+  failedCacheCount?: number;
+  failedChapterIndexes?: number[];
   isDeleteDialogOpen: boolean;
   isDeleting: boolean;
   isClearCacheDialogOpen?: boolean;

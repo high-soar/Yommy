@@ -6,8 +6,14 @@ import * as stories from "./EpisodeListItem.stories";
 import { EpisodeListItem } from "./EpisodeListItem";
 import type { ChapterSummary } from "../../../storage/types";
 
-const { Uncached, Cached, ReadAndCached, Bookmarked, WithoutDate } =
-  composeStories(stories);
+const {
+  Uncached,
+  Cached,
+  DownloadFailed,
+  ReadAndCached,
+  Bookmarked,
+  WithoutDate,
+} = composeStories(stories);
 
 const baseChapter: ChapterSummary = {
   id: "chapter-1",
@@ -64,6 +70,19 @@ describe("EpisodeListItem", () => {
       ).not.toBeInTheDocument();
       expect(
         screen.queryByTestId("episode-bookmark-badge"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("DownloadFailed ストーリーで取得失敗バッジが表示され、取得済み・未取得バッジは非表示であること (AC-ND-25)", () => {
+      render(<DownloadFailed />);
+      const failedBadge = screen.getByTestId("episode-failed-badge");
+      expect(failedBadge).toBeInTheDocument();
+      expect(failedBadge).toHaveTextContent("取得失敗");
+      expect(
+        screen.queryByTestId("episode-cached-badge"),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("episode-uncached-badge"),
       ).not.toBeInTheDocument();
     });
 
@@ -140,6 +159,52 @@ describe("EpisodeListItem", () => {
       );
 
       expect(screen.getByTestId("episode-cached-badge")).toBeInTheDocument();
+      expect(
+        screen.queryByTestId("episode-uncached-badge"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("isDownloadFailed が true でもキャッシュ済み（byteSize > 0 または downloadedAt !== null）の場合は取得済みバッジが優先されること", () => {
+      const cachedChapter: ChapterSummary = {
+        ...baseChapter,
+        downloadedAt: "2026-01-01T12:00:00Z",
+        byteSize: 1024,
+      };
+
+      render(
+        <EpisodeListItem
+          chapter={cachedChapter}
+          isBookmarked={false}
+          isDownloadFailed={true}
+          onSelectEpisode={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByTestId("episode-cached-badge")).toBeInTheDocument();
+      expect(
+        screen.queryByTestId("episode-failed-badge"),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("episode-uncached-badge"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("未キャッシュかつ isDownloadFailed が true の場合は取得失敗バッジが表示されること (AC-ND-25)", () => {
+      render(
+        <EpisodeListItem
+          chapter={baseChapter}
+          isBookmarked={false}
+          isDownloadFailed={true}
+          onSelectEpisode={vi.fn()}
+        />,
+      );
+
+      const failedBadge = screen.getByTestId("episode-failed-badge");
+      expect(failedBadge).toBeInTheDocument();
+      expect(failedBadge).toHaveTextContent("取得失敗");
+      expect(
+        screen.queryByTestId("episode-cached-badge"),
+      ).not.toBeInTheDocument();
       expect(
         screen.queryByTestId("episode-uncached-badge"),
       ).not.toBeInTheDocument();

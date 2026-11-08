@@ -8,6 +8,8 @@ import type {
   ChapterSummary,
   NovelRepository,
   ChapterRepository,
+  QueueRepository,
+  DownloadQueueItem,
 } from "../../../storage/types";
 
 const sampleNovel: NovelRecord = {
@@ -108,6 +110,68 @@ function createMockChapterRepository(
       totalCachedChapters: 0,
       totalByteSize: 0,
     }),
+  };
+}
+
+function createMockQueueRepository(
+  items: DownloadQueueItem[] = [],
+): QueueRepository {
+  let queue = [...items];
+  return {
+    enqueueChapters: async (
+      _novelId,
+      inputs,
+      nowIso = new Date().toISOString(),
+    ) => {
+      for (const input of inputs) {
+        const existing = queue.find(
+          (q) => q.chapterIndex === input.chapterIndex,
+        );
+        if (existing) {
+          existing.status = "pending";
+          existing.lastError = null;
+          existing.updatedAt = nowIso;
+        } else {
+          queue.push({
+            id: queue.length + 1,
+            novelId: _novelId,
+            chapterIndex: input.chapterIndex,
+            targetUrl: input.targetUrl,
+            status: "pending",
+            retryCount: 0,
+            lastError: null,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+          });
+        }
+      }
+    },
+    listByNovelId: async () => queue,
+    updateStatus: async (_novelId, chapterIndex, status, options) => {
+      const target = queue.find((q) => q.chapterIndex === chapterIndex);
+      if (target) {
+        target.status = status;
+        if (options?.incrementRetry) target.retryCount += 1;
+        if (options?.lastError !== undefined)
+          target.lastError = options.lastError;
+      }
+    },
+    resetInterruptedToPending: async () => {
+      for (const item of queue) {
+        if (item.status === "downloading") {
+          item.status = "pending";
+        }
+      }
+    },
+    deleteByNovelAndChapters: async (_novelId, chapterIndexes) => {
+      queue = queue.filter((q) => !chapterIndexes.includes(q.chapterIndex));
+    },
+    clearNovelQueue: async () => {
+      queue = [];
+    },
+    clearAllQueue: async () => {
+      queue = [];
+    },
   };
 }
 
@@ -243,6 +307,87 @@ export const WithCustomCallbacks: Story = {
       services={{
         novelRepository: createMockNovelRepository(sampleNovel),
         chapterRepository: createMockChapterRepository(sampleChapters),
+      }}
+    >
+      <RouterProvider initialPath={`/novels/${args.novelId}`}>
+        <NovelDetailContainer {...args} />
+      </RouterProvider>
+    </ServiceProvider>
+  ),
+};
+
+/**
+ * 一括キャッシュ中断後の再開待ち表示ストーリー
+ */
+export const ResumePending: Story = {
+  name: "キャッシュ再開待ち",
+  args: {
+    novelId: sampleNovel.id,
+  },
+  render: (args) => (
+    <ServiceProvider
+      services={{
+        novelRepository: createMockNovelRepository(sampleNovel),
+        chapterRepository: createMockChapterRepository(sampleChapters),
+        queueRepository: createMockQueueRepository([
+          {
+            id: 1,
+            novelId: sampleNovel.id,
+            chapterIndex: 2,
+            targetUrl: sampleChapters[1].url,
+            status: "pending",
+            retryCount: 0,
+            lastError: null,
+            createdAt: "2026-10-25T10:00:00Z",
+            updatedAt: "2026-10-25T10:00:00Z",
+          },
+          {
+            id: 2,
+            novelId: sampleNovel.id,
+            chapterIndex: 3,
+            targetUrl: sampleChapters[2].url,
+            status: "pending",
+            retryCount: 0,
+            lastError: null,
+            createdAt: "2026-10-25T10:00:00Z",
+            updatedAt: "2026-10-25T10:00:00Z",
+          },
+        ]),
+      }}
+    >
+      <RouterProvider initialPath={`/novels/${args.novelId}`}>
+        <NovelDetailContainer {...args} />
+      </RouterProvider>
+    </ServiceProvider>
+  ),
+};
+
+/**
+ * 一括キャッシュ失敗話の再試行待ち・取得失敗バッジ表示ストーリー
+ */
+export const RetryFailed: Story = {
+  name: "失敗話の再試行待ち",
+  args: {
+    novelId: sampleNovel.id,
+  },
+  render: (args) => (
+    <ServiceProvider
+      services={{
+        novelRepository: createMockNovelRepository(sampleNovel),
+        chapterRepository: createMockChapterRepository(sampleChapters),
+        queueRepository: createMockQueueRepository([
+          {
+            id: 1,
+            novelId: sampleNovel.id,
+            chapterIndex: 2,
+            targetUrl: sampleChapters[1].url,
+            status: "failed",
+            retryCount: 1,
+            lastError: "通信タイムアウト",
+            createdAt: "2026-10-25T10:00:00Z",
+            updatedAt: "2026-10-25T10:00:00Z",
+          },
+        ]),
       }}
     >
       <RouterProvider initialPath={`/novels/${args.novelId}`}>

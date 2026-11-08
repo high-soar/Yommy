@@ -66,6 +66,16 @@ export const Default: Story = {
 };
 
 /**
+ * 取得失敗話を含むエピソード一覧表示
+ */
+export const WithFailedChapters: Story = {
+  name: "取得失敗話を含む一覧",
+  args: {
+    failedChapterIndexes: [3],
+  },
+};
+
+/**
  * エピソード0件の空状態
  */
 export const Empty: Story = {
