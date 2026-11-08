@@ -2,8 +2,8 @@
 type: spec-feature
 title: "設定画面仕様書（SCR-05: Settings）"
 description: 小説リーダーの組版設定（縦書き/横書き、ページ送りモード、4カラーテーマ、文字サイズ、行間、フォント種別、画面余白、ハードウェア音量キー送り）の一括カスタマイズ・永続化、ルビ・傍点を含むサンプル文章プレビュー、Google Drive クラウド同期連携、ストレージ・本文キャッシュ管理、および下部タブ・OSバックキー連携を提供する設定画面（SCR-05）の正本仕様。
-status: "Approved"
-updated: "2026-11-07"
+status: "Review (#268)"
+updated: "2026-11-08"
 tags:
   [
     settings,
@@ -16,6 +16,7 @@ tags:
     cloud-sync,
     google-drive,
     cache-management,
+    download-queue,
     capacity-visualization,
     paging,
     pagination,
@@ -27,8 +28,10 @@ tags:
     ho-24,
     ho-25,
     ho-28,
+    ho-34,
   ]
 related_specs:
+  - docs/specs/changes/issue-268-persistent-download-queue.md
   - docs/specs/changes/archive/issue-203-volume-key-paging.md
   - docs/specs/changes/archive/issue-202-reader-top-overlay-and-seekbar.md
   - docs/specs/changes/archive/issue-169-font-and-margin-customization.md
@@ -450,8 +453,8 @@ export interface UseStorageCacheResult {
 2. **全体一括キャッシュ削除（`clearCache`）**:
    - `isClearing = true`, `error = null`, `notice = null` を設定する。
    - `deletedCount = await chapterRepository.deleteAllCachedBodies(options)` を実行する。
-     - `options.onlyRead === true`: 全作品を対象に既読話（`is_read = 1`）のみ本文キャッシュを破棄。
-     - `options.onlyRead === false`: 全作品の全エピソード本文キャッシュを一括破棄。
+     - `options.onlyRead === true`: 全作品を対象に既読話（`is_read = 1`）のみ本文キャッシュおよび対応する `download_queue` レコードを破棄（`v0.9` Issue #268）。
+     - `options.onlyRead === false`: 全作品の全エピソード本文キャッシュおよび全 `download_queue` レコードを一括破棄（`v0.9` Issue #268）。
      - いずれの場合も作品レコード（`novels`）、目次情報（`chapters`）、既読状態（`is_read`）、しおり位置は完全に保持される。
    - 削除完了後、`refreshSummary()` を実行して合計キャッシュ話数・合計容量を即時再集計して更新する。
    - `notice = "本文キャッシュを一括削除しました（${deletedCount}話）"` をセットし、`isClearing = false` として削除話数を返却する。
@@ -478,7 +481,7 @@ export interface UseStorageCacheResult {
 | **`AC-ST-13`** | ページ送りモード切替と永続化                                | ページ送りモードセレクター（`paging-mode-select`）で「ページめくり（縦書き時）」「連続スクロール」の2択を切り替えられ、横書き（`horizontal-tb`）選択時はセレクターが `disabled` となり注記（`paging-mode-note`）が表示されること。選択結果は `reader_settings` テーブルへ永続化され、リロード後およびリーダー画面（`SCR-03`）でも設定が維持・反映されること。                                                                                                                                                                                                                                                                               | `SYS-REQ-11`                   |
 | **`AC-ST-14`** | ストレージ・キャッシュ管理セクション表示                    | 設定画面に「ストレージ・キャッシュ管理」セクション（`data-testid="storage-cache-section"`）が配置され、アプリ全体の合計キャッシュ話数および合計容量（`data-testid="storage-cache-summary"`）が `formatByteSize` 規約に従って正確にフォーマット表示されること。                                                                                                                                                                                                                                                                                                                                                                              | `SYS-REQ-05` / `TR-01`         |
 | **`AC-ST-15`** | 一括削除起動ボタンと確認ダイアログ                          | 一括削除起動ボタン（`data-testid="open-global-clear-cache-dialog-button"`）から一括削除確認ダイアログ（`data-testid="global-clear-cache-dialog"`）が開き、「既読話の本文キャッシュのみ削除」（`data-testid="confirm-global-clear-read-cache-button"`）または「すべての本文キャッシュを削除」（`data-testid="confirm-global-clear-all-cache-button"`）を選択できること。また、合計キャッシュ話数が 0 または処理中はボタンが disabled となること。                                                                                                                                                                                            | `SYS-REQ-05` / `TR-20`         |
-| **`AC-ST-16`** | 一括キャッシュ削除の即時反映と安全性                        | 一括削除完了後、全登録作品の対象話本文キャッシュが削除され、作品登録・目次・既読状態・しおりは保持された状態で、合計キャッシュ話数・合計容量表示が即時再計算されて更新され、完了通知（`data-testid="storage-cache-notice"`）が表示されること。                                                                                                                                                                                                                                                                                                                                                                                              | `SYS-REQ-05` / `TR-20`         |
+| **`AC-ST-16`** | 一括キャッシュ削除の即時反映と安全性                        | 一括削除完了後、全登録作品の対象話本文キャッシュおよび対応する `download_queue` レコードが削除され、作品登録・目次・既読状態・しおりは保持された状態で、合計キャッシュ話数・合計容量表示が即時再計算されて更新され、完了通知（`data-testid="storage-cache-notice"`）が表示されること。                                                                                                                                                                                                                                                                                                                                                      | `SYS-REQ-05` / `TR-20`         |
 | **`AC-ST-17`** | フォント種別切替と永続化（v0.5 Issue #169）                 | フォント種別セレクター（`font-family-select`）で 5 種（UD明朝 / 明朝体 / UDゴシック / ゴシック体 / 教科書体 Klee）から選択でき、プレビュー枠のフォントスタックおよび `reader_settings` へ即時反映・永続化され、リロード後およびリーダー画面（`SCR-03`）でも設定が維持・反映されること。                                                                                                                                                                                                                                                                                                                                                     | `SYS-REQ-09`                   |
 | **`AC-ST-18`** | 画面余白ステッパー境界制御と永続化（v0.5 Issue #169）       | 画面余白（`8〜48px`、`±4px` 刻み、初期値 `20px`）の `−` / `＋` ボタン（`page-margin-decrease` / `page-margin-increase`）で値が変更でき、上限（`48px`）・下限（`8px`）で各ボタンが `disabled` となり、プレビュー枠のパディングおよび `reader_settings` へ即時反映・永続化され、リロード後およびリーダー画面（`SCR-03`）でも設定が維持・反映されること。                                                                                                                                                                                                                                                                                      | `SYS-REQ-09`                   |
 | **`AC-ST-19`** | 音量キー送りトグル設定と永続化（v0.6 Issue #203）           | 設定画面（`SCR-05`）の「表示・組版設定」セクションに「音量キーでページ送り」ON/OFF トグル（`data-testid="toggle-volume-key-paging"`, `aria-pressed={enableVolumeKeyPaging}`、初期値 `false`）が表示され、タップで ON/OFF 切替でき、`reader_settings` へ永続化されること。保存失敗時は直前の値へロールバックされ、エラー警告（`settings-error-alert`）が表示されること。                                                                                                                                                                                                                                                                     | `SYS-REQ-11` / `SCR-05`        |

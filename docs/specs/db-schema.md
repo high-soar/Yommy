@@ -2,7 +2,7 @@
 type: spec-db-schema
 title: ローカル DB スキーマ定義（App 全体正本）
 description: SQLite（novels, chapters, download_queue, reader_settings, app_settings）のER図、テーブル構造、およびDDL定義の正本。
-status: "Approved"
+status: "Review (#268)"
 updated: "2026-11-08"
 tags:
   [
@@ -13,6 +13,8 @@ tags:
     settings,
     prefetch,
     batch-cache,
+    download-queue,
+    queue-repository,
     cache-rules,
     cache-management,
     capacity-visualization,
@@ -29,8 +31,10 @@ tags:
     ho-24,
     ho-25,
     ho-32,
+    ho-34,
   ]
 related_specs:
+  - docs/specs/changes/issue-268-persistent-download-queue.md
   - docs/specs/changes/archive/issue-266-bookshelf-favorite-and-sync.md
   - docs/specs/changes/archive/issue-169-font-and-margin-customization.md
   - docs/specs/changes/archive/issue-170-cache-management-and-capacity-visualization.md
@@ -196,7 +200,7 @@ CREATE INDEX IF NOT EXISTS idx_novels_title ON novels(title COLLATE NOCASE ASC);
 
 ### 3.2 `chapters` テーブル（各話目次・本文 HTML キャッシュ）
 
-目次取得時は `body_html = NULL`, `byte_size = 0` でレコードを作成し、本文ダウンロード完了時にサニタイズ済み HTML と `byte_size`, `downloaded_at` を保存します。各話の一意性は `(novel_id, remote_chapter_id)` で保証されるため、連載途中でエピソードが挿入・削除されて `chapter_index` がずれた場合でも、本文キャッシュが別話へ誤って引き継がれることなく安全に維持されます。キャッシュ削除時（作品詳細での整理または設定画面での一括整理：`v0.5` Issue #170）は、目次情報・既読フラグ（`is_read`）・しおり位置を完全に残したまま、対象話の `body_html = NULL`, `byte_size = 0`, `downloaded_at = NULL` に更新します（既読話のみ削除時: `body_html IS NOT NULL AND is_read = 1`、全話削除時: `body_html IS NOT NULL`）。更新後、親作品レコードの `novels.cached_chapters` および `novels.total_byte_size` を単一トランザクション内で即時再集計して更新します。この際、クラウド同期の整合性維持（LWW および Tombstone 誤判定防止）のため、`novels.updated_at` は更新せず従前の値を維持します（R1-01）。
+目次取得時は `body_html = NULL`, `byte_size = 0` でレコードを作成し、本文ダウンロード完了時にサニタイズ済み HTML と `byte_size`, `downloaded_at` を保存します。各話の一意性は `(novel_id, remote_chapter_id)` で保証されるため、連載途中でエピソードが挿入・削除されて `chapter_index` がずれた場合でも、本文キャッシュが別話へ誤って引き継がれることなく安全に維持されます。キャッシュ削除時（作品詳細での整理または設定画面での一括整理：`v0.5` Issue #170）は、目次情報・既読フラグ（`is_read`）・しおり位置を完全に残したまま、対象話の `body_html = NULL`, `byte_size = 0`, `downloaded_at = NULL` に更新します（既読話のみ削除時: `body_html IS NOT NULL AND is_read = 1`、全話削除時: `body_html IS NOT NULL`）。さらに同一トランザクション内で、削除対象話に対応する `download_queue` レコードも同時に削除（クリーンアップ）し、親作品レコードの `novels.cached_chapters` および `novels.total_byte_size` を即時再集計して更新します（`v0.9` Issue #268）。この際、クラウド同期の整合性維持（LWW および Tombstone 誤判定防止）のため、`novels.updated_at` は更新せず従前の値を維持します（R1-01）。
 
 なお、`downloaded_at` はキャッシュ鮮度管理（TTL 7日間判定：`now - downloaded_at < 7 days` での通信スキップ、7日経過後の 3秒短タイムアウト再取得と既存キャッシュフォールバック）の判定基準日時として利用されます（`v0.3` Issue #81）。
 
@@ -221,9 +225,19 @@ CREATE TABLE IF NOT EXISTS chapters (
 CREATE INDEX IF NOT EXISTS idx_chapters_novel_index ON chapters(novel_id, chapter_index ASC);
 ```
 
-### 3.3 `download_queue` テーブル（バックグラウンド DL キュー：`v0.3`〜）
+### 3.3 `download_queue` テーブル（永続ダウンロードキュー：`v0.3` スキーマ定義 / `v0.9` Issue #268 統合）
 
-複数話一括取得時のレートリミット制御（1.5秒ウェイト）と中断・再開・リトライを管理します。
+作品詳細画面（`SCR-02`）における複数話一括取得時のレートリミット制御（1.5秒ウェイト）、途中話エラー時のスキップ継続、および中断・画面離脱・アプリ再起動後の再開・失敗話再試行を永続管理します（`QueueRepository` 経由でアクセス）。
+
+- **ステータス遷移（`status`）**:
+  - `'pending'`: キュー登録直後、または中断・画面離脱・再起動時に未完了（旧 `'downloading'` 含む）として待機中の状態。
+  - `'downloading'`: 現在 HTTP 取得・パース実行中の状態。画面再表示・一括キャッシュ開始時には `resetInterruptedToPending` により残存 `'downloading'` 行が自動的に `'pending'` へ戻される。
+  - `'completed'`: 本文取得および `chapters` への保存が完了した状態。
+  - `'failed'`: 通信エラー・タイムアウト・パース失敗等により取得失敗した状態（`retry_count` が `+1` 加算され、`last_error` にエラーメッセージが記録される）。再試行（`enqueueChapters`）時には `retry_count` を保持したまま `status = 'pending'`, `last_error = NULL` にリセットされる。
+- **クリーンアップ（削除）契機**:
+  - 一括キャッシュが失敗 0 件で全話完了した時点（`clearNovelQueue`）。
+  - 画面ロード時や一括キャッシュ開始時に、リーダー閲覧・先読み等により既に有効キャッシュ済み（`isChapterFresh === true`）と判定された話数（`deleteByNovelAndChapters`）。
+  - 作品単位またはアプリ全体の本文キャッシュ削除（`deleteCachedBodies` / `deleteAllCachedBodies`）実行時、および作品削除（`ON DELETE CASCADE`）時。
 
 ```sql
 CREATE TABLE IF NOT EXISTS download_queue (

@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Approved"
+status: "Review (#268)"
 updated: "2026-11-08"
 tags:
   - architecture
@@ -20,6 +20,8 @@ tags:
   - four-tabs
   - prefetch
   - batch-cache
+  - download-queue
+  - queue-repository
   - cache-rules
   - cache-management
   - capacity-visualization
@@ -44,7 +46,9 @@ tags:
   - ho-30
   - ho-31
   - ho-32
+  - ho-34
 related_specs:
+  - docs/specs/changes/issue-268-persistent-download-queue.md
   - docs/specs/changes/archive/issue-266-bookshelf-favorite-and-sync.md
   - docs/specs/changes/archive/issue-265-work-variation-filter.md
   - docs/specs/changes/archive/issue-264-advanced-search-filter.md
@@ -144,7 +148,7 @@ flowchart TB
     end
 
     subgraph StorageLayer ["2. Storage Layer (src/storage/*)"]
-        Repos["Repositories<br>(NovelRepository, ChapterRepository, SettingsRepository, AppSettingsRepository, QueueRepository［v0.9〜予定］)"]
+        Repos["Repositories<br>(NovelRepository, ChapterRepository, SettingsRepository, AppSettingsRepository, QueueRepository)"]
         DbAdapter["DatabaseAdapter Interface"]
         SqliteImpl["CapacitorSqliteAdapter<br>(Android 実機用)"]
         MemImpl["InMemoryDatabaseAdapter<br>(UT / Storybook / Playwright IT 用・resetTestDb())"]
@@ -249,10 +253,10 @@ Yommy/
     │   │   └── inMemoryDb.ts          # テスト・Web開発用インメモリDB実装（resetTestDb() 提供）
     │   └── repositories/
     │       ├── novelRepository.ts     # novels テーブル操作
-    │       ├── chapterRepository.ts   # chapters テーブル操作（本文キャッシュ保存・削除・容量集計）
+    │       ├── chapterRepository.ts   # chapters テーブル操作（本文キャッシュ保存・削除・容量集計・download_queue連動整理）
     │       ├── settingsRepository.ts  # reader_settings 操作
     │       ├── appSettingsRepository.ts # app_settings 操作（ソート順等永続化）
-    │       └── queueRepository.ts     # download_queue テーブル操作（v0.9〜予定）
+    │       └── queueRepository.ts     # download_queue テーブル操作（永続ダウンロードキュー・中断再開・再試行管理、v0.9 Issue #268）
     └── shared/                        # 複数機能で共有する汎用 UI コンポーネント・ユーティリティ
         ├── constants/                 # キャッシュ・レートリミット・タイポグラフィ等の共有定数（cache.ts, typography.ts）
         ├── utils/                     # キャッシュ判定・容量フォーマット等の共有ユーティリティ（cache.ts, formatByteSize.ts）
@@ -573,6 +577,52 @@ export interface ChapterRepository {
   }>;
 }
 
+export type DownloadQueueStatus =
+  "pending" | "downloading" | "completed" | "failed";
+
+export interface DownloadQueueItem {
+  id: number;
+  novelId: string;
+  chapterIndex: number;
+  targetUrl: string;
+  status: DownloadQueueStatus;
+  retryCount: number;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EnqueueChapterInput {
+  chapterIndex: number;
+  targetUrl: string;
+}
+
+export interface QueueRepository {
+  enqueueChapters(
+    novelId: string,
+    items: EnqueueChapterInput[],
+    nowIso?: string,
+  ): Promise<void>;
+  listByNovelId(novelId: string): Promise<DownloadQueueItem[]>;
+  updateStatus(
+    novelId: string,
+    chapterIndex: number,
+    status: DownloadQueueStatus,
+    options?: {
+      lastError?: string | null;
+      incrementRetry?: boolean;
+      nowIso?: string;
+    },
+  ): Promise<void>;
+  resetInterruptedToPending(novelId: string, nowIso?: string): Promise<void>;
+  deleteByNovelAndChapters(
+    novelId: string,
+    chapterIndexes: number[],
+  ): Promise<void>;
+  clearNovelQueue(novelId: string): Promise<void>;
+  clearAllQueue(): Promise<void>;
+}
+
 /**
  * フォント種別（v0.5 Issue #169）
  * - biz-ud-mincho: UD明朝（既定値、'BIZ UDMincho', 'Noto Serif CJK JP', 'Noto Serif JP', 'IPAexMincho', serif）
@@ -739,10 +789,11 @@ export const PREFETCH_COUNT = 5;
    - 第 $N$ 話の本文読み込み完了後、バックグラウンドで $N+1 \sim \min(N+5, \text{totalChapters})$ のエピソードを昇順で順次取得・SQLite 保存する。
    - 対象サーバーの過負荷防止（第 $N$ 話取得直後の連続リクエスト抑止）のため、最初の先読み（第 $N+1$ 話）リクエスト開始前に `PREFETCH_INTERVAL_MS`（1.5秒）の初期インターバルを空け、以降も 1話の取得完了ごとに 1.5秒のウェイトを空けて直列実行する。
    - 処理全体を `AbortController` で制御し、ユーザーが `goToChapter` で別エピソードへ移動した際やリーダー画面を離脱した際は、直ちに直前の処理をキャンセルしてリソースを解放する。またエピソード連続遷移時においても、先行先読みタスク（進行中の HTTP 通信含む）の Promise 完了を待機して直列化を保証し、1.5 秒の間隔規律を担保する。初期ロード通信完了後のマウント状態ガード（`isMounted`）および先読みタスクの `AbortSignal` 連動により、画面離脱後の DB 書き込みを防止する（R1-29）。
-3. **作品詳細での未取得話一括キャッシュ（`useNovelDetail`）**:
-   - 作品詳細ヘッダーの「未取得話を一括キャッシュ」操作（`TR-18`）により、未キャッシュエピソード（および TTL 7日経過した古いキャッシュ）を `PREFETCH_INTERVAL_MS`（1.5秒）間隔で順次直列取得する。
-   - 1話取得成功ごとに SQLite へ保存し、ヘッダーの取得済み話数（`cachedChapters`）および各話リストのキャッシュバッジをリアルタイムに更新する。
-   - ユーザー手動中断（「中断」ボタン）および画面アンマウント時は `AbortController` により安全に処理を停止する（取得済み話数は維持される）。
+3. **作品詳細での未取得話一括キャッシュと永続ダウンロードキュー統合（`useNovelDetail` / `QueueRepository`、`v0.3` Issue #81 / `v0.9` Issue #268）**:
+   - 作品詳細ヘッダーの「未取得話を一括キャッシュ」（または中断後の「キャッシュを再開（残りN話）」、失敗後の「失敗した話を再試行（N話）」）操作（`TR-18`）により、未キャッシュエピソード（および TTL 7日経過した古いキャッシュ）を `QueueRepository`（`download_queue` テーブル）へ `'pending'` として登録し、`PREFETCH_INTERVAL_MS`（1.5秒）間隔で順次直列取得する。
+   - 1話取得開始時にステータスを `'downloading'`、保存成功時に `'completed'` へ更新し、ヘッダーの取得済み話数（`cachedChapters`）・容量および各話リストのキャッシュバッジをリアルタイムに更新する（`novels.updated_at` は更新せず保持する、R2-16）。
+   - 特定話の取得に失敗（通信エラー・タイムアウトかつ既存キャッシュなし）した場合は、ループ全体を中断せず `download_queue` に `status = 'failed'`（`retry_count = retry_count + 1`、`last_error` 記録）として保存し、1.5秒ウェイト後に後続の `'pending'` 話の取得を継続する。ループ完了後に失敗話が存在する場合は該当エピソード行に `取得失敗` バッジ（`episode-failed-badge`）、ヘッダーにエラー通知と `失敗した話を再試行（N話）` ボタンを表示する。
+   - ユーザー手動中断（「中断」ボタン）および画面アンマウント時は `AbortController` により安全に処理を停止し、中断された `'downloading'` 話を `'pending'` に戻して保持する。画面再表示時は `キャッシュを再開（残りN話）` ボタンを表示し、再開時は残り対象話数 $N$ を分母（`0/N` 〜 `N/N`）として進捗を表示する。またリーダー画面での閲覧・先読みにより既に有効キャッシュ済みとなった話は自動的にキューから除外され、全話取得完了時および本文キャッシュ削除時にはキューレコードが自動クリーンアップされる。
 4. **7日経過キャッシュの短タイムアウトフォールバック**:
    - 取得から 7日以上経過したキャッシュは、閲覧時・先読み時・一括キャッシュ時に `SHORT_TIMEOUT_MS`（3秒）で再取得を試みる。
    - 3秒以内に取得成功した場合は新本文で DB および画面を更新する。
