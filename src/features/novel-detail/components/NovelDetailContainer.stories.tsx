@@ -301,6 +301,7 @@ export const WithCustomCallbacks: Story = {
     novelId: sampleNovel.id,
     onBackToBookshelf: fn(),
     onSelectEpisode: fn(),
+    onOpenWebView: fn(),
   },
   render: (args) => (
     <ServiceProvider

@@ -54,6 +54,8 @@ export interface NovelDetailHeaderProps {
   onOpenDeleteDialog: () => void;
   onOpenClearCacheDialog?: () => void;
   onToggleFavorite?: () => void | Promise<void>;
+  /** 「内蔵ブラウザで開く」ボタン押下時 (v0.9 Issue #269 / TR-09, AC-ND-26) */
+  onOpenWebView?: () => void;
 }
 
 /**
@@ -134,6 +136,8 @@ export interface NovelDetailPageProps {
     onlyRead: boolean;
   }) => void | Promise<void | number>;
   onToggleFavorite?: () => void | Promise<void>;
+  /** 内蔵ブラウザ画面（SCR-04）へフォールバック遷移（TR-09）するコールバック (v0.9 Issue #269) */
+  onOpenWebView?: (url: string) => void;
 }
 
 /**
@@ -143,4 +147,6 @@ export interface NovelDetailContainerProps {
   novelId: string;
   onBackToBookshelf?: () => void;
   onSelectEpisode?: (novelId: string, chapterIndex: number) => void;
+  /** 内蔵ブラウザ画面への遷移コールバック（TR-09、v0.9 Issue #269） */
+  onOpenWebView?: (url: string) => void;
 }

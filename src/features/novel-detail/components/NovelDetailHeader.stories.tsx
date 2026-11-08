@@ -42,6 +42,7 @@ const meta: Meta<typeof NovelDetailHeader> = {
     onOpenDeleteDialog: fn(),
     onOpenClearCacheDialog: fn(),
     onToggleFavorite: fn(),
+    onOpenWebView: fn(),
   },
 };
 

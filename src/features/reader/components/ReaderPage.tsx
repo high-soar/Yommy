@@ -75,6 +75,8 @@ export interface ReaderPageProps {
   onSelectTab?: (tab: BottomTab) => void;
   /** 上部オーバーレイ「← 目次」ボタン押下時のコールバック（TR-06、v0.6 Issue #202） */
   onBackToToc?: () => void;
+  /** エラー画面内「内蔵ブラウザで開いて取り込む」押下時コールバック（TR-10、v0.9 Issue #269） */
+  onOpenWebView?: () => void;
   /** 下部オーバーレイの初期展開フラグ（省略時はエラー/空状態時に true） */
   initialOverlayOpen?: boolean;
   /** 初期スライド変位量（px、Storybook/VRT/テスト用） */

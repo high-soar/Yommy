@@ -25,6 +25,8 @@ export interface ReaderContainerProps {
   onNavigateChapter?: (novelId: string, chapterIndex: number) => void;
   /** 「← 目次」タップ時のコールバック（省略時は flushBookmark 実行後にルーターの navigateToNovelDetail を使用、TR-06） */
   onBackToToc?: () => void;
+  /** エラー画面等からの内蔵ブラウザ遷移コールバック（TR-10、v0.9 Issue #269） */
+  onOpenWebView?: (url: string) => void;
 }
 
 /**

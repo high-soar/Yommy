@@ -1053,5 +1053,41 @@ describe("NovelDetailContainer", () => {
 
       pageSpy.mockRestore();
     });
+
+    it("onOpenWebView が渡された場合、NovelDetailPage へ正しく伝搬されること (Issue #269, TR-09)", async () => {
+      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const onOpenWebView = vi.fn();
+
+      render(
+        <ServiceProvider
+          services={{
+            novelRepository: createMockNovelRepo(sampleNovel),
+            chapterRepository: createMockChapterRepo(sampleChapters),
+          }}
+        >
+          <RouterProvider initialPath={`/novels/${sampleNovel.id}`}>
+            <NovelDetailContainer
+              novelId={sampleNovel.id}
+              onOpenWebView={onOpenWebView}
+            />
+          </RouterProvider>
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            onOpenWebView: expect.any(Function),
+          }),
+          undefined,
+        );
+      });
+
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      lastProps.onOpenWebView?.(sampleNovel.canonicalUrl);
+      expect(onOpenWebView).toHaveBeenCalledWith(sampleNovel.canonicalUrl);
+
+      pageSpy.mockRestore();
+    });
   });
 });

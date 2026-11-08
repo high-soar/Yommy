@@ -1457,4 +1457,35 @@ describe("ReaderContainer", () => {
       });
     });
   });
+
+  describe("内蔵ブラウザフォールバック連携 (onOpenWebView / AC-RD-29, TR-10)", () => {
+    it("onOpenWebView が渡された場合、ReaderPage へ正しく伝播され呼び出せること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const onOpenWebViewMock = vi.fn();
+      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
+      const { repo: chapterRepository } = createMockChapterRepo([
+        sampleChapter1,
+      ]);
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+          onOpenWebView={onOpenWebViewMock}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenCalled();
+      });
+
+      const lastProps = pageSpy.mock.lastCall?.[0];
+      expect(lastProps?.onOpenWebView).toBeDefined();
+
+      lastProps?.onOpenWebView?.();
+      expect(onOpenWebViewMock).toHaveBeenCalledWith(sampleChapter1.url);
+    });
+  });
 });
