@@ -323,6 +323,7 @@ export const WithCustomCallbacks: Story = {
     onNavigateSettings: fn(),
     onNavigateChapter: fn(),
     onBackToToc: fn(),
+    onOpenWebView: fn(),
   },
   render: (args) => (
     <ServiceProvider

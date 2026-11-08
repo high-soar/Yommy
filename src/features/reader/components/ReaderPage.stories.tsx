@@ -73,6 +73,7 @@ const meta: Meta<typeof ReaderPage> = {
     onScrollProgressChange: fn(),
     onSelectTab: fn(),
     onBackToToc: fn(),
+    onOpenWebView: fn(),
   },
 };
 

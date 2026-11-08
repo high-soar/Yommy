@@ -45,6 +45,7 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
   onCloseClearCacheDialog = noop,
   onConfirmClearCache = noop,
   onToggleFavorite,
+  onOpenWebView,
 }) => {
   const episodeContainerRef = useRef<HTMLElement | null>(null);
   const scrolledNovelIdRef = useRef<string | null>(null);
@@ -144,6 +145,11 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
               onOpenDeleteDialog={onOpenDeleteDialog}
               onOpenClearCacheDialog={onOpenClearCacheDialog}
               onToggleFavorite={onToggleFavorite}
+              onOpenWebView={
+                onOpenWebView
+                  ? () => onOpenWebView(novel.canonicalUrl)
+                  : undefined
+              }
             />
           </div>
 

@@ -705,6 +705,34 @@ describe("NovelDetailPage", () => {
         headerSpy.mockRestore();
         episodeListSpy.mockRestore();
       });
+
+      it("onOpenWebView が指定された場合、NovelDetailHeader へコールバックが渡され canonicalUrl で呼び出されること (Issue #269, TR-09, AC-ND-26)", () => {
+        const headerSpy = vi.spyOn(
+          NovelDetailHeaderModule,
+          "NovelDetailHeader",
+        );
+        const onOpenWebView = vi.fn();
+
+        render(
+          <NovelDetailPage
+            {...defaultPageProps}
+            onOpenWebView={onOpenWebView}
+          />,
+        );
+
+        expect(headerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            onOpenWebView: expect.any(Function),
+          }),
+          undefined,
+        );
+
+        const passedProps = headerSpy.mock.calls[0][0];
+        passedProps.onOpenWebView?.();
+        expect(onOpenWebView).toHaveBeenCalledWith(sampleNovel.canonicalUrl);
+
+        headerSpy.mockRestore();
+      });
     });
   });
 });

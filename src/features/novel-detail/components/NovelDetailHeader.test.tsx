@@ -789,5 +789,47 @@ describe("NovelDetailHeader", () => {
         await expect(user.click(favButton)).resolves.not.toThrow();
       });
     });
+
+    describe("「内蔵ブラウザで開く」ボタンの検証 (Issue #269 / AC-ND-26, TR-09)", () => {
+      it("「内蔵ブラウザで開く」ボタンが表示され、クリック時に onOpenWebView が呼び出されること", async () => {
+        const user = userEvent.setup();
+        const onOpenWebView = vi.fn();
+
+        render(
+          <NovelDetailHeader {...defaultProps} onOpenWebView={onOpenWebView} />,
+        );
+
+        const openBrowserButton = screen.getByTestId("open-webview-button");
+        expect(openBrowserButton).toBeInTheDocument();
+        expect(openBrowserButton).toHaveTextContent("内蔵ブラウザで開く");
+        expect(openBrowserButton).not.toBeDisabled();
+
+        await user.click(openBrowserButton);
+        expect(onOpenWebView).toHaveBeenCalledTimes(1);
+      });
+
+      it("目次更新中（isRefreshing === true）のときボタンが disabled であること", () => {
+        render(<NovelDetailHeader {...defaultProps} isRefreshing={true} />);
+
+        const openBrowserButton = screen.getByTestId("open-webview-button");
+        expect(openBrowserButton).toBeDisabled();
+      });
+
+      it("一括キャッシュ中（isBatchCaching === true）のときボタンが disabled であること", () => {
+        render(<NovelDetailHeader {...defaultProps} isBatchCaching={true} />);
+
+        const openBrowserButton = screen.getByTestId("open-webview-button");
+        expect(openBrowserButton).toBeDisabled();
+      });
+
+      it("onOpenWebView が省略された場合でもクリック時にエラーにならないこと", async () => {
+        const user = userEvent.setup();
+
+        render(<NovelDetailHeader {...defaultProps} />);
+
+        const openBrowserButton = screen.getByTestId("open-webview-button");
+        await expect(user.click(openBrowserButton)).resolves.not.toThrow();
+      });
+    });
   });
 });

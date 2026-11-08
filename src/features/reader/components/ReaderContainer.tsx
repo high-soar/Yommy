@@ -25,6 +25,8 @@ export interface ReaderContainerProps {
   onNavigateChapter?: (novelId: string, chapterIndex: number) => void;
   /** 「← 目次」タップ時のコールバック（省略時は flushBookmark 実行後にルーターの navigateToNovelDetail を使用、TR-06） */
   onBackToToc?: () => void;
+  /** エラー画面等からの内蔵ブラウザ遷移コールバック（TR-10、v0.9 Issue #269） */
+  onOpenWebView?: (url: string) => void;
 }
 
 /**
@@ -48,6 +50,7 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
   onNavigateSettings,
   onNavigateChapter,
   onBackToToc,
+  onOpenWebView,
 }) => {
   const router = useRouter();
   const {
@@ -161,6 +164,29 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
     }
   }, [flushBookmark, novelId, novel?.id, onBackToToc, router]);
 
+  const handleOpenWebView = useCallback(() => {
+    const targetUrl = chapter?.url ?? novel?.canonicalUrl ?? initialWorkUrl;
+    if (targetUrl) {
+      if (onOpenWebView) {
+        onOpenWebView(targetUrl);
+      } else {
+        const targetId = novelId ?? novel?.id;
+        router.navigate(
+          `/browser?url=${encodeURIComponent(targetUrl)}${targetId ? `&novelId=${encodeURIComponent(targetId)}` : ""}&chapterIndex=${currentChapterIndex}`,
+        );
+      }
+    }
+  }, [
+    chapter?.url,
+    currentChapterIndex,
+    initialWorkUrl,
+    novel?.canonicalUrl,
+    novel?.id,
+    novelId,
+    onOpenWebView,
+    router,
+  ]);
+
   return (
     <ReaderPage
       novel={novel}
@@ -188,6 +214,7 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
       onScrollProgressChange={handleScrollProgressChange}
       onSelectTab={handleSelectTab}
       onBackToToc={handleBackToToc}
+      onOpenWebView={handleOpenWebView}
     />
   );
 };

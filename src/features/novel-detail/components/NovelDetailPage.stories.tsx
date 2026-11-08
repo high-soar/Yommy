@@ -96,6 +96,7 @@ const meta: Meta<typeof NovelDetailPage> = {
     onCloseClearCacheDialog: fn(),
     onConfirmClearCache: fn(),
     onToggleFavorite: fn(),
+    onOpenWebView: fn(),
   },
 };
 

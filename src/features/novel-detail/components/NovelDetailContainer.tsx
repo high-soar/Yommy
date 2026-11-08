@@ -17,6 +17,7 @@ export const NovelDetailContainer: React.FC<NovelDetailContainerProps> = ({
   novelId,
   onBackToBookshelf,
   onSelectEpisode,
+  onOpenWebView,
 }) => {
   const router = useRouter();
   const {
@@ -93,6 +94,19 @@ export const NovelDetailContainer: React.FC<NovelDetailContainerProps> = ({
     await toggleFavorite();
   }, [toggleFavorite]);
 
+  const handleOpenWebView = useCallback(
+    (url: string) => {
+      if (onOpenWebView) {
+        onOpenWebView(url);
+      } else {
+        router.navigate(
+          `/browser?url=${encodeURIComponent(url)}&novelId=${encodeURIComponent(novelId)}`,
+        );
+      }
+    },
+    [novelId, onOpenWebView, router],
+  );
+
   return (
     <NovelDetailPage
       novel={novel}
@@ -125,6 +139,7 @@ export const NovelDetailContainer: React.FC<NovelDetailContainerProps> = ({
       onCloseClearCacheDialog={closeClearCacheDialog}
       onConfirmClearCache={confirmClearCache}
       onToggleFavorite={handleToggleFavorite}
+      onOpenWebView={handleOpenWebView}
     />
   );
 };

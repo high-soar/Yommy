@@ -206,13 +206,17 @@ describe("ReaderPage", () => {
       expect(screen.queryByTestId("reader-error")).not.toBeInTheDocument();
     });
 
-    it("ErrorState ストーリーでエラーアラートが描画され上下オーバーレイが初期展開表示されること（AC-RD-10, AC-RD-22）", () => {
+    it("ErrorState ストーリーでエラーアラートと内蔵ブラウザボタンが描画され上下オーバーレイが初期展開表示されること（AC-RD-10, AC-RD-22, AC-RD-29）", () => {
       render(<ErrorState />);
       const errorEl = screen.getByTestId("reader-error");
       expect(errorEl).toBeInTheDocument();
       expect(errorEl).toHaveAttribute("role", "alert");
       expect(errorEl).toHaveTextContent("エピソード本文の取得に失敗しました");
       expect(screen.queryByTestId("reader-view")).not.toBeInTheDocument();
+
+      const openWebviewBtn = screen.getByTestId("reader-open-webview-button");
+      expect(openWebviewBtn).toBeInTheDocument();
+      expect(openWebviewBtn).toHaveTextContent("内蔵ブラウザで開いて取り込む");
 
       // エラー時は初期状態で上下オーバーレイが展開表示
       const topOverlay = screen.getByTestId("reader-top-overlay");
@@ -1829,6 +1833,41 @@ describe("ReaderPage", () => {
       );
 
       expect(setEnabledSpy).toHaveBeenCalledWith(false);
+    });
+
+    it("エラー画面で「内蔵ブラウザで開いて取り込む」ボタン押下時に onOpenWebView が呼び出されること (AC-RD-29, TR-10)", async () => {
+      const user = userEvent.setup();
+      const onOpenWebView = vi.fn();
+
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            error: "エピソード本文の取得に失敗しました",
+            onOpenWebView,
+          })}
+        />,
+      );
+
+      const openButton = screen.getByTestId("reader-open-webview-button");
+      expect(openButton).toBeInTheDocument();
+      await user.click(openButton);
+
+      expect(onOpenWebView).toHaveBeenCalledTimes(1);
+    });
+
+    it("onOpenWebView が省略された場合でもボタン押下でエラーにならないこと", async () => {
+      const user = userEvent.setup();
+
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            error: "エピソード本文の取得に失敗しました",
+          })}
+        />,
+      );
+
+      const openButton = screen.getByTestId("reader-open-webview-button");
+      await expect(user.click(openButton)).resolves.not.toThrow();
     });
   });
 });

@@ -1457,4 +1457,214 @@ describe("ReaderContainer", () => {
       });
     });
   });
+
+  describe("内蔵ブラウザフォールバック連携 (onOpenWebView / AC-RD-29, TR-10)", () => {
+    it("onOpenWebView が渡された場合、ReaderPage へ正しく伝播され呼び出せること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const onOpenWebViewMock = vi.fn();
+      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
+      const { repo: chapterRepository } = createMockChapterRepo([
+        sampleChapter1,
+      ]);
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+          onOpenWebView={onOpenWebViewMock}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenCalled();
+      });
+
+      const lastProps = pageSpy.mock.lastCall?.[0];
+      expect(lastProps?.onOpenWebView).toBeDefined();
+
+      lastProps?.onOpenWebView?.();
+      expect(onOpenWebViewMock).toHaveBeenCalledWith(sampleChapter1.url);
+    });
+
+    it("onOpenWebView が省略された場合、デフォルトで router.navigate により /browser へ遷移すること (AC-RD-29, TR-10)", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
+      const { repo: chapterRepository } = createMockChapterRepo([
+        sampleChapter1,
+      ]);
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenCalled();
+      });
+
+      const lastProps = pageSpy.mock.lastCall?.[0];
+      expect(lastProps?.onOpenWebView).toBeDefined();
+
+      act(() => {
+        lastProps?.onOpenWebView?.();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+          `/browser?url=${encodeURIComponent(sampleChapter1.url)}&novelId=${encodeURIComponent(sampleNovel.id)}&chapterIndex=1`,
+        );
+      });
+    });
+
+    it("targetId が存在しない場合（initialWorkUrl のみ）、novelId パラメータなしで /browser へ遷移すること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const emptyNovelRepo: NovelRepository = {
+        listNovels: async () => [],
+        getNovelById: async () => null,
+        upsertNovelWithToc: async () => ({}) as never,
+        updateBookmark: async () => {},
+        setFavorite: async () => {},
+        deleteNovel: async () => {},
+        clearNewUpdate: async () => {},
+        updateLastCheckedAt: async () => {},
+      };
+      const emptyChapterRepo: ChapterRepository = {
+        listChaptersByNovelId: async () => [],
+        getChapter: async () => null,
+        saveChapterBody: async () => {},
+        markChapterRead: async () => {},
+        deleteCachedBodies: async () => 0,
+        deleteAllCachedBodies: async () => 0,
+        getStorageCacheSummary: async () => ({
+          totalCachedChapters: 0,
+          totalByteSize: 0,
+        }),
+      };
+
+      const customWorkUrl = "https://kakuyomu.jp/works/9999999999";
+
+      render(
+        <TestWrapper
+          initialWorkUrl={customWorkUrl}
+          chapterIndex={1}
+          novelRepository={emptyNovelRepo}
+          chapterRepository={emptyChapterRepo}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenCalled();
+      });
+
+      const lastProps = pageSpy.mock.lastCall?.[0];
+      expect(lastProps?.onOpenWebView).toBeDefined();
+
+      act(() => {
+        lastProps?.onOpenWebView?.();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+          `/browser?url=${encodeURIComponent(customWorkUrl)}&chapterIndex=1`,
+        );
+      });
+    });
+
+    it("targetUrl が存在しない場合、onOpenWebView 実行時になにも実行されないこと", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const emptyNovelRepo: NovelRepository = {
+        listNovels: async () => [],
+        getNovelById: async () => null,
+        upsertNovelWithToc: async () => ({}) as never,
+        updateBookmark: async () => {},
+        setFavorite: async () => {},
+        deleteNovel: async () => {},
+        clearNewUpdate: async () => {},
+        updateLastCheckedAt: async () => {},
+      };
+      const emptyChapterRepo: ChapterRepository = {
+        listChaptersByNovelId: async () => [],
+        getChapter: async () => null,
+        saveChapterBody: async () => {},
+        markChapterRead: async () => {},
+        deleteCachedBodies: async () => 0,
+        deleteAllCachedBodies: async () => 0,
+        getStorageCacheSummary: async () => ({
+          totalCachedChapters: 0,
+          totalByteSize: 0,
+        }),
+      };
+
+      render(
+        <TestWrapper
+          novelRepository={emptyNovelRepo}
+          chapterRepository={emptyChapterRepo}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenCalled();
+      });
+
+      const lastProps = pageSpy.mock.lastCall?.[0];
+      expect(lastProps?.onOpenWebView).toBeDefined();
+
+      act(() => {
+        lastProps?.onOpenWebView?.();
+      });
+
+      expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+        "/novels/kakuyomu:16817330658027210412/chapters/1",
+      );
+    });
+
+    it("chapter.url がなく novel.canonicalUrl が存在し、かつ novelId プロップス未指定で novel.id が存在する場合、novel 側の値で /browser へ遷移すること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
+      const emptyChapterRepo: ChapterRepository = {
+        listChaptersByNovelId: async () => [],
+        getChapter: async () => null,
+        saveChapterBody: async () => {},
+        markChapterRead: async () => {},
+        deleteCachedBodies: async () => 0,
+        deleteAllCachedBodies: async () => 0,
+        getStorageCacheSummary: async () => ({
+          totalCachedChapters: 0,
+          totalByteSize: 0,
+        }),
+      };
+
+      render(
+        <TestWrapper
+          initialWorkUrl={sampleNovel.canonicalUrl}
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={emptyChapterRepo}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenCalled();
+      });
+
+      const lastProps = pageSpy.mock.lastCall?.[0];
+      expect(lastProps?.onOpenWebView).toBeDefined();
+
+      act(() => {
+        lastProps?.onOpenWebView?.();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+          `/browser?url=${encodeURIComponent(sampleNovel.canonicalUrl)}&novelId=${encodeURIComponent(sampleNovel.id)}&chapterIndex=1`,
+        );
+      });
+    });
+  });
 });
