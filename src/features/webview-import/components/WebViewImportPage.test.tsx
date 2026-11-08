@@ -48,7 +48,9 @@ describe("WebViewImportPage", () => {
   it("Loading ストーリーでスピナーが表示され、操作ボタンが無効化されること", () => {
     render(<Loading />);
 
-    expect(screen.getByTestId("browser-loading")).toBeInTheDocument();
+    const loading = screen.getByTestId("browser-loading");
+    expect(loading).toBeInTheDocument();
+    expect(loading).toHaveTextContent("ページを取り込み中...");
     expect(screen.getByTestId("import-dom-button")).toBeDisabled();
     expect(screen.getByTestId("browser-navigate-button")).toBeDisabled();
   });
@@ -118,5 +120,170 @@ describe("WebViewImportPage", () => {
     // 表示中ページを取り込むボタン
     await user.click(screen.getByTestId("import-dom-button"));
     expect(onImportCurrentDomMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("URL 入力バーで Enter キーを押すと onNavigateUrl が発火し、他のキーでは発火しないこと", async () => {
+    const user = userEvent.setup();
+    const onNavigateUrlMock = vi.fn();
+
+    render(
+      <WebViewImportPage
+        url="https://example.com"
+        pageTitle="テスト"
+        currentCapturedUrl="https://example.com"
+        canImport={true}
+        isLoading={false}
+        isImporting={false}
+        notice={null}
+        error={null}
+        onUrlChange={vi.fn()}
+        onNavigateUrl={onNavigateUrlMock}
+        onOpenNativeBrowser={vi.fn()}
+        onImportCurrentDom={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+
+    const input = screen.getByTestId("browser-url-input");
+    await user.type(input, "{Shift}");
+    expect(onNavigateUrlMock).not.toHaveBeenCalled();
+
+    await user.type(input, "{Enter}");
+    expect(onNavigateUrlMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("タブバーのコールバックが省略された場合でも、タブ選択時にエラーが発生しないこと", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <WebViewImportPage
+        url="https://example.com"
+        pageTitle="テスト"
+        currentCapturedUrl="https://example.com"
+        canImport={true}
+        isLoading={false}
+        isImporting={false}
+        notice={null}
+        error={null}
+        onUrlChange={vi.fn()}
+        onNavigateUrl={vi.fn()}
+        onOpenNativeBrowser={vi.fn()}
+        onImportCurrentDom={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+
+    // 下部タブバーの各タブをクリック
+    const bookshelfTab = screen.getByTestId("tab-bookshelf");
+    await user.click(bookshelfTab);
+
+    const searchTab = screen.getByTestId("tab-search");
+    await user.click(searchTab);
+
+    const rankingTab = screen.getByTestId("tab-ranking");
+    await user.click(rankingTab);
+
+    const settingsTab = screen.getByTestId("tab-settings");
+    await user.click(settingsTab);
+  });
+
+  it("isLoading のみ true のときは『読み込み中...』が表示されること", () => {
+    render(
+      <WebViewImportPage
+        url="https://kakuyomu.jp/works/1"
+        pageTitle="テスト"
+        currentCapturedUrl="https://kakuyomu.jp/works/1"
+        canImport={true}
+        isLoading={true}
+        isImporting={false}
+        notice={null}
+        error={null}
+        onUrlChange={vi.fn()}
+        onNavigateUrl={vi.fn()}
+        onOpenNativeBrowser={vi.fn()}
+        onImportCurrentDom={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+
+    const loading = screen.getByTestId("browser-loading");
+    expect(loading).toHaveTextContent("読み込み中...");
+  });
+
+  it("isImporting 時は『ページを取り込み中...』が表示されること", () => {
+    render(
+      <WebViewImportPage
+        url="https://kakuyomu.jp/works/1"
+        pageTitle="テスト"
+        currentCapturedUrl="https://kakuyomu.jp/works/1"
+        canImport={true}
+        isLoading={false}
+        isImporting={true}
+        notice={null}
+        error={null}
+        onUrlChange={vi.fn()}
+        onNavigateUrl={vi.fn()}
+        onOpenNativeBrowser={vi.fn()}
+        onImportCurrentDom={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+
+    const loading = screen.getByTestId("browser-loading");
+    expect(loading).toHaveTextContent("ページを取り込み中...");
+  });
+
+  it("pageTitle および currentCapturedUrl が未定の場合のフォールバック表示を検証すること", () => {
+    // 1) pageTitle なし, url あり, currentCapturedUrl なし
+    const { rerender } = render(
+      <WebViewImportPage
+        url="https://example.com"
+        pageTitle=""
+        currentCapturedUrl=""
+        canImport={true}
+        isLoading={false}
+        isImporting={false}
+        notice={null}
+        error={null}
+        onUrlChange={vi.fn()}
+        onNavigateUrl={vi.fn()}
+        onOpenNativeBrowser={vi.fn()}
+        onImportCurrentDom={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("browser-target-title")).toHaveTextContent(
+      "読み込み中...",
+    );
+    expect(screen.getByTestId("browser-target-url")).toHaveTextContent(
+      "https://example.com",
+    );
+
+    // 2) pageTitle なし, url なし, currentCapturedUrl なし
+    rerender(
+      <WebViewImportPage
+        url=""
+        pageTitle=""
+        currentCapturedUrl=""
+        canImport={false}
+        isLoading={false}
+        isImporting={false}
+        notice={null}
+        error={null}
+        onUrlChange={vi.fn()}
+        onNavigateUrl={vi.fn()}
+        onOpenNativeBrowser={vi.fn()}
+        onImportCurrentDom={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("browser-target-title")).toHaveTextContent(
+      "未読み込み",
+    );
+    expect(screen.getByTestId("browser-target-url")).toHaveTextContent(
+      "（URL 未指定）",
+    );
   });
 });

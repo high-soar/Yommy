@@ -112,6 +112,8 @@ export function useWebViewImport({
       setError(null);
       setNotice(null);
 
+      let result: ImportSuccessResult | null = null;
+
       try {
         const captured = await webViewDomBridge.captureDom();
         setPageTitle(captured.title);
@@ -120,138 +122,146 @@ export function useWebViewImport({
         const parser = parserRegistry.getParser(captured.url);
         if (!parser || !parser.canParse(captured.url)) {
           setError("対応外のページです");
-          return null;
-        }
+        } else {
+          const isChapter = isChapterUrl(captured.url, parser.siteType);
 
-        const isChapter = isChapterUrl(captured.url, parser.siteType);
+          if (!isChapter) {
+            // 1. 作品トップ（目次）インポート
+            const novelIndex = parser.parseNovelIndex(
+              captured.html,
+              captured.url,
+            );
+            const now = new Date().toISOString();
+            const savedNovel = await novelRepository.upsertNovelWithToc(
+              novelIndex,
+              now,
+            );
 
-        if (!isChapter) {
-          // 1. 作品トップ（目次）インポート
-          const novelIndex = parser.parseNovelIndex(
-            captured.html,
-            captured.url,
-          );
-          const now = new Date().toISOString();
-          const savedNovel = await novelRepository.upsertNovelWithToc(
-            novelIndex,
-            now,
-          );
+            // なろう短編（1話完結で同一ページに本文が含まれる場合）の本文同時保存
+            const isShortStory =
+              novelIndex.siteType === "narou" &&
+              novelIndex.chapters.length === 1 &&
+              (novelIndex.chapters[0].url === novelIndex.canonicalUrl ||
+                captured.html.includes('id="novel_honbun"') ||
+                captured.html.includes("p-novel__body"));
 
-          // なろう短編（1話完結で同一ページに本文が含まれる場合）の本文同時保存
-          const isShortStory =
-            novelIndex.siteType === "narou" &&
-            novelIndex.chapters.length === 1 &&
-            (novelIndex.chapters[0].url === novelIndex.canonicalUrl ||
-              captured.html.includes('id="novel_honbun"') ||
-              captured.html.includes("p-novel__body"));
+            if (isShortStory) {
+              const parsedChapter = parser.parseChapterContent(
+                captured.html,
+                captured.url,
+              );
+              await chapterRepository.saveChapterBody(
+                savedNovel.id,
+                1,
+                parsedChapter,
+                now,
+              );
+            }
 
-          if (isShortStory) {
+            if (syncEngine) {
+              await syncEngine.notifyChanged();
+            }
+
+            result = {
+              type: "novel",
+              novelId: savedNovel.id,
+            };
+            setNotice("作品目次を取り込みました");
+            if (onImportComplete) {
+              onImportComplete(result);
+            }
+          } else {
+            // 2. 各話エピソード（本文）インポート
             const parsedChapter = parser.parseChapterContent(
               captured.html,
               captured.url,
             );
-            await chapterRepository.saveChapterBody(
-              savedNovel.id,
-              1,
-              parsedChapter,
-              now,
-            );
-          }
+            const canonicalUrl = parser.normalizeWorkUrl(captured.url);
 
-          await syncEngine?.notifyChanged?.();
-
-          const result: ImportSuccessResult = {
-            type: "novel",
-            novelId: savedNovel.id,
-          };
-          setNotice("作品目次を取り込みました");
-          onImportComplete?.(result);
-          return result;
-        } else {
-          // 2. 各話エピソード（本文）インポート
-          const parsedChapter = parser.parseChapterContent(
-            captured.html,
-            captured.url,
-          );
-          const canonicalUrl = parser.normalizeWorkUrl(captured.url);
-
-          let targetNovel: NovelRecord | null = null;
-          if (initialNovelId) {
-            targetNovel = await novelRepository.getNovelById(initialNovelId);
-          }
-
-          if (!targetNovel) {
-            const list = await novelRepository.listNovels();
-            const found = list.find((n) => n.canonicalUrl === canonicalUrl);
-            if (found) {
-              targetNovel = await novelRepository.getNovelById(found.id);
-            }
-          }
-
-          // 未登録作品の場合は目次自動補完を試行
-          if (!targetNovel) {
-            if (fetchFullNovelIndex) {
-              try {
-                const fullIndex = await fetchFullNovelIndex(
-                  httpClient!,
-                  parser,
-                  canonicalUrl,
-                );
-                const now = new Date().toISOString();
-                targetNovel = await novelRepository.upsertNovelWithToc(
-                  fullIndex,
-                  now,
-                );
-              } catch {
-                targetNovel = null;
-              }
+            let targetNovel: NovelRecord | null = null;
+            if (initialNovelId) {
+              targetNovel = await novelRepository.getNovelById(initialNovelId);
             }
 
             if (!targetNovel) {
-              setError("先に作品トップ（目次）ページを取り込んでください");
-              return null;
+              const list = await novelRepository.listNovels();
+              const found = list.find((n) => n.canonicalUrl === canonicalUrl);
+              if (found) {
+                targetNovel = await novelRepository.getNovelById(found.id);
+              }
+            }
+
+            // 未登録作品の場合は目次自動補完を試行
+            if (!targetNovel) {
+              if (fetchFullNovelIndex) {
+                try {
+                  const fullIndex = await fetchFullNovelIndex(
+                    httpClient!,
+                    parser,
+                    canonicalUrl,
+                  );
+                  const now = new Date().toISOString();
+                  targetNovel = await novelRepository.upsertNovelWithToc(
+                    fullIndex,
+                    now,
+                  );
+                } catch {
+                  targetNovel = null;
+                }
+              }
+
+              if (!targetNovel) {
+                setError("先に作品トップ（目次）ページを取り込んでください");
+              }
+            }
+
+            if (targetNovel) {
+              // chapterIndex の特定
+              const chapters = await chapterRepository.listChaptersByNovelId(
+                targetNovel.id,
+              );
+              const matched = chapters.find(
+                (c) => c.remoteChapterId === parsedChapter.remoteChapterId,
+              );
+              const chapterIndex = matched
+                ? matched.chapterIndex
+                : (initialChapterIndex ?? 1);
+
+              const now = new Date().toISOString();
+              await chapterRepository.saveChapterBody(
+                targetNovel.id,
+                chapterIndex,
+                parsedChapter,
+                now,
+              );
+
+              if (syncEngine) {
+                await syncEngine.notifyChanged();
+              }
+
+              result = {
+                type: "chapter",
+                novelId: targetNovel.id,
+                chapterIndex,
+              };
+              setNotice("本文を取り込みました");
+              if (onImportComplete) {
+                onImportComplete(result);
+              }
             }
           }
-
-          // chapterIndex の特定
-          const chapters = await chapterRepository.listChaptersByNovelId(
-            targetNovel.id,
-          );
-          const matched = chapters.find(
-            (c) => c.remoteChapterId === parsedChapter.remoteChapterId,
-          );
-          const chapterIndex = matched
-            ? matched.chapterIndex
-            : (initialChapterIndex ?? 1);
-
-          const now = new Date().toISOString();
-          await chapterRepository.saveChapterBody(
-            targetNovel.id,
-            chapterIndex,
-            parsedChapter,
-            now,
-          );
-
-          await syncEngine?.notifyChanged?.();
-
-          const result: ImportSuccessResult = {
-            type: "chapter",
-            novelId: targetNovel.id,
-            chapterIndex,
-          };
-          setNotice("本文を取り込みました");
-          onImportComplete?.(result);
-          return result;
         }
       } catch (err: unknown) {
         setError(
           err instanceof Error ? err.message : "インポートに失敗しました",
         );
-        return null;
+        result = null;
       } finally {
         setIsImporting(false);
         setIsLoading(false);
       }
+
+      return result;
     }, [
       webViewDomBridge,
       parserRegistry,

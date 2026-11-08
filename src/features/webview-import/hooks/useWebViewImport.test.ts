@@ -1,6 +1,6 @@
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { useWebViewImport } from "./useWebViewImport";
+import { useWebViewImport, isChapterUrl } from "./useWebViewImport";
 import { MockWebViewDomBridge } from "../../../bridges/webview/mockWebViewDomBridge";
 import type {
   NovelRepository,
@@ -285,6 +285,28 @@ describe("useWebViewImport", () => {
 
       expect(success).toBe(false);
     });
+
+    it("引数なしで loadUrl を呼び出した場合、現在の url state を使ってロードされること", async () => {
+      const { result } = renderHook(() =>
+        useWebViewImport({
+          initialUrl: "https://kakuyomu.jp/works/16817330658027210412",
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          parserRegistry: mockParserRegistry,
+        }),
+      );
+
+      await act(async () => {});
+
+      let success: boolean = false;
+      await act(async () => {
+        success = await result.current.loadUrl();
+      });
+
+      expect(success).toBe(true);
+      expect(result.current.canImport).toBe(true);
+    });
   });
 
   describe("ネイティブブラウザ起動 (AC-WV-03)", () => {
@@ -330,6 +352,48 @@ describe("useWebViewImport", () => {
       });
 
       expect(result.current.error).toBe("安全でない URL スキームは開けません");
+    });
+
+    it("bridge.open が Error 例外を送出した場合、そのメッセージが error に設定されること", async () => {
+      vi.spyOn(bridge, "open").mockRejectedValueOnce(
+        new Error("ブラウザの起動に失敗"),
+      );
+
+      const { result } = renderHook(() =>
+        useWebViewImport({
+          initialUrl: "https://kakuyomu.jp/works/16817330658027210412",
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          parserRegistry: mockParserRegistry,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.openNativeBrowser();
+      });
+
+      expect(result.current.error).toBe("ブラウザの起動に失敗");
+    });
+
+    it("bridge.open が非 Error 例外を送出した場合、既定のエラーメッセージが設定されること", async () => {
+      vi.spyOn(bridge, "open").mockRejectedValueOnce("Unknown failure");
+
+      const { result } = renderHook(() =>
+        useWebViewImport({
+          initialUrl: "https://kakuyomu.jp/works/16817330658027210412",
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          parserRegistry: mockParserRegistry,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.openNativeBrowser();
+      });
+
+      expect(result.current.error).toBe("ブラウザの起動に失敗しました");
     });
   });
 
@@ -429,6 +493,108 @@ describe("useWebViewImport", () => {
         novelId: narouShortNovel.id,
       });
     });
+
+    it("なろう短編作品で p-novel__body クラスが含まれる場合も本文が同時保存されること", async () => {
+      const narouShortNovel: NovelRecord = {
+        ...sampleNovel,
+        id: "narou:n1111aa",
+        siteType: "narou",
+        remoteWorkId: "n1111aa",
+        canonicalUrl: "https://ncode.syosetu.com/n1111aa/",
+      };
+
+      (
+        mockNovelRepo.upsertNovelWithToc as ReturnType<typeof vi.fn>
+      ).mockResolvedValue(narouShortNovel);
+
+      bridge.setMockPage({
+        html: "<html><body><div class='p-novel__body'>新レイアウト本文</div></body></html>",
+        url: "https://ncode.syosetu.com/n1111aa/",
+        title: "なろう短編新レイアウト",
+      });
+
+      const { result } = renderHook(() =>
+        useWebViewImport({
+          initialUrl: "https://ncode.syosetu.com/n1111aa/",
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          parserRegistry: mockParserRegistry,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.importCurrentDom();
+      });
+
+      expect(mockNarouParser.parseChapterContent).toHaveBeenCalled();
+      expect(mockChapterRepo.saveChapterBody).toHaveBeenCalledWith(
+        narouShortNovel.id,
+        1,
+        expect.anything(),
+        expect.any(String),
+      );
+    });
+
+    it("なろう短編作品で章 URL が作品 URL と同一の場合も本文が同時保存されること", async () => {
+      const narouShortNovel: NovelRecord = {
+        ...sampleNovel,
+        id: "narou:n2222bb",
+        siteType: "narou",
+        remoteWorkId: "n2222bb",
+        canonicalUrl: "https://ncode.syosetu.com/n2222bb/",
+      };
+
+      const customIndex: ParsedNovelIndex = {
+        siteType: "narou",
+        remoteWorkId: "n2222bb",
+        canonicalUrl: "https://ncode.syosetu.com/n2222bb/",
+        title: "短編同一URL",
+        author: "作者",
+        synopsis: "あらすじ",
+        chapters: [
+          {
+            chapterIndex: 1,
+            remoteChapterId: "1",
+            partTitle: null,
+            title: "短編",
+            url: "https://ncode.syosetu.com/n2222bb/",
+            publishedAt: "2026-10-01",
+          },
+        ],
+        nextTocPageUrl: null,
+      };
+
+      vi.spyOn(mockNarouParser, "parseNovelIndex").mockReturnValueOnce(
+        customIndex,
+      );
+      (
+        mockNovelRepo.upsertNovelWithToc as ReturnType<typeof vi.fn>
+      ).mockResolvedValue(narouShortNovel);
+
+      bridge.setMockPage({
+        html: "<html><body>本文テキスト</body></html>",
+        url: "https://ncode.syosetu.com/n2222bb/",
+        title: "短編同一URL",
+      });
+
+      const { result } = renderHook(() =>
+        useWebViewImport({
+          initialUrl: "https://ncode.syosetu.com/n2222bb/",
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          parserRegistry: mockParserRegistry,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.importCurrentDom();
+      });
+
+      expect(mockNarouParser.parseChapterContent).toHaveBeenCalled();
+      expect(mockChapterRepo.saveChapterBody).toHaveBeenCalled();
+    });
   });
 
   describe("各話エピソード（本文）DOM インポート保存 (AC-WV-06, TR-11)", () => {
@@ -474,6 +640,39 @@ describe("useWebViewImport", () => {
         novelId: sampleNovel.id,
         chapterIndex: 1,
       });
+      expect(importResult).toEqual({
+        type: "chapter",
+        novelId: sampleNovel.id,
+        chapterIndex: 1,
+      });
+      expect(result.current.notice).toContain("本文");
+    });
+
+    it("onImportComplete 未指定時でも本文インポートが正常に完了すること", async () => {
+      bridge.setMockPage({
+        html: "<html><body><div class='widget-episodeBody'>本文</div></body></html>",
+        url: "https://kakuyomu.jp/works/16817330658027210412/episodes/16817330658027210413",
+        title: "第1話 プロローグ",
+      });
+
+      const { result } = renderHook(() =>
+        useWebViewImport({
+          initialUrl:
+            "https://kakuyomu.jp/works/16817330658027210412/episodes/16817330658027210413",
+          initialNovelId: sampleNovel.id,
+          initialChapterIndex: 1,
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          parserRegistry: mockParserRegistry,
+        }),
+      );
+
+      let importResult: unknown = null;
+      await act(async () => {
+        importResult = await result.current.importCurrentDom();
+      });
+
       expect(importResult).toEqual({
         type: "chapter",
         novelId: sampleNovel.id,
@@ -588,6 +787,143 @@ describe("useWebViewImport", () => {
       );
       expect(mockChapterRepo.saveChapterBody).not.toHaveBeenCalled();
     });
+
+    it("initialNovelId 未指定でも listNovels 内の作品 canonicalUrl 一致から対象作品が特定されること", async () => {
+      bridge.setMockPage({
+        html: "<html><body><div class='widget-episodeBody'>本文</div></body></html>",
+        url: "https://kakuyomu.jp/works/16817330658027210412/episodes/16817330658027210413",
+        title: "第1話",
+      });
+
+      const { result } = renderHook(() =>
+        useWebViewImport({
+          initialUrl:
+            "https://kakuyomu.jp/works/16817330658027210412/episodes/16817330658027210413",
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          parserRegistry: mockParserRegistry,
+        }),
+      );
+
+      let importResult: unknown = null;
+      await act(async () => {
+        importResult = await result.current.importCurrentDom();
+      });
+
+      expect(importResult).toEqual({
+        type: "chapter",
+        novelId: sampleNovel.id,
+        chapterIndex: 1,
+      });
+      expect(mockChapterRepo.saveChapterBody).toHaveBeenCalledWith(
+        sampleNovel.id,
+        1,
+        expect.anything(),
+        expect.any(String),
+      );
+    });
+
+    it("章一覧に一致する remoteChapterId が存在しない場合、initialChapterIndex または 1 へフォールバックすること", async () => {
+      (
+        mockChapterRepo.listChaptersByNovelId as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce([]);
+
+      bridge.setMockPage({
+        html: "<html><body><div class='widget-episodeBody'>未知のエピソード本文</div></body></html>",
+        url: "https://kakuyomu.jp/works/16817330658027210412/episodes/9999999999",
+        title: "番外編",
+      });
+
+      // 1) initialChapterIndex が 5 の場合
+      const { result: r1 } = renderHook(() =>
+        useWebViewImport({
+          initialUrl:
+            "https://kakuyomu.jp/works/16817330658027210412/episodes/9999999999",
+          initialNovelId: sampleNovel.id,
+          initialChapterIndex: 5,
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          parserRegistry: mockParserRegistry,
+        }),
+      );
+
+      let res1: unknown = null;
+      await act(async () => {
+        res1 = await r1.current.importCurrentDom();
+      });
+
+      expect(res1).toEqual({
+        type: "chapter",
+        novelId: sampleNovel.id,
+        chapterIndex: 5,
+      });
+
+      // 2) initialChapterIndex も未指定の場合 (1 にフォールバック)
+      (
+        mockChapterRepo.listChaptersByNovelId as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce([]);
+
+      const { result: r2 } = renderHook(() =>
+        useWebViewImport({
+          initialUrl:
+            "https://kakuyomu.jp/works/16817330658027210412/episodes/9999999999",
+          initialNovelId: sampleNovel.id,
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          parserRegistry: mockParserRegistry,
+        }),
+      );
+
+      let res2: unknown = null;
+      await act(async () => {
+        res2 = await r2.current.importCurrentDom();
+      });
+
+      expect(res2).toEqual({
+        type: "chapter",
+        novelId: sampleNovel.id,
+        chapterIndex: 1,
+      });
+    });
+
+    it("未登録作品エピソードで fetchFullNovelIndex が未指定の場合、エラーとなること", async () => {
+      (
+        mockNovelRepo.getNovelById as ReturnType<typeof vi.fn>
+      ).mockResolvedValue(null);
+      (mockNovelRepo.listNovels as ReturnType<typeof vi.fn>).mockResolvedValue(
+        [],
+      );
+
+      bridge.setMockPage({
+        html: "<html><body>本文</body></html>",
+        url: "https://kakuyomu.jp/works/16817330658027210412/episodes/16817330658027210413",
+        title: "第1話",
+      });
+
+      const { result } = renderHook(() =>
+        useWebViewImport({
+          initialUrl:
+            "https://kakuyomu.jp/works/16817330658027210412/episodes/16817330658027210413",
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          parserRegistry: mockParserRegistry,
+        }),
+      );
+
+      let importResult: unknown = null;
+      await act(async () => {
+        importResult = await result.current.importCurrentDom();
+      });
+
+      expect(importResult).toBeNull();
+      expect(result.current.error).toBe(
+        "先に作品トップ（目次）ページを取り込んでください",
+      );
+    });
   });
 
   describe("非対応 URL・例外ハンドリング (AC-WV-04)", () => {
@@ -639,6 +975,29 @@ describe("useWebViewImport", () => {
       expect(result.current.error).toBe("Bridge connection lost");
       expect(result.current.isImporting).toBe(false);
     });
+
+    it("captureDom が非 Error 例外を送出した場合、既定のエラー文言が設定されること", async () => {
+      vi.spyOn(bridge, "captureDom").mockRejectedValueOnce(
+        "Unknown bridge error",
+      );
+
+      const { result } = renderHook(() =>
+        useWebViewImport({
+          initialUrl: "https://kakuyomu.jp/works/16817330658027210412",
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          parserRegistry: mockParserRegistry,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.importCurrentDom();
+      });
+
+      expect(result.current.error).toBe("インポートに失敗しました");
+      expect(result.current.isImporting).toBe(false);
+    });
   });
 
   describe("戻るナビゲーション (AC-WV-08, TR-12)", () => {
@@ -660,6 +1019,97 @@ describe("useWebViewImport", () => {
       });
 
       expect(onNavigateBackMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("isChapterUrl ヘルパー関数の境界値検証", () => {
+    it("カクヨムおよびなろうのエピソードURLを正しく判定し、未対応サイトや目次URLは false を返すこと", () => {
+      expect(
+        isChapterUrl(
+          "https://kakuyomu.jp/works/16817330658027210412/episodes/16817330658027210413",
+          "kakuyomu",
+        ),
+      ).toBe(true);
+      expect(
+        isChapterUrl(
+          "https://kakuyomu.jp/works/16817330658027210412",
+          "kakuyomu",
+        ),
+      ).toBe(false);
+
+      expect(
+        isChapterUrl("https://ncode.syosetu.com/n9669bk/1/", "narou"),
+      ).toBe(true);
+      expect(isChapterUrl("https://ncode.syosetu.com/n9669bk/", "narou")).toBe(
+        false,
+      );
+
+      // 未知のサイト種別
+      expect(
+        isChapterUrl("https://example.com/works/1/episodes/1", "unknown_site"),
+      ).toBe(false);
+    });
+  });
+
+  describe("なろう1話のみだが本文を含まない連載目次ページのインポート", () => {
+    it("目次ページに本文要素が存在せず章URLも異なる場合は本文保存を行わないこと", async () => {
+      const narouSerialNovel: NovelRecord = {
+        ...sampleNovel,
+        id: "narou:n3333cc",
+        siteType: "narou",
+        remoteWorkId: "n3333cc",
+        canonicalUrl: "https://ncode.syosetu.com/n3333cc/",
+      };
+
+      const customIndex: ParsedNovelIndex = {
+        siteType: "narou",
+        remoteWorkId: "n3333cc",
+        canonicalUrl: "https://ncode.syosetu.com/n3333cc/",
+        title: "連載作品",
+        author: "作者",
+        synopsis: "あらすじ",
+        chapters: [
+          {
+            chapterIndex: 1,
+            remoteChapterId: "1",
+            partTitle: null,
+            title: "第1話",
+            url: "https://ncode.syosetu.com/n3333cc/1/",
+            publishedAt: "2026-10-01",
+          },
+        ],
+        nextTocPageUrl: null,
+      };
+
+      vi.spyOn(mockNarouParser, "parseNovelIndex").mockReturnValueOnce(
+        customIndex,
+      );
+      (
+        mockNovelRepo.upsertNovelWithToc as ReturnType<typeof vi.fn>
+      ).mockResolvedValue(narouSerialNovel);
+
+      bridge.setMockPage({
+        html: "<html><body><div class='index_box'>目次のみ</div></body></html>",
+        url: "https://ncode.syosetu.com/n3333cc/",
+        title: "目次ページ",
+      });
+
+      const { result } = renderHook(() =>
+        useWebViewImport({
+          initialUrl: "https://ncode.syosetu.com/n3333cc/",
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          parserRegistry: mockParserRegistry,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.importCurrentDom();
+      });
+
+      expect(mockNovelRepo.upsertNovelWithToc).toHaveBeenCalled();
+      expect(mockChapterRepo.saveChapterBody).not.toHaveBeenCalled();
     });
   });
 });
