@@ -349,7 +349,6 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
               0,
               prev!.totalByteSize - oldSize + parsedContent.byteSize,
             ),
-            updatedAt: downloadedAt,
           };
         });
 

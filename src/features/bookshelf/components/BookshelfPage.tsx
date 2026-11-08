@@ -78,19 +78,13 @@ export const BookshelfPage: React.FC<BookshelfPageProps> = ({
               aria-pressed={favoriteOnly}
               aria-label="お気に入りのみ表示"
               onClick={onToggleFavoriteFilter}
-              className={`inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs md:text-sm font-medium transition-colors cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-amber-500 ${
+              className={`inline-flex items-center justify-center shrink-0 whitespace-nowrap px-2.5 py-1.5 rounded-lg border text-xs md:text-sm font-medium transition-colors cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-amber-500 ${
                 favoriteOnly
-                  ? "bg-amber-50 dark:bg-amber-950/40 border-amber-400 dark:border-amber-600 text-amber-700 dark:text-amber-300 font-semibold"
-                  : "bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                  ? "bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700/60 text-amber-500 font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/50"
+                  : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
               }`}
             >
-              <span
-                className={favoriteOnly ? "text-amber-500" : "text-slate-400"}
-                aria-hidden="true"
-              >
-                {favoriteOnly ? "★" : "☆"}
-              </span>
-              <span>お気に入り</span>
+              {favoriteOnly ? "★" : "☆"}
             </button>
             <select
               data-testid="bookshelf-sort-select"
