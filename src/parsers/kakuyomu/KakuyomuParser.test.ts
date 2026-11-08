@@ -737,13 +737,15 @@ describe("KakuyomuParser", () => {
       ).toContain("order=weekly_ranking");
     });
 
-    it("連載状態オプション（running, completed）を付与し、all または未指定の場合はクエリから省略すること (AC-08)", () => {
+    it("連載状態オプション（running, completed）を付与し、completed では total_character_count_range を付与せず、all または未指定の場合はクエリから省略すること (AC-08, R2-18)", () => {
       expect(
         parser.buildSearchUrl("テスト", { serialStatus: "running" }),
       ).toContain("serial_status=running");
-      expect(
-        parser.buildSearchUrl("テスト", { serialStatus: "completed" }),
-      ).toContain("serial_status=completed");
+      const completedUrl = parser.buildSearchUrl("テスト", {
+        serialStatus: "completed",
+      });
+      expect(completedUrl).toContain("serial_status=completed");
+      expect(completedUrl).not.toContain("total_character_count_range");
       expect(
         parser.buildSearchUrl("テスト", { serialStatus: "all" }),
       ).not.toContain("serial_status");
@@ -752,10 +754,14 @@ describe("KakuyomuParser", () => {
       );
     });
 
-    it("連載状態オプションに short を指定した場合は completed にマッピングされて serial_status=completed が付与されること (AC-08)", () => {
-      expect(
+    it("連載状態オプションに short を指定した場合は serial_status=completed かつ total_character_count_range=-20000 が付与されること (AC-08, R2-18)", () => {
+      const shortUrl = new URL(
         parser.buildSearchUrl("テスト", { serialStatus: "short" }),
-      ).toContain("serial_status=completed");
+      );
+      expect(shortUrl.searchParams.get("serial_status")).toBe("completed");
+      expect(shortUrl.searchParams.get("total_character_count_range")).toBe(
+        "-20000",
+      );
     });
 
     it("ジャンル名オプション（小文字スラッグ）を正しくクエリに付与すること", () => {

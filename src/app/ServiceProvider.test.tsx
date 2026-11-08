@@ -444,9 +444,10 @@ describe("ServiceProvider", () => {
     });
 
     it("createDefaultMockHttpClient がなろうランキングURLで type=re または type=t が付与されていてもランキング結果を返すこと (Issue #265)", async () => {
+      window.history.pushState({}, "", "/ranking");
       let rankingLongJson = "";
       let rankingShortJson = "";
-      let searchShortJson = "";
+      let rankingDailyShortJson = "";
 
       const TestConsumer: React.FC = () => {
         const services = useServices();
@@ -460,7 +461,7 @@ describe("ServiceProvider", () => {
               .then((res) => {
                 rankingLongJson = res.html;
               });
-            // ランキング: 短編（type=t）
+            // ランキング画面上での短編（type=t）
             services.httpClient
               .getHtml({
                 url: "https://api.syosetu.com/novelapi/api/?out=json&lim=20&order=weeklypoint&type=t",
@@ -468,13 +469,14 @@ describe("ServiceProvider", () => {
               .then((res) => {
                 rankingShortJson = res.html;
               });
-            // 検索: 短編（type=t かつ word 指定）
+            // ランキング専用 order（dailypoint）での短編（type=t）
+            window.history.pushState({}, "", "/");
             services.httpClient
               .getHtml({
-                url: "https://api.syosetu.com/novelapi/api/?out=json&lim=20&word=%E7%9F%AD%E7%B7%A8&type=t",
+                url: "https://api.syosetu.com/novelapi/api/?out=json&lim=20&order=dailypoint&type=t",
               })
               .then((res) => {
-                searchShortJson = res.html;
+                rankingDailyShortJson = res.html;
               });
           }
         }, [services]);
@@ -490,7 +492,51 @@ describe("ServiceProvider", () => {
       await waitFor(() => {
         expect(rankingLongJson).toContain("デイリー1位作品");
         expect(rankingShortJson).toContain("デイリー1位作品");
-        expect(searchShortJson).toContain(
+        expect(rankingDailyShortJson).toContain("デイリー1位作品");
+      });
+    });
+
+    it("createDefaultMockHttpClient がなろうで type=t かつ word なしの検索 URL に対して検索用フィクスチャを返すこと (R2-10)", async () => {
+      window.history.pushState({}, "", "/");
+      let searchShortNoWordJson = "";
+      let searchShortWithWordJson = "";
+
+      const TestConsumer: React.FC = () => {
+        const services = useServices();
+        React.useEffect(() => {
+          if (services.isReady) {
+            // 検索: 短編（type=t かつ word なし・既定の並び順・単一ジャンル）
+            services.httpClient
+              .getHtml({
+                url: "https://api.syosetu.com/novelapi/api/?out=json&lim=20&order=weeklypoint&type=t&genre=201",
+              })
+              .then((res) => {
+                searchShortNoWordJson = res.html;
+              });
+            // 検索: 短編（type=t かつ word 指定）
+            services.httpClient
+              .getHtml({
+                url: "https://api.syosetu.com/novelapi/api/?out=json&lim=20&word=%E7%9F%AD%E7%B7%A8&type=t",
+              })
+              .then((res) => {
+                searchShortWithWordJson = res.html;
+              });
+          }
+        }, [services]);
+        return <div>なろう短編検索モックテスト</div>;
+      };
+
+      render(
+        <ServiceProvider>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(searchShortNoWordJson).toContain(
+          "無職転生 - 異世界行ったら本気だす -",
+        );
+        expect(searchShortWithWordJson).toContain(
           "無職転生 - 異世界行ったら本気だす -",
         );
       });
