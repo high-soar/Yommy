@@ -50,6 +50,7 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
   onNavigateSettings,
   onNavigateChapter,
   onBackToToc,
+  onOpenWebView,
 }) => {
   const router = useRouter();
   const {
@@ -163,6 +164,29 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
     }
   }, [flushBookmark, novelId, novel?.id, onBackToToc, router]);
 
+  const handleOpenWebView = useCallback(() => {
+    const targetUrl = chapter?.url ?? novel?.canonicalUrl ?? initialWorkUrl;
+    if (targetUrl) {
+      if (onOpenWebView) {
+        onOpenWebView(targetUrl);
+      } else {
+        const targetId = novelId ?? novel?.id;
+        router.navigate(
+          `/browser?url=${encodeURIComponent(targetUrl)}${targetId ? `&novelId=${encodeURIComponent(targetId)}` : ""}&chapterIndex=${currentChapterIndex}`,
+        );
+      }
+    }
+  }, [
+    chapter?.url,
+    currentChapterIndex,
+    initialWorkUrl,
+    novel?.canonicalUrl,
+    novel?.id,
+    novelId,
+    onOpenWebView,
+    router,
+  ]);
+
   return (
     <ReaderPage
       novel={novel}
@@ -190,6 +214,7 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
       onScrollProgressChange={handleScrollProgressChange}
       onSelectTab={handleSelectTab}
       onBackToToc={handleBackToToc}
+      onOpenWebView={handleOpenWebView}
     />
   );
 };

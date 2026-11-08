@@ -29,6 +29,7 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
   onOpenDeleteDialog,
   onOpenClearCacheDialog,
   onToggleFavorite,
+  onOpenWebView,
 }) => {
   const [isSynopsisExpanded, setIsSynopsisExpanded] = useState(false);
 
@@ -138,6 +139,15 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
           className="px-3 py-1.5 text-xs font-medium text-amber-700 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-amber-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
         >
           本文キャッシュ整理
+        </button>
+        <button
+          type="button"
+          data-testid="open-webview-button"
+          onClick={onOpenWebView}
+          disabled={isRefreshing || isBatchCaching}
+          className="px-3 py-1.5 text-xs font-medium bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-emerald-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+        >
+          内蔵ブラウザで開く
         </button>
         <button
           type="button"

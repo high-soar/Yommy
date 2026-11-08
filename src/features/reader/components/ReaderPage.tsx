@@ -125,6 +125,7 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
   onScrollProgressChange,
   onSelectTab,
   onBackToToc,
+  onOpenWebView,
   initialOverlayOpen,
   initialSlideOffsetPx,
   initialBoundaryHint,
@@ -330,7 +331,15 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
               className="max-w-md w-full bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 p-4 rounded-lg text-sm shadow-xs"
             >
               <div className="font-semibold mb-1">エラー</div>
-              <div>{error}</div>
+              <div className="mb-3">{error}</div>
+              <button
+                type="button"
+                data-testid="reader-open-webview-button"
+                onClick={onOpenWebView}
+                className="w-full py-2 px-3 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors focus:outline-hidden focus:ring-2 focus:ring-emerald-500 text-center cursor-pointer"
+              >
+                内蔵ブラウザで開いて取り込む
+              </button>
             </div>
           </div>
         ) : isLoading && !hasBodyHtml ? (
