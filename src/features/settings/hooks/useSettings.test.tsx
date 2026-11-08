@@ -8,6 +8,7 @@ import {
 import {
   NovelRepository,
   ChapterRepository,
+  QueueRepository,
   SettingsRepository,
   AppSettingsRepository,
   ReaderSettings,
@@ -53,6 +54,7 @@ function createMockServices(
     databaseAdapter: {} as DatabaseAdapter,
     novelRepository: {} as NovelRepository,
     chapterRepository: {} as ChapterRepository,
+    queueRepository: overrides?.queueRepository ?? ({} as QueueRepository),
     settingsRepository: overrides?.settingsRepository ?? defaultSettingsRepo,
     appSettingsRepository:
       overrides?.appSettingsRepository ?? ({} as AppSettingsRepository),

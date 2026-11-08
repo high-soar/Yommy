@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetTestDb } from "../adapter/inMemoryDb";
+import type { DatabaseAdapter } from "../adapter/types";
 import { SqlNovelRepository } from "./novelRepository";
 import { SqlChapterRepository } from "./chapterRepository";
 import type {
@@ -8,6 +9,7 @@ import type {
 } from "../../parsers/types";
 
 describe("SqlChapterRepository", () => {
+  let adapter: DatabaseAdapter;
   let novelRepo: SqlNovelRepository;
   let chapterRepo: SqlChapterRepository;
 
@@ -50,7 +52,7 @@ describe("SqlChapterRepository", () => {
   };
 
   beforeEach(async () => {
-    const adapter = await resetTestDb();
+    adapter = await resetTestDb();
     novelRepo = new SqlNovelRepository(adapter);
     chapterRepo = new SqlChapterRepository(adapter);
     await novelRepo.upsertNovelWithToc(
@@ -269,6 +271,88 @@ describe("SqlChapterRepository", () => {
       const novel = await novelRepo.getNovelById(novelId);
       expect(novel?.cachedChapters).toBe(1);
       expect(novel?.totalByteSize).toBe(300);
+    });
+
+    it("options 未指定時は download_queue の対象作品レコードも削除され他作品のキューは維持されること (Issue #268)", async () => {
+      // download_queue に novelId の 1話〜3話と、他作品の 1話を挿入
+      const otherNovelId = "narou:other1";
+      await adapter.execute(
+        `INSERT INTO download_queue (novel_id, chapter_index, target_url, status, created_at, updated_at)
+         VALUES
+           (?, 1, 'https://example.com/1', 'completed', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+           (?, 2, 'https://example.com/2', 'failed', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+           (?, 3, 'https://example.com/3', 'pending', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
+        [novelId, novelId, novelId],
+      );
+      await novelRepo.upsertNovelWithToc(
+        {
+          siteType: "narou",
+          remoteWorkId: "other1",
+          canonicalUrl: "https://ncode.syosetu.com/other1/",
+          title: "他小説",
+          author: "他作者",
+          synopsis: "あらすじ",
+          nextTocPageUrl: null,
+          chapters: [
+            {
+              chapterIndex: 1,
+              remoteChapterId: "1",
+              partTitle: null,
+              title: "話1",
+              url: "https://ncode.syosetu.com/other1/1/",
+              publishedAt: "2026-01-01T00:00:00Z",
+            },
+          ],
+        },
+        "2026-01-01T00:00:00Z",
+      );
+      await adapter.execute(
+        `INSERT INTO download_queue (novel_id, chapter_index, target_url, status, created_at, updated_at)
+         VALUES (?, 1, 'https://example.com/other1', 'completed', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
+        [otherNovelId],
+      );
+
+      const novelBefore = await novelRepo.getNovelById(novelId);
+      await chapterRepo.deleteCachedBodies(novelId);
+
+      // novelId の download_queue は全削除
+      const novelQueue = await adapter.query<{ id: number }>(
+        "SELECT id FROM download_queue WHERE novel_id = ?;",
+        [novelId],
+      );
+      expect(novelQueue).toHaveLength(0);
+
+      // otherNovelId の download_queue は維持
+      const otherQueue = await adapter.query<{ id: number }>(
+        "SELECT id FROM download_queue WHERE novel_id = ?;",
+        [otherNovelId],
+      );
+      expect(otherQueue).toHaveLength(1);
+
+      // R1-01: novels.updated_at は不変
+      const novelAfter = await novelRepo.getNovelById(novelId);
+      expect(novelAfter?.updatedAt).toBe(novelBefore?.updatedAt);
+    });
+
+    it("onlyRead: true 指定時は既読話に対応する download_queue のみが削除され未読話のキューは維持されること (Issue #268)", async () => {
+      // 1話(既読), 2話(既読), 3話(未読) のキューを登録
+      await adapter.execute(
+        `INSERT INTO download_queue (novel_id, chapter_index, target_url, status, created_at, updated_at)
+         VALUES
+           (?, 1, 'https://example.com/1', 'completed', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+           (?, 2, 'https://example.com/2', 'failed', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+           (?, 3, 'https://example.com/3', 'pending', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
+        [novelId, novelId, novelId],
+      );
+
+      await chapterRepo.deleteCachedBodies(novelId, { onlyRead: true });
+
+      const remainingQueue = await adapter.query<{ chapter_index: number }>(
+        "SELECT chapter_index FROM download_queue WHERE novel_id = ? ORDER BY chapter_index ASC;",
+        [novelId],
+      );
+      expect(remainingQueue).toHaveLength(1);
+      expect(remainingQueue[0].chapter_index).toBe(3); // 未読の3話のみ残る
     });
   });
 
@@ -585,6 +669,58 @@ describe("SqlChapterRepository", () => {
       const summary = await chapterRepo.getStorageCacheSummary();
       expect(summary.totalCachedChapters).toBe(4);
       expect(summary.totalByteSize).toBe(1100);
+    });
+
+    it("options 未指定時は全作品の download_queue レコードが一括全削除されること (Issue #268)", async () => {
+      // 2作品それぞれにキューを登録
+      await adapter.execute(
+        `INSERT INTO download_queue (novel_id, chapter_index, target_url, status, created_at, updated_at)
+         VALUES
+           (?, 1, 'https://example.com/1', 'completed', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+           (?, 2, 'https://example.com/2', 'failed', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+           (?, 1, 'https://example.com/sec1', 'pending', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
+        [novelId, novelId, secondNovelId],
+      );
+
+      await chapterRepo.deleteAllCachedBodies();
+
+      const allQueues = await adapter.query<{ id: number }>(
+        "SELECT id FROM download_queue;",
+      );
+      expect(allQueues).toHaveLength(0);
+    });
+
+    it("onlyRead: true 指定時は全作品の既読話に対応する download_queue のみが削除され未読話のキューは維持されること (Issue #268)", async () => {
+      // novelId: 1話(既読), 2話(既読), 3話(未読)
+      // secondNovelId: 1話(既読), 2話(未読)
+      await adapter.execute(
+        `INSERT INTO download_queue (novel_id, chapter_index, target_url, status, created_at, updated_at)
+         VALUES
+           (?, 1, 'https://example.com/1', 'completed', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+           (?, 3, 'https://example.com/3', 'pending', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+           (?, 1, 'https://example.com/sec1', 'completed', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+           (?, 2, 'https://example.com/sec2', 'failed', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
+        [novelId, novelId, secondNovelId, secondNovelId],
+      );
+
+      await chapterRepo.deleteAllCachedBodies({ onlyRead: true });
+
+      const remainingQueues = await adapter.query<{
+        novel_id: string;
+        chapter_index: number;
+      }>(
+        "SELECT novel_id, chapter_index FROM download_queue ORDER BY novel_id, chapter_index ASC;",
+      );
+      // 未読の novelId 3話 と secondNovelId 2話 のみが残る
+      expect(remainingQueues).toHaveLength(2);
+      expect(remainingQueues[0]).toEqual({
+        novel_id: novelId,
+        chapter_index: 3,
+      });
+      expect(remainingQueues[1]).toEqual({
+        novel_id: secondNovelId,
+        chapter_index: 2,
+      });
     });
   });
 });

@@ -8,6 +8,7 @@ import {
 import {
   ChapterRepository,
   NovelRepository,
+  QueueRepository,
   SettingsRepository,
   AppSettingsRepository,
 } from "../../../storage/types";
@@ -43,6 +44,7 @@ function createMockServices(
     parserRegistry: {} as ParserRegistry,
     novelRepository: {} as NovelRepository,
     chapterRepository: defaultChapterRepo,
+    queueRepository: (overrides?.queueRepository ?? {}) as QueueRepository,
     settingsRepository: {} as SettingsRepository,
     appSettingsRepository: {} as AppSettingsRepository,
     databaseAdapter: {} as DatabaseAdapter,

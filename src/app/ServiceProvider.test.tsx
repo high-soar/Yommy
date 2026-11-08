@@ -25,6 +25,8 @@ import {
   MockVolumeKeyBridge,
   CapacitorVolumeKeyBridge,
 } from "../bridges/volume-key";
+import type { QueueRepository } from "../storage/types";
+import { SqlQueueRepository } from "../storage/repositories/queueRepository";
 
 const { Default, CustomMockServices } = composeStories(stories);
 
@@ -48,6 +50,9 @@ describe("ServiceProvider", () => {
         "present",
       );
       expect(screen.getByTestId("service-app-settings-repo")).toHaveTextContent(
+        "present",
+      );
+      expect(screen.getByTestId("service-queue-repo")).toHaveTextContent(
         "present",
       );
     });
@@ -1033,6 +1038,63 @@ describe("ServiceProvider", () => {
       // deleted_novels テーブルが作成されていること
       const deletedNovels = await db.query("SELECT * FROM deleted_novels;");
       expect(deletedNovels).toEqual([]);
+    });
+  });
+
+  describe("QueueRepository DI 統合 (Issue #268, #293)", () => {
+    it("デフォルト初期化時に queueRepository が Context から提供され SqlQueueRepository であること", async () => {
+      let queueRepoInstance: QueueRepository | undefined;
+
+      const TestConsumer: React.FC = () => {
+        const services = useServices();
+        queueRepoInstance = services.queueRepository;
+        return <div data-testid="queue-consumer-ready">OK</div>;
+      };
+
+      render(
+        <ServiceProvider>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("queue-consumer-ready")).toBeInTheDocument();
+      });
+
+      expect(queueRepoInstance).toBeDefined();
+      expect(queueRepoInstance).toBeInstanceOf(SqlQueueRepository);
+    });
+
+    it("カスタム queueRepository を services 経由で注入できること", async () => {
+      const mockQueueRepo: QueueRepository = {
+        enqueueChapters: vi.fn(),
+        listByNovelId: vi.fn().mockResolvedValue([]),
+        updateStatus: vi.fn(),
+        resetInterruptedToPending: vi.fn(),
+        deleteByNovelAndChapters: vi.fn(),
+        clearNovelQueue: vi.fn(),
+        clearAllQueue: vi.fn(),
+      };
+
+      let queueRepoInstance: QueueRepository | undefined;
+
+      const TestConsumer: React.FC = () => {
+        const services = useServices();
+        queueRepoInstance = services.queueRepository;
+        return <div data-testid="custom-queue-ready">OK</div>;
+      };
+
+      render(
+        <ServiceProvider services={{ queueRepository: mockQueueRepo }}>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("custom-queue-ready")).toBeInTheDocument();
+      });
+
+      expect(queueRepoInstance).toBe(mockQueueRepo);
     });
   });
 });

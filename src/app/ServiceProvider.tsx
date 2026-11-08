@@ -21,6 +21,7 @@ import type {
   ChapterRepository,
   SettingsRepository,
   AppSettingsRepository,
+  QueueRepository,
 } from "../storage/types";
 import { SqlNovelRepository } from "../storage/repositories/novelRepository";
 import { SqlChapterRepository } from "../storage/repositories/chapterRepository";
@@ -55,6 +56,7 @@ export interface ServiceContextValue {
   databaseAdapter: DatabaseAdapter;
   novelRepository: NovelRepository;
   chapterRepository: ChapterRepository;
+  queueRepository: QueueRepository;
   settingsRepository: SettingsRepository;
   appSettingsRepository: AppSettingsRepository;
   appBridge: AppBridge;
@@ -351,6 +353,8 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           databaseAdapter,
           novelRepository,
           chapterRepository,
+          queueRepository: (services?.queueRepository ??
+            undefined) as unknown as QueueRepository,
           settingsRepository,
           appSettingsRepository,
           appBridge,
@@ -379,6 +383,7 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
             databaseAdapter: null as unknown as DatabaseAdapter,
             novelRepository: null as unknown as NovelRepository,
             chapterRepository: null as unknown as ChapterRepository,
+            queueRepository: null as unknown as QueueRepository,
             settingsRepository: null as unknown as SettingsRepository,
             appSettingsRepository:
               services?.appSettingsRepository as AppSettingsRepository,
@@ -427,6 +432,7 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           databaseAdapter: services?.databaseAdapter as DatabaseAdapter,
           novelRepository: services?.novelRepository as NovelRepository,
           chapterRepository: services?.chapterRepository as ChapterRepository,
+          queueRepository: services?.queueRepository as QueueRepository,
           settingsRepository:
             services?.settingsRepository as SettingsRepository,
           appSettingsRepository:
