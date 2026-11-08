@@ -211,8 +211,8 @@ export interface SearchInputBarProps {
 }
 ```
 
-- 1 段目にキーワード入力欄（`data-testid="search-input"`, `aria-label="小説を検索"`）・クリアボタン（`data-testid="search-clear-button"`）・「除外語」トグルボタン（`data-testid="search-exclude-toggle-button"`, `aria-expanded={isExcludeOpen}`, 展開時 `isExcludeOpen === true` のみ `aria-controls={excludeInputId}` を出力し折りたたみ時は出力しない、R2-09）・「検索」実行ボタン（`data-testid="search-submit-button"`）を配置する。
-- 「除外語」トグルボタン押下により、2 段目に除外キーワード入力欄（`data-testid="search-exclude-input"`, `id={excludeInputId}`［`useId()` で一意生成］, `aria-label="除外キーワード"`、R2-09）およびクリアボタン（`data-testid="search-exclude-clear-button"`）をインライン開閉する（初期描画時に `excludeKeyword` が非空の場合は展開状態で初期化）。またパネルが閉じていても `excludeKeyword.trim().length > 0` のときはトグルボタンを強調表示（`data-active="true"`, `除外語（設定中）`）する（v0.8 Issue #264）。
+- 1 段目にキーワード入力欄（`data-testid="search-input"`, `placeholder="作品名・著者名・キーワードを入力"`）・クリアボタン（`data-testid="search-clear-button"`, `aria-label="キーワードをクリア"`）・「除外語」トグルボタン（`data-testid="search-exclude-toggle-button"`, `aria-expanded={isExcludeOpen}`, `aria-label="除外キーワード入力を開く"` / `"除外キーワード入力を閉じる"`, 展開時 `isExcludeOpen === true` のみ `aria-controls={excludeInputId}` を出力し折りたたみ時は出力しない、R2-09）・「検索」実行ボタン（`data-testid="search-submit-button"`, `aria-label="検索"`）を配置する。
+- 「除外語」トグルボタン押下により、2 段目に除外キーワード入力欄（`data-testid="search-exclude-input"`, `id={excludeInputId}`［`useId()` で一意生成］, `aria-label="除外キーワード"`, `placeholder="除外ワード（スペース区切り）"`、R2-09）およびクリアボタン（`data-testid="search-exclude-clear-button"`, `aria-label="除外キーワードをクリア"`）をインライン開閉する（初期描画時に `excludeKeyword` が非空の場合は展開状態で初期化）。またパネルが閉じていても `excludeKeyword.trim().length > 0` のときはトグルボタンを強調表示（`data-active="true"`、青色ボーダーおよびドットインジケーター表示）する（v0.8 Issue #264）。
 
 ### 3.5 `SearchFilterBarProps`
 
