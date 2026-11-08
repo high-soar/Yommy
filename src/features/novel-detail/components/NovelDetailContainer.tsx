@@ -27,6 +27,9 @@ export const NovelDetailContainer: React.FC<NovelDetailContainerProps> = ({
     isBatchCaching,
     batchCacheProgress,
     isAllCached,
+    pendingCacheCount,
+    failedCacheCount,
+    failedChapterIndexes,
     isDeleteDialogOpen,
     isDeleting,
     isClearCacheDialogOpen,
@@ -99,6 +102,9 @@ export const NovelDetailContainer: React.FC<NovelDetailContainerProps> = ({
       isBatchCaching={isBatchCaching}
       batchCacheProgress={batchCacheProgress}
       isAllCached={isAllCached}
+      pendingCacheCount={pendingCacheCount}
+      failedCacheCount={failedCacheCount}
+      failedChapterIndexes={failedChapterIndexes}
       isDeleteDialogOpen={isDeleteDialogOpen}
       isDeleting={isDeleting}
       isClearCacheDialogOpen={isClearCacheDialogOpen}

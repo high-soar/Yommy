@@ -167,9 +167,15 @@ describe("EpisodeList", () => {
     });
 
     it("failedChapterIndexes に含まれる話数に isDownloadFailed が伝達されて取得失敗バッジが表示されること (AC-ND-25)", () => {
+      const uncachedChapters: ChapterSummary[] = testChapters.map((c) => ({
+        ...c,
+        byteSize: 0,
+        downloadedAt: null,
+      }));
+
       render(
         <EpisodeList
-          chapters={testChapters}
+          chapters={uncachedChapters}
           bookmarkChapterIndex={null}
           failedChapterIndexes={[1, 4]}
           onSelectEpisode={vi.fn()}

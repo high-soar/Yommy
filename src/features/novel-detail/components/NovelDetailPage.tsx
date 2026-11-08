@@ -22,6 +22,9 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
   isBatchCaching,
   batchCacheProgress,
   isAllCached,
+  pendingCacheCount,
+  failedCacheCount,
+  failedChapterIndexes,
   isDeleteDialogOpen,
   isDeleting,
   isClearCacheDialogOpen = false,
@@ -129,6 +132,8 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
               isBatchCaching={isBatchCaching}
               batchCacheProgress={batchCacheProgress}
               isAllCached={isAllCached}
+              pendingCacheCount={pendingCacheCount}
+              failedCacheCount={failedCacheCount}
               refreshMessage={refreshMessage}
               error={error}
               onStartFromBeginning={onStartFromBeginning}
@@ -152,6 +157,7 @@ export const NovelDetailPage: React.FC<NovelDetailPageProps> = ({
             <EpisodeList
               chapters={chapters}
               bookmarkChapterIndex={novel.bookmarkChapterIndex}
+              failedChapterIndexes={failedChapterIndexes}
               onSelectEpisode={handleSelectEpisode}
             />
           </main>
