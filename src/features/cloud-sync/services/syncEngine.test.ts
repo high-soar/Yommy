@@ -678,7 +678,8 @@ describe("syncEngine", () => {
       expect(localNovel?.bookmarkChapterIndex).toBe(2);
       expect(localNovel?.bookmarkScrollProgress).toBe(0.0);
       expect(localNovel?.isFavorite).toBe(true);
-      // R1-19: 新規作品取込時にリモートの updatedAt がローカルに維持されること
+      // R1-19, R2-02: 新規作品取込時にリモートの createdAt および updatedAt がローカルに復元されること
+      expect(localNovel?.createdAt).toBe("2026-10-01T00:00:00.000Z");
       expect(localNovel?.updatedAt).toBe("2026-10-31T10:00:00.000Z");
 
       const chapters = await chapterRepo.listChaptersByNovelId(
@@ -1063,6 +1064,91 @@ describe("syncEngine", () => {
       expect(
         await novelRepo.getNovelById("kakuyomu:16817330658027210412"),
       ).toBeNull();
+    });
+
+    it("pullAndMerge: 未 Push の Tombstone（削除日時 t1）を持つ端末 A が、その作品を Pull 取込して Push した他端末 B のペイロード（元の createdAt < t1 が保持されている）を Pull しても、削除後の再登録と誤判定されず復活しないこと (R2-02)", async () => {
+      const baseNow = Date.now();
+      const t0 = new Date(baseNow - 10 * 86_400_000).toISOString(); // 初回登録日時
+      const t1Ms = baseNow - 5 * 86_400_000; // 端末 A でのオフライン削除日時 (t1 > t0)
+      const t2Ms = baseNow - 1 * 86_400_000; // 端末 B での Pull & Push 日時 (t2 > t1)
+
+      const novelId = "kakuyomu:16817330658027210412";
+      const parser = parserRegistry.requireParser(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      const index = parser.parseNovelIndex(
+        workIndexHtml,
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+
+      // 1. クラウド上に初期状態（createdAt = t0）が存在する
+      const initialRemoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: t0,
+        novels: {
+          [novelId]: {
+            id: novelId,
+            siteType: "kakuyomu",
+            remoteWorkId: "16817330658027210412",
+            canonicalUrl: "https://kakuyomu.jp/works/16817330658027210412",
+            title: "境界迷宮と異界の魔術師",
+            author: "小野崎",
+            synopsis: "あらすじ本文",
+            totalChapters: 3,
+            isFavorite: 1,
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: t0,
+            bookmarkChapterIndex: 1,
+            lastReadAt: t0,
+            readChapterIds: [],
+            createdAt: t0,
+            updatedAt: t0,
+          },
+        },
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(initialRemoteState));
+
+      // 2. 端末 A（novelRepo / engine）は t0 で登録済みの作品を t1 でローカル削除（未 Push の Tombstone 保持）
+      await novelRepo.upsertNovelWithToc(index, t0);
+      const dateNowSpy = vi.spyOn(Date, "now").mockReturnValue(t1Ms);
+      await novelRepo.deleteNovel(novelId);
+      dateNowSpy.mockRestore();
+
+      expect(await novelRepo.getNovelById(novelId)).toBeNull();
+      expect(await novelRepo.getDeletedNovels()).toEqual([
+        { id: novelId, deletedAt: t1Ms },
+      ]);
+
+      // 3. 他端末 B が t2（> t1）時点でクラウドから新規 Pull 取込（mergeNewNovel）し、続けて Push する
+      const dbB = await createInMemoryDb();
+      const novelRepoB = new SqlNovelRepository(dbB);
+      const chapterRepoB = new SqlChapterRepository(dbB);
+      const appSettingsRepoB = new SqlAppSettingsRepository(dbB);
+      const engineB = new SyncEngine({
+        bridge,
+        novelRepository: novelRepoB,
+        chapterRepository: chapterRepoB,
+        appSettingsRepository: appSettingsRepoB,
+        parserRegistry,
+        httpClient,
+      });
+
+      const dateNowSpyB = vi.spyOn(Date, "now").mockReturnValue(t2Ms);
+      await engineB.pullAndMerge();
+      await engineB.pushCurrentState();
+      dateNowSpyB.mockRestore();
+
+      // 端末 B 上で元の createdAt (t0) が保持されていること
+      const novelOnB = await novelRepoB.getNovelById(novelId);
+      expect(novelOnB?.createdAt).toBe(t0);
+
+      // 4. 端末 A が端末 B の Push 後ペイロードを Pull しても、createdAt (t0) < deletedAt (t1) のため復活しないこと
+      await engine.pullAndMerge();
+      expect(await novelRepo.getNovelById(novelId)).toBeNull();
+      expect(await novelRepo.getDeletedNovels()).toEqual([
+        { id: novelId, deletedAt: t1Ms },
+      ]);
     });
 
     it("pullAndMerge: 同一作品が存在する場合、リモートの lastReadAt が新しければリモートの bookmarkChapterIndex を採用しスクロール進捗率をリセットすること", async () => {

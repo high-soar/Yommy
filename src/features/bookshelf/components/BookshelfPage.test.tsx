@@ -111,14 +111,20 @@ describe("BookshelfPage", () => {
       );
     });
 
-    it("FavoriteFilterActive ストーリーでお気に入りフィルタボタンが aria-pressed=true で強調表示され、絞り込まれた作品のみ描画されること (Issue #266)", () => {
+    it("FavoriteFilterActive ストーリーでお気に入りフィルタボタンが aria-pressed=true かつ ★ アイコンのみで強調表示され、絞り込まれた作品のみ描画されること (Issue #266, R2-20)", () => {
       render(<FavoriteFilterActive />);
       const filterButton = screen.getByTestId(
         "bookshelf-favorite-filter-button",
       );
       expect(filterButton).toBeInTheDocument();
       expect(filterButton).toHaveAttribute("aria-pressed", "true");
-      expect(filterButton).toHaveTextContent("★");
+      expect(filterButton).toHaveAttribute("aria-label", "お気に入りのみ表示");
+      expect(filterButton.textContent?.trim()).toBe("★");
+      expect(filterButton).toHaveClass(
+        "shrink-0",
+        "whitespace-nowrap",
+        "border-amber-300",
+      );
       expect(screen.getByTestId("novel-list")).toBeInTheDocument();
       expect(screen.getAllByTestId("novel-card")).toHaveLength(1);
     });
@@ -343,7 +349,13 @@ describe("BookshelfPage", () => {
 
       const filterBtn = screen.getByTestId("bookshelf-favorite-filter-button");
       expect(filterBtn).toHaveAttribute("aria-pressed", "false");
-      expect(filterBtn).toHaveTextContent("☆");
+      expect(filterBtn).toHaveAttribute("aria-label", "お気に入りのみ表示");
+      expect(filterBtn.textContent?.trim()).toBe("☆");
+      expect(filterBtn).toHaveClass(
+        "shrink-0",
+        "whitespace-nowrap",
+        "border-slate-200",
+      );
 
       await user.click(filterBtn);
       expect(onToggleFavoriteFilter).toHaveBeenCalledTimes(1);

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useId, useState } from "react";
 
 export interface SearchInputBarProps {
   keyword: string;
@@ -26,6 +26,7 @@ export const SearchInputBar: React.FC<SearchInputBarProps> = ({
   isLoading = false,
   defaultOpenExclude,
 }) => {
+  const excludeInputId = useId();
   const [isExcludeOpen, setIsExcludeOpen] = useState<boolean>(() =>
     defaultOpenExclude !== undefined
       ? defaultOpenExclude
@@ -82,7 +83,7 @@ export const SearchInputBar: React.FC<SearchInputBarProps> = ({
           type="button"
           data-testid="search-exclude-toggle-button"
           aria-expanded={isExcludeOpen}
-          aria-controls="search-exclude-input"
+          aria-controls={isExcludeOpen ? excludeInputId : undefined}
           aria-label={
             isExcludeOpen
               ? "除外キーワード入力を閉じる"
@@ -130,7 +131,7 @@ export const SearchInputBar: React.FC<SearchInputBarProps> = ({
           </span>
           <input
             type="search"
-            id="search-exclude-input"
+            id={excludeInputId}
             data-testid="search-exclude-input"
             aria-label="除外キーワード"
             value={excludeKeyword}

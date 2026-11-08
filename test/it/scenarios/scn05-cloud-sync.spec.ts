@@ -63,7 +63,7 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
         typeof window.__yommyServices !== "undefined" &&
         window.__yommyServices.isReady,
     );
-    await page.evaluate(async () => {
+    const initialKakuyomuUpdatedAt = await page.evaluate(async () => {
       const services = window.__yommyServices!;
       // カクヨム作品のシード登録
       const sampleUrl = "https://kakuyomu.jp/works/16817330658027210412";
@@ -73,6 +73,12 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
       await services.novelRepository.upsertNovelWithToc(
         parsedIndex,
         new Date().toISOString(),
+      );
+      // R2-11: お気に入りトグルによる updatedAt 増加を決定論的に検証できるよう初期 updated_at を1分前に設定
+      const oneMinAgo = new Date(Date.now() - 60_000).toISOString();
+      await services.databaseAdapter.execute(
+        "UPDATE novels SET updated_at = ? WHERE id = ?",
+        [oneMinAgo, "kakuyomu:16817330658027210412"],
       );
 
       // 小説家になろう作品のシード登録（複数ページ目次取得・クラウド同期検証, Issue #239, R1-06）
@@ -94,6 +100,7 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
         4,
         true,
       );
+      return oneMinAgo;
     });
     await page.reload();
     await page.waitForFunction(
@@ -129,11 +136,11 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
       /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
     );
 
-    // 作品詳細ヘッダーでお気に入り状態が「★ お気に入り済み」に反映されていることを確認 (AC-ND-23)
+    // 作品詳細ヘッダーでお気に入り状態が「★ お気に入り」に反映されていることを確認 (AC-ND-23, R2-19)
     const detailFavBtn = page.getByTestId("detail-favorite-toggle-button");
     await expect(detailFavBtn).toBeVisible();
     await expect(detailFavBtn).toHaveAttribute("aria-pressed", "true");
-    await expect(detailFavBtn).toHaveText("★ お気に入り済み");
+    await expect(detailFavBtn).toHaveText("★ お気に入り");
 
     // 6. 目次一覧から第2話エピソード行を選択して第2話へ進む（SCR-03）
     const episodeItems = page.getByTestId("episode-item");
@@ -168,9 +175,9 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     await expect(resumeButton).toBeVisible();
     await expect(resumeButton).toContainText("続きから読む（第2話）");
 
-    // 9. 2.5秒のデバウンス auto-push が発火し、モック Drive のリモートデータにカクヨム（isFavorite: 1, 第2話しおり）およびなろう作品（isFavorite: 0, 第4話しおり）が記録されるのを待機 (AC-BS-13, AC-BS-14)
+    // 9. 2.5秒のデバウンス auto-push が発火し、モック Drive のリモートデータにカクヨム（isFavorite: 1, 更新された updatedAt, 第2話しおり）およびなろう作品（isFavorite: 0, 第4話しおり）が記録されるのを待機 (AC-BS-13, AC-BS-14, R2-11)
     await page.waitForFunction(
-      () => {
+      (prevUpdatedAt) => {
         const raw = localStorage.getItem("yommy_mock_gdrive_file");
         if (!raw) return false;
         try {
@@ -183,6 +190,7 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
             kakuyomuNovel.bookmarkChapterIndex === 2 &&
             kakuyomuNovel.isFavorite === 1 &&
             typeof kakuyomuNovel.updatedAt === "string" &&
+            Date.parse(kakuyomuNovel.updatedAt) > Date.parse(prevUpdatedAt) &&
             kakuyomuNovel.title === "境界迷宮と異界の魔術師" &&
             Boolean(narouNovel) &&
             narouNovel.bookmarkChapterIndex === 4 &&
@@ -194,13 +202,22 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
           return false;
         }
       },
+      initialKakuyomuUpdatedAt,
       { timeout: 10000 },
     );
 
     // =========================================================================
     // ステップ3: 端末 B（DB リセット状態）での起動時自動 Pull、複数ページ目次を含むなろう作品およびカクヨム作品の自動取得、しおり復帰・既読同期確認
     // =========================================================================
-    // 1. 直前の DB 永続化（onUpdate -> backup）の完了を確実に待機してからバックアップを退避（R1-19, R2-08 偽陽性防止）
+    // 1. 後続の LWW 比較（T1 < T2 < now）と整合するよう、端末 A バックアップ上のなろう作品 updated_at を過去時刻（T0 = now - 120s）に設定し、
+    //    DB 永続化（onUpdate -> backup）の完了を確実に待機してからバックアップを退避（R1-19, R2-05, R2-08 偽陽性防止）
+    await page.evaluate(async () => {
+      const t0 = new Date(Date.now() - 120_000).toISOString();
+      await window.__yommyServices!.databaseAdapter.execute(
+        "UPDATE novels SET updated_at = ? WHERE id = 'narou:n9669bk'",
+        [t0],
+      );
+    });
     await expect
       .poll(() =>
         page.evaluate(() => localStorage.getItem("yommy_sqlite_db_backup")),
@@ -340,24 +357,66 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     await expect(page).toHaveURL("/");
     await expect(page.getByTestId("bookshelf-page")).toBeVisible();
 
-    // 2. 他端末によるリモート側の同期データ更新をシミュレート
-    //    ・なろう作品: isFavorite を 0 → 1、updatedAt を未来時刻（現在+10秒）に設定
-    //    ・カクヨム作品: isFavorite を 1 → 0、updatedAt を未来時刻（現在+10秒）に設定
-    await page.evaluate(() => {
+    // 2. R2-05 (R1-01 / No.236 回帰保証):
+    //    定常処理（しおり更新・目次更新）で novels.updated_at が現在時刻に汚染されていたら失敗する決定論的タイムラインを構築
+    //    - ローカル作品の updated_at を T1（現在時刻 - 60秒）に設定
+    //    - リモートの updatedAt を T2（現在時刻 - 30秒、すなわち T1 < T2 < 現在時刻 now）に設定
+    //    - 現在時刻 now にてローカルで定常処理（updateBookmark および upsertNovelWithToc）を実行し、updated_at が T1 のまま保護されていることを検証
+    //    - 同期実行で T2 > T1 によりリモートのお気に入り変更が勝利し、かつ更新したしおり（第3話）は保持されることを検証
+    const { t1Iso, t2Iso } = await page.evaluate(async () => {
+      const services = window.__yommyServices!;
+      const t1 = new Date(Date.now() - 60_000).toISOString();
+      const t2 = new Date(Date.now() - 30_000).toISOString();
+
+      // (1) ローカル対象作品の updated_at を T1 に設定（kakuyomu: isFavorite=true, narou: isFavorite=false）
+      await services.databaseAdapter.execute(
+        "UPDATE novels SET updated_at = ? WHERE id IN ('kakuyomu:16817330658027210412', 'narou:n9669bk')",
+        [t1],
+      );
+
+      // (2) モック Drive 上のリモートデータの updatedAt を T2（T1 < T2 < now）に設定
       const raw = localStorage.getItem("yommy_mock_gdrive_file");
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      const futureTime = new Date(Date.now() + 10000).toISOString();
-      if (parsed.novels?.["narou:n9669bk"]) {
-        parsed.novels["narou:n9669bk"].isFavorite = 1;
-        parsed.novels["narou:n9669bk"].updatedAt = futureTime;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.novels?.["narou:n9669bk"]) {
+          parsed.novels["narou:n9669bk"].isFavorite = 1;
+          parsed.novels["narou:n9669bk"].updatedAt = t2;
+        }
+        if (parsed.novels?.["kakuyomu:16817330658027210412"]) {
+          parsed.novels["kakuyomu:16817330658027210412"].isFavorite = 0;
+          parsed.novels["kakuyomu:16817330658027210412"].updatedAt = t2;
+        }
+        localStorage.setItem("yommy_mock_gdrive_file", JSON.stringify(parsed));
       }
-      if (parsed.novels?.["kakuyomu:16817330658027210412"]) {
-        parsed.novels["kakuyomu:16817330658027210412"].isFavorite = 0;
-        parsed.novels["kakuyomu:16817330658027210412"].updatedAt = futureTime;
-      }
-      localStorage.setItem("yommy_mock_gdrive_file", JSON.stringify(parsed));
+
+      // (3) 現在時刻 now にてローカルで定常処理（しおり更新 updateBookmark および目次更新 upsertNovelWithToc）を実行
+      await services.novelRepository.updateBookmark(
+        "kakuyomu:16817330658027210412",
+        3,
+        0.5,
+      );
+      const sampleUrl = "https://kakuyomu.jp/works/16817330658027210412";
+      const response = await services.httpClient.getHtml({ url: sampleUrl });
+      const parser = services.parserRegistry.requireParser(sampleUrl);
+      const parsedIndex = parser.parseNovelIndex(response.html, sampleUrl);
+      await services.novelRepository.upsertNovelWithToc(
+        parsedIndex,
+        new Date().toISOString(),
+      );
+
+      return { t1Iso: t1, t2Iso: t2 };
     });
+
+    // 定常処理（updateBookmark / upsertNovelWithToc）実行後もローカル DB の updated_at が now に汚染されず T1 のまま保護されていることを検証 (R2-05)
+    const localKakuyomuBeforeSync = await page.evaluate(async () => {
+      const services = window.__yommyServices!;
+      return await services.novelRepository.getNovelById(
+        "kakuyomu:16817330658027210412",
+      );
+    });
+    expect(localKakuyomuBeforeSync?.updatedAt).toBe(t1Iso);
+    expect(localKakuyomuBeforeSync?.isFavorite).toBe(true);
+    expect(localKakuyomuBeforeSync?.bookmarkChapterIndex).toBe(3);
 
     // 3. 設定画面へ遷移し、「今すぐ同期」を実行して Pull（LWW マージ）をトリガー
     await page.getByTestId("tab-settings").click();
@@ -367,12 +426,8 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     await expect(syncNowBtnStep3).toBeEnabled();
     await syncNowBtnStep3.click();
 
-    // 同期完了待機: 「今すぐ同期」が再活性化されることを待機 (TR-17, R1-14)
-    await expect(syncNowBtnStep3).toBeEnabled({ timeout: 15000 });
-    await expect(syncNowBtnStep3).toHaveText("今すぐ同期");
-
-    // 設定画面にいる段階で、手動同期によってローカル DB の is_favorite がリモート値で更新されたことをポーリング検証 (R1-14)
-    // （これにより、本棚画面への遷移時（再マウント時）の自動 Pull ではなく手動同期が正しく反映されたことを保証する）
+    // 設定画面にいる段階で、手動同期によって T2 > T1 によりリモートのお気に入り値（kakuyomu: false, narou: true）が勝利し、
+    // かつローカルで更新したしおり（第3話）は保持されていることをポーリング検証 (R1-14, R2-05, R2-06)
     await expect
       .poll(
         async () => {
@@ -386,6 +441,8 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
             return {
               narouFav: narou?.isFavorite,
               kakuyomuFav: kakuyomu?.isFavorite,
+              kakuyomuUpdatedAt: kakuyomu?.updatedAt,
+              kakuyomuBookmark: kakuyomu?.bookmarkChapterIndex,
             };
           });
         },
@@ -394,7 +451,13 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
       .toEqual({
         narouFav: true,
         kakuyomuFav: false,
+        kakuyomuUpdatedAt: t2Iso,
+        kakuyomuBookmark: 3,
       });
+
+    // 同期完了待機: DB マージおよび Push 完了後に「今すぐ同期」が再活性化されることを確認 (TR-17, R1-14, R2-06)
+    await expect(syncNowBtnStep3).toBeEnabled({ timeout: 15000 });
+    await expect(syncNowBtnStep3).toHaveText("今すぐ同期");
 
     // 4. 本棚へ戻り、既存作品に対するリモートのお気に入り変更がローカルに反映されたことを確認
     await page.getByTestId("tab-bookshelf").click();
@@ -410,17 +473,20 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     await expect(
       cardNarouLww.getByTestId("novel-card-favorite-button"),
     ).toHaveAttribute("aria-pressed", "true");
-    // カクヨム作品が ☆（aria-pressed="false"）に更新されていること
+    // カクヨム作品が ☆（aria-pressed="false"）に更新され、しおりは第3話が維持されていること
     await expect(
       cardKakuyomuLww.getByTestId("novel-card-favorite-button"),
     ).toHaveAttribute("aria-pressed", "false");
+    await expect(cardKakuyomuLww.getByTestId("novel-card-bookmark")).toHaveText(
+      "しおり: 第3話",
+    );
 
-    // 5. なろう作品の詳細画面でもヘッダーのお気に入り状態が ★ に更新されていることを確認
+    // 5. なろう作品の詳細画面でもヘッダーのお気に入り状態が ★ に更新されていることを確認 (R2-19)
     await cardNarouLww.getByTestId("novel-card-select").click();
     await expect(page).toHaveURL(/\/novels\/narou(%3A|:)n9669bk$/);
     const detailFavBtnNarou = page.getByTestId("detail-favorite-toggle-button");
     await expect(detailFavBtnNarou).toHaveAttribute("aria-pressed", "true");
-    await expect(detailFavBtnNarou).toHaveText("★ お気に入り済み");
+    await expect(detailFavBtnNarou).toHaveText("★ お気に入り");
 
     // 本棚へ戻る
     await page.goBack();

@@ -337,6 +337,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
           ),
         );
 
+        // R2-16: 一括キャッシュ進行中は novels.updated_at 保護規約（R1-01）と整合させ updatedAt を保持する
         setNovel((prev) => {
           const isNewCache = target.downloadedAt === null;
           const oldSize = target.byteSize;
@@ -349,7 +350,6 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
               0,
               prev!.totalByteSize - oldSize + parsedContent.byteSize,
             ),
-            updatedAt: downloadedAt,
           };
         });
 

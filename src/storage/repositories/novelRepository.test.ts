@@ -879,15 +879,18 @@ describe("SqlNovelRepository", () => {
       expect(unchanged?.isFavorite).toBe(false);
       expect(unchanged?.lastReadAt).toBe("2026-11-01T12:00:00Z");
 
-      // updatedAt の更新
+      // createdAt および updatedAt の更新 (R2-02)
+      const targetCreatedAt = "2026-10-01T09:00:00.000Z";
       const targetUpdatedAt = "2026-11-05T18:00:00.000Z";
       await repository.updateSyncMetadata?.(created.id, {
+        createdAt: targetCreatedAt,
         updatedAt: targetUpdatedAt,
         isFavorite: true,
       });
-      const withUpdatedAt = await repository.getNovelById(created.id);
-      expect(withUpdatedAt?.isFavorite).toBe(true);
-      expect(withUpdatedAt?.updatedAt).toBe(targetUpdatedAt);
+      const withTimestamps = await repository.getNovelById(created.id);
+      expect(withTimestamps?.isFavorite).toBe(true);
+      expect(withTimestamps?.createdAt).toBe(targetCreatedAt);
+      expect(withTimestamps?.updatedAt).toBe(targetUpdatedAt);
     });
 
     it("purgeExpiredDeletedNovels で指定時刻以前の Tombstone が一括パージされること (R1-28)", async () => {

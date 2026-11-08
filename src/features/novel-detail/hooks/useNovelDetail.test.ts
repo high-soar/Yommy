@@ -1291,6 +1291,8 @@ describe("useNovelDetail", () => {
         expect(getHtmlSpy).toHaveBeenCalledTimes(1); // 2話目以降は実行されない
         expect(result.current.chapters[0].downloadedAt).not.toBeNull();
         expect(result.current.chapters[1].downloadedAt).toBeNull();
+        // R2-16: 一括キャッシュ途中中断時にもメモリ上の novel.updatedAt が書き換わらず元の値を保持すること
+        expect(result.current.novel?.updatedAt).toBe("2026-01-01T00:00:00Z");
 
         vi.useRealTimers();
       });

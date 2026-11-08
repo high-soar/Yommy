@@ -447,11 +447,12 @@ export class SyncEngine {
       );
     }
 
-    // 新規取込時にお気に入り、最終読了日時、および更新日時を復元 (R1-12, R1-19)
-    // （upsertNovelWithToc/updateBookmark 設定による現在時刻上書きも含め、リモートの updatedAt / lastReadAt を確実に反映）
+    // 新規取込時にお気に入り、最終読了日時、登録日時、および更新日時を復元 (R1-12, R1-19, R2-02)
+    // （upsertNovelWithToc/updateBookmark 設定による現在時刻上書きも含め、リモートの createdAt / updatedAt / lastReadAt を確実に反映）
     await this.deps.novelRepository.updateSyncMetadata?.(novelId, {
       isFavorite: remoteNovel.isFavorite === 1,
       lastReadAt: remoteNovel.lastReadAt,
+      createdAt: remoteNovel.createdAt,
       updatedAt: remoteNovel.updatedAt,
     });
 
@@ -476,7 +477,7 @@ export class SyncEngine {
     remoteNovel: SyncNovelData,
     localNovel: NovelRecord,
   ): Promise<void> {
-    // 1. お気に入りおよび更新日時の LWW 判定（updateBookmark によるローカル updated_at 書き換え前に比較）
+    // 1. お気に入りおよび更新日時の LWW 判定（ローカルの既存の novels.updated_at とリモートの updatedAt を比較し、リモートが新しい場合は後続の updateSyncMetadata で同期・復元する）
     const isRemoteUpdatedNewer =
       Date.parse(remoteNovel.updatedAt) > Date.parse(localNovel.updatedAt);
 

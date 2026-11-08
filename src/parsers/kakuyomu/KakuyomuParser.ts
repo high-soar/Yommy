@@ -791,6 +791,9 @@ export class KakuyomuParser implements NovelParser {
       options?.serialStatus === "short"
     ) {
       url.searchParams.set("serial_status", "completed");
+      if (options.serialStatus === "short") {
+        url.searchParams.set("total_character_count_range", "-20000");
+      }
     }
 
     const genres = resolveKakuyomuGenres(options);

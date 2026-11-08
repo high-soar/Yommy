@@ -108,6 +108,7 @@ export interface NovelRepository {
     metadata: {
       isFavorite?: boolean;
       lastReadAt?: string | null;
+      createdAt?: string;
       updatedAt?: string;
     },
   ): Promise<void>;

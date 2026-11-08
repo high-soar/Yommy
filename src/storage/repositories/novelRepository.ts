@@ -47,7 +47,7 @@ ON CONFLICT(novel_id, remote_chapter_id) DO UPDATE SET
 
 /**
  * 5種の本棚ソート順に対応する ORDER BY 句の定義
- * （docs/specs/db-schema.md および docs/specs/changes/issue-80-bookshelf-update-check-and-sort.md に準拠）
+ * （docs/specs/db-schema.md および docs/specs/changes/archive/issue-80-bookshelf-update-check-and-sort.md に準拠）
  */
 const ORDER_BY_CLAUSES: Record<BookshelfSortOrder, string> = {
   unread_first: `ORDER BY
@@ -371,6 +371,7 @@ export class SqlNovelRepository implements NovelRepository {
     metadata: {
       isFavorite?: boolean;
       lastReadAt?: string | null;
+      createdAt?: string;
       updatedAt?: string;
     },
   ): Promise<void> {
@@ -384,6 +385,10 @@ export class SqlNovelRepository implements NovelRepository {
     if (metadata.lastReadAt !== undefined) {
       updates.push("last_read_at = ?");
       params.push(metadata.lastReadAt);
+    }
+    if (metadata.createdAt !== undefined) {
+      updates.push("created_at = ?");
+      params.push(metadata.createdAt);
     }
     if (metadata.updatedAt !== undefined) {
       updates.push("updated_at = ?");

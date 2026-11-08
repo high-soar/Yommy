@@ -109,6 +109,7 @@ export function useNovelSearch(): UseNovelSearchResult {
   const hasSearchedRef = useRef<boolean>(false);
 
   // 通信重複ガードおよび非同期競合（Race Condition）防止用 ref
+  const isMountedRef = useRef<boolean>(true);
   const isSearchingRef = useRef<boolean>(false);
   const searchGenerationRef = useRef<number>(0);
   const selectedSiteRef = useRef<NovelSiteType>(selectedSite);
@@ -129,6 +130,14 @@ export function useNovelSearch(): UseNovelSearchResult {
   useEffect(() => {
     selectedSiteRef.current = selectedSite;
   }, [selectedSite]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      searchGenerationRef.current += 1;
+    };
+  }, []);
 
   /**
    * DB内の登録済み作品ID一覧を更新（サイト切替時は targetSite を明示して照合）
@@ -199,6 +208,7 @@ export function useNovelSearch(): UseNovelSearchResult {
         });
 
         const response = await httpClient.getHtml({ url });
+        if (!isMountedRef.current) return;
         const result = parser.searchNovels(response.html, url);
 
         // 検索実行成功時の検索条件をスナップショット（次ページ読込用: R1-07）
@@ -216,13 +226,16 @@ export function useNovelSearch(): UseNovelSearchResult {
 
         await refreshRegisteredIds(targetSite);
       } catch (err) {
+        if (!isMountedRef.current) return;
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
         setItems([]);
         setHasNextPage(false);
       } finally {
         isSearchingRef.current = false;
-        setIsLoading(false);
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
       }
     },
     [
@@ -398,10 +411,14 @@ export function useNovelSearch(): UseNovelSearchResult {
           new Date().toISOString(),
         );
 
-        if (selectedSiteRef.current === siteAtStart) {
-          setRegisteredWorkIds((prev) => new Set(prev).add(item.remoteWorkId));
+        if (isMountedRef.current) {
+          if (selectedSiteRef.current === siteAtStart) {
+            setRegisteredWorkIds((prev) =>
+              new Set(prev).add(item.remoteWorkId),
+            );
+          }
+          setAddingWorkId((prev) => (prev === item.remoteWorkId ? null : prev));
         }
-        setAddingWorkId((prev) => (prev === item.remoteWorkId ? null : prev));
         syncEngine?.notifyChanged().catch(() => {});
         return savedNovel.id;
       } catch (err) {
@@ -447,7 +464,7 @@ export function useNovelSearch(): UseNovelSearchResult {
       }
 
       const novelId = await addNovelToBookshelf(item);
-      if (novelId) {
+      if (novelId && isMountedRef.current) {
         router.navigateToNovelDetail(novelId, "/search");
       }
     },

@@ -96,6 +96,9 @@ export function useBookshelf(
 
   const isMountedRef = useRef<boolean>(true);
   const isCheckingUpdatesRef = useRef<boolean>(false);
+  // R2-08: お気に入りトグル（作品ID単位）およびフィルタトグルの非同期処理中連打排他ガード
+  const togglingFavoriteIdsRef = useRef<Set<string>>(new Set());
+  const isTogglingFilterRef = useRef<boolean>(false);
   const sortOrderRef = useRef<BookshelfSortOrder>(DEFAULT_SORT_ORDER);
   const allNovelsRef = useRef<NovelSummary[]>([]);
   const favoriteOnlyRef = useRef<boolean>(false);
@@ -360,6 +363,8 @@ export function useBookshelf(
 
   const setFavoriteOnly = useCallback(
     async (nextFavoriteOnly: boolean): Promise<void> => {
+      if (isTogglingFilterRef.current) return;
+      isTogglingFilterRef.current = true;
       try {
         await appSettingsRepository.setSetting(
           SETTINGS_KEY_BOOKSHELF_FAVORITE_ONLY,
@@ -374,6 +379,8 @@ export function useBookshelf(
         if (isMountedRef.current) {
           setError(err instanceof Error ? err.message : String(err));
         }
+      } finally {
+        isTogglingFilterRef.current = false;
       }
     },
     [appSettingsRepository],
@@ -385,6 +392,8 @@ export function useBookshelf(
 
   const toggleFavorite = useCallback(
     async (novelId: string, nextIsFavorite?: boolean): Promise<void> => {
+      if (togglingFavoriteIdsRef.current.has(novelId)) return;
+      togglingFavoriteIdsRef.current.add(novelId);
       const current = allNovelsRef.current.find((n) => n.id === novelId);
       const targetValue =
         nextIsFavorite !== undefined ? nextIsFavorite : !current?.isFavorite;
@@ -410,6 +419,8 @@ export function useBookshelf(
         if (isMountedRef.current) {
           setError(err instanceof Error ? err.message : String(err));
         }
+      } finally {
+        togglingFavoriteIdsRef.current.delete(novelId);
       }
     },
     [novelRepository, syncEngine],

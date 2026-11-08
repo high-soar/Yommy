@@ -162,7 +162,7 @@ erDiagram
 - **`has_new_update`**: 目次更新（自動更新チェックまたは手動更新）時に話数増加・新規エピソード追加が検知された場合に `1`（NEWバッジ表示）が記録され、作品閲覧時（`SCR-02` または `SCR-03` 表示時）に `0` へ解除されます。
 - **`latest_episode_published_at`**: `upsertNovelWithToc` 実行時に `index.chapters` 内の各エピソードのうち有効な `publishedAt` の最大値（最新公開/更新日時）を算出し、ISO 8601 UTC 文字列（例: `2026-01-01T20:00:00.000Z`）に正規化して保持します（サイトごとのタイムゾーン表記揺れによる文字列ソート誤差を防止）。全エピソード未設定時は `NULL` となります。本カラムにより、ソート順「作品更新日順（`latest_published`）」において `chapters` テーブルとの結合なしで高速にソートクエリを実行可能です。
 - **`is_favorite` と `updated_at` 連動（`v0.8` Issue #266 / R1-01）**: 本棚画面（`SCR-01`）または作品詳細画面（`SCR-02`）からお気に入り状態がトグル操作（`novelRepository.setFavorite(novelId, isFavorite)`）された際、`novels.is_favorite`（`1` または `0`）の更新と同一の SQL 文で **`novels.updated_at` も現在時刻（ISO 8601 UTC 文字列）へ同時に更新** します。これにより Google Drive クラウド同期（`SyncEngine`）において、端末間のお気に入り変更が `updated_at` 基準の Last-Write-Wins（LWW）競合解決で双方向（Push / Pull とも）に正しく反映されます。なお、目次再取得（`upsertNovelWithToc`）時には既存の `is_favorite` 値が保持されます。
-- **`updated_at` の保護規約（`v0.5` Issue #170 / `v0.8` R1-01）**: `novels.updated_at` はユーザーによる作品メタデータ変更（お気に入りトグル `setFavorite`、初回作品登録）およびクラウド同期での最新メタデータ適用（`updateSyncMetadata`）でのみ更新されます。定常的な目次更新チェック（`upsertNovelWithToc`）、読書時のしおり更新（`updateBookmark`）、本文キャッシュ保存・再集計（`saveChapterBody`, `recalculateNovelStats`）、キャッシュ削除（作品詳細画面での `deleteCachedBodies` または設定画面での `deleteAllCachedBodies`）では、**`novels.updated_at` は意図的に更新されず既存値が保持されます**。これらの定常処理で `updated_at` を進めてしまうと、他端末で行われたお気に入り変更（`isFavorite`）や論理削除（Tombstone `remoteDeletedAt > max(created, updated)`）が LWW 判定でローカルの新しい `updated_at` により不当に上書き・消失してしまう致命的な競合を防ぐためです（R1-01）。
+- **`updated_at` の保護規約とクラウド同期時の `created_at` / `updated_at` 復元（`v0.5` Issue #170 / `v0.8` R1-01 / R2-02）**: `novels.updated_at` はユーザーによる作品メタデータ変更（お気に入りトグル `setFavorite`、初回作品登録）およびクラウド同期での最新メタデータ適用（`updateSyncMetadata`）でのみ更新されます。また新規作品のクラウド Pull 復元時（`mergeNewNovel`）には、`updateSyncMetadata` により `remoteNovel.createdAt` および `remoteNovel.updatedAt` の双方をローカル DB に同期保持し、Pull 実行時のローカル現在時刻によって後続の Tombstone 削除判定が阻害されるのを防ぎます（R2-02）。定常的な目次更新チェック（`upsertNovelWithToc`）、読書時のしおり更新（`updateBookmark`）、本文キャッシュ保存・再集計（`saveChapterBody`, `recalculateNovelStats`）、キャッシュ削除（作品詳細画面での `deleteCachedBodies` または設定画面での `deleteAllCachedBodies`）では、**`novels.updated_at` は意図的に更新されず既存値が保持されます**。これらの定常処理で `updated_at` を進めてしまうと、他端末で行われたお気に入り変更（`isFavorite`）や論理削除（Tombstone `remoteDeletedAt > max(created, updated)`）が LWW 判定でローカルの新しい `updated_at` により不当に上書き・消失してしまう致命的な競合を防ぐためです（R1-01）。
 
 ```sql
 CREATE TABLE IF NOT EXISTS novels (
@@ -331,7 +331,7 @@ INSERT OR IGNORE INTO app_settings (
 
 - **記録契機**: `novelRepository.deleteNovel(novelId)` 呼び出し時に、該当 ID と現在時刻（ミリ秒タイムスタンプ `Date.now()`）を本テーブルへ `INSERT OR REPLACE` します。
 - **再登録時の自動消去**: 同一作品が再度本棚に追加された場合（`upsertNovelWithToc`）、本テーブルから該当作品 ID のレコードを即座に削除（`DELETE FROM deleted_novels WHERE id = ?;`）し、過去の削除状態による誤削除・同期遮断を防止します（R1-28）。
-- **クラウド同期連携と定期パージ**: 次回 Push 時に、本テーブルのレコードをリモートの `yommy-sync-state.json` 内 `deletedNovels` マップへ結合します。Pull 時には、リモート `deletedNovels` の削除日時がローカル作品の登録/更新日時より新しい場合にローカル作品をカスケード削除し、本テーブルにも反映します。また、削除から30日以上経過したレコードは `purgeExpiredDeletedNovels` により自動パージされ、容量肥大化を防止します（R1-28）。
+- **クラウド同期連携と定期パージ**: 次回 Push 時に、本テーブルのレコードをリモートの `yommy-sync-state.json` 内 `deletedNovels` マップへ結合します。Pull 時には、リモート `deletedNovels` の削除日時がローカル作品の登録/更新日時（新規作品 Pull 復元時も `updateSyncMetadata` でリモートの `createdAt` / `updatedAt` を復元保持、R2-02）より新しい場合にローカル作品をカスケード削除し、本テーブルにも反映します。また、削除から30日以上経過したレコードは `purgeExpiredDeletedNovels` により自動パージされ、容量肥大化を防止します（R1-28）。
 
 ```sql
 CREATE TABLE IF NOT EXISTS deleted_novels (

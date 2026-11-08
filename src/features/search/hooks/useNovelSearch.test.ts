@@ -1973,5 +1973,141 @@ describe("useNovelSearch", () => {
       expect(result.current.isLoading).toBe(false);
       expect(result.current.genres).toEqual([]);
     });
+
+    it("検索通信中（成功・失敗）および未登録カード選択（addNovelToBookshelf）進行中にアンマウントされた場合、完了後に State 更新や router.navigateToNovelDetail が発火しないこと (R2-17)", async () => {
+      // 1. 検索通信中（成功応答）のアンマウント検証
+      let resolveSearch!: (res: HttpResponse) => void;
+      mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/search/, () => {
+        return new Promise<HttpResponse>((resolve) => {
+          resolveSearch = resolve;
+        });
+      });
+
+      const { result: result1, unmount: unmount1 } = renderHook(
+        () => useNovelSearch(),
+        {
+          wrapper: createWrapper(),
+        },
+      );
+
+      let searchPromise1!: Promise<void>;
+      act(() => {
+        searchPromise1 = result1.current.search();
+      });
+
+      await waitFor(() => {
+        expect(result1.current.isLoading).toBe(true);
+      });
+
+      unmount1();
+
+      await act(async () => {
+        resolveSearch({
+          status: 200,
+          url: "https://kakuyomu.jp/search",
+          headers: {},
+          html: searchApolloHtml,
+        });
+        await searchPromise1;
+      });
+
+      // アンマウント後のため items は更新されないこと
+      expect(result1.current.items).toEqual([]);
+
+      // 2. 検索通信中（エラー応答）のアンマウント検証
+      let rejectSearch!: (err: Error) => void;
+      mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/search/, () => {
+        return new Promise<HttpResponse>((_, reject) => {
+          rejectSearch = reject;
+        });
+      });
+
+      const { result: result2, unmount: unmount2 } = renderHook(
+        () => useNovelSearch(),
+        {
+          wrapper: createWrapper(),
+        },
+      );
+
+      let searchPromise2!: Promise<void>;
+      act(() => {
+        searchPromise2 = result2.current.search();
+      });
+
+      await waitFor(() => {
+        expect(result2.current.isLoading).toBe(true);
+      });
+
+      unmount2();
+
+      await act(async () => {
+        rejectSearch(new Error("Unmount Search Error"));
+        await searchPromise2;
+      });
+
+      expect(result2.current.error).toBeNull();
+
+      // 3. 未登録カード選択（handleCardSelect -> addNovelToBookshelf）進行中のアンマウント検証
+      mockHttpClient.setResponse(
+        /^https:\/\/kakuyomu\.jp\/search/,
+        (options) => ({
+          status: 200,
+          url: options.url,
+          headers: {},
+          html: searchApolloHtml,
+        }),
+      );
+
+      let resolveWorkIndex!: (res: HttpResponse) => void;
+      mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/works\/\d+$/, () => {
+        return new Promise<HttpResponse>((resolve) => {
+          resolveWorkIndex = resolve;
+        });
+      });
+
+      window.history.replaceState(null, "", "/search");
+      const { result: result3, unmount: unmount3 } = renderHook(
+        () => useNovelSearch(),
+        {
+          wrapper: createWrapper("/search"),
+        },
+      );
+
+      act(() => {
+        result3.current.setKeyword("異世界");
+      });
+      await act(async () => {
+        await result3.current.search();
+      });
+
+      const targetItem = result3.current.items[0];
+      let cardSelectPromise!: Promise<void>;
+      act(() => {
+        cardSelectPromise = result3.current.handleCardSelect(targetItem);
+      });
+
+      await waitFor(() => {
+        expect(result3.current.addingWorkId).toBe(targetItem.remoteWorkId);
+      });
+
+      // 作品取得中にアンマウント
+      unmount3();
+
+      await act(async () => {
+        resolveWorkIndex({
+          status: 200,
+          url: targetItem.workUrl,
+          headers: {},
+          html: workIndexHtml,
+        });
+        await cardSelectPromise;
+      });
+
+      // アンマウント後のため registeredWorkIds 更新も画面遷移も発火しないこと
+      expect(
+        result3.current.registeredWorkIds.has(targetItem.remoteWorkId),
+      ).toBe(false);
+      expect(window.location.pathname).toBe("/search");
+    });
   });
 });

@@ -98,7 +98,7 @@ related_tests:
   - `TR-19`（作品詳細ヘッダーの「本文キャッシュ整理」アクションによる本文キャッシュ削除［既読のみ／全話］・容量即時再計算、`v0.5` Issue #170）
 - **対象外スコープ（後続 Issue / Milestone）**:
   - エピソード閲覧に伴うしおり位置（`bookmarkChapterIndex`, `bookmarkScrollProgress`）および既読フラグ（`isRead`）の自動更新ロジック本体（Issue #14 の `SCR-03` リーダー画面拡張で一括実装）
-  - 内蔵 WebView（`SCR-04`）での手動インポート連携（Milestone `v0.8〜予定`：`SYS-REQ-13, 14`, `TR-09`）
+  - 内蔵 WebView（`SCR-04`）での手動インポート連携（Milestone `v0.9〜予定`：`SYS-REQ-13, 14`, `TR-09`）
 
 ---
 
@@ -192,8 +192,8 @@ src/features/novel-detail/
   - ※`novel.totalChapters === 0` または `isBatchCaching === true` の場合は読書開始ボタンを `disabled` とする。
 - **管理アクションボタン（右寄せ）**:
   - **お気に入り（★）トグルボタン（`v0.8` Issue #266）**: `data-testid="detail-favorite-toggle-button"`
-    - セマンティック属性: `aria-pressed={novel.isFavorite}`。
-    - ラベル: `novel.isFavorite === true` のときは `★ お気に入り済み`（アンバー色強調スタイル）、`false` のときは `☆ お気に入り`（通常枠線スタイル）。
+    - セマンティック属性: 固定ラベル `aria-label="お気に入り"` ＋ `aria-pressed={Boolean(novel.isFavorite)}`（R1-10 / R2-01）。
+    - ラベルと枠線スタイル: `novel.isFavorite === true` のときは `★ お気に入り`（アンバー色強調スタイル、`border border-amber-300 dark:border-amber-700/60`）、`false` のときは `☆ お気に入り`（通常枠線スタイル、`border border-slate-200 dark:border-slate-600`）。「済み」への文字数変化を行わず固定テキストとし、ON/OFF 双方で常時 1px `border` を維持することで、トグル時のボタン幅・高さ（2px）変化によるレイアウトちらつきを防止する（R2-19）。
     - クリック時に `onToggleFavorite?.()` を呼び出す。`isRefreshing === true` または `isBatchCaching === true` の間は `disabled` とする。
   - **未取得話一括キャッシュボタン（`v0.3`）**: `data-testid="batch-cache-button"`
     - `novel.totalChapters === 0`（または `chapters.length === 0`）の場合: ラベル `未取得話を一括キャッシュ`、`disabled` 化（対象話が存在しないため）。
@@ -464,7 +464,7 @@ export interface UseNovelDetailResult {
    - `AbortController` を生成し、1話ごとに `PREFETCH_INTERVAL_MS`（1.5秒）のウェイト間隔を空けながら直列に取得を実行する。
      - 7日経過キャッシュが存在する場合は短タイムアウト（3秒）、未キャッシュ話は標準タイムアウト（10秒）で取得する。
      - HTML 取得後、パーサーで解析して `chapterRepository.saveChapterBody` で SQLite に保存する。
-     - 1話保存成功ごとに `novel`（`cachedChapters` および `totalByteSize` 更新）および `chapters`（`downloadedAt` / `byteSize` 更新）の State を即時更新し、画面にリアルタイム反映する。
+     - 1話保存成功ごとに `novel`（`cachedChapters` および `totalByteSize` 更新。なおクラウド同期 LWW 用タイムスタンプである `novel.updatedAt` は変更せず既存値を保持する、R2-16）および `chapters`（`downloadedAt` / `byteSize` 更新）の State を即時更新し、画面にリアルタイム反映する。
      - 進捗 `batchCacheProgress = { current: i + 1, total: targets.length }` を更新する。
    - 手動中断（`cancelBatchCache`）または画面離脱（アンマウント）時は `AbortController.abort()` で直ちに安全に処理を停止する（取得済み話数は SQLite 内に保持される）。
    - 全話取得成功時は `novelRepository.getNovelById(novelId)` で作品最新情報を再取得・同期し、`refreshMessage = "全話のキャッシュを取得しました"`（または `"N話のキャッシュを取得しました"`）を設定し、`isBatchCaching = false`, `batchCacheProgress = null` とする。
@@ -506,7 +506,7 @@ export interface UseNovelDetailResult {
 | **`AC-ND-20`** | 作品ヘッダーでのキャッシュ容量表示                       | 作品詳細ヘッダー（`data-testid="novel-detail-stats"`）において、`全 {novel.totalChapters} 話（取得済み {novel.cachedChapters} 話 / {formatByteSize(novel.totalByteSize)}）` の形式でキャッシュ容量がフォーマット表示されること。                                                                                                                                                                                                                                        | `SYS-REQ-05` / `TR-02`                        |
 | **`AC-ND-21`** | 本文キャッシュ整理ボタンと確認ダイアログ                 | 作品詳細ヘッダーの「本文キャッシュ整理」（`data-testid="open-clear-cache-dialog-button"`）から確認ダイアログ（`data-testid="clear-cache-confirm-dialog"`）が開き、「既読話の本文キャッシュのみ削除」（`data-testid="confirm-clear-read-cache-button"`）または「すべての本文キャッシュを削除」（`data-testid="confirm-clear-all-cache-button"`）を選択できること。また、`novel.cachedChapters === 0`、一括キャッシュ中、または目次更新中はボタンが disabled となること。 | `SYS-REQ-05` / `TR-19`                        |
 | **`AC-ND-22`** | 本文キャッシュ削除の即時反映と安全性                     | 本文キャッシュ削除実行時、目次情報・既読フラグ・しおり位置を保持したまま該当話の本文キャッシュ（`body_html = NULL`, `byte_size = 0`, `downloaded_at = NULL`）が削除され、親作品の `cachedChapters` / `totalByteSize` および各話一覧のバッジ（取得済み→未取得）が即時再計算・反映され、完了通知（`novel-detail-notice`）が表示されること。                                                                                                                               | `SYS-REQ-05` / `TR-19`                        |
-| **`AC-ND-23`** | 作品詳細ヘッダーでのお気に入り登録・解除                 | 作品詳細ヘッダーのお気に入りトグルボタン（`data-testid="detail-favorite-toggle-button"`）をタップすると、お気に入り状態（`★ お気に入り済み` / `☆ お気に入り`、`aria-pressed`）が切り替わり、SQLite の `novels.is_favorite` と `novels.updated_at` が同時更新され、本棚画面復帰時やクラウド同期へ反映されること。                                                                                                                                                        | `SYS-REQ-04`, `SYS-REQ-06`                    |
+| **`AC-ND-23`** | 作品詳細ヘッダーでのお気に入り登録・解除                 | 作品詳細ヘッダーのお気に入りトグルボタン（`data-testid="detail-favorite-toggle-button"`）をタップすると、お気に入り状態（`★ お気に入り` / `☆ お気に入り`、`aria-label="お気に入り"`、`aria-pressed`、常時 1px `border` による高さ・幅固定）が切り替わり、SQLite の `novels.is_favorite` と `novels.updated_at` が同時更新され、本棚画面復帰時やクラウド同期へ反映されること。                                                                                           | `SYS-REQ-04`, `SYS-REQ-06`                    |
 
 ---
 
