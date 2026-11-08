@@ -70,7 +70,8 @@ docs/
     │   ├── v0.4-cloud-sync-reader-ux-log.md # Milestone v0.4 クラウド同期/リーダーUX バグ記録（No. 133〜168）＆ 申し送りアーカイブ
     │   ├── v0.5-reader-customization-and-cache-log.md # Milestone v0.5 縦書きリーダー組版/設定/キャッシュ バグ記録（No. 169〜180）＆ 申し送りアーカイブ
     │   ├── v0.6-reader-animation-overlay-and-volume-key-log.md # Milestone v0.6 リーダー水平スライド/上下オーバーレイ＆シークバー/音量キー バグ記録（No. 181〜201）＆ 申し送りアーカイブ
-    │   └── v0.7-narou-site-support-and-loading-ux-log.md # Milestone v0.7 なろう対応/WebアクセスローディングUX バグ記録（No. 202〜233）＆ 申し送りアーカイブ
+    │   ├── v0.7-narou-site-support-and-loading-ux-log.md # Milestone v0.7 なろう対応/WebアクセスローディングUX バグ記録（No. 202〜233）＆ 申し送りアーカイブ
+    │   └── v0.8-discovery-filter-and-bookshelf-favorite-ux-log.md # Milestone v0.8 探索フィルタ高度化/本棚お気に入り管理 バグ記録（No. 234〜279）＆ 申し送りアーカイブ
     └── reports/                       # ミニリリース Milestone ごとの品質分析・改善（Kaizen）レポート格納先
         ├── phase3-poc.md              # Phase 3 PoC 品質分析・改善レポート
         ├── v0.1-mvp.md                # Milestone v0.1（カクヨム MVP）品質分析・改善レポート
@@ -79,7 +80,8 @@ docs/
         ├── v0.4-cloud-sync-reader-ux.md # Milestone v0.4（クラウド同期・ページめくり・リーダーUI改善）品質分析・改善レポート
         ├── v0.5-reader-customization-and-cache.md # Milestone v0.5（縦書きリーダー組版・設定・キャッシュ管理）品質分析・改善レポート
         ├── v0.6-reader-animation-overlay-and-volume-key.md # Milestone v0.6（リーダーページ送りアニメーション・上下連動オーバーレイ＆シークバー・音量キー送り）品質分析・改善レポート
-        └── v0.7-narou-site-support-and-loading-ux.md # Milestone v0.7（小説家になろう対応 ＆ WebアクセスローディングUX改善）品質分析・改善レポート
+        ├── v0.7-narou-site-support-and-loading-ux.md # Milestone v0.7（小説家になろう対応 ＆ WebアクセスローディングUX改善）品質分析・改善レポート
+        └── v0.8-discovery-filter-and-bookshelf-favorite-ux.md # Milestone v0.8（探索フィルタ高度化 ＆ 本棚お気に入り管理）品質分析・改善レポート
 ```
 
 > [!NOTE]

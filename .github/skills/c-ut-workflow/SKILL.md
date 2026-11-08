@@ -88,6 +88,10 @@ MK 作業はファイル編集数やテスト・VRT 実行ログが多く、メ�
     - `useReader` の `loadInitialData` および `fetchNovelFromUrl` では、`setNovel` と同時に `novelRef.current` および `currentChapterIndexRef.current` を同期的（インライン）に更新し、コールバックでのしおり保存スキップを防ぐため `novelRef.current ?? novel` フォールバックを行うこと。
     - 非同期探索 Hook（`useNovelSearch`, `useNovelRanking`）では `requestIdRef`（世代カウンタ）を導入して旧通信の遅延解決結果による一覧汚染を防止し、通信中のセレクター・ピル操作を UI レベルで非活性化（`isInteractingDisabled`）すること。
     - 結合テスト（IT）では条件分岐（`if (await element.isVisible())`）による暗黙スキップや `waitForTimeout` を禁止し、`toHaveAttribute("aria-pressed", "true")` や `toHaveValue(...)` で選択状態の反映を決定論的にアサートすること。
+  - **クラウド同期 LWW タイムスタンプ保護・探索確定クエリ＆複合パラメータ検証・狭幅ヘッダー＆トグル寸法不変性（原因 `D`/`L`/`A`/`S` 再発防止: `v0.8 Kaizen`）**:
+    - `novels.updated_at`（および React State の `novel.updatedAt`）はユーザーの明示的な作品設定変更時のみ更新し、定常処理（目次更新・しおり・本文キャッシュ・再集計・`startBatchCache` ループ）で更新しないこと。また `SyncEngine.mergeNewNovel` 初回 Pull 時は `createdAt` / `updatedAt` の双方を復元し、IT（`SCN-03`, `SCN-05`）では `T1 < T2 < now` タイムラインで定常処理後の LWW 勝敗を検証すること。
+    - 外部サイト検索フィルタ実装時は複合クエリパラメータ（カクヨム短編の `serial_status=completed&total_character_count_range=-20000` 等）を実サイト仕様で確認し、`useNovelSearch.loadMore` は `committedQueryRef` の確定条件を使用、IT（`SCN-02`）では `expect.poll` で送信 URL クエリパラメータ実体を全種別アサートすること。
+    - 375px モバイル狭幅ヘッダーの補助フィルタボタンはアイコンのみ（`★`/`☆` ＋ `aria-label`）＋ `shrink-0 whitespace-nowrap` とし、トグルボタンは ON/OFF 双方で常時 1px `border` と固定文字数ラベル（`★ お気に入り` / `☆ お気に入り`）を維持して 2px 高さ変化や横幅ちらつきを防止すること。また折りたたみパネルの `aria-controls` は `useId()` を用い展開時のみ出力し、非同期トグル操作には作品 ID 単位（`Set<string>` ref）または操作単位の連打排他ガードを設けること。
   - `*.test.tsx` で `composeStories` による全 Story 実行＋内部ロジック補完テストを記述する。
 - **失敗確認とコミット**: `npx vitest run <対象テスト>` を実行し、未実装により期待通り失敗することを確認して `test(<scope>): ...（Red）` をコミットする。
 

@@ -3,7 +3,7 @@ type: guideline
 title: テスト・実装規律の正本（SSOT）
 description: Yommyの3層テスト体系（Parser/Storage/Viewer）、TDDコミット規約、1対1 Story/UT、親子分離、C0/C1 100%、縦書きVRT、および原因D設計同期ルールの正本。
 status: "Approved"
-updated: "2026-11-07"
+updated: "2026-11-08"
 tags: [testing, tdd, vrt, storybook, vitest, playwright, coverage]
 related_specs:
   - docs/index.md
@@ -172,6 +172,25 @@ Git Worktree を用いた並行開発やフォーク環境において、環境�
 4. **正本仕様書・OKF フロントマターの 3 点双方向トレーサビリティ同期（No. 202, 204, 211, 217, 218 等再発防止）**:
    - 新規受入条件（`AC-NR-xx`, `AC-RD-28` 等）新設時は、「① `requirements.md`（機能一覧 ＆ ロードマップ表）」「② `screen-transitions.md`（遷移表 ＆ E2E シナリオマッピング）」「③ 個別仕様書（`features/*.md` / `parsers/*.md`）」の 3 点セットで同時に双方向リンクを更新すること。
    - OKF YAML フロントマターの `tags`, `related_specs`, `related_tests` も相互に対称性を確認し、`validate-okf.mjs` による機械検証をマージ前必須とすること。
+
+### 3.6 クラウド同期 LWW タイムスタンプ保護・探索パラメータ実体検証・狭幅ヘッダー＆トグル寸法不変性規約（v0.8 Kaizen）
+
+1. **クラウド同期 LWW タイムスタンプ保護と Pull 初回復元・IT 時系列検証規律（No. 236, 254, 260, 263, 274: `R1-01`, `R1-19`, `R2-02`, `R2-05`, `R2-16` 再発防止）**:
+   - `novels.updated_at`（および React State 上の `novel.updatedAt`）は、作品単位の LWW（Last-Write-Wins）同期調停タイムスタンプとして保護し、ユーザーの明示的な作品設定変更（作品追加、お気に入り変更等）時のみ更新すること。定常的な目次更新チェック、しおり更新、本文キャッシュ保存・削除、キャッシュ件数再集計、`useNovelDetail.startBatchCache` のループ内進捗更新等で `updated_at` / `updatedAt` を進めてはならない。
+   - `SyncEngine.mergeNewNovel` でローカル未登録作品をクラウドから初回 Pull 復元する際は、`updateSyncMetadata` に `remoteNovel.createdAt` および `remoteNovel.updatedAt` の双方を渡し、未 Push Tombstone の削除時刻判定（`deletedAt > createdAt`）および LWW 比較基準の整合性を維持すること。
+   - 結合テスト（`SCN-03`, `SCN-05`）で LWW 競合解決を検証する際は、未来時刻（`now + 10s` 等）に頼らず、過去時刻 `T1 < T2 < now` のタイムライン上で定常処理（目次再取得・しおり更新・本文キャッシュ保存）を実行しても `T2` のリモート変更が勝利すること、および Push ペイロードの `updatedAt` が変更前より増加していることを直接検証すること。
+2. **外部小説サイト検索パラメータ複合条件の事前調査と確定クエリスナップショット・IT URL 検証（No. 238, 242, 268, 269, 276: `R1-03`, `R1-07`, `R2-10`, `R2-11`, `R2-18` 再発防止）**:
+   - 外部サイトの検索フィルタ（短編・長編・完結等）を追加する際は、単一クエリパラメータだけで意図通り絞り込まれるか実サイト仕様を事前検証すること（例: カクヨム検索の「短編」は `serial_status=completed` 単独では長編完結作品が混入するため、`total_character_count_range=-20000` の複合指定が必須）。
+   - 検索 Hook（`useNovelSearch`）では、検索実行時点の条件スナップショットを `committedQueryRef` に保持し、追加入力やピル変更後に「もっと読み込む（`loadMore`）」が押された場合でも確定済み条件で次ページを取得すること。またアンマウント時は `isMountedRef` と世代カウンタ更新で遅延遷移・State 更新を遮断すること。
+   - 結合テスト（`SCN-02`）および `ServiceProvider` モック分岐では、一覧の描画確認にとどまらず `expect.poll` でリクエスト URL クエリパラメータ（`genre`, `not_word`, `work_variation`, `total_character_count_range`, `type` 等）の実体を全種別で厳密にアサートすること。
+3. **モバイル狭幅（375px）ヘッダーの省スペース設計とトグルボタンの寸法不変性・排他ロック・動的 `aria-controls` 規律（No. 244, 245, 266, 267, 277, 278: `R1-09`, `R1-10`, `R2-08`, `R2-09`, `R2-19`, `R2-20` 再発防止）**:
+   - モバイル狭幅（360px〜375px）の画面ヘッダーに複数のアクション・進捗バッジ・セレクトボックスを並べる場合、補助トグルボタンはアイコンのみ（`★` / `☆` ＋ `aria-label`）に省スペース化し、`shrink-0 whitespace-nowrap` で改行崩れを防止すること。
+   - ON/OFF トグルボタン（お気に入りボタン等）は、状態切替時の高さ 2px 変化や横幅伸縮による実機レイアウトちらつきを防ぐため、ON/OFF 双方で常時 1px `border`（OFF 時は `border-transparent` または同幅枠線）を維持し、表示ラベル文字数も固定（`★ お気に入り` / `☆ お気に入り`）とすること。また `aria-label` は状態に依存しない固定文字列とし、状態は `aria-pressed` で表現すること。
+   - 折りたたみパネルを制御するトグルボタンでは、`useId()` で一意な ID を生成し、パネル展開時（対象要素が DOM に存在する時）のみ `aria-controls` 属性を出力して折りたたみ時のダングリング ID 参照を防止すること。
+   - 非同期永続化を伴うトグル操作（`useBookshelf.toggleFavorite`, `toggleFavoriteFilter`, `useNovelDetail.toggleFavorite` 等）には、作品 ID 単位（`Set<string>` ref）または操作単位の排他ロック ref を必ず設け、連打・多重タップによる並行呼び出しを防止すること。
+4. **Markdown テーブル内のパイプ記号（`|`）禁止と原因 `D` 厳格分類（No. 234, 246, 261, 265: `R1-11`, `R2-03`, `R2-07` 再発防止）**:
+   - Markdown テーブルセル内のインラインコードや本文では、Prettier 整形時の列分割破損を防ぐためパイプ記号（`|`）を使用せず、`/` 区切りや個別バッククォート併記（`` `A` / `B` ``）を使用すること。
+   - バグ記録票において `docs/specs/` の正本仕様書修正を伴わないテスト・台帳・コメント修正は原因 `L` / `A` / `S` に分類し、原因 `D` に分類した項目には必ず具体的な設計書同期コミット SHA を記載すること。
 
 ---
 

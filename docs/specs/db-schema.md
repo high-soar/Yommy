@@ -2,8 +2,8 @@
 type: spec-db-schema
 title: ローカル DB スキーマ定義（App 全体正本）
 description: SQLite（novels, chapters, download_queue, reader_settings, app_settings）のER図、テーブル構造、およびDDL定義の正本。
-status: "Review (#266)"
-updated: "2026-11-07"
+status: "Approved"
+updated: "2026-11-08"
 tags:
   [
     database,
