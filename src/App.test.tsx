@@ -21,6 +21,7 @@ const {
   NovelDetailRoute,
   ReaderRoute,
   ExitToastRoute,
+  BrowserRoute,
 } = composeStories(stories);
 
 describe("App コンポーネント", () => {
@@ -203,6 +204,16 @@ describe("App コンポーネント", () => {
       expect(toast).toBeInTheDocument();
       expect(toast).toHaveTextContent("もう一度バックボタンを押すと終了します");
       expect(toast).toHaveAttribute("role", "status");
+    });
+
+    it("BrowserRoute ストーリー: 内蔵ブラウザ画面と内包タブバーを描画する (SCR-04)", async () => {
+      render(<BrowserRoute />);
+      expect(screen.getByTestId("app-root")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByTestId("webview-import-page")).toBeInTheDocument();
+      });
+      // 外側の bottom-tab-bar ではなく、WebViewImportPage 内の bottom-tab-bar が1つだけ存在すること
+      expect(screen.getAllByTestId("bottom-tab-bar")).toHaveLength(1);
     });
   });
 
@@ -659,6 +670,29 @@ describe("App コンポーネント", () => {
       });
     });
 
+    it("内蔵ブラウザ画面 (SCR-04) で戻るボタン押下時、router.back() が呼ばれて直前の画面へ論理復帰すること (SCR-04, TR-12)", async () => {
+      const mockAppBridge = new MockAppBridge();
+      render(
+        <App
+          appBridge={mockAppBridge}
+          initialPath="/browser?url=https%3A%2F%2Fkakuyomu.jp%2Fworks%2F16817330658027210412&novelId=kakuyomu%3A16817330658027210412"
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("webview-import-page")).toBeInTheDocument();
+      });
+
+      await act(async () => {
+        await mockAppBridge.triggerBackButton();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
+      });
+      expect(mockAppBridge.exitAppCalled).toBe(false);
+    });
+
     it("本棚画面 (SCR-01) で戻るボタン1回目押下時、終了せず確認トーストが表示され2秒後に自動消去されること (AC-AB-05, TR-13)", async () => {
       const mockAppBridge = new MockAppBridge();
       render(<App initialPath="/" appBridge={mockAppBridge} />);
@@ -821,6 +855,13 @@ describe("App コンポーネント", () => {
         expect(getActiveTab("reader", null)).toBe("bookshelf");
         expect(getActiveTab("reader", undefined)).toBe("bookshelf");
 
+        // browser (SCR-04, TR-12)
+        expect(getActiveTab("browser", "/search")).toBe("search");
+        expect(getActiveTab("browser", "/ranking")).toBe("ranking");
+        expect(getActiveTab("browser", "/")).toBe("bookshelf");
+        expect(getActiveTab("browser", null)).toBe("bookshelf");
+        expect(getActiveTab("browser", undefined)).toBe("bookshelf");
+
         // bookshelf and others
         expect(getActiveTab("bookshelf")).toBe("bookshelf");
         expect(getActiveTab("unknown")).toBe("bookshelf");
@@ -974,6 +1015,22 @@ describe("App コンポーネント", () => {
         expect(
           screen.getByTestId("reader-bottom-tab-bookshelf"),
         ).toHaveAttribute("aria-selected", "false");
+      });
+
+      it("route.name === 'browser' のとき WebViewImportContainer が描画され、外側の BottomTabBar は非表示となること (SCR-04, TR-12)", async () => {
+        render(
+          <ServiceProvider>
+            <RouterProvider initialPath="/browser?url=https%3A%2F%2Fkakuyomu.jp%2Fworks%2F16817330658027210412&novelId=kakuyomu%3A16817330658027210412&chapterIndex=1">
+              <AppContent />
+            </RouterProvider>
+          </ServiceProvider>,
+        );
+
+        await waitFor(() => {
+          expect(screen.getByTestId("webview-import-page")).toBeInTheDocument();
+        });
+        // 外側 BottomTabBar は非表示（WebViewImportPage 内部の1つのみ）
+        expect(screen.getAllByTestId("bottom-tab-bar")).toHaveLength(1);
       });
     });
   });

@@ -463,6 +463,9 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     setIsLoading(true);
     setError(null);
 
+    let targetNovel: NovelRecord | null = null;
+    let targetChapter: ChapterRecord | null = null;
+
     async function loadInitialData() {
       try {
         // 設定読み出し
@@ -492,7 +495,6 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
 
         const targetIndex = chapterIndex ?? 1;
 
-        let targetNovel: NovelRecord | null = null;
         if (novelId) {
           targetNovel = await novelRepository.getNovelById(novelId);
         } else {
@@ -520,7 +522,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           };
         }
 
-        let targetChapter = await chapterRepository.getChapter(
+        targetChapter = await chapterRepository.getChapter(
           targetNovel.id,
           targetIndex,
         );
@@ -592,6 +594,14 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       } catch (err: unknown) {
         if (isMounted) {
           setError(toErrorMessage(err));
+          // エラー時も内蔵ブラウザ連携 (TR-10) のために対象作品・対象話メタデータを設定
+          if (targetNovel) {
+            setNovel(targetNovel);
+            novelRef.current = targetNovel;
+          }
+          if (targetChapter) {
+            setChapter(targetChapter);
+          }
         }
       } finally {
         if (isMounted) {
@@ -847,14 +857,22 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           if (targetChapter.bodyHtml === null) {
             setChapter(null);
           }
-          const resolved = await resolveChapterBody(
-            currentNovel.id,
-            targetChapterIndex,
-            targetChapter,
-          );
-          if (!isMountedRef.current) return false;
-          if (resolved) {
-            targetChapter = resolved;
+          try {
+            const resolved = await resolveChapterBody(
+              currentNovel.id,
+              targetChapterIndex,
+              targetChapter,
+            );
+            if (!isMountedRef.current) return false;
+            if (resolved) {
+              targetChapter = resolved;
+            }
+          } catch (fetchErr) {
+            // エラー時も内蔵ブラウザ連携 (TR-10) のために対象話メタデータを保持
+            if (isMountedRef.current) {
+              setChapter(targetChapter);
+            }
+            throw fetchErr;
           }
         }
 

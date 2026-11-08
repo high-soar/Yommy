@@ -61,7 +61,7 @@ tags:
   - ho-34
   - ho-35
 related_specs:
-  - docs/specs/changes/issue-269-webview-fallback-and-dom-import.md
+  - docs/specs/changes/archive/issue-269-webview-fallback-and-dom-import.md
   - docs/specs/features/webview-import.md
   - docs/specs/changes/archive/issue-268-persistent-download-queue.md
   - docs/quality/reports/v0.8-discovery-filter-and-bookshelf-favorite-ux.md

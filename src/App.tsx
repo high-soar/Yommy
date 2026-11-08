@@ -8,6 +8,7 @@ import { ReaderContainer } from "./features/reader/components/ReaderContainer";
 import { SearchContainer } from "./features/search/components/SearchContainer";
 import { RankingContainer } from "./features/ranking/components/RankingContainer";
 import { SettingsContainer } from "./features/settings/components/SettingsContainer";
+import { WebViewImportContainer } from "./features/webview-import/components/WebViewImportContainer";
 import { BottomTabBar, type BottomTab } from "./shared/ui/BottomTabBar";
 
 /**
@@ -24,7 +25,11 @@ export function getActiveTab(
   ) {
     return routeName;
   }
-  if (routeName === "novel-detail" || routeName === "reader") {
+  if (
+    routeName === "novel-detail" ||
+    routeName === "reader" ||
+    routeName === "browser"
+  ) {
     if (novelOrigin === "/search") {
       return "search";
     }
@@ -67,6 +72,7 @@ export const AppContent: React.FC<AppContentProps> = ({
   const router = useRouter();
   const { appBridge } = useServices();
   const isReader = router.route.name === "reader";
+  const isBrowser = router.route.name === "browser";
   const activeTab = getActiveTab(router.route.name, router.novelOrigin);
 
   const [showExitToast, setShowExitToast] = useState(initialShowExitToast);
@@ -132,6 +138,14 @@ export const AppContent: React.FC<AppContentProps> = ({
             activeTab={activeTab}
           />
         )}
+        {router.route.name === "browser" && (
+          <WebViewImportContainer
+            initialUrl={router.route.url}
+            novelId={router.route.novelId}
+            chapterIndex={router.route.chapterIndex}
+            activeTab={activeTab}
+          />
+        )}
         {router.route.name === "settings" && <SettingsContainer />}
       </main>
 
@@ -146,7 +160,7 @@ export const AppContent: React.FC<AppContentProps> = ({
         </div>
       )}
 
-      {!isReader && (
+      {!isReader && !isBrowser && (
         <BottomTabBar
           activeTab={activeTab}
           onSelectBookshelf={router.navigateToBookshelf}

@@ -9,6 +9,7 @@ import {
   matchRoute,
   safeDecodeURIComponent,
   resolveInitialPath,
+  type RouterContextValue,
 } from "./router";
 
 const {
@@ -19,6 +20,7 @@ const {
   ReaderRoute,
   SettingsRoute,
   UnknownFallbackRoute,
+  BrowserRoute,
 } = composeStories(stories);
 
 describe("router", () => {
@@ -105,6 +107,16 @@ describe("router", () => {
       );
       expect(screen.getByTestId("route-name")).toHaveTextContent(
         "Route: bookshelf",
+      );
+    });
+
+    it("BrowserRoute ストーリーが内蔵ブラウザ画面ルートを描画すること (SCR-04)", () => {
+      render(<BrowserRoute />);
+      expect(screen.getByTestId("current-path")).toHaveTextContent(
+        "Path: /browser?url=https%3A%2F%2Fkakuyomu.jp%2Fworks%2F16817330658027210412&novelId=kakuyomu%3A16817330658027210412",
+      );
+      expect(screen.getByTestId("route-name")).toHaveTextContent(
+        "Route: browser",
       );
     });
   });
@@ -205,6 +217,49 @@ describe("router", () => {
       });
     });
 
+    it("内蔵ブラウザパス /browser はクエリパラメータ（url, novelId, chapterIndex, originPath）を解析して browser ルートにマッチすること (SCR-04)", () => {
+      const result = matchRoute(
+        "/browser?url=https%3A%2F%2Fkakuyomu.jp%2Fworks%2F16817330658027210412&novelId=kakuyomu%3A16817330658027210412&chapterIndex=2&originPath=%2Fnovels%2Fkakuyomu%3A16817330658027210412",
+      );
+      expect(result).toEqual({
+        name: "browser",
+        path: "/browser?url=https%3A%2F%2Fkakuyomu.jp%2Fworks%2F16817330658027210412&novelId=kakuyomu%3A16817330658027210412&chapterIndex=2&originPath=%2Fnovels%2Fkakuyomu%3A16817330658027210412",
+        url: "https://kakuyomu.jp/works/16817330658027210412",
+        novelId: "kakuyomu:16817330658027210412",
+        chapterIndex: 2,
+        originPath: "/novels/kakuyomu:16817330658027210412",
+      });
+    });
+
+    it("内蔵ブラウザパスでクエリパラメータが未指定の場合、url は空文字で任意パラメータは undefined にフォールバックすること", () => {
+      const result = matchRoute("/browser");
+      expect(result).toEqual({
+        name: "browser",
+        path: "/browser",
+        url: "",
+      });
+    });
+
+    it("内蔵ブラウザパスで末尾スラッシュとクエリがある場合も正しくマッチすること", () => {
+      const result = matchRoute("/browser/?url=https%3A%2F%2Fexample.com");
+      expect(result).toEqual({
+        name: "browser",
+        path: "/browser/?url=https%3A%2F%2Fexample.com",
+        url: "https://example.com",
+      });
+    });
+
+    it("内蔵ブラウザパスで chapterIndex が 0 以下の場合は undefined となること", () => {
+      const result = matchRoute(
+        "/browser?url=https%3A%2F%2Fkakuyomu.jp%2Fworks%2F123&chapterIndex=0",
+      );
+      expect(result).toEqual({
+        name: "browser",
+        path: "/browser?url=https%3A%2F%2Fkakuyomu.jp%2Fworks%2F123&chapterIndex=0",
+        url: "https://kakuyomu.jp/works/123",
+      });
+    });
+
     it("未知のパスや不正なパスは本棚ルートへフォールバックすること", () => {
       expect(matchRoute("/unknown/route")).toEqual({
         name: "bookshelf",
@@ -257,6 +312,9 @@ describe("router", () => {
           </span>
           <span data-testid="origin-display">
             {router.novelOrigin ?? "null"}
+          </span>
+          <span data-testid="browser-origin-display">
+            {router.browserOrigin ?? "null"}
           </span>
           <button
             data-testid="btn-bookshelf"
@@ -317,6 +375,20 @@ describe("router", () => {
             onClick={() => router.navigateToSettings()}
           >
             設定
+          </button>
+          <button
+            data-testid="btn-browser"
+            onClick={() =>
+              router.navigateToBrowser(
+                "https://kakuyomu.jp/works/16817330658027210412",
+                {
+                  novelId: "kakuyomu:16817330658027210412",
+                  chapterIndex: 2,
+                },
+              )
+            }
+          >
+            ブラウザ
           </button>
           <button data-testid="btn-back" onClick={() => router.back()}>
             戻る
@@ -397,6 +469,17 @@ describe("router", () => {
       );
 
       act(() => {
+        screen.getByTestId("btn-browser").click();
+      });
+      expect(screen.getByTestId("path-display")).toHaveTextContent(
+        "/browser?url=https%3A%2F%2Fkakuyomu.jp%2Fworks%2F16817330658027210412&novelId=kakuyomu%3A16817330658027210412&chapterIndex=2",
+      );
+      expect(screen.getByTestId("route-display")).toHaveTextContent("browser");
+      expect(screen.getByTestId("previous-path-display")).toHaveTextContent(
+        "/settings",
+      );
+
+      act(() => {
         screen.getByTestId("btn-custom").click();
       });
       expect(screen.getByTestId("path-display")).toHaveTextContent(
@@ -445,6 +528,242 @@ describe("router", () => {
       expect(screen.getByTestId("previous-path-display")).toHaveTextContent(
         "/novels/kakuyomu%3A16817330658027210412",
       );
+    });
+
+    it("navigateToBrowser で遷移したとき、browserOrigin に遷移元パスが記録されること (SCR-04, TR-09, TR-10)", () => {
+      render(
+        <RouterProvider initialPath="/novels/sample-work">
+          <TestConsumer />
+        </RouterProvider>,
+      );
+
+      expect(screen.getByTestId("path-display")).toHaveTextContent(
+        "/novels/sample-work",
+      );
+      expect(screen.getByTestId("browser-origin-display")).toHaveTextContent(
+        "null",
+      );
+
+      act(() => {
+        screen.getByTestId("btn-browser").click();
+      });
+
+      expect(screen.getByTestId("route-display")).toHaveTextContent("browser");
+      expect(screen.getByTestId("browser-origin-display")).toHaveTextContent(
+        "/novels/sample-work",
+      );
+    });
+
+    it("navigateToBrowser で originPath を指定した場合、クエリパラメータおよび browserOrigin に反映されること", () => {
+      const routerRef: { current: RouterContextValue | null } = {
+        current: null,
+      };
+      const RouterCapture: React.FC = () => {
+        routerRef.current = useRouter();
+        return null;
+      };
+
+      render(
+        <RouterProvider initialPath="/novels/sample-work">
+          <RouterCapture />
+        </RouterProvider>,
+      );
+
+      act(() => {
+        routerRef.current?.navigateToBrowser("https://example.com/work", {
+          originPath: "/custom-origin",
+        });
+      });
+
+      expect(routerRef.current?.currentPath).toBe(
+        "/browser?url=https%3A%2F%2Fexample.com%2Fwork&originPath=%2Fcustom-origin",
+      );
+      expect(routerRef.current?.browserOrigin).toBe("/custom-origin");
+      expect(routerRef.current?.route.name).toBe("browser");
+      if (routerRef.current?.route.name === "browser") {
+        expect(routerRef.current.route.originPath).toBe("/custom-origin");
+      }
+    });
+
+    it("navigateToBrowser で replace: true を指定した場合、history.replaceState が呼ばれること", () => {
+      const replaceSpy = vi.spyOn(window.history, "replaceState");
+      const routerRef: { current: RouterContextValue | null } = {
+        current: null,
+      };
+      const RouterCapture: React.FC = () => {
+        routerRef.current = useRouter();
+        return null;
+      };
+
+      render(
+        <RouterProvider initialPath="/novels/sample-work">
+          <RouterCapture />
+        </RouterProvider>,
+      );
+
+      act(() => {
+        routerRef.current?.navigateToBrowser("https://example.com/work", {
+          replace: true,
+        });
+      });
+
+      expect(replaceSpy).toHaveBeenCalledWith(
+        null,
+        "",
+        "/browser?url=https%3A%2F%2Fexample.com%2Fwork",
+      );
+      expect(routerRef.current?.currentPath).toBe(
+        "/browser?url=https%3A%2F%2Fexample.com%2Fwork",
+      );
+      expect(routerRef.current?.previousPath).toBe("/novels/sample-work");
+    });
+
+    it("すでに /browser にいる状態で navigateToBrowser を呼んだ場合、既存の browserOrigin が上書きされないこと", () => {
+      const routerRef: { current: RouterContextValue | null } = {
+        current: null,
+      };
+      const RouterCapture: React.FC = () => {
+        routerRef.current = useRouter();
+        return null;
+      };
+
+      render(
+        <RouterProvider initialPath="/novels/initial-origin">
+          <RouterCapture />
+        </RouterProvider>,
+      );
+
+      act(() => {
+        routerRef.current?.navigateToBrowser("https://example.com/page1");
+      });
+      expect(routerRef.current?.browserOrigin).toBe("/novels/initial-origin");
+
+      act(() => {
+        routerRef.current?.navigateToBrowser("https://example.com/page2");
+      });
+      expect(routerRef.current?.browserOrigin).toBe("/novels/initial-origin");
+    });
+
+    it("navigateToBrowser を options なしで呼び出した場合、url のみのクエリで /browser へ遷移すること", () => {
+      const routerRef: { current: RouterContextValue | null } = {
+        current: null,
+      };
+      const RouterCapture: React.FC = () => {
+        routerRef.current = useRouter();
+        return null;
+      };
+
+      render(
+        <RouterProvider initialPath="/">
+          <RouterCapture />
+        </RouterProvider>,
+      );
+
+      act(() => {
+        routerRef.current?.navigateToBrowser("https://example.com/raw");
+      });
+
+      expect(routerRef.current?.currentPath).toBe(
+        "/browser?url=https%3A%2F%2Fexample.com%2Fraw",
+      );
+      expect(routerRef.current?.route).toEqual({
+        name: "browser",
+        path: "/browser?url=https%3A%2F%2Fexample.com%2Fraw",
+        url: "https://example.com/raw",
+      });
+    });
+
+    it("navigateToBrowser で replace: true と originPath を同時に指定した場合、browserOrigin が更新されて replaceState が呼ばれること", () => {
+      const replaceSpy = vi.spyOn(window.history, "replaceState");
+      const routerRef: { current: RouterContextValue | null } = {
+        current: null,
+      };
+      const RouterCapture: React.FC = () => {
+        routerRef.current = useRouter();
+        return null;
+      };
+
+      render(
+        <RouterProvider initialPath="/novels/sample-work">
+          <RouterCapture />
+        </RouterProvider>,
+      );
+
+      act(() => {
+        routerRef.current?.navigateToBrowser("https://example.com/work", {
+          replace: true,
+          originPath: "/replace-origin",
+        });
+      });
+
+      expect(replaceSpy).toHaveBeenCalledWith(
+        null,
+        "",
+        "/browser?url=https%3A%2F%2Fexample.com%2Fwork&originPath=%2Freplace-origin",
+      );
+      expect(routerRef.current?.browserOrigin).toBe("/replace-origin");
+    });
+
+    it("navigate でクエリなしの /browser へ遷移した場合、browserOrigin が記録され searchStr は空文字として処理されること", () => {
+      const routerRef: { current: RouterContextValue | null } = {
+        current: null,
+      };
+      const RouterCapture: React.FC = () => {
+        routerRef.current = useRouter();
+        return null;
+      };
+
+      render(
+        <RouterProvider initialPath="/novels/origin-test">
+          <RouterCapture />
+        </RouterProvider>,
+      );
+
+      act(() => {
+        routerRef.current?.navigate("/browser");
+      });
+
+      expect(routerRef.current?.currentPath).toBe("/browser");
+      expect(routerRef.current?.browserOrigin).toBe("/novels/origin-test");
+    });
+
+    it("navigateToNovelDetail で origin を直接指定した場合に novelOrigin に反映されること", () => {
+      const routerRef: { current: RouterContextValue | null } = {
+        current: null,
+      };
+      const RouterCapture: React.FC = () => {
+        routerRef.current = useRouter();
+        return null;
+      };
+
+      render(
+        <RouterProvider initialPath="/">
+          <RouterCapture />
+        </RouterProvider>,
+      );
+
+      act(() => {
+        routerRef.current?.navigateToNovelDetail("custom-id", "/search");
+      });
+
+      expect(routerRef.current?.novelOrigin).toBe("/search");
+      expect(routerRef.current?.currentPath).toBe("/novels/custom-id");
+    });
+
+    it("popstate イベントで /search へ戻った際に novelOrigin がリセットされること", () => {
+      render(
+        <RouterProvider initialPath="/novels/sample">
+          <TestConsumer />
+        </RouterProvider>,
+      );
+
+      act(() => {
+        window.history.pushState(null, "", "/search");
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      });
+
+      expect(screen.getByTestId("path-display")).toHaveTextContent("/search");
+      expect(screen.getByTestId("origin-display")).toHaveTextContent("null");
     });
 
     it("popstate イベント発火時にブラウザの pathname と同期すること", () => {
@@ -873,6 +1192,81 @@ describe("router", () => {
       it("ランキング画面 (SCR-07) から back() を呼んだとき、ホーム本棚画面 (/) へ復帰すること (TR-12)", () => {
         render(
           <RouterProvider initialPath="/ranking">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent("/");
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "bookshelf",
+        );
+      });
+
+      it("内蔵ブラウザ画面 (SCR-04) で originPath が指定されている場合、back() で originPath へ復帰すること (TR-12)", () => {
+        render(
+          <RouterProvider initialPath="/browser?url=https%3A%2F%2Fexample.com&originPath=%2Fnovels%2Fwork1%2Fchapters%2F3">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/novels/work1/chapters/3",
+        );
+        expect(screen.getByTestId("route-display")).toHaveTextContent("reader");
+      });
+
+      it("作品詳細画面から内蔵ブラウザ画面へ遷移した場合、back() で browserOrigin である作品詳細画面へ復帰すること (TR-12)", () => {
+        render(
+          <RouterProvider initialPath="/novels/sample-work">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-browser").click();
+        });
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "browser",
+        );
+
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/novels/sample-work",
+        );
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "novel-detail",
+        );
+      });
+
+      it("内蔵ブラウザ画面 (SCR-04) で novelId のみが指定されている場合、back() で該当作品詳細画面へ復帰すること (TR-12)", () => {
+        render(
+          <RouterProvider initialPath="/browser?url=https%3A%2F%2Fexample.com&novelId=kakuyomu%3A16817330658027210412">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/novels/kakuyomu%3A16817330658027210412",
+        );
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "novel-detail",
+        );
+      });
+
+      it("内蔵ブラウザ画面 (SCR-04) で originPath, browserOrigin, novelId がいずれも未指定の場合、back() で本棚 (/) へ復帰すること (TR-12)", () => {
+        render(
+          <RouterProvider initialPath="/browser?url=https%3A%2F%2Fexample.com">
             <TestConsumer />
           </RouterProvider>,
         );

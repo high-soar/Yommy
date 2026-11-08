@@ -3,7 +3,7 @@ type: spec-delta
 title: "内蔵ブラウザ画面（SCR-04）と WebView 表示中 DOM 手動インポート・フォールバック遷移（TR-09〜11）の実装"
 description: "Issue #269 に対する差分仕様。WebViewDomBridge / WebViewDomPlugin.java の新設、内蔵ブラウザ画面（SCR-04: /browser）の新設、作品詳細（SCR-02）・リーダー（SCR-03）からのフォールバック遷移（TR-09, TR-10）、DOM インポート保存（目次 vs 本文自動判別）と完了後遷移（TR-11）、および Playwright E2E 結合テスト（SCN-07）の設計。"
 issue: "#269"
-status: "Review (#269)"
+status: "Completed (Archived)"
 updated: "2026-11-08"
 tags:
   [
@@ -174,7 +174,7 @@ export interface WebViewDomBridge {
 
 ### 2.5 新規・更新受入条件一覧
 
-- **内蔵ブラウザ画面（`SCR-04`）**: `AC-WV-01`〜`AC-WV-08`（詳細は [docs/specs/features/webview-import.md §7](../features/webview-import.md#7-受入条件一覧acceptance-criteria-ac-wv-xx) を参照）
+- **内蔵ブラウザ画面（`SCR-04`）**: `AC-WV-01`〜`AC-WV-08`（詳細は [docs/specs/features/webview-import.md §7](../../features/webview-import.md#7-受入条件一覧acceptance-criteria-ac-wv-xx) を参照）
 - **作品詳細画面（`SCR-02`）**: `AC-ND-26`（作品詳細ヘッダーからの「内蔵ブラウザで開く」導線 `TR-09`）
 - **小説リーダー画面（`SCR-03`）**: `AC-RD-29`（リーダー本文取得エラー時の「内蔵ブラウザで開いて取り込む」導線 `TR-10`）
 
@@ -256,13 +256,13 @@ flowchart TD
 
 ### 5.1 Android 実機検証タイミング判断
 
-- [docs/guidelines/workflow.md §2.2](../../guidelines/workflow.md#22-android-実機検証の実施判断基準と試験項目表フォーマット) の判断基準に基づき、本要望の実機検証タイミングを判定：
+- [docs/guidelines/workflow.md §2.2](../../../guidelines/workflow.md#22-android-実機検証の実施判断基準と試験項目表フォーマット) の判断基準に基づき、本要望の実機検証タイミングを判定：
   - **判定結果**: **B. Milestone 最終レビュー後に一括で実機検証を実施（完了ゲート: `Milestone v0.9 完了前`）**
   - **判断理由**: 本要望は Android ネイティブプラグイン（`WebViewDomPlugin.java`）を新設するものの、DOM キャプチャロジック（`evaluateJavascript`）および UI / ルーター統合は Playwright IT（`SCN-07`）および Vitest 単体テストで決定論的に 100% 検証可能である。また先行する永続キュー（Issue #268 / `HO-34`）とともに Milestone `v0.9` の一括実機検証（Issue #270）にて、実機 WebView 操作とキャッシュ保存の連携を一筆書きで検証する方が効率的かつ網羅的であるため。
 
 ### 5.2 申し送り事項（`HO-35`）の登録
 
-- [docs/quality/bug-and-handover-log.md](../../quality/bug-and-handover-log.md) に以下の申し送り事項を登録する：
+- [docs/quality/bug-and-handover-log.md](../../../quality/bug-and-handover-log.md) に以下の申し送り事項を登録する：
   - **ID**: `HO-35`
   - **起票元**: Issue `#269`
   - **内容**: Android 実機（`android.webkit.WebView` ＋ `evaluateJavascript` ＋ `WebViewDomPlugin.java`）における全画面内蔵ブラウザダイアログの表示、Web ページ閲覧・Cloudflare/ログイン操作、DOM キャプチャ取り込み（作品目次 vs 各話本文の自動判別・DB保存）、および作品詳細（`TR-09`）・リーダー（`TR-10`）・完了後遷移（`TR-11`）・OS バックキー論理復帰の実機確認

@@ -91,3 +91,15 @@ export const ExitToastRoute: Story = {
     initialShowExitToast: true,
   },
 };
+
+/**
+ * 内蔵ブラウザ画面ルートストーリー。
+ * /browser?url=... への直接アクセス時（全画面シェル・内蔵ブラウザ画面 SCR-04・内包下部タブバー）を描画します。
+ */
+export const BrowserRoute: Story = {
+  name: "内蔵ブラウザ画面ルート表示",
+  args: {
+    initialPath:
+      "/browser?url=https%3A%2F%2Fkakuyomu.jp%2Fworks%2F16817330658027210412&novelId=kakuyomu%3A16817330658027210412",
+  },
+};

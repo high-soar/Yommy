@@ -6,7 +6,7 @@ status: "Approved"
 updated: "2026-11-08"
 tags: [quality, bug-log, handover, dre, kaizen, ho-34, ho-35]
 related_specs:
-  - docs/specs/changes/issue-269-webview-fallback-and-dom-import.md
+  - docs/specs/changes/archive/issue-269-webview-fallback-and-dom-import.md
   - docs/specs/features/webview-import.md
   - docs/specs/changes/archive/issue-268-persistent-download-queue.md
   - docs/quality/archive/v0.8-discovery-filter-and-bookshelf-favorite-ux-log.md
@@ -88,11 +88,12 @@ related_tests: []
 >
 > 次期作業中の **Milestone `v0.9`** で検出されたバグ記録は、本表へ No. 280 より連番で記入します。
 
-| No. | Issue / PR | 検出フェーズ・手段          | 成果物区分 (`製品コード` / `支援成果物`) | 対象箇所                                                | 原因 (`L`/`S`/`D`/`B`/`A`) | 不備の概要と是正内容（原因 `D` は設計書同期コミット併記）                                                                                                                         |
-| :-: | :--------: | :-------------------------- | :--------------------------------------: | :------------------------------------------------------ | :------------------------: | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 280 |  PR #303   | AI レビュー (`pr-reviewer`) |               `支援成果物`               | `docs/specs/features/webview-import.md`                 |            `D`             | `related_specs` における起票元差分仕様書（issue-269）参照の欠落。差分仕様書パスを追記し双方向トレーサビリティを確立（コミット `0749c8d`）。                                       |
-| 281 |  PR #303   | AI レビュー (`pr-reviewer`) |               `支援成果物`               | `docs/quality/bug-and-handover-log.md`                  |            `D`             | フロントマターにおける `ho-35` タグおよび `issue-269` 関連仕様書参照の欠落。`tags` および `related_specs` に追記（コミット `0749c8d`）。                                          |
-| 282 |  PR #303   | AI レビュー (`pr-reviewer`) |               `支援成果物`               | `docs/specs/features/novel-detail.md`, `reader-view.md` |            `D`             | `NovelDetailPageProps` / `NovelDetailContainerProps` / `ReaderContainerProps` のテーブルにおける `onOpenWebView` 定義の欠落。プロパティ契約テーブルに追記（コミット `0749c8d`）。 |
+| No. | Issue / PR  | 検出フェーズ・手段          | 成果物区分 (`製品コード` / `支援成果物`) | 対象箇所                                                | 原因 (`L`/`S`/`D`/`B`/`A`) | 不備の概要と是正内容（原因 `D` は設計書同期コミット併記）                                                                                                                                                                                                                                       |
+| :-: | :---------: | :-------------------------- | :--------------------------------------: | :------------------------------------------------------ | :------------------------: | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 280 |   PR #303   | AI レビュー (`pr-reviewer`) |               `支援成果物`               | `docs/specs/features/webview-import.md`                 |            `D`             | `related_specs` における起票元差分仕様書（issue-269）参照の欠落。差分仕様書パスを追記し双方向トレーサビリティを確立（コミット `0749c8d`）。                                                                                                                                                     |
+| 281 |   PR #303   | AI レビュー (`pr-reviewer`) |               `支援成果物`               | `docs/quality/bug-and-handover-log.md`                  |            `D`             | フロントマターにおける `ho-35` タグおよび `issue-269` 関連仕様書参照の欠落。`tags` および `related_specs` に追記（コミット `0749c8d`）。                                                                                                                                                        |
+| 282 |   PR #303   | AI レビュー (`pr-reviewer`) |               `支援成果物`               | `docs/specs/features/novel-detail.md`, `reader-view.md` |            `D`             | `NovelDetailPageProps` / `NovelDetailContainerProps` / `ReaderContainerProps` のテーブルにおける `onOpenWebView` 定義の欠落。プロパティ契約テーブルに追記（コミット `0749c8d`）。                                                                                                               |
+| 283 | #298 / #269 | 結合テスト実装 (`SCN-07`)   |               `製品コード`               | `src/features/reader/hooks/useReader.ts`                |            `S`             | 本文取得エラー発生時（HTTP 403 等）に `novel` および `chapter` が未設定となり、`ReaderContainer` の `TR-10` フォールバック遷移先 URL が欠落する不備。`resolveChapterBody` 失敗時にも目次・作品メタデータを State に保持して `TR-10` 遷移先 URL を正常解決できるよう是正（コミット `01b41d7`）。 |
 
 ---
 
