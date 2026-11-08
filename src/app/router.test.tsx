@@ -9,6 +9,7 @@ import {
   matchRoute,
   safeDecodeURIComponent,
   resolveInitialPath,
+  type RouterContextValue,
 } from "./router";
 
 const {
@@ -19,6 +20,7 @@ const {
   ReaderRoute,
   SettingsRoute,
   UnknownFallbackRoute,
+  BrowserRoute,
 } = composeStories(stories);
 
 describe("router", () => {
@@ -105,6 +107,16 @@ describe("router", () => {
       );
       expect(screen.getByTestId("route-name")).toHaveTextContent(
         "Route: bookshelf",
+      );
+    });
+
+    it("BrowserRoute ストーリーが内蔵ブラウザ画面ルートを描画すること (SCR-04)", () => {
+      render(<BrowserRoute />);
+      expect(screen.getByTestId("current-path")).toHaveTextContent(
+        "Path: /browser?url=https%3A%2F%2Fkakuyomu.jp%2Fworks%2F16817330658027210412&novelId=kakuyomu%3A16817330658027210412",
+      );
+      expect(screen.getByTestId("route-name")).toHaveTextContent(
+        "Route: browser",
       );
     });
   });
@@ -205,6 +217,40 @@ describe("router", () => {
       });
     });
 
+    it("内蔵ブラウザパス /browser はクエリパラメータ（url, novelId, chapterIndex, originPath）を解析して browser ルートにマッチすること (SCR-04)", () => {
+      const result = matchRoute(
+        "/browser?url=https%3A%2F%2Fkakuyomu.jp%2Fworks%2F16817330658027210412&novelId=kakuyomu%3A16817330658027210412&chapterIndex=2&originPath=%2Fnovels%2Fkakuyomu%3A16817330658027210412",
+      );
+      expect(result).toEqual({
+        name: "browser",
+        path: "/browser?url=https%3A%2F%2Fkakuyomu.jp%2Fworks%2F16817330658027210412&novelId=kakuyomu%3A16817330658027210412&chapterIndex=2&originPath=%2Fnovels%2Fkakuyomu%3A16817330658027210412",
+        url: "https://kakuyomu.jp/works/16817330658027210412",
+        novelId: "kakuyomu:16817330658027210412",
+        chapterIndex: 2,
+        originPath: "/novels/kakuyomu:16817330658027210412",
+      });
+    });
+
+    it("内蔵ブラウザパスでクエリパラメータが未指定の場合、url は空文字で任意パラメータは undefined にフォールバックすること", () => {
+      const result = matchRoute("/browser");
+      expect(result).toEqual({
+        name: "browser",
+        path: "/browser",
+        url: "",
+      });
+    });
+
+    it("内蔵ブラウザパスで chapterIndex が 0 以下の場合は undefined となること", () => {
+      const result = matchRoute(
+        "/browser?url=https%3A%2F%2Fkakuyomu.jp%2Fworks%2F123&chapterIndex=0",
+      );
+      expect(result).toEqual({
+        name: "browser",
+        path: "/browser?url=https%3A%2F%2Fkakuyomu.jp%2Fworks%2F123&chapterIndex=0",
+        url: "https://kakuyomu.jp/works/123",
+      });
+    });
+
     it("未知のパスや不正なパスは本棚ルートへフォールバックすること", () => {
       expect(matchRoute("/unknown/route")).toEqual({
         name: "bookshelf",
@@ -246,8 +292,22 @@ describe("router", () => {
   });
 
   describe("画面遷移ナビゲーションと History API 同期検証", () => {
+    interface ExtendedRouterContextValue extends RouterContextValue {
+      browserOrigin?: string | null;
+      navigateToBrowser?: (
+        url: string,
+        options?: {
+          novelId?: string;
+          chapterIndex?: number;
+          originPath?: string;
+          replace?: boolean;
+        },
+      ) => void;
+    }
+
     const TestConsumer: React.FC = () => {
       const router = useRouter();
+      const extendedRouter = router as unknown as ExtendedRouterContextValue;
       return (
         <div>
           <span data-testid="path-display">{router.currentPath}</span>
@@ -257,6 +317,9 @@ describe("router", () => {
           </span>
           <span data-testid="origin-display">
             {router.novelOrigin ?? "null"}
+          </span>
+          <span data-testid="browser-origin-display">
+            {extendedRouter.browserOrigin ?? "null"}
           </span>
           <button
             data-testid="btn-bookshelf"
@@ -317,6 +380,20 @@ describe("router", () => {
             onClick={() => router.navigateToSettings()}
           >
             設定
+          </button>
+          <button
+            data-testid="btn-browser"
+            onClick={() =>
+              extendedRouter.navigateToBrowser?.(
+                "https://kakuyomu.jp/works/16817330658027210412",
+                {
+                  novelId: "kakuyomu:16817330658027210412",
+                  chapterIndex: 2,
+                },
+              )
+            }
+          >
+            ブラウザ
           </button>
           <button data-testid="btn-back" onClick={() => router.back()}>
             戻る
@@ -397,6 +474,17 @@ describe("router", () => {
       );
 
       act(() => {
+        screen.getByTestId("btn-browser").click();
+      });
+      expect(screen.getByTestId("path-display")).toHaveTextContent(
+        "/browser?url=https%3A%2F%2Fkakuyomu.jp%2Fworks%2F16817330658027210412&novelId=kakuyomu%3A16817330658027210412&chapterIndex=2",
+      );
+      expect(screen.getByTestId("route-display")).toHaveTextContent("browser");
+      expect(screen.getByTestId("previous-path-display")).toHaveTextContent(
+        "/settings",
+      );
+
+      act(() => {
         screen.getByTestId("btn-custom").click();
       });
       expect(screen.getByTestId("path-display")).toHaveTextContent(
@@ -444,6 +532,30 @@ describe("router", () => {
       expect(screen.getByTestId("path-display")).toHaveTextContent("/settings");
       expect(screen.getByTestId("previous-path-display")).toHaveTextContent(
         "/novels/kakuyomu%3A16817330658027210412",
+      );
+    });
+
+    it("navigateToBrowser で遷移したとき、browserOrigin に遷移元パスが記録されること (SCR-04, TR-09, TR-10)", () => {
+      render(
+        <RouterProvider initialPath="/novels/sample-work">
+          <TestConsumer />
+        </RouterProvider>,
+      );
+
+      expect(screen.getByTestId("path-display")).toHaveTextContent(
+        "/novels/sample-work",
+      );
+      expect(screen.getByTestId("browser-origin-display")).toHaveTextContent(
+        "null",
+      );
+
+      act(() => {
+        screen.getByTestId("btn-browser").click();
+      });
+
+      expect(screen.getByTestId("route-display")).toHaveTextContent("browser");
+      expect(screen.getByTestId("browser-origin-display")).toHaveTextContent(
+        "/novels/sample-work",
       );
     });
 
@@ -873,6 +985,81 @@ describe("router", () => {
       it("ランキング画面 (SCR-07) から back() を呼んだとき、ホーム本棚画面 (/) へ復帰すること (TR-12)", () => {
         render(
           <RouterProvider initialPath="/ranking">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent("/");
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "bookshelf",
+        );
+      });
+
+      it("内蔵ブラウザ画面 (SCR-04) で originPath が指定されている場合、back() で originPath へ復帰すること (TR-12)", () => {
+        render(
+          <RouterProvider initialPath="/browser?url=https%3A%2F%2Fexample.com&originPath=%2Fnovels%2Fwork1%2Fchapters%2F3">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/novels/work1/chapters/3",
+        );
+        expect(screen.getByTestId("route-display")).toHaveTextContent("reader");
+      });
+
+      it("作品詳細画面から内蔵ブラウザ画面へ遷移した場合、back() で browserOrigin である作品詳細画面へ復帰すること (TR-12)", () => {
+        render(
+          <RouterProvider initialPath="/novels/sample-work">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-browser").click();
+        });
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "browser",
+        );
+
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/novels/sample-work",
+        );
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "novel-detail",
+        );
+      });
+
+      it("内蔵ブラウザ画面 (SCR-04) で novelId のみが指定されている場合、back() で該当作品詳細画面へ復帰すること (TR-12)", () => {
+        render(
+          <RouterProvider initialPath="/browser?url=https%3A%2F%2Fexample.com&novelId=kakuyomu%3A16817330658027210412">
+            <TestConsumer />
+          </RouterProvider>,
+        );
+
+        act(() => {
+          screen.getByTestId("btn-back").click();
+        });
+        expect(screen.getByTestId("path-display")).toHaveTextContent(
+          "/novels/kakuyomu%3A16817330658027210412",
+        );
+        expect(screen.getByTestId("route-display")).toHaveTextContent(
+          "novel-detail",
+        );
+      });
+
+      it("内蔵ブラウザ画面 (SCR-04) で originPath, browserOrigin, novelId がいずれも未指定の場合、back() で本棚 (/) へ復帰すること (TR-12)", () => {
+        render(
+          <RouterProvider initialPath="/browser?url=https%3A%2F%2Fexample.com">
             <TestConsumer />
           </RouterProvider>,
         );

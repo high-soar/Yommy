@@ -198,3 +198,15 @@ export const UnknownFallbackRoute: Story = {
     </RouterProvider>
   ),
 };
+
+/**
+ * 内蔵ブラウザ画面ルート（/browser）の初期表示ストーリー (SCR-04)
+ */
+export const BrowserRoute: Story = {
+  name: "内蔵ブラウザ画面ルート（/browser）",
+  render: () => (
+    <RouterProvider initialPath="/browser?url=https%3A%2F%2Fkakuyomu.jp%2Fworks%2F16817330658027210412&novelId=kakuyomu%3A16817330658027210412">
+      <RouterStateInspector />
+    </RouterProvider>
+  ),
+};
