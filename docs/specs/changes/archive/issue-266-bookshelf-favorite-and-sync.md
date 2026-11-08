@@ -4,7 +4,7 @@ title: "作品のお気に入り（★）登録・クラウド同期連携と本
 description: "Issue #266 に対する差分仕様、本棚（SCR-01）および作品詳細（SCR-02）のお気に入り（★）トグルUI、本棚お気に入りフィルタとDB永続化、クラウド同期（SyncEngine）双方向LWWマージ、テスト計画、およびSub-issue分割計画。"
 issue: "#266"
 status: "Completed (Archived)"
-updated: "2026-11-07"
+updated: "2026-11-08"
 tags:
   - delta
   - bookshelf

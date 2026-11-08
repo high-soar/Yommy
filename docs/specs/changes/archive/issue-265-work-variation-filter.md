@@ -4,7 +4,7 @@ title: "ランキング・検索画面（SCR-07 / SCR-06）における作品種
 description: "Issue #265 に対する差分仕様、カクヨム・小説家になろうの作品種別ランキング/検索URL生成仕様、ランキング画面の作品種別セグメントピルおよび検索画面の短編ピル追加設計、テスト計画、およびSub-issue分割計画。"
 issue: "#265"
 status: "Completed (Archived)"
-updated: "2026-11-07"
+updated: "2026-11-08"
 tags:
   - delta
   - ranking
@@ -101,7 +101,7 @@ Step 1 の `/grill-me` インタビューおよび既存仕様・コード調査
    - `options?.serialStatus` に応じて `serial_status` パラメータを設定する：
      - `"all"` または未指定 → `serial_status` を省略
      - `"running"`（連載中）→ `serial_status=running`
-     - `"completed"`（完結済）または `"short"`（短編）→ `serial_status=completed`（カクヨム Web 検索では短編も完結済作品として扱われるため `completed` にマッピング）
+     - `"completed"`（完結済）または `"short"`（短編）→ `serial_status=completed`（カクヨム Web 検索では短編も完結済作品として扱われるため `completed` にマッピング。※Milestone v0.8 実機検証 `R2-18` にて、正本 [docs/specs/parsers/kakuyomu.md](../../parsers/kakuyomu.md) および [docs/specs/features/search.md](../../features/search.md) では `"short"` 選択時に長編完結作品の混入を防ぐため `serial_status=completed` に加えて `total_character_count_range=-20000`［20,000文字以下］を付与する仕様へ改訂済み）
 
 ### 2.2 ランキング画面（`SCR-07`）の作品種別フィルタ UI と状態管理（`useNovelRanking`）
 

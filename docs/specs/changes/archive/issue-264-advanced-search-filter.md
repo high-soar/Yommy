@@ -4,7 +4,7 @@ title: "検索画面（SCR-06）の高度検索フィルタ機能（除外キー
 description: "Issue #264（HO-31）に対する差分仕様、カクヨム・小説家になろうの除外キーワードおよび複数ジャンル検索URL生成仕様、検索画面のインライン折りたたみ除外ワードUI・マルチセレクトジャンルピル設計、テスト計画、およびSub-issue分割計画。"
 issue: "#264"
 status: "Completed (Archived)"
-updated: "2026-11-07"
+updated: "2026-11-08"
 tags:
   - delta
   - search
@@ -113,7 +113,7 @@ Step 1 の `/grill-me` インタビューおよび実サイト（カクヨム Ne
      ```
    - **UI 構造と振る舞い**:
      - `<form role="search" onSubmit={handleSubmit}>` 内の 1 段目に、メイン検索キーワード入力欄（`data-testid="search-input"`）、**「除外語」トグルボタン（`data-testid="search-exclude-toggle-button"`）**、および「検索」実行ボタン（`data-testid="search-submit-button"`）を配置する。
-     - 「除外語」トグルボタン（`aria-expanded={isExcludeOpen}`）をタップすると、フォームの 2 段目として **除外キーワード入力欄（`data-testid="search-exclude-input"`, `placeholder="除外ワード（スペース区切り）"`）** がインライン展開される（初期状態は折りたたみ。ただし初期描画時に `excludeKeyword` が非空で渡された場合は展開状態で初期化する）。
+     - 「除外語」トグルボタン（`aria-expanded={isExcludeOpen}`）をタップすると、フォームの 2 段目として **除外キーワード入力欄（`data-testid="search-exclude-input"`, `placeholder="除外ワード（スペース区切り）"`）** がインライン展開される（初期状態は折りたたみ。ただし初期描画時に `excludeKeyword` が非空で渡された場合は展開状態で初期化する。※Milestone v0.8 レビュー `R1-10` / `R2-09` にて、正本 [docs/specs/features/search.md](../../features/search.md) では `useId()` による一意 ID 生成および展開時［`isExcludeOpen === true`］のみ `aria-controls` を出力する仕様へ改訂済み）。
      - 除外キーワード入力欄に 1 文字以上入力されているときは、右端に **クリアボタン（`data-testid="search-exclude-clear-button"`, `aria-label="除外キーワードをクリア"`）** を表示し、押下時に `onChangeExcludeKeyword("")` を呼び出す。
      - 除外キーワードが実質非空（`excludeKeyword.trim().length > 0`）のときは、パネルを閉じていても「除外語」トグルボタンをアクティブ強調スタイル（バッジ／色変化）で描画し、除外フィルタが適用中であることを視覚的に明示する。
      - 同一 `<form>` 内に配置されるため、除外キーワード入力欄内で `Enter` キーを押下した場合もそのまま `onSubmitSearch()` が発火する（通信中 `isLoading === true` のときは submit 抑止、テキスト入力自体は可能維持）。
@@ -153,7 +153,7 @@ Step 1 の `/grill-me` インタビューおよび実サイト（カクヨム Ne
      - `targetGenre` が文字列の場合: 現在の `genres` に含まれていれば除去し、含まれていなければ末尾に追加した新配列 `nextGenres` に更新する（全ジャンルが解除された場合は自動的に `[]`＝「すべて」となる）。
      - 通信中（`isLoadingMore || isSearchingRef.current`）は無視し、`hasSearchedRef.current === true` の場合は更新後の `nextGenres` で直ちに 1 ページ目から `executeSearch({ genres: nextGenres })` を発火する。
 2. **検索実行（`executeSearch`）と次ページ取得（`loadMore`）**:
-   - `parser.buildSearchUrl(keyword, { order: targetOrder, serialStatus: targetSerial, genre: targetGenres[0], genres: targetGenres, excludeKeyword: targetExcludeKeyword, page })` を呼び出し、`excludeKeyword` と `genres` を 1 ページ目検索・リトライ・次ページ追加読み込み（`loadMore`）のすべてで一貫して引き継ぐ。
+   - `parser.buildSearchUrl(keyword, { order: targetOrder, serialStatus: targetSerial, genre: targetGenres[0], genres: targetGenres, excludeKeyword: targetExcludeKeyword, page })` を呼び出し、`excludeKeyword` と `genres` を 1 ページ目検索・リトライ・次ページ追加読み込み（`loadMore`）のすべてで一貫して引き継ぐ（※Milestone v0.8 レビュー `R1-07` / `R2-15` にて、正本 [docs/specs/features/search.md](../../features/search.md) では直近の検索実行時点の確定条件を `committedQueryRef` に保持し、`loadMore` 時は未確定の入力欄変更に影響されず `committedQueryRef` の確定条件を使用する仕様へ改訂済み）。
 3. **サイト切替連動（`setSelectedSite`）**:
    - カクヨム ⇔ 小説家になろうを切り替えた際、サイト共通条件である **`keyword`・`excludeKeyword`・`order`・`serialStatus` は保持** し、サイト固有の **`genres` を `[]`（`genre` は `undefined`）にリセット** する。
    - `hasSearchedRef.current === true` の場合は `executeSearch({ site: newSite, genres: [] })` で直ちに新サイトを再検索する。

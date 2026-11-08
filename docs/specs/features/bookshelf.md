@@ -2,8 +2,8 @@
 type: spec-feature
 title: "本棚画面仕様書（SCR-01: Bookshelf）"
 description: "登録済み小説カード一覧の表示、お気に入り（★）登録・絞り込みフィルタ、しおり位置からのワンタップ読書再開、および検索・ランキング画面への誘導を提供する本棚画面（SCR-01）の正本仕様。"
-status: "Review (#266)"
-updated: "2026-11-07"
+status: "Approved"
+updated: "2026-11-08"
 tags:
   - bookshelf
   - scr-01
