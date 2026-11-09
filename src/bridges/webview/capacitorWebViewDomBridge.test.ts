@@ -135,4 +135,75 @@ describe("CapacitorWebViewDomBridge", () => {
       });
     });
   });
+
+  describe("addDomCapturedListener", () => {
+    it("WebViewDomNative.addListener が存在する場合、domCaptured を購読し、イベント通知がリスナーに届くこと", async () => {
+      const mockRemove = vi.fn().mockResolvedValue(undefined);
+      let capturedCallback: ((data: unknown) => void) | undefined;
+      const addListenerMock = vi
+        .fn()
+        .mockImplementation((_event: string, cb: (data: unknown) => void) => {
+          capturedCallback = cb;
+          return Promise.resolve({ remove: mockRemove });
+        });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (WebViewDomNative as any).addListener = addListenerMock;
+
+      const listener = vi.fn();
+      const unsubscribe = bridge.addDomCapturedListener(listener);
+
+      expect(addListenerMock).toHaveBeenCalledWith(
+        "domCaptured",
+        expect.any(Function),
+      );
+
+      // イベント発火
+      capturedCallback?.({
+        html: "<p>本文</p>",
+        url: "https://kakuyomu.jp/works/1",
+        title: "タイトル",
+      });
+
+      expect(listener).toHaveBeenCalledWith({
+        html: "<p>本文</p>",
+        url: "https://kakuyomu.jp/works/1",
+        title: "タイトル",
+      });
+
+      // 購読解除
+      await Promise.resolve(); // Promise 解決を待つ
+      unsubscribe();
+      expect(mockRemove).toHaveBeenCalledTimes(1);
+    });
+
+    it("Promise 解決前に購読解除された場合でも、解決後に即座に remove が呼ばれること", async () => {
+      const mockRemove = vi.fn().mockResolvedValue(undefined);
+      let resolvePromise: (handle: { remove: () => Promise<void> }) => void;
+      const deferred = new Promise<{ remove: () => Promise<void> }>(
+        (resolve) => {
+          resolvePromise = resolve;
+        },
+      );
+      const addListenerMock = vi.fn().mockReturnValue(deferred);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (WebViewDomNative as any).addListener = addListenerMock;
+
+      const unsubscribe = bridge.addDomCapturedListener(vi.fn());
+      unsubscribe(); // 解決前に解除
+
+      resolvePromise!({ remove: mockRemove });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(mockRemove).toHaveBeenCalledTimes(1);
+    });
+
+    it("WebViewDomNative.addListener が未定義の場合でもエラーにならず解除関数が呼べること", () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (WebViewDomNative as any).addListener = undefined;
+
+      const unsubscribe = bridge.addDomCapturedListener(vi.fn());
+      expect(() => unsubscribe()).not.toThrow();
+    });
+  });
 });

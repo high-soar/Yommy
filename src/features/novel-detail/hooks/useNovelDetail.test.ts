@@ -170,6 +170,33 @@ describe("useNovelDetail", () => {
       expect(result.current.error).toBe(DEFAULT_FETCH_ERROR_MESSAGE);
     });
 
+    it("初期ロード時のキュー状態同期で例外が発生した場合でもクラッシュせず安全に無視されること (R1-02)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const queueRepo = new SqlQueueRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 1);
+
+      vi.spyOn(queueRepo, "resetInterruptedToPending").mockRejectedValueOnce(
+        new Error("キュー同期失敗"),
+      );
+
+      const { result } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          queueRepository: queueRepo,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.novel).not.toBeNull();
+      expect(result.current.error).toBeNull();
+    });
+
     it("アンマウント後に初期データ取得が解決してもステート更新エラーが発生しないこと", async () => {
       let resolveGetNovel: ((value: unknown) => void) | null = null;
       const customRepo = {
@@ -202,6 +229,43 @@ describe("useNovelDetail", () => {
       });
 
       expect(customRepo.getNovelById).toHaveBeenCalled();
+    });
+
+    it("syncQueueState の非同期待機中にアンマウントされた場合、安全にステート更新をスキップすること (186行目)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const queueRepo = new SqlQueueRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 1);
+
+      let resolveList: ((value: unknown) => void) | null = null;
+      const listPromise = new Promise((resolve) => {
+        resolveList = resolve;
+      });
+      const listSpy = vi
+        .spyOn(queueRepo, "listByNovelId")
+        .mockImplementation(() => listPromise as never);
+
+      const { unmount } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          queueRepository: queueRepo,
+        }),
+      });
+
+      // syncQueueState 内で listByNovelId が呼ばれるまで待機
+      await waitFor(() => {
+        expect(listSpy).toHaveBeenCalled();
+      });
+
+      // 初回ロードで listByNovelId 待機中にアンマウント
+      unmount();
+
+      resolveList!([]);
+      await act(async () => {
+        await Promise.resolve();
+      });
     });
   });
 
@@ -320,6 +384,49 @@ describe("useNovelDetail", () => {
       expect(result.current.chapters).toHaveLength(4);
       expect(result.current.refreshMessage).toBe("目次を更新しました（+3話）");
       expect(result.current.error).toBeNull();
+    });
+
+    it("refreshToc: hasNewUpdate === true の場合、clearNewUpdate が呼ばれ、キュー状態が同期されること (R1-18)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const queueRepo = new SqlQueueRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 1);
+      // hasNewUpdate を true に設定
+      await db.execute("UPDATE novels SET has_new_update = 1 WHERE id = ?", [
+        seeded.id,
+      ]);
+
+      const clearNewUpdateSpy = vi.spyOn(novelRepo, "clearNewUpdate");
+
+      const { result } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          queueRepository: queueRepo,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // 初回ロードで clearNewUpdate が1回呼ばれる
+      expect(clearNewUpdateSpy).toHaveBeenCalledTimes(1);
+
+      // 再び markNewUpdate を実行
+      await db.execute("UPDATE novels SET has_new_update = 1 WHERE id = ?", [
+        seeded.id,
+      ]);
+
+      let success = false;
+      await act(async () => {
+        success = await result.current.refreshToc();
+      });
+
+      expect(success).toBe(true);
+      expect(clearNewUpdateSpy).toHaveBeenCalledTimes(2);
+      expect(result.current.novel?.hasNewUpdate).toBe(false);
     });
 
     it("refreshToc: 差分新着話数がない（0話）場合、「最新の状態です」の通知が設定されること (AC-ND-05)", async () => {
@@ -1749,6 +1856,43 @@ describe("useNovelDetail", () => {
         );
         expect(getNovelSpy).not.toHaveBeenCalled();
         expect(listChaptersSpy).not.toHaveBeenCalled();
+      });
+
+      it("confirmClearCache: 削除対象が0件の場合でも syncQueueState が実行されキュー状態が最新化されること (R1-18)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const queueRepo = new SqlQueueRepository(db);
+        const seeded = await seedSampleNovel(novelRepo, 2);
+
+        const resetInterruptedSpy = vi.spyOn(
+          queueRepo,
+          "resetInterruptedToPending",
+        );
+
+        const { result } = renderHook(() => useNovelDetail(seeded.id), {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+            queueRepository: queueRepo,
+          }),
+        });
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        resetInterruptedSpy.mockClear();
+
+        let deletedCount = 0;
+        await act(async () => {
+          deletedCount = await result.current.confirmClearCache({
+            onlyRead: true, // 既読話なしのため 0 件
+          });
+        });
+
+        expect(deletedCount).toBe(0);
+        expect(resetInterruptedSpy).toHaveBeenCalledTimes(1);
       });
 
       it("confirmClearCache 失敗時（deleteCachedBodies で例外）はダイアログを開いたまま error がセットされること", async () => {

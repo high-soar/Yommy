@@ -505,4 +505,178 @@ test.describe("SCN-07: 内蔵ブラウザ画面（SCR-04）による目次・本
     await expect(page).toHaveURL("/");
     await expect(page.getByTestId("bookshelf-page")).toBeVisible();
   });
+
+  test("SCN-07-04: リーダー画面（SCR-03）からのブラウザ遷移後の論理復帰（TR-10 → TR-12）、危険なURLスキーム入力遮断（AC-WV-02）、および未登録作品エピソード直接取り込み時の保護エラー（AC-WV-07）", async ({
+    page,
+  }) => {
+    const sampleWorkUrl = "https://kakuyomu.jp/works/1177354054881162325";
+    const episodeUrl =
+      "https://kakuyomu.jp/works/1177354054881162325/episodes/1177354054881162326";
+    const novelId = "kakuyomu:1177354054881162325";
+
+    // 1. 作品情報をローカル DB に登録（本文は未キャッシュ状態）
+    await page.evaluate(
+      async ({ sampleWorkUrl, episodeUrl }) => {
+        const services = window.__yommyServices!;
+        const initialIndex = {
+          siteType: "kakuyomu" as const,
+          remoteWorkId: "1177354054881162325",
+          canonicalUrl: sampleWorkUrl,
+          title: "境界迷宮と異界の魔術師",
+          author: "小野崎",
+          synopsis: "異世界に召喚された少年の冒険譚。",
+          chapters: [
+            {
+              chapterIndex: 1,
+              remoteChapterId: "1177354054881162326",
+              partTitle: null,
+              title: "プロローグ：目覚め",
+              url: episodeUrl,
+              publishedAt: null,
+            },
+          ],
+          nextTocPageUrl: null,
+        };
+        await services.novelRepository.upsertNovelWithToc(
+          initialIndex,
+          new Date().toISOString(),
+        );
+      },
+      { sampleWorkUrl, episodeUrl, novelId },
+    );
+
+    // 本棚をリロードして登録作品を同期
+    await page.reload();
+    await page.waitForFunction(() =>
+      Boolean(
+        (window as unknown as { __yommyServices?: { isReady?: boolean } })
+          .__yommyServices?.isReady,
+      ),
+    );
+
+    // エピソード取得時に通信エラー (HTTP 500) をシミュレート
+    await page.evaluate(
+      ({ episodeUrl }) => {
+        const services = window.__yommyServices!;
+        services.httpClient.setResponse(episodeUrl, {
+          status: 500,
+          headers: {},
+          html: "Internal Server Error",
+          url: episodeUrl,
+        });
+      },
+      { episodeUrl },
+    );
+
+    // 2. 本棚から作品詳細 (SCR-02) を経由して第1話リーダー (SCR-03) を開く
+    const novelCard = page.getByTestId("novel-card-select");
+    await expect(novelCard).toBeVisible();
+    await novelCard.click();
+
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)1177354054881162325$/,
+    );
+    const readFirstBtn = page.getByTestId("detail-read-first-button");
+    await expect(readFirstBtn).toBeVisible();
+    await readFirstBtn.click();
+
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)1177354054881162325\/chapters\/1$/,
+    );
+
+    // 3. 通信エラー画面の「内蔵ブラウザで開いて取り込む」ボタンを押下 (TR-10)
+    const readerOpenWebviewBtn = page.getByTestId("reader-open-webview-button");
+    await expect(readerOpenWebviewBtn).toBeVisible({ timeout: 10000 });
+    await readerOpenWebviewBtn.click();
+
+    // 4. 内蔵ブラウザ画面 (SCR-04) へ遷移することを確認
+    await expect(page).toHaveURL(
+      new RegExp(
+        `/browser\\?url=${encodeURIComponent(episodeUrl)}&novelId=${encodeURIComponent(novelId)}&chapterIndex=1`,
+      ),
+    );
+    const webviewImportPage = page.getByTestId("webview-import-page");
+    await expect(webviewImportPage).toBeVisible();
+
+    // 5. ヘッダーの「← 戻る」ボタンを押下して、元のリーダー画面 (SCR-03) へ論理復帰することを確認 (TR-12)
+    const backBtn = page.getByTestId("browser-back-button");
+    await expect(backBtn).toBeVisible();
+    await backBtn.click();
+
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)1177354054881162325\/chapters\/1$/,
+    );
+    await expect(readerOpenWebviewBtn).toBeVisible();
+
+    // 6. 再び内蔵ブラウザ画面へ進み、危険なスキーム（file://, javascript:）の入力遮断を検証 (AC-WV-02)
+    await readerOpenWebviewBtn.click();
+    await expect(page.getByTestId("webview-import-page")).toBeVisible();
+
+    const urlInput = page.getByTestId("browser-url-input");
+    const navigateBtn = page.getByTestId("browser-navigate-button");
+
+    // 6-a: file:// スキーム入力
+    await urlInput.fill("file:///etc/passwd");
+    await navigateBtn.click();
+
+    const browserError = page.getByTestId("browser-error");
+    await expect(browserError).toBeVisible();
+    await expect(browserError).toContainText(
+      "安全でない URL スキームは開けません",
+    );
+    await expect(page.getByTestId("import-dom-button")).toBeDisabled();
+
+    // 6-b: javascript: スキーム入力
+    await urlInput.fill("javascript:alert(1)");
+    await navigateBtn.click();
+    await expect(browserError).toBeVisible();
+    await expect(browserError).toContainText(
+      "安全でない URL スキームは開けません",
+    );
+    await expect(page.getByTestId("import-dom-button")).toBeDisabled();
+
+    // 7. 未登録作品のエピソード本文ページを直接開いて取り込もうとした場合の保護エラーを検証 (AC-WV-07)
+    const unseededEpisodeUrl =
+      "https://kakuyomu.jp/works/9999999999999999999/episodes/9999999999999999998";
+    const unseededEpisodeHtml = `<!doctype html>
+<html>
+  <head><title>第1話 - カクヨム</title></head>
+  <body>
+    <div id="contentMain">
+      <header class="widget-episode-header"><h1 class="widget-episodeTitle">第1話</h1></header>
+      <div class="widget-episodeBody js-episode-body"><p>未登録作品の本文</p></div>
+    </div>
+  </body>
+</html>`;
+
+    // MockWebViewDomBridge にページをセット
+    await page.evaluate(
+      ({ unseededEpisodeUrl, unseededEpisodeHtml }) => {
+        window.__yommyServices?.webViewDomBridge.setMockPage({
+          url: unseededEpisodeUrl,
+          title: "第1話 - カクヨム",
+          html: unseededEpisodeHtml,
+        });
+      },
+      { unseededEpisodeUrl, unseededEpisodeHtml },
+    );
+
+    // URL 入力欄に未登録作品エピソード URL を入力して移動
+    await urlInput.fill(unseededEpisodeUrl);
+    await navigateBtn.click();
+
+    // エラーがクリアされ、取り込みボタンが活性化
+    await expect(browserError).not.toBeVisible();
+    const importBtn = page.getByTestId("import-dom-button");
+    await expect(importBtn).toBeEnabled();
+
+    // 取り込みボタンを押下
+    await importBtn.click();
+
+    // 未登録作品エラーメッセージが表示され、取り込みがガードされることを確認
+    await expect(browserError).toBeVisible();
+    await expect(browserError).toContainText(
+      "先に作品トップ（目次）を取り込んでください",
+    );
+  });
 });

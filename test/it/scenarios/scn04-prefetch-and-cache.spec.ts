@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャッシュ・キャッシュ鮮度フォールバック・キャッシュ容量管理シナリオ (HO-20, HO-21, HO-24)", () => {
+test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャッシュ・永続キュー中断再開・再試行・キャッシュ鮮度フォールバック・キャッシュ容量管理シナリオ (HO-20, HO-21, HO-24, Issue #268)", () => {
   test.beforeEach(async ({ page }) => {
     // ローカルストレージをクリアして初期状態から開始
     await page.goto("/");
@@ -261,15 +261,21 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     await expect(cachedBadges).toHaveCount(4);
     await expect(failedBadges).toHaveCount(0);
 
-    // 10. download_queue が空にクリーンアップされていること
-    const queueLength = await page.evaluate(async () => {
-      const services = window.__yommyServices!;
-      const items = await services.queueRepository.listByNovelId(
-        "kakuyomu:16817330658027210412",
-      );
-      return items.length;
-    });
-    expect(queueLength).toBe(0);
+    // 10. download_queue が空にクリーンアップされていること (R1-09)
+    await expect
+      .poll(
+        async () => {
+          return await page.evaluate(async () => {
+            const services = window.__yommyServices!;
+            const items = await services.queueRepository.listByNovelId(
+              "kakuyomu:16817330658027210412",
+            );
+            return items.length;
+          });
+        },
+        { timeout: 10000, intervals: [200, 500] },
+      )
+      .toBe(0);
   });
 
   test("リーダー第1話表示後にバックグラウンドで後続5話が自動先読みされ（上限超は未取得）、第2話へ遷移した際に即時描画されること (HO-20, AC-RD-12, AC-RD-13, R1-18)", async ({
@@ -612,6 +618,16 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     await expect(clearCacheBtn).toBeDisabled();
     await expect(batchButton).toBeEnabled();
     await expect(batchButton).toHaveText("未取得話を一括キャッシュ");
+
+    // 全話キャッシュ削除後、キューが 0 件であることを確認 (R1-03)
+    const queueAfterClear = await page.evaluate(async () => {
+      const services = window.__yommyServices!;
+      const items = await services.queueRepository.listByNovelId(
+        "kakuyomu:16817330658027210412",
+      );
+      return items.length;
+    });
+    expect(queueAfterClear).toBe(0);
 
     // 8. 再度全話キャッシュを取得し、設定画面（SCR-05）の動作検証へ進む
     await batchButton.click();

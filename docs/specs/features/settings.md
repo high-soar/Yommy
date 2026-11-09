@@ -2,7 +2,7 @@
 type: spec-feature
 title: "設定画面仕様書（SCR-05: Settings）"
 description: 小説リーダーの組版設定（縦書き/横書き、ページ送りモード、4カラーテーマ、文字サイズ、行間、フォント種別、画面余白、ハードウェア音量キー送り）の一括カスタマイズ・永続化、ルビ・傍点を含むサンプル文章プレビュー、Google Drive クラウド同期連携、ストレージ・本文キャッシュ管理、および下部タブ・OSバックキー連携を提供する設定画面（SCR-05）の正本仕様。
-status: "Approved (#268)"
+status: "Review (#268)"
 updated: "2026-11-08"
 tags:
   [
@@ -490,7 +490,7 @@ export interface UseStorageCacheResult {
 
 ## 6. Playwright システム結合テスト（E2E シナリオ連携）
 
-設定画面（`SCR-05`）に関連する E2E 動作は、`test/it/scenarios/` 配下の以下のシナリオで継続回帰検証されます（詳細は [docs/specs/screen-transitions.md §4](../screen-transitions.md#4-playwright-システム結合テストe2e-シナリオ-scn-01--scn-06マッピング) を参照）：
+設定画面（`SCR-05`）に関連する E2E 動作は、`test/it/scenarios/` 配下の以下のシナリオで継続回帰検証されます（詳細は [docs/specs/screen-transitions.md §4](../screen-transitions.md#4-playwright-システム結合テストe2e-シナリオ-scn-01--scn-07マッピング) を参照）：
 
 - **`SCN-01`（`test/it/scenarios/scn01-poc-vertical-reader.spec.ts`）**: 組版設定（縦書き/横書き、ページ送りモード、フォント種別 5 種、画面余白 8〜48px 等）の変更・永続化とリーダー画面への動的反映、および OS バックキーによる直前画面復帰（`TR-12`, `AC-ST-01`〜`07`, `13`, `17`, `18`）。
 - **`SCN-04`（`test/it/scenarios/scn04-prefetch-and-cache.spec.ts`）**: ストレージ・キャッシュ管理セクションにおける全体キャッシュ容量表示と本文キャッシュ一括削除（既読のみ／全話、`TR-20`, `AC-ST-14`〜`16`）。

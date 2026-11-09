@@ -29,22 +29,17 @@ import org.json.JSONTokener;
  */
 @CapacitorPlugin(name = "WebViewDom")
 public class WebViewDomPlugin extends Plugin {
-    private static volatile WebViewDomPlugin instance;
     private Dialog dialog;
     private WebView webView;
 
     @Override
     public void load() {
         super.load();
-        instance = this;
     }
 
     @Override
     protected void handleOnDestroy() {
         dismissAndDestroyDialog();
-        if (instance == this) {
-            instance = null;
-        }
         super.handleOnDestroy();
     }
 
@@ -78,7 +73,9 @@ public class WebViewDomPlugin extends Plugin {
         String url = call.getString("url");
         String initialTitle = call.getString("title", "");
 
-        if (url == null || (!url.startsWith("http://") && !url.startsWith("https://"))) {
+        Uri parsedUri = url != null ? Uri.parse(url) : null;
+        String scheme = parsedUri != null ? parsedUri.getScheme() : null;
+        if (url == null || scheme == null || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))) {
             call.reject("Invalid or unsafe URL scheme: " + url);
             return;
         }
@@ -151,6 +148,8 @@ public class WebViewDomPlugin extends Plugin {
 
             WebSettings settings = webView.getSettings();
             settings.setJavaScriptEnabled(true);
+            settings.setAllowFileAccess(false);
+            settings.setAllowContentAccess(false);
             settings.setDomStorageEnabled(true);
             settings.setDatabaseEnabled(true);
             settings.setUseWideViewPort(true);
@@ -176,7 +175,12 @@ public class WebViewDomPlugin extends Plugin {
 
                 @Override
                 public boolean shouldOverrideUrlLoading(WebView view, String requestUrl) {
-                    if (requestUrl == null || (!requestUrl.startsWith("http://") && !requestUrl.startsWith("https://"))) {
+                    if (requestUrl == null) {
+                        return true;
+                    }
+                    Uri parsed = Uri.parse(requestUrl);
+                    String s = parsed != null ? parsed.getScheme() : null;
+                    if (s == null || (!"http".equalsIgnoreCase(s) && !"https".equalsIgnoreCase(s))) {
                         return true; // 危険スキーム遮断
                     }
                     return false;
@@ -227,6 +231,7 @@ public class WebViewDomPlugin extends Plugin {
                         data.put("url", currentUrl);
                         data.put("title", currentTitle);
                         notifyListeners("domCaptured", data);
+                        dismissAndDestroyDialog();
                     });
                 }
             });

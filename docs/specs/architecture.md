@@ -118,8 +118,14 @@ related_tests:
   - src/features/cloud-sync/services/syncEngine.test.ts
   - src/storage/repositories/appSettingsRepository.test.ts
   - src/storage/repositories/chapterRepository.test.ts
+  - src/storage/repositories/queueRepository.test.ts
   - src/storage/repositories/novelRepository.test.ts
   - src/storage/repositories/settingsRepository.test.ts
+  - src/bridges/webview/capacitorWebViewDomBridge.test.ts
+  - src/features/webview-import/hooks/useWebViewImport.test.ts
+  - src/features/webview-import/components/WebViewImportContainer.test.tsx
+  - src/features/webview-import/components/WebViewImportPage.test.tsx
+  - test/it/scenarios/scn07-webview-import-fallback.spec.ts
   - src/shared/utils/cache.test.ts
   - src/shared/utils/formatByteSize.test.ts
   - src/shared/constants/cache.test.ts
@@ -693,11 +699,26 @@ export type AppRoute =
   | { name: "ranking"; path: "/ranking" }
   | { name: "settings"; path: "/settings" }
   | { name: "novel-detail"; path: string; novelId: string }
-  | { name: "reader"; path: string; novelId: string; chapterIndex: number };
+  | { name: "reader"; path: string; novelId: string; chapterIndex: number }
+  | {
+      name: "browser";
+      path: string;
+      url: string;
+      novelId?: string;
+      chapterIndex?: number;
+      originPath?: string;
+    };
 
 export interface NavigateToReaderOptions {
   replace?: boolean;
   fromBookshelfResume?: boolean;
+}
+
+export interface NavigateToBrowserOptions {
+  novelId?: string;
+  chapterIndex?: number;
+  originPath?: string;
+  replace?: boolean;
 }
 
 export interface RouterContextValue {
@@ -705,6 +726,7 @@ export interface RouterContextValue {
   previousPath?: string;
   novelOrigin: string | null;
   settingsOrigin: string | null;
+  browserOrigin: string | null;
   route: AppRoute;
   navigate: (path: string) => void;
   navigateToBookshelf: () => void;
@@ -717,6 +739,7 @@ export interface RouterContextValue {
     options?: NavigateToReaderOptions,
   ) => void;
   navigateToSettings: () => void;
+  navigateToBrowser: (url: string, options?: NavigateToBrowserOptions) => void;
   back: () => void;
 }
 ```
@@ -728,6 +751,9 @@ export interface RouterContextValue {
   - 設定画面（`SCR-05: /settings`）への遷移時、直前画面がリーダー（`SCR-03`）または作品詳細（`SCR-02`）の場合はそのパスを `settingsOrigin` として保持する。
   - OS バックキー実行時、`settingsOrigin` が保持されていれば直前画面へ復帰し、`settingsOrigin` を `null` にリセットする。
   - 下部タブバー等で別の主画面（本棚・検索・ランキング）へ移動した際も `settingsOrigin` は `null` にリセットされる。
+- **内蔵ブラウザ画面復帰オリジン制御（`browserOrigin`、Issue #269 / R1-19）**:
+  - 内蔵ブラウザ画面（`SCR-04: /browser`）への遷移時、直前画面（作品詳細 `SCR-02` またはリーダー `SCR-03`）または明示された `originPath` を `browserOrigin` として保持する。
+  - 「← 戻る」ボタン押下時または OS バックキー実行時、`browserOrigin` が保持されていれば直前画面へ復帰し、未指定時は本棚（`/`）へ復帰する（`TR-12`）。
 - **OS バックキー（@capacitor/app の AppBridge 経由およびブラウザ戻る操作）の論理階層遷移制御**:
   - ブラウザ履歴順に依存せず、常に論理階層順（**各話View `SCR-03` → 目次 `SCR-02` → 直前の遷移元（本棚 `SCR-01`、検索 `SCR-06`、ランキング `SCR-07`）**、**設定 `SCR-05` → 直前画面（リーダー `SCR-03`、作品詳細 `SCR-02`、または本棚 `SCR-01`）**、**検索 `SCR-06` / ランキング `SCR-07` → 本棚 `SCR-01`**）で戻るよう制御する。
   - 本棚の「続きから読む」から各話Viewへ直行した場合も、ルーターが履歴スタックに目次（`/novels/:novelId`）を介在させることで、バックキー 1 回で確実に目次画面へ戻る。

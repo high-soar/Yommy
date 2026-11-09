@@ -1,4 +1,4 @@
-import { registerPlugin } from "@capacitor/core";
+import { registerPlugin, type PluginListenerHandle } from "@capacitor/core";
 import type {
   CapturedDomResult,
   OpenWebViewOptions,
@@ -13,6 +13,10 @@ export interface WebViewDomNativePlugin {
   open(options: { url: string; title?: string }): Promise<void>;
   close(): Promise<void>;
   captureDom(): Promise<{ html: string; url: string; title: string }>;
+  addListener?(
+    eventName: "domCaptured",
+    listenerFunc: (data: CapturedDomResult) => void,
+  ): Promise<PluginListenerHandle>;
 }
 
 export const WebViewDomNative =
@@ -58,6 +62,39 @@ export class CapacitorWebViewDomBridge implements WebViewDomBridge {
       html: result?.html ?? "",
       url: result?.url ?? "",
       title: result?.title ?? "",
+    };
+  }
+
+  /**
+   * ネイティブ内蔵ブラウザダイアログで DOM キャプチャ（「取込」ボタン等）が実行されたときの通知を購読する。
+   */
+  addDomCapturedListener(
+    listener: (result: CapturedDomResult) => void,
+  ): () => void {
+    let handle: PluginListenerHandle | null = null;
+    let isRemoved = false;
+
+    if (typeof WebViewDomNative.addListener === "function") {
+      void WebViewDomNative.addListener(
+        "domCaptured",
+        (data: CapturedDomResult) => {
+          listener(data);
+        },
+      ).then((h) => {
+        if (isRemoved) {
+          void h.remove();
+        } else {
+          handle = h;
+        }
+      });
+    }
+
+    return () => {
+      isRemoved = true;
+      if (handle) {
+        void handle.remove();
+        handle = null;
+      }
     };
   }
 }

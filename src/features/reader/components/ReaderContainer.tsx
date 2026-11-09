@@ -171,9 +171,10 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
         onOpenWebView(targetUrl);
       } else {
         const targetId = novelId ?? novel?.id;
-        router.navigate(
-          `/browser?url=${encodeURIComponent(targetUrl)}${targetId ? `&novelId=${encodeURIComponent(targetId)}` : ""}&chapterIndex=${currentChapterIndex}`,
-        );
+        router.navigateToBrowser(targetUrl, {
+          novelId: targetId,
+          chapterIndex: currentChapterIndex,
+        });
       }
     }
   }, [

@@ -30,15 +30,22 @@ const meta: Meta<typeof WebViewImportContainer> = {
 export default meta;
 type Story = StoryObj<typeof WebViewImportContainer>;
 
-export const Default: Story = {};
+/** 通常表示（対応作品URL） */
+export const Default: Story = {
+  name: "通常表示",
+};
 
+/** 非対応URL表示時 */
 export const UnsupportedUrl: Story = {
+  name: "非対応URL表示",
   args: {
     initialUrl: "https://example.com/unsupported",
   },
 };
 
+/** 読み込み中状態 */
 export const Loading: Story = {
+  name: "読み込み中",
   args: {
     initialUrl: "https://kakuyomu.jp/works/loading",
   },

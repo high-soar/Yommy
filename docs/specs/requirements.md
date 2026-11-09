@@ -121,6 +121,7 @@ related_tests:
   - test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts
   - test/it/scenarios/scn04-prefetch-and-cache.spec.ts
   - test/it/scenarios/scn05-cloud-sync.spec.ts
+  - test/it/scenarios/scn07-webview-import-fallback.spec.ts
   - test/it/smoke.spec.ts
   - scripts/generate-icons.test.ts
 ---
@@ -145,7 +146,7 @@ related_tests:
 | :-------------: | :-------------------------------------------------------------- | :------------------------------------------------------------- | :----------------------------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **1（最優先）** | **カクヨム**                                                    | `kakuyomu.jp`                                                  | **Phase 3 (PoC) / `v0.1` 〜 `v0.3`** | `KakuyomuParser` により作品情報・章/エピソード一覧・本文（`<ruby>`・傍点含む）および検索結果・ランキング一覧（`v0.3`）を抽出。                                                                                                                                                   |
 |      **2**      | **小説家になろう（一般）**                                      | `ncode.syosetu.com`<br>`api.syosetu.com`                       |             **`v0.7`〜**             | `NarouParser` により連載・短編の作品情報・目次（100話超の複数ページ目次連続取得対応）・本文（前書き・本編・後書き結合、ルビ・傍点正規化）およびクラウド同期（#239）、ならびに公式「なろう小説 API（`api.syosetu.com/novelapi/api/`）」による検索・ランキング抽出（#240）に対応。 |
-|      **3**      | **内蔵ブラウザ（WebView）手動インポート ＆ フォールバック表示** | 全サイト共通（Cloudflare等のBot対策・ログイン必須・DOM変更時） |           **`v0.9〜予定`**           | バックグラウンド通信（`CapacitorHttp`）で取得できないページは、内蔵 WebView（`SCR-04`）で人間が開き、表示中 DOM から直接本文をキャプチャして DB へ取り込む。                                                                                                                     |
+|      **3**      | **内蔵ブラウザ（WebView）手動インポート ＆ フォールバック表示** | 全サイト共通（Cloudflare等のBot対策・ログイン必須・DOM変更時） |             **`v0.9`〜**             | バックグラウンド通信（`CapacitorHttp`）で取得できないページは、内蔵 WebView（`SCR-04`）で人間が開き、表示中 DOM から直接本文をキャプチャして DB へ取り込む。                                                                                                                     |
 
 ---
 
@@ -216,7 +217,7 @@ flowchart LR
     M6["<b>Milestone v0.6 (Reader Animation, Overlay & Hardware Key UX)</b><br>・水平スライドアニメーション（#201）<br>・上下連動オーバーレイ＆RTLシークバー（#202）<br>・音量キーページ送り（#203）"]
     M7["<b>Milestone v0.7 (Narou Site Support & Web Access Loading UX)</b><br>・Webアクセス時ローディング明示（#238）<br>・なろう目次/本文/複数ページ目次/同期（#239）<br>・なろう検索/ランキング＆サイト切替（#240）"]
     M8["<b>Milestone v0.8 (Search & Bookshelf Refinement)</b><br>・高度検索フィルタ（#264 / HO-31）<br>・作品種別フィルタ切替（#265）<br>・お気に入り登録＆フィルタ＆同期（#266 / HO-32）"]
-    M9["<b>Milestone v0.9 (Persistent Queue & WebView Import)</b><br>・永続DLキュー＆一括キャッシュ再開/再試行（#268 / HO-34）<br>・内蔵WebView＆DOMインポート（#269〜予定）"]
+    M9["<b>Milestone v0.9 (Persistent Queue & WebView Import)</b><br>・永続DLキュー＆一括キャッシュ再開/再試行（#268 / HO-34）<br>・内蔵WebView＆DOMインポート（#269 / HO-35）"]
 
     PoC --> M1 --> M2 --> M3 --> M4 --> M5 --> M6 --> M7 --> M8 --> M9
 ```

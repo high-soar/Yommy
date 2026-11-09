@@ -5,6 +5,7 @@ import type {
   ImportSuccessResult,
 } from "../types";
 import type { NovelRecord } from "../../../storage/types";
+import type { CapturedDomResult } from "../../../bridges/webview/types";
 
 /**
  * 対象 URL が各話エピソード（本文）ページか判定する
@@ -25,7 +26,7 @@ export function isChapterUrl(url: string, siteType: string): boolean {
 export function useWebViewImport({
   initialUrl,
   initialNovelId,
-  initialChapterIndex,
+  initialChapterIndex: _initialChapterIndex,
   webViewDomBridge,
   novelRepository,
   chapterRepository,
@@ -48,6 +49,16 @@ export function useWebViewImport({
   const [error, setError] = useState<string | null>(null);
 
   const initialUrlLoadedRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  // 画面マウント・アンマウント管理および Bridge クリーンアップ（R1-11）
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      void webViewDomBridge.close();
+    };
+  }, [webViewDomBridge]);
 
   const loadUrl = useCallback(
     async (targetUrl?: string): Promise<boolean> => {
@@ -58,20 +69,23 @@ export function useWebViewImport({
 
       // 危険スキーム遮断（http: / https: 以外を拒否）
       if (!webViewDomBridge.canHandle(toLoad)) {
-        setError("安全でない URL スキームは開けません");
-        setCanImport(false);
+        if (isMountedRef.current) {
+          setError("安全でない URL スキームは開けません");
+          setCanImport(false);
+        }
         return false;
       }
-
-      setError(null);
-      setNotice(null);
 
       const parser = parserRegistry.getParser(toLoad);
       const isSupported = Boolean(parser && parser.canParse(toLoad));
 
-      setUrl(toLoad);
-      setCurrentCapturedUrl(toLoad);
-      setCanImport(isSupported);
+      if (isMountedRef.current) {
+        setError(null);
+        setNotice(null);
+        setUrl(toLoad);
+        setCurrentCapturedUrl(toLoad);
+        setCanImport(isSupported);
+      }
 
       return true;
     },
@@ -88,25 +102,35 @@ export function useWebViewImport({
   const openNativeBrowser = useCallback(async (): Promise<void> => {
     const target = url.trim();
     if (!webViewDomBridge.canHandle(target)) {
-      setError("安全でない URL スキームは開けません");
+      if (isMountedRef.current) {
+        setError("安全でない URL スキームは開けません");
+      }
       return;
     }
 
     try {
-      setError(null);
+      if (isMountedRef.current) {
+        setError(null);
+      }
       await webViewDomBridge.open({
         url: target,
         title: pageTitle || undefined,
       });
     } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "ブラウザの起動に失敗しました",
-      );
+      if (isMountedRef.current) {
+        setError(
+          err instanceof Error ? err.message : "ブラウザの起動に失敗しました",
+        );
+      }
     }
   }, [url, pageTitle, webViewDomBridge]);
 
-  const importCurrentDom =
-    useCallback(async (): Promise<ImportSuccessResult | null> => {
+  const importCapturedDomInternal = useCallback(
+    async (
+      captured: CapturedDomResult,
+    ): Promise<ImportSuccessResult | null> => {
+      if (!isMountedRef.current) return null;
+
       setIsImporting(true);
       setIsLoading(true);
       setError(null);
@@ -115,14 +139,21 @@ export function useWebViewImport({
       let result: ImportSuccessResult | null = null;
 
       try {
-        const captured = await webViewDomBridge.captureDom();
-        setPageTitle(captured.title);
-        setCurrentCapturedUrl(captured.url);
+        if (isMountedRef.current) {
+          setPageTitle(captured.title);
+          setCurrentCapturedUrl(captured.url);
+        }
 
         const parser = parserRegistry.getParser(captured.url);
         if (!parser || !parser.canParse(captured.url)) {
-          setError("対応外のページです");
+          if (isMountedRef.current) {
+            setError("対応外のページです");
+            setCanImport(false);
+          }
         } else {
+          if (isMountedRef.current) {
+            setCanImport(true);
+          }
           const isChapter = isChapterUrl(captured.url, parser.siteType);
 
           if (!isChapter) {
@@ -166,7 +197,9 @@ export function useWebViewImport({
               type: "novel",
               novelId: savedNovel.id,
             };
-            setNotice("作品目次を取り込みました");
+            if (isMountedRef.current) {
+              setNotice("作品目次を取り込みました");
+            }
             if (onImportComplete) {
               onImportComplete(result);
             }
@@ -179,8 +212,12 @@ export function useWebViewImport({
             const canonicalUrl = parser.normalizeWorkUrl(captured.url);
 
             let targetNovel: NovelRecord | null = null;
+            // R1-01: initialNovelId が指定されていても canonicalUrl が一致する場合のみ対象とする
             if (initialNovelId) {
-              targetNovel = await novelRepository.getNovelById(initialNovelId);
+              const novel = await novelRepository.getNovelById(initialNovelId);
+              if (novel && novel.canonicalUrl === canonicalUrl) {
+                targetNovel = novel;
+              }
             }
 
             if (!targetNovel) {
@@ -191,12 +228,12 @@ export function useWebViewImport({
               }
             }
 
-            // 未登録作品の場合は目次自動補完を試行
+            // 未登録作品の場合は目次自動補完を試行（R1-12: httpClient の安全な存在チェック）
             if (!targetNovel) {
-              if (fetchFullNovelIndex) {
+              if (fetchFullNovelIndex && httpClient) {
                 try {
                   const fullIndex = await fetchFullNovelIndex(
-                    httpClient!,
+                    httpClient,
                     parser,
                     canonicalUrl,
                   );
@@ -211,69 +248,139 @@ export function useWebViewImport({
               }
 
               if (!targetNovel) {
-                setError("先に作品トップ（目次）ページを取り込んでください");
+                if (isMountedRef.current) {
+                  setError("先に作品トップ（目次）ページを取り込んでください");
+                }
+                return null;
               }
             }
 
-            if (targetNovel) {
-              // chapterIndex の特定
-              const chapters = await chapterRepository.listChaptersByNovelId(
-                targetNovel.id,
-              );
-              const matched = chapters.find(
-                (c) => c.remoteChapterId === parsedChapter.remoteChapterId,
-              );
-              const chapterIndex = matched
-                ? matched.chapterIndex
-                : (initialChapterIndex ?? 1);
+            // chapterIndex の特定（R1-01: 話数不一致時の安全な処理）
+            let chapters = await chapterRepository.listChaptersByNovelId(
+              targetNovel.id,
+            );
+            let matched = chapters.find(
+              (c) => c.remoteChapterId === parsedChapter.remoteChapterId,
+            );
 
-              const now = new Date().toISOString();
-              await chapterRepository.saveChapterBody(
-                targetNovel.id,
-                chapterIndex,
-                parsedChapter,
-                now,
-              );
-
-              if (syncEngine) {
-                await syncEngine.notifyChanged();
+            // 目次にない場合、目次自動更新を試行
+            if (!matched && fetchFullNovelIndex && httpClient) {
+              try {
+                const fullIndex = await fetchFullNovelIndex(
+                  httpClient,
+                  parser,
+                  canonicalUrl,
+                );
+                const now = new Date().toISOString();
+                await novelRepository.upsertNovelWithToc(fullIndex, now);
+                chapters = await chapterRepository.listChaptersByNovelId(
+                  targetNovel.id,
+                );
+                matched = chapters.find(
+                  (c) => c.remoteChapterId === parsedChapter.remoteChapterId,
+                );
+              } catch {
+                // 自動更新失敗時はそのまま
               }
+            }
 
-              result = {
-                type: "chapter",
-                novelId: targetNovel.id,
-                chapterIndex,
-              };
+            let chapterIndex: number;
+            if (matched) {
+              chapterIndex = matched.chapterIndex;
+            } else {
+              if (isMountedRef.current) {
+                setError(
+                  "該当エピソードが作品目次に見つかりません。先に作品トップ（目次）を取り込んでください",
+                );
+              }
+              return null;
+            }
+
+            const now = new Date().toISOString();
+            await chapterRepository.saveChapterBody(
+              targetNovel.id,
+              chapterIndex,
+              parsedChapter,
+              now,
+            );
+
+            if (syncEngine) {
+              await syncEngine.notifyChanged();
+            }
+
+            result = {
+              type: "chapter",
+              novelId: targetNovel.id,
+              chapterIndex,
+            };
+            if (isMountedRef.current) {
               setNotice("本文を取り込みました");
-              if (onImportComplete) {
-                onImportComplete(result);
-              }
+            }
+            if (onImportComplete) {
+              onImportComplete(result);
             }
           }
         }
       } catch (err: unknown) {
-        setError(
-          err instanceof Error ? err.message : "インポートに失敗しました",
-        );
+        if (isMountedRef.current) {
+          setError(
+            err instanceof Error ? err.message : "インポートに失敗しました",
+          );
+        }
         result = null;
       } finally {
-        setIsImporting(false);
-        setIsLoading(false);
+        if (isMountedRef.current) {
+          setIsImporting(false);
+          setIsLoading(false);
+        }
       }
 
       return result;
-    }, [
-      webViewDomBridge,
+    },
+    [
       parserRegistry,
       novelRepository,
       chapterRepository,
       syncEngine,
       initialNovelId,
-      initialChapterIndex,
       fetchFullNovelIndex,
       httpClient,
       onImportComplete,
-    ]);
+    ],
+  );
+
+  // ネイティブ内蔵ブラウザからの DOM キャプチャ通知連携（R1-10）
+  useEffect(() => {
+    if (!webViewDomBridge.addDomCapturedListener) {
+      return;
+    }
+    const unsubscribe = webViewDomBridge.addDomCapturedListener((captured) => {
+      if (!isMountedRef.current) return;
+      setUrl(captured.url);
+      setCurrentCapturedUrl(captured.url);
+      setPageTitle(captured.title);
+      void importCapturedDomInternal(captured);
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [webViewDomBridge, importCapturedDomInternal]);
+
+  const importCurrentDom =
+    useCallback(async (): Promise<ImportSuccessResult | null> => {
+      if (!isMountedRef.current) return null;
+      try {
+        const captured = await webViewDomBridge.captureDom();
+        return await importCapturedDomInternal(captured);
+      } catch (err: unknown) {
+        if (isMountedRef.current) {
+          setError(
+            err instanceof Error ? err.message : "インポートに失敗しました",
+          );
+        }
+        return null;
+      }
+    }, [webViewDomBridge, importCapturedDomInternal]);
 
   const goBack = useCallback(() => {
     onNavigateBack?.();

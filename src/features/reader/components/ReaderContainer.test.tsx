@@ -277,6 +277,9 @@ const TestObserver: React.FC<{
   return (
     <div>
       <div data-testid="observed-current-path">{router.currentPath}</div>
+      <div data-testid="observed-browser-origin">
+        {router.browserOrigin ?? ""}
+      </div>
       <ServiceProvider services={services}>
         <ReaderContainer {...containerProps} />
       </ServiceProvider>
@@ -1488,7 +1491,7 @@ describe("ReaderContainer", () => {
       expect(onOpenWebViewMock).toHaveBeenCalledWith(sampleChapter1.url);
     });
 
-    it("onOpenWebView が省略された場合、デフォルトで router.navigate により /browser へ遷移すること (AC-RD-29, TR-10)", async () => {
+    it("onOpenWebView が省略された場合、デフォルトで router.navigateToBrowser により /browser へ遷移すること (AC-RD-29, TR-10, R1-19)", async () => {
       const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo([
@@ -1518,6 +1521,9 @@ describe("ReaderContainer", () => {
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           `/browser?url=${encodeURIComponent(sampleChapter1.url)}&novelId=${encodeURIComponent(sampleNovel.id)}&chapterIndex=1`,
+        );
+        expect(screen.getByTestId("observed-browser-origin")).toHaveTextContent(
+          `/novels/${sampleNovel.id}/chapters/1`,
         );
       });
     });

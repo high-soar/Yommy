@@ -38,4 +38,12 @@ export interface WebViewDomBridge {
    * 指定 URL が http: または https: の安全なスキームか検証する。
    */
   canHandle(url: string): boolean;
+
+  /**
+   * ネイティブ内蔵ブラウザダイアログで DOM キャプチャ（「取込」ボタン等）が実行されたときの通知を購読する。
+   * 返却値の関数を呼び出すことで購読を解除する。
+   */
+  addDomCapturedListener?(
+    listener: (result: CapturedDomResult) => void,
+  ): () => void;
 }

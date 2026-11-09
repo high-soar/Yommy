@@ -336,7 +336,7 @@ export interface UseBookshelfResult {
 
 ## 6. Playwright システム結合テスト（E2E シナリオ連携）
 
-本棚画面（`SCR-01`）に関連する E2E 動作は、`test/it/scenarios/` 配下の以下のシナリオで継続回帰検証されます（詳細は [docs/specs/screen-transitions.md §4](../screen-transitions.md#4-playwright-システム結合テストe2e-シナリオ-scn-01--scn-06マッピング) を参照）：
+本棚画面（`SCR-01`）に関連する E2E 動作は、`test/it/scenarios/` 配下の以下のシナリオで継続回帰検証されます（詳細は [docs/specs/screen-transitions.md §4](../screen-transitions.md#4-playwright-システム結合テストe2e-シナリオ-scn-01--scn-07マッピング) を参照）：
 
 - **`SCN-01`（`test/it/scenarios/scn01-poc-vertical-reader.spec.ts`）**: 空状態表示、作品カード表示、作品詳細遷移、「続きから読む」によるリーダー直行としおり復元、OS バックキー2回押下終了トースト（`TR-02`, `TR-03`, `TR-13`, `AC-BS-01`〜`07`, `12`）。
 - **`SCN-02`（`test/it/scenarios/scn02-search-ranking-discovery.spec.ts`）**: 空状態からの検索・ランキング画面への誘導導線および探索画面からの作品追加反映（`TR-15`, `AC-BS-01`）。
