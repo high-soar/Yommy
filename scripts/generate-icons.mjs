@@ -133,12 +133,7 @@ export async function generateIcons(options = {}) {
   } else {
     sourcePath = path.resolve(rootDir, "assets", "icon.png");
     if (!fs.existsSync(sourcePath)) {
-      const fallbackPath = path.resolve(rootDir, "reference", "image.png");
-      if (fs.existsSync(fallbackPath)) {
-        sourcePath = fallbackPath;
-      } else {
-        throw new Error(`Master icon file not found: ${sourcePath}`);
-      }
+      throw new Error(`Master icon file not found: ${sourcePath}`);
     }
   }
 
