@@ -3,7 +3,7 @@ type: spec-delta
 title: "v1.0 リリース整備（バージョン 1.0.0 統一・設定画面バージョン表示・reference/ 撤去・README.md 整備）差分仕様書"
 description: "バージョン表記の 1.0.0 統一、設定画面（SCR-05）フッターでのアプリバージョン表示（Yommy v1.0.0）、reference/ ディレクトリの完全撤去とアイコン生成スクリプト厳格化、README.md の正式版整備、および Milestone v1.0 ロードマップ反映に関する差分仕様書。"
 issue: "#304"
-status: "Review (#304)"
+status: "Completed (Archived)"
 updated: "2026-11-09"
 tags:
   [

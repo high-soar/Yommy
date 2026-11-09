@@ -50,6 +50,11 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     const settingsPage = page.getByTestId("settings-page");
     await expect(settingsPage).toBeVisible();
 
+    // フッターバージョン表示の確認（AC-ST-20, v1.0 Issue #304）
+    const versionFooter = page.getByTestId("settings-version-footer");
+    await expect(versionFooter).toBeVisible();
+    await expect(versionFooter).toHaveText("Yommy v1.0.0");
+
     // サンプル文章プレビュー枠の確認（ルビ・傍点の描画確認）
     const samplePreview = page.getByTestId("sample-text-preview");
     await expect(samplePreview).toBeVisible();
@@ -1156,6 +1161,11 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await page.goto("/settings");
     const settingsPage = page.getByTestId("settings-page");
     await expect(settingsPage).toBeVisible();
+
+    // フッターバージョン表示の確認（AC-ST-20, v1.0 Issue #304）
+    const versionFooter = page.getByTestId("settings-version-footer");
+    await expect(versionFooter).toBeVisible();
+    await expect(versionFooter).toHaveText("Yommy v1.0.0");
 
     const samplePreview = page.getByTestId("sample-text-preview");
     await expect(samplePreview).toBeVisible();

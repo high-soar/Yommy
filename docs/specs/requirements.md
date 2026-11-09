@@ -64,7 +64,7 @@ tags:
   - ho-35
   - ho-36
 related_specs:
-  - docs/specs/changes/issue-304-v1-release-readiness.md
+  - docs/specs/changes/archive/issue-304-v1-release-readiness.md
   - docs/quality/reports/v0.9-persistent-queue-and-webview-fallback.md
   - docs/quality/archive/v0.9-persistent-queue-and-webview-fallback-log.md
   - docs/specs/changes/archive/issue-269-webview-fallback-and-dom-import.md
