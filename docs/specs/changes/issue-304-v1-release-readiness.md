@@ -206,7 +206,7 @@ export interface SettingsPageProps {
    - テスト実行（`npm run test:unit`, `npm run test:coverage`, `npm run test:vrt`, `npm run test:it`）
    - Android APK ビルド手順
 6. **ドキュメント体系（Documentation / OKF）**: Single Source of Truth（SSOT）としての `docs/index.md` への誘導。
-7. **ライセンス（License）**: MIT License。
+7. **ライセンス（License）**: Apache License 2.0。
 
 ---
 

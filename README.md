@@ -12,7 +12,7 @@
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
 ![Capacitor](https://img.shields.io/badge/Capacitor-8-119EFF?logo=capacitor&logoColor=white)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 </div>
 
@@ -169,4 +169,4 @@ Yommy は **OKF（Open Knowledge Format）** に準拠した 2-Layer Living Docu
 
 ## ライセンス（License）
 
-本プロジェクトは [MIT License](LICENSE) のもとで公開されています。
+本プロジェクトは [Apache License 2.0](LICENSE) のもとで公開されています。
