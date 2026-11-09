@@ -19,6 +19,7 @@ import {
   PAGE_MARGIN_STEP_PX,
   clampPageMargin,
 } from "../../../shared/constants/typography";
+import { APP_NAME, APP_VERSION } from "../../../shared/constants/app";
 
 export interface SettingsPageProps {
   /** 現在の組み方向 */
@@ -87,6 +88,10 @@ export interface SettingsPageProps {
   }) => void | Promise<number>;
   /** エラーメッセージ（省略時: null） */
   error?: string | null;
+  /** アプリケーション表示名（省略時: "Yommy"、v1.0 Issue #304） */
+  appName?: string;
+  /** アプリケーションバージョン（省略時: "1.0.0"、v1.0 Issue #304） */
+  appVersion?: string;
   /** 追加の CSS クラス（任意） */
   className?: string;
 }
@@ -197,6 +202,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   storageCacheError = null,
   initialShowStorageCacheDialog = false,
   onClearStorageCache,
+  appName = APP_NAME,
+  appVersion = APP_VERSION,
   className,
 }) => {
   const rootClasses =
@@ -597,6 +604,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           initialShowDialog={initialShowStorageCacheDialog}
           onClearCache={onClearStorageCache}
         />
+
+        <footer
+          data-testid="settings-version-footer"
+          className="mt-8 mb-6 text-center text-xs text-slate-500 dark:text-slate-400"
+        >
+          {appName} v{appVersion}
+        </footer>
       </div>
     </div>
   );

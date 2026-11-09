@@ -3,6 +3,7 @@ import { useSettings } from "../hooks/useSettings";
 import { useCloudSync } from "../hooks/useCloudSync";
 import { useStorageCache } from "../hooks/useStorageCache";
 import { SettingsPage } from "./SettingsPage";
+import { APP_NAME, APP_VERSION } from "../../../shared/constants/app";
 
 export interface SettingsContainerProps {
   /** テスト用または単体表示用のカスタムクラス（任意） */
@@ -70,6 +71,8 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
       pageMarginPx={pageMarginPx}
       pagingMode={pagingMode}
       enableVolumeKeyPaging={enableVolumeKeyPaging}
+      appName={APP_NAME}
+      appVersion={APP_VERSION}
       isLoading={isLoading}
       error={error}
       cloudSyncAuthState={cloudSyncAuthState}

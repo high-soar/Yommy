@@ -37,6 +37,8 @@ describe("SettingsContainer", () => {
             pageMarginPx: 20,
             pagingMode: "auto",
             enableVolumeKeyPaging: false,
+            appName: "Yommy",
+            appVersion: "1.0.0",
             isLoading: false,
             error: null,
           }),
@@ -231,6 +233,8 @@ describe("SettingsContainer", () => {
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
             enableVolumeKeyPaging: false,
+            appName: "Yommy",
+            appVersion: "1.0.0",
             isLoading: false,
           }),
           undefined,

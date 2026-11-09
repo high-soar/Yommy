@@ -1091,7 +1091,7 @@ Android Debug APK の継続的な検証と上書きインストール（`INSTALL
 - `android/app/build.gradle` の `defaultConfig` において、CI 環境変数（`BUILD_NUMBER`）および Gradle プロパティ（`versionCode` / `versionName`）から動的にバージョンを解決する。
 - GitHub Actions（`.github/workflows/build-android.yml`）では `BUILD_NUMBER: ${{ github.run_number }}` を注入し、ビルドごとに `versionCode` を単調増加させる。また、GitHub Secrets（`ANDROID_KEYSTORE_BASE64` 等）を Gradle ビルドステップへ注入する。
 - リモート CI（`.github/workflows/ci.yml`）の `quality-gate` において、`android-compile` ジョブによる `./gradlew compileDebugJavaWithJavac` を自動実行し、Java コンパイル安全性を保証する。
-- ローカルビルド時はフォールバック値（`versionCode 1`、`versionName "0.3.0"`）を採用し、開発作業の利便性を損なわない構成とする。
+- ローカルビルド時はフォールバック値（`versionCode 1`、`versionName "1.0.0"`）を採用し、開発作業の利便性を損なわない構成とする。
 
 ### 5.3 Google OAuth 用署名鍵の秘密管理と SHA-1 なりすまし防止
 

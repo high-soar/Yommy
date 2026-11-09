@@ -91,7 +91,7 @@ describe("Android ビルド設定および署名・バージョン管理検証 (
       const content = fs.readFileSync(buildGradlePath, "utf-8");
 
       expect(content).toMatch(
-        /def\s+appVersionName\s*=\s*System\.getenv\(["']BUILD_NAME["']\)\s*\?:\s*\(project\.findProperty\(["']versionName["']\)\s*\?:\s*["']0\.3\.0["']\)/,
+        /def\s+appVersionName\s*=\s*System\.getenv\(["']BUILD_NAME["']\)\s*\?:\s*\(project\.findProperty\(["']versionName["']\)\s*\?:\s*["']1\.0\.0["']\)/,
       );
       expect(content).toMatch(/versionName\s+appVersionName/);
     });

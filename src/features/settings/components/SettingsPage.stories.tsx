@@ -23,6 +23,8 @@ const meta: Meta<typeof SettingsPage> = {
     onChangePageMargin: fn(),
     onChangePagingMode: fn(),
     onToggleVolumeKeyPaging: fn(),
+    appName: "Yommy",
+    appVersion: "1.0.0",
   },
 };
 
@@ -30,7 +32,7 @@ export default meta;
 type Story = StoryObj<typeof SettingsPage>;
 
 /**
- * デフォルト表示（縦書き・ライトテーマ、文字サイズ 18px、行間 1.8、UD明朝、余白 20px）
+ * デフォルト表示（縦書き・ライトテーマ、文字サイズ 18px、行間 1.8、UD明朝、余白 20px、フッターバージョン Yommy v1.0.0）
  */
 export const Default: Story = {
   name: "デフォルト（縦書き・ライト）",
