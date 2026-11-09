@@ -57,9 +57,9 @@ export class SqlQueueRepository implements QueueRepository {
 
     const timestamp = nowIso ?? new Date().toISOString();
 
-    await this.db.runTransaction(async () => {
+    await this.db.runTransaction(async (tx) => {
       for (const item of items) {
-        await this.db.execute(
+        await tx.execute(
           `INSERT INTO download_queue (
             novel_id, chapter_index, target_url, status, retry_count, last_error, created_at, updated_at
           ) VALUES (?, ?, ?, 'pending', 0, NULL, ?, ?)

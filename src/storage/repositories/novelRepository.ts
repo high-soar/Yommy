@@ -157,9 +157,13 @@ export class SqlNovelRepository implements NovelRepository {
 
   /**
    * 作品 ID に対応する詳細レコードを取得する。存在しない場合は null を返す。
+   * トランザクション内から実行する場合は第2引数に tx を渡すことで再帰呼び出しデッドロックを防止する。
    */
-  async getNovelById(novelId: string): Promise<NovelRecord | null> {
-    const rows = await this.db.query<NovelRow>(
+  async getNovelById(
+    novelId: string,
+    db: DatabaseAdapter = this.db,
+  ): Promise<NovelRecord | null> {
+    const rows = await db.query<NovelRow>(
       "SELECT * FROM novels WHERE id = ?;",
       [novelId],
     );
@@ -201,7 +205,7 @@ export class SqlNovelRepository implements NovelRepository {
     );
 
     return await this.db.runTransaction(async (tx) => {
-      const existing = await this.getNovelById(id);
+      const existing = await this.getNovelById(id, tx);
 
       if (existing === null) {
         if (options?.updateOnly) {
@@ -330,7 +334,7 @@ export class SqlNovelRepository implements NovelRepository {
         await tx.execute(`DELETE FROM deleted_novels WHERE id = ?;`, [id]);
       }
 
-      const result = await this.getNovelById(id);
+      const result = await this.getNovelById(id, tx);
       return result;
     });
   }

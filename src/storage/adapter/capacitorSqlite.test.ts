@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import type { SQLiteDBConnection } from "@capacitor-community/sqlite";
 import { CapacitorSqliteAdapter } from "./capacitorSqlite";
+import { SqlNovelRepository } from "../repositories/novelRepository";
+import { SqlQueueRepository } from "../repositories/queueRepository";
+import type { ParsedNovelIndex } from "../../parsers/types";
 
 describe("CapacitorSqliteAdapter", () => {
   const createMockConnection = (
@@ -288,6 +291,114 @@ describe("CapacitorSqliteAdapter", () => {
       const adapter = new CapacitorSqliteAdapter(mockConn);
 
       await expect(adapter.close()).rejects.toThrow("close 失敗");
+    });
+  });
+
+  describe("リポジトリとのトランザクション統合（再帰デッドロック防止）", () => {
+    it("SqlNovelRepository.upsertNovelWithToc が mutex 直列化アダプター下でデッドロックせず正常終了すること", async () => {
+      const mockConn = createMockConnection({
+        query: vi.fn().mockImplementation(async (sql: string) => {
+          if (sql.includes("FROM novels WHERE id = ?")) {
+            return {
+              values: [
+                {
+                  id: "narou:n1234",
+                  site_type: "narou",
+                  remote_work_id: "n1234",
+                  canonical_url: "https://ncode.syosetu.com/n1234/",
+                  title: "テスト小説",
+                  author: "テスト作者",
+                  synopsis: "あらすじ",
+                  total_chapters: 1,
+                  cached_chapters: 0,
+                  total_byte_size: 0,
+                  bookmark_chapter_index: null,
+                  bookmark_scroll_progress: 0,
+                  is_favorite: 0,
+                  has_new_update: 0,
+                  latest_episode_published_at: null,
+                  last_checked_at: null,
+                  last_read_at: null,
+                  created_at: "2026-01-01T00:00:00.000Z",
+                  updated_at: "2026-01-01T00:00:00.000Z",
+                },
+              ],
+            };
+          }
+          if (sql.includes("SELECT remote_chapter_id FROM chapters")) {
+            return { values: [] };
+          }
+          if (
+            sql.includes(
+              "SELECT remote_chapter_id, chapter_index FROM chapters",
+            )
+          ) {
+            return { values: [] };
+          }
+          return { values: [] };
+        }),
+      });
+      const adapter = new CapacitorSqliteAdapter(mockConn);
+      const repo = new SqlNovelRepository(adapter);
+
+      const parsedIndex: ParsedNovelIndex = {
+        siteType: "narou",
+        remoteWorkId: "n1234",
+        canonicalUrl: "https://ncode.syosetu.com/n1234/",
+        title: "テスト小説",
+        author: "テスト作者",
+        synopsis: "あらすじ",
+        nextTocPageUrl: null,
+        chapters: [
+          {
+            chapterIndex: 1,
+            remoteChapterId: "1",
+            partTitle: null,
+            title: "第1話",
+            url: "https://ncode.syosetu.com/n1234/1/",
+            publishedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      };
+
+      const deadlockTimeout = new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error("Deadlock detected in upsertNovelWithToc")),
+          300,
+        ),
+      );
+
+      const result = await Promise.race([
+        repo.upsertNovelWithToc(parsedIndex, "2026-01-01T00:00:00.000Z"),
+        deadlockTimeout,
+      ]);
+
+      expect(result).not.toBeNull();
+      expect(mockConn.beginTransaction).toHaveBeenCalledTimes(1);
+      expect(mockConn.commitTransaction).toHaveBeenCalledTimes(1);
+    });
+
+    it("SqlQueueRepository.enqueueChapters が mutex 直列化アダプター下でデッドロックせず正常終了すること", async () => {
+      const mockConn = createMockConnection();
+      const adapter = new CapacitorSqliteAdapter(mockConn);
+      const repo = new SqlQueueRepository(adapter);
+
+      const deadlockTimeout = new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error("Deadlock detected in enqueueChapters")),
+          300,
+        ),
+      );
+
+      await Promise.race([
+        repo.enqueueChapters("narou:n1234", [
+          { chapterIndex: 1, targetUrl: "https://ncode.syosetu.com/n1234/1/" },
+        ]),
+        deadlockTimeout,
+      ]);
+
+      expect(mockConn.beginTransaction).toHaveBeenCalledTimes(1);
+      expect(mockConn.commitTransaction).toHaveBeenCalledTimes(1);
     });
   });
 });
