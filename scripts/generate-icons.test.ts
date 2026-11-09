@@ -516,44 +516,10 @@ describe("アプリアイコン生成スクリプト及びアセット配置検�
       }
     });
 
-    it("assets/icon.png が存在せず reference/image.png が存在する場合にフォールバックすること", async () => {
+    it("assets/icon.png が存在しない場合はフォールバックせず直ちにエラーをスローすること (AC-ICON-01)", async () => {
       const existsSpy = vi.spyOn(fs, "existsSync").mockImplementation((p) => {
         const filePath = p.toString();
         if (filePath.endsWith(path.join("assets", "icon.png"))) {
-          return false;
-        }
-        if (filePath.endsWith(path.join("reference", "image.png"))) {
-          return true;
-        }
-        return true;
-      });
-      const readSpy = vi.spyOn(fs, "readFileSync").mockImplementation((p) => {
-        const filePath = p.toString();
-        if (filePath.endsWith(path.join("reference", "image.png"))) {
-          return createDummyPngBuffer(1024, 1024);
-        }
-        return Buffer.from("");
-      });
-      const writeSpy = vi
-        .spyOn(fs, "writeFileSync")
-        .mockImplementation(() => {});
-
-      try {
-        await expect(generateIcons()).resolves.not.toThrow();
-      } finally {
-        existsSpy.mockRestore();
-        readSpy.mockRestore();
-        writeSpy.mockRestore();
-      }
-    });
-
-    it("マスターアイコンおよびフォールバック画像が両方とも存在しない場合はエラーをスローすること", async () => {
-      const existsSpy = vi.spyOn(fs, "existsSync").mockImplementation((p) => {
-        const filePath = p.toString();
-        if (
-          filePath.endsWith(path.join("assets", "icon.png")) ||
-          filePath.endsWith(path.join("reference", "image.png"))
-        ) {
           return false;
         }
         return true;
