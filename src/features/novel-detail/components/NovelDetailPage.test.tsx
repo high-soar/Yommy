@@ -17,6 +17,7 @@ const {
   Refreshing,
   WithError,
   BatchCaching,
+  BatchCachingWithFailures,
   ResumePending,
   RetryFailed,
   AllCached,
@@ -440,6 +441,16 @@ describe("NovelDetailPage", () => {
         expect(screen.getByTestId("batch-cache-progress")).toBeInTheDocument();
         const container = screen.getByTestId("episode-list-container");
         expect(container.className).toContain("pointer-events-none");
+      });
+
+      it("BatchCachingWithFailures ストーリーで一括キャッシュヘッダーに失敗件数が表示されること (AC-ND-25)", () => {
+        render(<BatchCachingWithFailures />);
+
+        const progressEl = screen.getByTestId("batch-cache-progress");
+        expect(progressEl).toHaveTextContent(
+          "キャッシュ中 (1/2) [失敗 1話]...",
+        );
+        expect(progressEl.className).toContain("text-amber-600");
       });
 
       it("ResumePending ストーリーで「キャッシュを再開（残り2話）」ボタンが表示されること (AC-ND-24)", () => {

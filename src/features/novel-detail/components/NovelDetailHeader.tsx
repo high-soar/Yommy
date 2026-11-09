@@ -94,10 +94,16 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
           <div className="flex items-center gap-2">
             <span
               data-testid="batch-cache-progress"
-              className="text-xs font-medium text-blue-600 dark:text-blue-400 animate-pulse"
+              className={`text-xs font-medium animate-pulse ${
+                failedCacheCount > 0
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-blue-600 dark:text-blue-400"
+              }`}
             >
               {batchCacheProgress
-                ? `キャッシュ中 (${batchCacheProgress.current}/${batchCacheProgress.total})...`
+                ? failedCacheCount > 0
+                  ? `キャッシュ中 (${batchCacheProgress.current}/${batchCacheProgress.total}) [失敗 ${failedCacheCount}話]...`
+                  : `キャッシュ中 (${batchCacheProgress.current}/${batchCacheProgress.total})...`
                 : "キャッシュ中..."}
             </span>
             <button
