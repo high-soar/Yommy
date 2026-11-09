@@ -124,6 +124,11 @@ describe("SettingsPage", () => {
 
       // SampleTextPreview のマウント確認 (R1-32)
       expect(screen.getByTestId("sample-text-preview")).toBeInTheDocument();
+
+      // バージョン表示フッター (AC-ST-20)
+      const footer = screen.getByTestId("settings-version-footer");
+      expect(footer).toBeInTheDocument();
+      expect(footer).toHaveTextContent("Yommy v1.0.0");
     });
 
     it("HorizontalSepia: 横書き・セピアテーマ表示が正しく反映されること (AC-ST-03, AC-ST-04)", () => {
@@ -145,6 +150,11 @@ describe("SettingsPage", () => {
 
       // SampleTextPreview のマウント確認 (R1-32)
       expect(screen.getByTestId("sample-text-preview")).toBeInTheDocument();
+
+      // バージョン表示フッター (AC-ST-20)
+      const footer = screen.getByTestId("settings-version-footer");
+      expect(footer).toBeInTheDocument();
+      expect(footer).toHaveTextContent("Yommy v1.0.0");
     });
 
     it("MinBoundaries: 最小境界値（12px / 1.4 / 8px）で縮小ボタンが無効化されること (AC-ST-05, AC-ST-18)", () => {
@@ -879,6 +889,52 @@ describe("SettingsPage", () => {
       );
 
       expect(screen.getByTestId("toggle-volume-key-paging")).toBeDisabled();
+    });
+  });
+
+  describe("バージョン表示フッター (AC-ST-20, v1.0 Issue #304)", () => {
+    it("最下部に settings-version-footer がレンダリングされ、デフォルトで 'Yommy v1.0.0' が表示されること (AC-ST-20)", () => {
+      render(
+        <SettingsPage
+          writingMode="vertical-rl"
+          theme="light"
+          onToggleWritingMode={vi.fn()}
+          onChangeTheme={vi.fn()}
+          onChangeFontSize={vi.fn()}
+          onChangeLineHeight={vi.fn()}
+        />,
+      );
+
+      const footer = screen.getByTestId("settings-version-footer");
+      expect(footer).toBeInTheDocument();
+      expect(footer).toHaveTextContent("Yommy v1.0.0");
+      expect(footer).toHaveClass(
+        "mt-8",
+        "mb-6",
+        "text-center",
+        "text-xs",
+        "text-slate-500",
+        "dark:text-slate-400",
+      );
+    });
+
+    it("appName および appVersion Props を指定した場合、渡された値でフッターが表示されること (AC-ST-20)", () => {
+      render(
+        <SettingsPage
+          writingMode="vertical-rl"
+          theme="light"
+          appName="CustomReader"
+          appVersion="2.5.0"
+          onToggleWritingMode={vi.fn()}
+          onChangeTheme={vi.fn()}
+          onChangeFontSize={vi.fn()}
+          onChangeLineHeight={vi.fn()}
+        />,
+      );
+
+      const footer = screen.getByTestId("settings-version-footer");
+      expect(footer).toBeInTheDocument();
+      expect(footer).toHaveTextContent("CustomReader v2.5.0");
     });
   });
 });

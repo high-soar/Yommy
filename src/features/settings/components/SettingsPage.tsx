@@ -87,6 +87,10 @@ export interface SettingsPageProps {
   }) => void | Promise<number>;
   /** エラーメッセージ（省略時: null） */
   error?: string | null;
+  /** アプリケーション表示名（省略時: "Yommy"、v1.0 Issue #304） */
+  appName?: string;
+  /** アプリケーションバージョン（省略時: "1.0.0"、v1.0 Issue #304） */
+  appVersion?: string;
   /** 追加の CSS クラス（任意） */
   className?: string;
 }
@@ -197,8 +201,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   storageCacheError = null,
   initialShowStorageCacheDialog = false,
   onClearStorageCache,
+  appName,
+  appVersion,
   className,
 }) => {
+  void appName;
+  void appVersion;
   const rootClasses =
     `h-full flex flex-col overflow-y-auto bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 ${className ?? ""}`.trim();
 
