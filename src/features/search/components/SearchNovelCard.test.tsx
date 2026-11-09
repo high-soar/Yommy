@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./SearchNovelCard.stories";
 import { SearchNovelCard } from "./SearchNovelCard";
-import { sampleSearchItem } from "../types";
+import { sampleSearchItem } from "../__fixtures__/searchFixtures";
 
 const { Default, Adding, Registered, WithoutLastPublished } =
   composeStories(stories);

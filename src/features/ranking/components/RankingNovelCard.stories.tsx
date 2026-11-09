@@ -6,7 +6,7 @@ import {
   sampleRankingItem2,
   sampleRankingItem3,
   sampleRankingItem4,
-} from "../types";
+} from "../__fixtures__/rankingFixtures";
 
 const meta: Meta<typeof RankingNovelCard> = {
   title: "Features/Ranking/RankingNovelCard",

@@ -13,7 +13,10 @@ import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.htm
 import narouWorkIndexSerializedHtml from "../../../parsers/narou/__fixtures__/work_index_serialized.html?raw";
 import narouWorkIndexPage2Html from "../../../parsers/narou/__fixtures__/work_index_page2.html?raw";
 import narouRankingResultsJson from "../../../parsers/narou/__fixtures__/ranking_results.json?raw";
-import { sampleRankingItem1, sampleRankingItem2 } from "../types";
+import {
+  sampleRankingItem1,
+  sampleRankingItem2,
+} from "../__fixtures__/rankingFixtures";
 import type { HttpResponse } from "../../../bridges/http/types";
 import type { NovelRankingResultItem } from "../../../parsers/types";
 import type { SyncEngine } from "../../cloud-sync/services/syncEngine";

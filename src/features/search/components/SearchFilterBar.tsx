@@ -4,7 +4,11 @@ import type {
   NovelSerialStatus,
   NovelSiteType,
 } from "../../../parsers/types";
-import { SEARCH_GENRES, SEARCH_ORDERS, SEARCH_SERIAL_STATUSES } from "../types";
+import {
+  SEARCH_GENRES,
+  SEARCH_ORDERS,
+  SEARCH_SERIAL_STATUSES,
+} from "../constants";
 import { NAROU_SEARCH_GENRES } from "../../../parsers/narou/genres";
 
 export interface SearchFilterBarProps {

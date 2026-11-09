@@ -3,7 +3,7 @@ type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
 status: "Approved"
-updated: "2026-11-09"
+updated: "2026-11-10"
 tags:
   - architecture
   - parser
@@ -54,6 +54,7 @@ tags:
   - ho-34
   - ho-35
 related_specs:
+  - docs/specs/changes/archive/issue-304-v1-release-readiness.md
   - docs/specs/changes/archive/issue-269-webview-fallback-and-dom-import.md
   - docs/specs/features/webview-import.md
   - docs/specs/changes/archive/issue-268-persistent-download-queue.md
@@ -103,9 +104,13 @@ related_tests:
   - src/parsers/narou/NarouParser.test.ts
   - src/parsers/narou/genres.test.ts
   - src/parsers/kakuyomu/KakuyomuParser.test.ts
+  - src/parsers/parserRegistry.test.ts
+  - src/parsers/sanitizer.test.ts
   - src/parsers/fetchFullNovelIndex.test.ts
   - src/shared/ui/BottomTabBar.test.tsx
   - src/storage/schema.test.ts
+  - src/bridges/http/capacitorHttpClient.test.ts
+  - src/bridges/http/mockHttpClient.test.ts
   - src/bridges/app/capacitorAppBridge.test.ts
   - src/bridges/app/mockAppBridge.test.ts
   - src/bridges/app/index.test.ts
@@ -122,6 +127,10 @@ related_tests:
   - src/storage/repositories/novelRepository.test.ts
   - src/storage/repositories/settingsRepository.test.ts
   - src/bridges/webview/capacitorWebViewDomBridge.test.ts
+  - src/bridges/webview/mockWebViewDomBridge.test.ts
+  - src/bridges/webview/urlUtils.test.ts
+  - src/bridges/webview/index.test.ts
+  - src/features/webview-import/index.test.ts
   - src/features/webview-import/hooks/useWebViewImport.test.ts
   - src/features/webview-import/components/WebViewImportContainer.test.tsx
   - src/features/webview-import/components/WebViewImportPage.test.tsx
@@ -234,6 +243,7 @@ Yommy/
     │       ├── types.ts               # WebViewDomBridge, CapturedDomResult, OpenWebViewOptions 定義
     │       ├── capacitorWebViewDomBridge.ts # Android ネイティブプラグイン（WebViewDomPlugin）連携
     │       ├── mockWebViewDomBridge.ts # UT / Storybook / IT 用モック実装（setMockPage）
+    │       ├── urlUtils.ts            # URL スキーム・安全性検証ユーティリティ
     │       └── index.ts               # ブリッジ生成・エクスポート
     ├── features/                      # 【3. Viewer & UI Layer（画面・機能別モジュール）】
     │   ├── bookshelf/                 # SCR-01: 本棚一覧（空状態での検索/ランキング誘導・更新チェック・ソート・お気に入りトグル＆フィルタ）
@@ -1039,6 +1049,14 @@ export interface WebViewDomBridge {
    * 指定 URL が http: または https: の安全なスキームか検証する。
    */
   canHandle(url: string): boolean;
+
+  /**
+   * ネイティブ内蔵ブラウザダイアログで DOM キャプチャ（「取込」ボタン等）が実行されたときの通知を購読する。
+   * 返却値の関数を呼び出すことで購読を解除する。
+   */
+  addDomCapturedListener?(
+    listener: (result: CapturedDomResult) => void,
+  ): () => void;
 }
 ```
 
@@ -1099,3 +1117,44 @@ Android Debug APK の継続的な検証と上書きインストール（`INSTALL
 
 - 公開 `android/debug.keystore` の SHA-1 は GCP に登録しない（第三者による偽造 APK の OAuth なりすまし防止）。
 - GitHub Secrets（`ANDROID_KEYSTORE_BASE64` 等）に保管した非公開 Keystore の SHA-1 とパッケージ名（`com.yommy.app`）のみを GCP の Android OAuth クライアントに登録し、CI APK ビルド時に署名する。Secrets 未設定のローカル/PR 環境のみ `android/debug.keystore` へフォールバックする。
+
+---
+
+## 6. アーキテクチャ・ネイティブ・ビルド受入条件一覧
+
+本セクションは、アーキテクチャ層、ネイティブ Bridge 層、ビルド・署名構成、およびアセット管理に属する受入条件（`AC-ICON-xx`, `AC-AB-xx`, `AC-APK-xx`, `AC-AUTH-xx`）の正本定義を管理します。
+
+### 6.1 アプリアイコン・ブランディング（`AC-ICON-xx`）
+
+|   受入条件 ID    | 項目                       | 内容                                                                                                                                                                 | 対応要件 ID  | 検証成果物                       |
+| :--------------: | :------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------: | :------------------------------- |
+| **`AC-ICON-01`** | マスター正本配置           | `assets/icon.png`（1024×1024）がマスター画像として配置され、`scripts/generate-icons.mjs` がマスター画像のみを参照して決定論的にアイコンアセットを生成すること。      | `SYS-REQ-15` | `scripts/generate-icons.test.ts` |
+| **`AC-ICON-02`** | Android アプリアイコン反映 | 各 DPI（mdpi〜xxxhdpi）の `ic_launcher.png`, `ic_launcher_round.png`, `ic_launcher_foreground.png` が生成され、Adaptive Icon 背景色 `#0D0E26` が設定されていること。 | `SYS-REQ-15` | `scripts/generate-icons.test.ts` |
+| **`AC-ICON-03`** | Web Favicon 反映           | `public/favicon.ico`, `icon-192.png`, `apple-touch-icon.png` が配置され、`index.html` から正しくリンク参照されていること。                                           | `SYS-REQ-15` | `scripts/generate-icons.test.ts` |
+| **`AC-ICON-04`** | 再現可能スクリプト         | `npm run generate:icons` を実行することで、全アイコンアセットがローカルで差分なく再生成できること。                                                                  | `SYS-REQ-15` | `scripts/generate-icons.test.ts` |
+
+### 6.2 システム戻るボタン・階層遷移・終了 UX（`AC-AB-xx`）
+
+|  受入条件 ID   | 項目                       | 内容                                                                                                                                                             |   対応要件 ID    | 検証成果物                              |
+| :------------: | :------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------: | :-------------------------------------- |
+| **`AC-AB-01`** | Bridge 抽象層の隔離        | `AppBridge`（`CapacitorAppBridge` / `MockAppBridge`）が整備され、Web/Vitest/Storybook 環境では Capacitor ネイティブ例外を一切発生させずにモック動作すること。    |   `SYS-REQ-16`   | `src/bridges/app/mockAppBridge.test.ts` |
+| **`AC-AB-02`** | リーダー画面からの階層復帰 | `SCR-03` でバックボタン押下時、しおり（`flushBookmark`）が即時保存され、目次画面（`SCR-02`）へ復帰すること（`TR-06`）。                                          | `SYS-REQ-12, 16` | `src/App.test.tsx` / `SCN-01`           |
+| **`AC-AB-03`** | 目次画面からの階層復帰     | `SCR-02` でバックボタン押下時、本棚画面（`SCR-01`）へ復帰すること（`TR-07`）。                                                                                   | `SYS-REQ-01, 16` | `src/App.test.tsx` / `SCN-01`           |
+| **`AC-AB-04`** | 設定画面からの直前復帰     | `SCR-05` でバックボタン押下時、直前に開いていた画面へ正確に復帰すること（`TR-12`）。                                                                             |   `SYS-REQ-16`   | `src/App.test.tsx` / `SCN-01`           |
+| **`AC-AB-05`** | 本棚での終了確認トースト   | `SCR-01`（`/`）でバックボタン 1 回目押下時、アプリは終了せず「もう一度バックボタンを押すと終了します」のトーストが表示され、2秒後に自動消滅すること（`TR-13`）。 |   `SYS-REQ-16`   | `src/App.test.tsx` / `SCN-01`           |
+| **`AC-AB-06`** | 本棚での二重押下アプリ終了 | `SCR-01`（`/`）でトースト表示中（2秒以内）に再度バックボタンを押下したとき、`appBridge.exitApp()` が呼び出されること（`TR-13`）。                                |   `SYS-REQ-16`   | `src/App.test.tsx` / `SCN-01`           |
+
+### 6.3 Android ビルド・署名・バージョン管理（`AC-APK-xx`）
+
+|   受入条件 ID   | 項目                        | 内容                                                                                                                                                                                                                     | 対応要件 ID  | 検証成果物                             |
+| :-------------: | :-------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------: | :------------------------------------- |
+| **`AC-APK-01`** | Debug 署名鍵の固定化        | `android/debug.keystore` が配備され、`build.gradle` で明示指定されることで、再ビルドした APK 間で署名証明書フィンガープリントが一致し、上書きインストール（`INSTALL_FAILED_UPDATE_INCOMPATIBLE` 回避）が可能であること。 | `SYS-REQ-16` | `scripts/android-build-config.test.ts` |
+| **`AC-APK-02`** | バージョン管理・単調増加    | `package.json` の `version`（`1.0.0`）に基づき `versionName` が解決され、GitHub Actions ビルド時に `github.run_number`（または `BUILD_NUMBER`）により `versionCode` がビルドごとに単調増加すること。                     | `SYS-REQ-16` | `scripts/android-build-config.test.ts` |
+| **`AC-APK-03`** | CI 署名・キーストア保護構成 | CI 署名設定として `ANDROID_KEYSTORE_BASE64` が存在する場合のデコードと未設定時フォールバック構成が含まれること。                                                                                                         | `SYS-REQ-16` | `scripts/android-build-config.test.ts` |
+
+### 6.4 Android ネイティブ認可・認証契約（`AC-AUTH-xx`）
+
+|   受入条件 ID    | 項目                                             | 内容                                                                                                                                      | 対応要件 ID  | 検証成果物                             |
+| :--------------: | :----------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------- | :----------: | :------------------------------------- |
+| **`AC-AUTH-01`** | Google Play Services Auth 依存定義               | `android/app/build.gradle` の dependencies に Google Play Services Auth が定義されていること。                                            | `SYS-REQ-16` | `scripts/android-build-config.test.ts` |
+| **`AC-AUTH-02`** | Android ネイティブ Google 認証プラグイン認可契約 | `CloudSyncPlugin.java` が ActivityResultContracts、IntentSender、認可キャッシュ破棄、multipart/related アップロード等の契約を満たすこと。 | `SYS-REQ-16` | `scripts/android-build-config.test.ts` |

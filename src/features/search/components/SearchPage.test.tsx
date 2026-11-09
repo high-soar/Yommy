@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./SearchPage.stories";
 import { SearchPage } from "./SearchPage";
-import { sampleSearchItem } from "../types";
+import { sampleSearchItem } from "../__fixtures__/searchFixtures";
 import * as siteSelectorModule from "./SiteSelector";
 import * as searchFilterBarModule from "./SearchFilterBar";
 import * as searchInputBarModule from "./SearchInputBar";

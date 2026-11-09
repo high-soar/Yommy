@@ -1,6 +1,6 @@
 import React from "react";
 import type { NovelSiteType } from "../../../parsers/types";
-import { RANKING_SITES } from "../types";
+import { RANKING_SITES } from "../constants";
 
 export interface SiteSelectorProps {
   selectedSite: NovelSiteType;
