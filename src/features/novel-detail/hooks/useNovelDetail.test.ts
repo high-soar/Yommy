@@ -688,6 +688,49 @@ describe("useNovelDetail", () => {
 
       expect(result.current.isRefreshing).toBe(false);
     });
+
+    it("refreshToc: 外部で作品が削除されていた場合、updateOnly: true により削除作品が再INSERTされないこと (R1-02)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 2);
+
+      const mockHttp = new MockHttpClient();
+      mockHttp.setResponse(`https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}`, {
+        status: 200,
+        headers: {},
+        html: workIndexHtml,
+      });
+
+      const { result } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          httpClient: mockHttp,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // 外部で作品を削除
+      await novelRepo.deleteNovel(seeded.id, 1730000000000);
+
+      // refreshToc を実行
+      let ok = false;
+      await act(async () => {
+        ok = await result.current.refreshToc();
+      });
+      expect(ok).toBe(false);
+
+      // 作品は復活していないこと
+      const novel = await novelRepo.getNovelById(seeded.id);
+      expect(novel).toBeNull();
+
+      // Tombstone も消えていないこと
+      const deletedNovels = await novelRepo.getDeletedNovels();
+      expect(deletedNovels).toHaveLength(1);
+      expect(deletedNovels[0].id).toBe(seeded.id);
+    });
   });
 
   describe("作品削除確認ダイアログ制御 (openDeleteDialog / closeDeleteDialog)", () => {
@@ -2601,6 +2644,45 @@ describe("useNovelDetail", () => {
       expect(result.current.failedCacheCount).toBe(0);
       expect(result.current.failedChapterIndexes).toEqual([]);
       expect(result.current.pendingCacheCount).toBe(0);
+    });
+
+    it("残存キューに failed レコードが存在していても該当話が既にキャッシュ済みの場合は failedCacheCount が 0 になること (R1-44)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const queueRepo = new SqlQueueRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 1);
+
+      // 第1話の本文を保存（キャッシュ済み）
+      await chapterRepo.saveChapterBody(
+        seeded.id,
+        1,
+        createDummyContent(1, "<p>第1話本文</p>", 100),
+        new Date().toISOString(),
+      );
+
+      // 過去に失敗したキュー行を強制的に挿入（TTL経過などによる孤児行のシミュレーション）
+      await db.execute(
+        `INSERT INTO download_queue (novel_id, chapter_index, target_url, status, created_at, updated_at)
+         VALUES (?, 1, 'https://example.com/1', 'failed', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
+        [seeded.id],
+      );
+
+      const { result } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          queueRepository: queueRepo,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // キャッシュ済みのため failedCacheCount は 0 になること
+      expect(result.current.failedCacheCount).toBe(0);
+      expect(result.current.failedChapterIndexes).toEqual([]);
     });
 
     it("本文パース時に例外が発生した場合でもループを中断せず残りの話を取得し、失敗話が failed に記録されること", async () => {

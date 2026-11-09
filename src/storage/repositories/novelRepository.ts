@@ -172,21 +172,43 @@ export class SqlNovelRepository implements NovelRepository {
   /**
    * 目次パース結果から作品情報および各話目次レコードをトランザクション内で保存・更新する。
    * 話数増加時は has_new_update = 1 を記録し、最新話公開日時（latest_episode_published_at）を更新する。
+   * （options.updateOnly: true の場合、既存レコードが存在しないときは新規登録・Tombstone消去を行わず null を返す: R1-02）
+   * （新しい目次に含まれない古いエピソードは chapters および download_queue から削除し統計情報を再集計する: R1-03）
    */
+  upsertNovelWithToc(
+    index: ParsedNovelIndex,
+    fetchedAt: string,
+    options: { updateOnly: true },
+  ): Promise<NovelRecord | null>;
+  upsertNovelWithToc(
+    index: ParsedNovelIndex,
+    fetchedAt: string,
+    options?: { updateOnly?: false },
+  ): Promise<NovelRecord>;
+  upsertNovelWithToc(
+    index: ParsedNovelIndex,
+    fetchedAt: string,
+    options?: { updateOnly?: boolean },
+  ): Promise<NovelRecord | null>;
   async upsertNovelWithToc(
     index: ParsedNovelIndex,
     fetchedAt: string,
-  ): Promise<NovelRecord> {
+    options?: { updateOnly?: boolean },
+  ): Promise<NovelRecord | null> {
     const id = `${index.siteType}:${index.remoteWorkId}`;
     const latestEpisodePublishedAt = computeLatestEpisodePublishedAt(
       index.chapters,
     );
 
-    return await this.db.runTransaction(async () => {
+    return await this.db.runTransaction(async (tx) => {
       const existing = await this.getNovelById(id);
 
       if (existing === null) {
-        await this.db.execute(
+        if (options?.updateOnly) {
+          return null;
+        }
+
+        await tx.execute(
           `INSERT INTO novels (
             id, site_type, remote_work_id, canonical_url, title, author, synopsis,
             total_chapters, cached_chapters, total_byte_size,
@@ -210,7 +232,7 @@ export class SqlNovelRepository implements NovelRepository {
           ],
         );
       } else {
-        const existingChapterRows = await this.db.query<{
+        const existingChapterRows = await tx.query<{
           remote_chapter_id: string;
         }>(`SELECT remote_chapter_id FROM chapters WHERE novel_id = ?;`, [id]);
         const existingRemoteIds = new Set(
@@ -227,7 +249,7 @@ export class SqlNovelRepository implements NovelRepository {
               ? 1
               : 0;
 
-        await this.db.execute(
+        await tx.execute(
           `UPDATE novels
            SET site_type = ?, remote_work_id = ?, canonical_url = ?, title = ?, author = ?, synopsis = ?,
                total_chapters = ?, has_new_update = ?, latest_episode_published_at = ?,
@@ -249,9 +271,38 @@ export class SqlNovelRepository implements NovelRepository {
         );
       }
 
+      // 新しい目次に含まれない古いエピソードの削除およびキュー整理 (R1-03)
+      const currentRemoteIds = new Set(
+        index.chapters.map((c) => c.remoteChapterId),
+      );
+      const existingChapters = await tx.query<{
+        remote_chapter_id: string;
+        chapter_index: number;
+      }>(
+        `SELECT remote_chapter_id, chapter_index FROM chapters WHERE novel_id = ?;`,
+        [id],
+      );
+      const removedChapters = existingChapters.filter(
+        (c) => !currentRemoteIds.has(c.remote_chapter_id),
+      );
+
+      if (removedChapters.length > 0) {
+        for (const removed of removedChapters) {
+          await tx.execute(
+            `DELETE FROM chapters WHERE novel_id = ? AND remote_chapter_id = ?;`,
+            [id, removed.remote_chapter_id],
+          );
+          await tx.execute(
+            `DELETE FROM download_queue WHERE novel_id = ? AND chapter_index = ?;`,
+            [id, removed.chapter_index],
+          );
+        }
+      }
+
+      // 新しい目次エピソードの UPSERT
       for (const chapter of index.chapters) {
         const chapterId = `${id}:${chapter.remoteChapterId}`;
-        await this.db.execute(UPSERT_CHAPTER_SQL, [
+        await tx.execute(UPSERT_CHAPTER_SQL, [
           chapterId,
           id,
           chapter.chapterIndex,
@@ -263,11 +314,24 @@ export class SqlNovelRepository implements NovelRepository {
         ]);
       }
 
-      // 再登録時は deleted_novels の Tombstone を自動消去 (R1-28)
-      await this.db.execute(`DELETE FROM deleted_novels WHERE id = ?;`, [id]);
+      // エピソード削除や目次更新に伴う集計キャッシュの再計算 (R1-03)
+      await tx.execute(
+        `UPDATE novels
+         SET
+           total_chapters = (SELECT COUNT(*) FROM chapters WHERE novel_id = ?),
+           cached_chapters = (SELECT COUNT(*) FROM chapters WHERE novel_id = ? AND body_html IS NOT NULL),
+           total_byte_size = (SELECT COALESCE(SUM(byte_size), 0) FROM chapters WHERE novel_id = ? AND body_html IS NOT NULL)
+         WHERE id = ?;`,
+        [id, id, id, id],
+      );
+
+      // 新規登録・通常 upsert 時は deleted_novels の Tombstone を自動消去 (R1-28, R1-02)
+      if (!options?.updateOnly) {
+        await tx.execute(`DELETE FROM deleted_novels WHERE id = ?;`, [id]);
+      }
 
       const result = await this.getNovelById(id);
-      return result!;
+      return result;
     });
   }
 
@@ -307,15 +371,19 @@ export class SqlNovelRepository implements NovelRepository {
    * 作品および紐づくエピソード・ダウンロードキュー（CASCADE）を削除し、
    * クラウド同期用の Tombstone（deleted_novels テーブル）に削除日時を記録する
    * （docs/specs/features/bookshelf.md AC-BS-13 および docs/specs/db-schema.md §3.6 に準拠）
+   * @param novelId 削除対象作品ID
+   * @param deletedAt 削除日時タイムスタンプ（ミリ秒、未指定時は Date.now()）(R1-06)
    */
-  async deleteNovel(novelId: string): Promise<void> {
-    const deletedAt = Date.now();
-    await this.db.runTransaction(async () => {
-      await this.db.execute(
+  async deleteNovel(
+    novelId: string,
+    deletedAt: number = Date.now(),
+  ): Promise<void> {
+    await this.db.runTransaction(async (tx) => {
+      await tx.execute(
         `INSERT OR REPLACE INTO deleted_novels (id, deleted_at) VALUES (?, ?);`,
         [novelId, deletedAt],
       );
-      await this.db.execute("DELETE FROM novels WHERE id = ?;", [novelId]);
+      await tx.execute("DELETE FROM novels WHERE id = ?;", [novelId]);
     });
   }
 
