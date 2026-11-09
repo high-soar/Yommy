@@ -138,6 +138,138 @@ describe("CapacitorSqliteAdapter", () => {
       expect(mockConn.commitTransaction).not.toHaveBeenCalled();
       expect(mockConn.rollbackTransaction).toHaveBeenCalledTimes(1);
     });
+
+    it("txAdapter 経由での execute / query および close / runTransaction 禁止が機能すること", async () => {
+      const mockConn = createMockConnection();
+      const adapter = new CapacitorSqliteAdapter(mockConn);
+
+      await adapter.runTransaction(async (tx) => {
+        await tx.execute("INSERT INTO foo VALUES (1);");
+        await tx.query("SELECT * FROM foo;");
+        await expect(tx.close()).resolves.toBeUndefined();
+        await expect(tx.runTransaction(async () => {})).rejects.toThrow(
+          "Nested transactions are not supported",
+        );
+      });
+
+      expect(mockConn.execute).toHaveBeenCalledWith(
+        "INSERT INTO foo VALUES (1);",
+        false,
+      );
+      expect(mockConn.query).toHaveBeenCalledWith("SELECT * FROM foo;", []);
+    });
+
+    it("並行する runTransaction が mutex により直列化され 'Already in transaction' を防止すること", async () => {
+      const order: string[] = [];
+      const mockConn = createMockConnection({
+        beginTransaction: vi.fn().mockImplementation(async () => {
+          order.push("begin");
+        }),
+        commitTransaction: vi.fn().mockImplementation(async () => {
+          order.push("commit");
+        }),
+      });
+      const adapter = new CapacitorSqliteAdapter(mockConn);
+
+      let tx1Resolve: () => void;
+      const tx1Wait = new Promise<void>((r) => {
+        tx1Resolve = r;
+      });
+
+      const p1 = adapter.runTransaction(async () => {
+        order.push("tx1-start");
+        await tx1Wait;
+        order.push("tx1-end");
+      });
+
+      const p2 = adapter.runTransaction(async () => {
+        order.push("tx2-start");
+        order.push("tx2-end");
+      });
+
+      // マイクロタスクを進めて tx1 が開始されるのを待つ
+      await new Promise((r) => setTimeout(r, 10));
+
+      // tx1 が実行中の時点では tx2 の beginTransaction はまだ呼ばれていない
+      expect(order).toEqual(["begin", "tx1-start"]);
+
+      tx1Resolve!();
+      await Promise.all([p1, p2]);
+
+      expect(order).toEqual([
+        "begin",
+        "tx1-start",
+        "tx1-end",
+        "commit",
+        "begin",
+        "tx2-start",
+        "tx2-end",
+        "commit",
+      ]);
+    });
+
+    it("トランザクション実行中に外から呼び出された execute / query がコミット完了まで待機すること", async () => {
+      const order: string[] = [];
+      const mockConn = createMockConnection({
+        beginTransaction: vi.fn().mockImplementation(async () => {
+          order.push("tx-begin");
+        }),
+        commitTransaction: vi.fn().mockImplementation(async () => {
+          order.push("tx-commit");
+        }),
+        execute: vi.fn().mockImplementation(async () => {
+          order.push("ext-execute");
+        }),
+        query: vi.fn().mockImplementation(async () => {
+          order.push("ext-query");
+          return { values: [] };
+        }),
+      });
+      const adapter = new CapacitorSqliteAdapter(mockConn);
+
+      let txResolve: () => void;
+      const txWait = new Promise<void>((r) => {
+        txResolve = r;
+      });
+
+      const txPromise = adapter.runTransaction(async () => {
+        order.push("tx-body");
+        await txWait;
+      });
+
+      const extExecPromise = adapter.execute("EXTERNAL EXECUTE;");
+      const extQueryPromise = adapter.query("EXTERNAL QUERY;");
+
+      // マイクロタスクを進めて tx が実行中であることを確認
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(order).toEqual(["tx-begin", "tx-body"]);
+
+      txResolve!();
+      await Promise.all([txPromise, extExecPromise, extQueryPromise]);
+
+      expect(order).toEqual([
+        "tx-begin",
+        "tx-body",
+        "tx-commit",
+        "ext-execute",
+        "ext-query",
+      ]);
+    });
+
+    it("前のタスクが例外で失敗しても後続の操作が中断されず実行されること", async () => {
+      const mockConn = createMockConnection();
+      const adapter = new CapacitorSqliteAdapter(mockConn);
+
+      await expect(
+        adapter.runTransaction(async () => {
+          throw new Error("先行失敗");
+        }),
+      ).rejects.toThrow("先行失敗");
+
+      // 後続の execute が正常に実行できること
+      await expect(adapter.execute("SELECT 1;")).resolves.toBeUndefined();
+    });
   });
 
   describe("close", () => {

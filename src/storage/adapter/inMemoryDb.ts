@@ -53,11 +53,13 @@ export class InMemoryDatabaseAdapter implements DatabaseAdapter {
     }
   }
 
-  async runTransaction<T>(action: () => Promise<T>): Promise<T> {
+  async runTransaction<T>(
+    action: (tx: DatabaseAdapter) => Promise<T>,
+  ): Promise<T> {
     this.inTransaction = true;
     this.db.run("BEGIN TRANSACTION;");
     try {
-      const result = await action();
+      const result = await action(this);
       this.db.run("COMMIT;");
       this.inTransaction = false;
       this.onUpdate?.();
