@@ -378,6 +378,8 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
 
     setIsBatchCaching(true);
     setBatchCacheProgress({ current: 0, total: targetChapters.length });
+    setFailedCacheCount(0);
+    setFailedChapterIndexes([]);
     setError(null);
     setRefreshMessage(null);
 

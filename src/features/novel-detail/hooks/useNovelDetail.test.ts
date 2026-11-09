@@ -2532,6 +2532,11 @@ describe("useNovelDetail", () => {
         batchPromise = result.current.startBatchCache();
       });
 
+      // 開始直後は失敗件数がリセットされて 0 になること (AC-ND-25)
+      expect(result.current.isBatchCaching).toBe(true);
+      expect(result.current.failedCacheCount).toBe(0);
+      expect(result.current.failedChapterIndexes).toEqual([]);
+
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1600);
       });

@@ -84,6 +84,18 @@ export const BatchCaching: Story = {
 };
 
 /**
+ * 一括キャッシュ実行中かつ一部話数取得失敗状態（進捗プログレス・失敗件数リアルタイム表示）
+ */
+export const BatchCachingWithFailures: Story = {
+  name: "一括キャッシュ中（失敗件数あり）",
+  args: {
+    isBatchCaching: true,
+    batchCacheProgress: { current: 5, total: 15 },
+    failedCacheCount: 2,
+  },
+};
+
+/**
  * 一括キャッシュ中断後の再開待ち状態（「キャッシュを再開（残りN話）」ボタン表示）
  */
 export const ResumePending: Story = {

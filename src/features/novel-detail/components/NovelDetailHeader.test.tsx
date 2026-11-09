@@ -36,6 +36,7 @@ const {
   FallbackAuthorAndSynopsis,
   ExpandedSynopsis,
   BatchCaching,
+  BatchCachingWithFailures,
   ResumePending,
   RetryFailed,
   AllCached,
@@ -179,6 +180,13 @@ describe("NovelDetailHeader", () => {
       expect(synopsis).not.toHaveClass("line-clamp-2");
       expect(synopsis).toHaveClass("max-h-40");
       expect(synopsis).toHaveClass("overflow-y-auto");
+    });
+
+    it("BatchCachingWithFailures ストーリーで一括キャッシュ進行中に失敗件数（[失敗 2話]）と警告色が表示されること (AC-ND-25)", () => {
+      render(<BatchCachingWithFailures />);
+      const progressEl = screen.getByTestId("batch-cache-progress");
+      expect(progressEl).toHaveTextContent("キャッシュ中 (5/15) [失敗 2話]...");
+      expect(progressEl.className).toContain("text-amber-600");
     });
 
     it("Favorite ストーリーでお気に入り登録済み（★）ボタンが描画され、aria-pressed が true であること (Issue #266, R1-10, R2-01, R2-19)", () => {
@@ -382,6 +390,23 @@ describe("NovelDetailHeader", () => {
         expect(screen.getByTestId("detail-read-first-button")).toBeDisabled();
         expect(screen.getByTestId("refresh-toc-button")).toBeDisabled();
         expect(screen.getByTestId("open-delete-dialog-button")).toBeDisabled();
+      });
+
+      it("isBatchCaching === true かつ failedCacheCount > 0 のとき、進行表示に「[失敗 N話]」が含まれ警告色クラスが付与されること (AC-ND-25)", () => {
+        render(
+          <NovelDetailHeader
+            {...defaultProps}
+            isBatchCaching={true}
+            batchCacheProgress={{ current: 5, total: 15 }}
+            failedCacheCount={2}
+          />,
+        );
+
+        const progressEl = screen.getByTestId("batch-cache-progress");
+        expect(progressEl).toHaveTextContent(
+          "キャッシュ中 (5/15) [失敗 2話]...",
+        );
+        expect(progressEl.className).toContain("text-amber-600");
       });
 
       it("ResumePending ストーリーで「キャッシュを再開（残り7話）」ボタンが表示されること (AC-ND-24)", () => {
