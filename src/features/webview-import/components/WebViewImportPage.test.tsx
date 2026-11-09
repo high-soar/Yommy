@@ -15,9 +15,14 @@ describe("WebViewImportPage", () => {
 
     expect(screen.getByTestId("webview-import-page")).toBeInTheDocument();
     expect(screen.getByTestId("browser-back-button")).toBeInTheDocument();
-    expect(screen.getByTestId("browser-url-input")).toHaveValue(
+    const urlInput = screen.getByTestId("browser-url-input");
+    expect(urlInput).toHaveValue(
       "https://kakuyomu.jp/works/16817330658027210412",
     );
+    expect(urlInput).toHaveAttribute("aria-label", "URLを入力");
+    const previewArea = screen.getByTestId("browser-preview-area");
+    expect(previewArea).toBeInTheDocument();
+    expect(previewArea.tagName.toLowerCase()).toBe("div");
     expect(screen.getByTestId("browser-navigate-button")).toBeInTheDocument();
     expect(
       screen.getByTestId("open-native-browser-button"),

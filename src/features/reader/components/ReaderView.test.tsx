@@ -143,6 +143,7 @@ describe("ReaderView", () => {
       expect(container).toHaveStyle({
         fontSize: "24px",
         lineHeight: "2.2",
+        wordBreak: "break-word",
       });
     });
 

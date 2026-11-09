@@ -65,6 +65,8 @@ export function useCloudSync(): UseCloudSyncResult {
 
   const isMountedRef = useRef<boolean>(true);
   const hasUserActionOccurredRef = useRef<boolean>(false);
+  const isOperatingRef = useRef<boolean>(false);
+  const isSyncingRef = useRef<boolean>(false);
   const authStateRef = useRef<CloudSyncAuthState>(authState);
   authStateRef.current = authState;
 
@@ -140,6 +142,8 @@ export function useCloudSync(): UseCloudSyncResult {
 
   // Google アカウント連携（認可フロー実行）
   const signIn = useCallback(async (): Promise<void> => {
+    if (isOperatingRef.current || isSyncingRef.current) return;
+    isOperatingRef.current = true;
     hasUserActionOccurredRef.current = true;
     if (isMountedRef.current) {
       setError(null);
@@ -163,6 +167,7 @@ export function useCloudSync(): UseCloudSyncResult {
 
         // 初回自動同期（Pull → Merge → Push）を実行
         setIsSyncing(true);
+        isSyncingRef.current = true;
         try {
           if (syncEngine) {
             await syncEngine.sync();
@@ -185,6 +190,7 @@ export function useCloudSync(): UseCloudSyncResult {
             );
           }
         } finally {
+          isSyncingRef.current = false;
           if (isMountedRef.current) {
             setIsSyncing(false);
           }
@@ -211,11 +217,15 @@ export function useCloudSync(): UseCloudSyncResult {
         setAuthState({ status: "error", message: msg });
         setError(msg);
       }
+    } finally {
+      isOperatingRef.current = false;
     }
   }, [appSettingsRepository, cloudSyncBridge, syncEngine]);
 
   // 連携解除
   const signOut = useCallback(async (): Promise<void> => {
+    if (isOperatingRef.current || isSyncingRef.current) return;
+    isOperatingRef.current = true;
     hasUserActionOccurredRef.current = true;
     if (isMountedRef.current) {
       setError(null);
@@ -237,6 +247,8 @@ export function useCloudSync(): UseCloudSyncResult {
       if (isMountedRef.current) {
         setError(err instanceof Error ? err.message : String(err));
       }
+    } finally {
+      isOperatingRef.current = false;
     }
   }, [appSettingsRepository, cloudSyncBridge]);
 
@@ -245,6 +257,10 @@ export function useCloudSync(): UseCloudSyncResult {
     if (authStateRef.current.status !== "connected") {
       return;
     }
+    if (isSyncingRef.current || isOperatingRef.current) {
+      return;
+    }
+    isSyncingRef.current = true;
 
     if (isMountedRef.current) {
       setIsSyncing(true);
@@ -282,6 +298,7 @@ export function useCloudSync(): UseCloudSyncResult {
         setError(err instanceof Error ? err.message : String(err));
       }
     } finally {
+      isSyncingRef.current = false;
       if (isMountedRef.current) {
         setIsSyncing(false);
       }

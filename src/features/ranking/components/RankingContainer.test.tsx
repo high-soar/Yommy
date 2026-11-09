@@ -148,10 +148,7 @@ describe("RankingContainer コンポーネント", () => {
       expect(screen.getByTestId("ranking-results-list")).toBeInTheDocument();
     });
 
-    const cards = screen.getAllByRole("button");
-    const novelCards = cards.filter((el) =>
-      el.getAttribute("data-testid")?.startsWith("ranking-novel-card-"),
-    );
+    const novelCards = screen.getAllByTestId(/^ranking-novel-card-/);
 
     await user.click(novelCards[0]);
 
@@ -183,10 +180,7 @@ describe("RankingContainer コンポーネント", () => {
     });
 
     // 登録済みカード本体をタップ
-    const cards = screen.getAllByRole("button");
-    const novelCards = cards.filter((el) =>
-      el.getAttribute("data-testid")?.startsWith("ranking-novel-card-"),
-    );
+    const novelCards = screen.getAllByTestId(/^ranking-novel-card-/);
 
     await user.click(novelCards[0]);
 
@@ -203,10 +197,7 @@ describe("RankingContainer コンポーネント", () => {
       expect(screen.getByTestId("ranking-results-list")).toBeInTheDocument();
     });
 
-    const cards = screen.getAllByRole("button");
-    const novelCards = cards.filter((el) =>
-      el.getAttribute("data-testid")?.startsWith("ranking-novel-card-"),
-    );
+    const novelCards = screen.getAllByTestId(/^ranking-novel-card-/);
 
     await user.click(novelCards[0]);
 
@@ -231,10 +222,7 @@ describe("RankingContainer コンポーネント", () => {
       expect(screen.getByTestId("ranking-results-list")).toBeInTheDocument();
     });
 
-    const cards = screen.getAllByRole("button");
-    const novelCards = cards.filter((el) =>
-      el.getAttribute("data-testid")?.startsWith("ranking-novel-card-"),
-    );
+    const novelCards = screen.getAllByTestId(/^ranking-novel-card-/);
 
     await user.click(novelCards[0]);
 

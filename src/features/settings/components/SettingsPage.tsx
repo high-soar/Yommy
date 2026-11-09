@@ -40,6 +40,8 @@ export interface SettingsPageProps {
   pagingMode?: ReaderPagingMode;
   /** 設定読み込み中フラグ（省略時: false） */
   isLoading?: boolean;
+  /** 設定更新中フラグ（トグル・更新中の多重実行防止、R1-35） */
+  isUpdating?: boolean;
   /** 組み方向切替ボタン押下時のコールバック */
   onToggleWritingMode: () => void;
   /** テーマ選択ボタン押下時のコールバック */
@@ -179,6 +181,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   enableVolumeKeyPaging = false,
   pagingMode = "auto",
   isLoading = false,
+  isUpdating = false,
   error = null,
   cloudSyncAuthState = { status: "unlinked" },
   cloudSyncLastSyncedAt = null,
@@ -300,7 +303,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             <button
               type="button"
               data-testid="toggle-orientation"
-              disabled={isLoading}
+              disabled={isLoading || isUpdating}
               onClick={onToggleWritingMode}
               className="px-3.5 py-1.5 text-xs md:text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
             >
@@ -549,7 +552,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               aria-label="音量キーでページ送り"
               aria-checked={enableVolumeKeyPaging}
               aria-pressed={enableVolumeKeyPaging}
-              disabled={isLoading}
+              disabled={isLoading || isUpdating}
               onClick={onToggleVolumeKeyPaging}
               className={`${TOGGLE_SWITCH_BASE} ${
                 enableVolumeKeyPaging

@@ -31,6 +31,7 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
     pagingMode,
     enableVolumeKeyPaging,
     isLoading,
+    isUpdating,
     error,
     toggleWritingMode,
     changeTheme,
@@ -74,6 +75,7 @@ export const SettingsContainer: React.FC<SettingsContainerProps> = ({
       appName={APP_NAME}
       appVersion={APP_VERSION}
       isLoading={isLoading}
+      isUpdating={isUpdating}
       error={error}
       cloudSyncAuthState={cloudSyncAuthState}
       cloudSyncLastSyncedAt={cloudSyncLastSyncedAt}

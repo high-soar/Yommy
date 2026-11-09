@@ -37,6 +37,7 @@ export interface UseStorageCacheResult {
 export function useStorageCache(): UseStorageCacheResult {
   const { chapterRepository, isReady } = useServices();
   const isMountedRef = useRef<boolean>(true);
+  const isClearingRef = useRef<boolean>(false);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -99,7 +100,8 @@ export function useStorageCache(): UseStorageCacheResult {
 
   const clearCache = useCallback(
     async (options: { onlyRead: boolean }): Promise<number> => {
-      if (!isMountedRef.current) return 0;
+      if (!isMountedRef.current || isClearingRef.current) return 0;
+      isClearingRef.current = true;
       setIsClearing(true);
       setError(null);
       setNotice(null);
@@ -126,6 +128,7 @@ export function useStorageCache(): UseStorageCacheResult {
         }
         throw err;
       } finally {
+        isClearingRef.current = false;
         if (isMountedRef.current) {
           setIsClearing(false);
         }

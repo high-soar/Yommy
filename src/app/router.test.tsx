@@ -1448,6 +1448,55 @@ describe("router", () => {
           });
           expect(screen.getByTestId("origin-display")).toHaveTextContent("/");
         });
+
+        it("内蔵ブラウザ (/browser) から作品詳細 (/novels/:novelId) へ遷移した際に novelOrigin がセットされないこと (R1-48)", () => {
+          render(
+            <RouterProvider initialPath="/browser?url=https%3A%2F%2Fkakuyomu.jp%2Fworks%2F123">
+              <TestConsumer />
+            </RouterProvider>,
+          );
+
+          expect(screen.getByTestId("path-display")).toHaveTextContent(
+            "/browser",
+          );
+
+          act(() => {
+            screen.getByTestId("btn-detail").click();
+          });
+
+          expect(screen.getByTestId("path-display")).toHaveTextContent(
+            "/novels/kakuyomu%3A16817330658027210412",
+          );
+          expect(screen.getByTestId("origin-display")).toHaveTextContent(
+            "null",
+          );
+        });
+
+        it("back() で直前の履歴エントリと一致する場合、pushState ではなく replaceState が使用されて履歴重複が防止されること (R1-25)", () => {
+          const pushStateSpy = vi.spyOn(window.history, "pushState");
+          const replaceStateSpy = vi.spyOn(window.history, "replaceState");
+
+          render(
+            <RouterProvider initialPath="/search">
+              <TestConsumer />
+            </RouterProvider>,
+          );
+
+          // /search から詳細へ pushState
+          act(() => {
+            screen.getByTestId("btn-detail").click();
+          });
+          expect(pushStateSpy).toHaveBeenCalledTimes(1);
+
+          // 詳細から back() で /search へ戻る -> 直前履歴と一致するため replaceState が使われる
+          act(() => {
+            screen.getByTestId("btn-back").click();
+          });
+          expect(screen.getByTestId("path-display")).toHaveTextContent(
+            "/search",
+          );
+          expect(replaceStateSpy).toHaveBeenCalled();
+        });
       });
     });
   });

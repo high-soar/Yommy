@@ -39,14 +39,6 @@ export const RankingNovelCard: React.FC<RankingNovelCardProps> = ({
   onAdd,
   onSelect,
 }) => {
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.target !== e.currentTarget) return;
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      onSelect();
-    }
-  };
-
   const handleAddClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isRegistered && !isAdding) {
@@ -54,14 +46,16 @@ export const RankingNovelCard: React.FC<RankingNovelCardProps> = ({
     }
   };
 
+  const handleTitleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onSelect();
+  };
+
   return (
     <article
-      tabIndex={0}
-      role="button"
       data-testid={`ranking-novel-card-${item.remoteWorkId}`}
       onClick={onSelect}
-      onKeyDown={handleKeyDown}
-      className="p-4 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 shadow-xs hover:border-sky-300 dark:hover:border-sky-600 transition-all duration-150 cursor-pointer flex flex-col gap-2.5 focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+      className="p-4 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 shadow-xs hover:border-sky-300 dark:hover:border-sky-600 transition-all duration-150 cursor-pointer flex flex-col gap-2.5"
     >
       {/* 上部: 順位バッジ・ジャンル・連載状態・本棚追加ボタン */}
       <div className="flex items-center justify-between gap-2">
@@ -134,7 +128,14 @@ export const RankingNovelCard: React.FC<RankingNovelCardProps> = ({
           data-testid="ranking-card-title"
           className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 line-clamp-2 leading-snug"
         >
-          {item.title}
+          <button
+            type="button"
+            data-testid="ranking-card-title-button"
+            onClick={handleTitleClick}
+            className="text-left font-bold hover:text-sky-600 dark:hover:text-sky-400 focus:outline-hidden focus:ring-2 focus:ring-sky-500 rounded-sm cursor-pointer"
+          >
+            {item.title}
+          </button>
         </h3>
         <p
           data-testid="ranking-card-author"

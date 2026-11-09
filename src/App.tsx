@@ -115,6 +115,7 @@ export const AppContent: React.FC<AppContentProps> = ({
     return () => {
       removeListener();
       clearToastTimer();
+      setShowExitToast(false);
     };
   }, [appBridge, router]);
 

@@ -13,9 +13,15 @@ describe("SearchNovelCard コンポーネント", () => {
   it("Default ストーリー: 作品メタデータと「＋ 本棚に追加」ボタンが描画されること", () => {
     render(<Default />);
 
-    expect(
-      screen.getByTestId("search-novel-card-16817330658027210412"),
-    ).toBeInTheDocument();
+    const card = screen.getByTestId("search-novel-card-16817330658027210412");
+    expect(card).toBeInTheDocument();
+    expect(card).not.toHaveAttribute("role", "button");
+    expect(card).not.toHaveAttribute("tabindex");
+
+    const titleButton = screen.getByTestId("search-card-title-button");
+    expect(titleButton).toBeInTheDocument();
+    expect(titleButton).toHaveTextContent("境界迷宮と異界の魔術師");
+
     expect(screen.getByTestId("search-card-title")).toHaveTextContent(
       "境界迷宮と異界の魔術師",
     );
@@ -121,7 +127,7 @@ describe("SearchNovelCard コンポーネント", () => {
     expect(handleSelect).toHaveBeenCalledTimes(1);
   });
 
-  it("キーボード操作（Enter / Space）でカード本体の onSelect が呼び出されること", async () => {
+  it("キーボード操作（Enter / Space）でカードタイトルボタンの onSelect が呼び出されること", async () => {
     const user = userEvent.setup();
     const handleSelect = vi.fn();
 
@@ -135,8 +141,8 @@ describe("SearchNovelCard コンポーネント", () => {
       />,
     );
 
-    const card = screen.getByTestId("search-novel-card-16817330658027210412");
-    card.focus();
+    const titleButton = screen.getByTestId("search-card-title-button");
+    titleButton.focus();
     await user.keyboard("{Enter}");
     expect(handleSelect).toHaveBeenCalledTimes(1);
 

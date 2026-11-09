@@ -572,4 +572,53 @@ describe("useStorageCache", () => {
 
     expect(deleted).toBe(0);
   });
+
+  it("clearCache 実行中に再度呼び出された場合、早期リターンして多重実行が防止されること (R1-35)", async () => {
+    let resolveDelete: () => void = () => {};
+    const deletePromise = new Promise<number>((resolve) => {
+      resolveDelete = () => resolve(5);
+    });
+    const deleteAllCachedBodiesMock = vi.fn().mockReturnValue(deletePromise);
+    const services = createMockServices({
+      chapterRepoOverrides: {
+        deleteAllCachedBodies: deleteAllCachedBodiesMock,
+      },
+    });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ServiceContext.Provider value={services}>
+        {children}
+      </ServiceContext.Provider>
+    );
+
+    const { result } = renderHook(() => useStorageCache(), {
+      wrapper,
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // 1回目実行（未完了）
+    let promise1: Promise<number>;
+    act(() => {
+      promise1 = result.current.clearCache({ onlyRead: false });
+    });
+
+    // 2回目実行（排他ガードにより早期リターン）
+    let promise2: Promise<number>;
+    act(() => {
+      promise2 = result.current.clearCache({ onlyRead: false });
+    });
+
+    const result2 = await promise2!;
+    expect(result2).toBe(0);
+    expect(deleteAllCachedBodiesMock).toHaveBeenCalledTimes(1);
+
+    // 1回目を完了させる
+    await act(async () => {
+      resolveDelete();
+      await promise1!;
+    });
+    expect(deleteAllCachedBodiesMock).toHaveBeenCalledTimes(1);
+  });
 });

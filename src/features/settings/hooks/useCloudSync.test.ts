@@ -227,6 +227,54 @@ describe("useCloudSync", () => {
       expect(result.current.error).toBeNull();
     });
 
+    it("signIn 実行中に再度 signIn が呼び出された場合、または同期中の場合、多重発火がガードされること (R1-35)", async () => {
+      let resolveSignIn!: (value: {
+        status: "connected";
+        email: string;
+      }) => void;
+      const bridge = createMockBridge({ status: "unlinked" });
+      vi.mocked(bridge.signIn).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveSignIn = resolve;
+          }),
+      );
+      const appSettings = createMockAppSettings();
+      const syncEngine = createMockSyncEngine();
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+          syncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.authState.status).toBe("unlinked");
+      });
+
+      let promise1: Promise<void>;
+      act(() => {
+        promise1 = result.current.signIn();
+      });
+
+      // 操作中（isOperating）に2回目の signIn を呼ぶ（ガードされる）
+      await act(async () => {
+        await result.current.signIn();
+      });
+
+      expect(bridge.signIn).toHaveBeenCalledTimes(1);
+
+      // 1回目の signIn を完了
+      await act(async () => {
+        resolveSignIn({ status: "connected", email: "user@example.com" });
+        await promise1!;
+      });
+
+      expect(result.current.authState.status).toBe("connected");
+    });
+
     it("bridge.signIn が error ステータスを返した場合、error 状態となりエラーメッセージが設定されること", async () => {
       const bridge = createMockBridge({ status: "unlinked" });
       vi.mocked(bridge.signIn).mockResolvedValueOnce({
@@ -351,6 +399,54 @@ describe("useCloudSync", () => {
       expect(result.current.lastSyncedAt).toBeNull();
       expect(result.current.error).toBeNull();
     });
+
+    it("signOut 実行中に再度 signOut が呼び出された場合、または同期中の場合、多重発火がガードされること (R1-35)", async () => {
+      let resolveSignOut!: () => void;
+      const bridge = createMockBridge({
+        status: "connected",
+        email: "user@example.com",
+      });
+      vi.mocked(bridge.signOut).mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveSignOut = resolve;
+          }),
+      );
+      const appSettings = createMockAppSettings({ email: "user@example.com" });
+      const syncEngine = createMockSyncEngine();
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+          syncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.authState.status).toBe("connected");
+      });
+
+      let promise1: Promise<void>;
+      act(() => {
+        promise1 = result.current.signOut();
+      });
+
+      // 操作中（isOperating）に2回目の signOut を呼ぶ（ガードされる）
+      await act(async () => {
+        await result.current.signOut();
+      });
+
+      expect(bridge.signOut).toHaveBeenCalledTimes(1);
+
+      // 1回目の signOut を完了
+      await act(async () => {
+        resolveSignOut();
+        await promise1!;
+      });
+
+      expect(result.current.authState.status).toBe("unlinked");
+    });
   });
 
   describe("手動即時同期 (syncNow, AC-ST-09, AC-ST-11)", () => {
@@ -407,6 +503,102 @@ describe("useCloudSync", () => {
       expect(appSettings.setCloudSyncLastSyncedAt).toHaveBeenCalled();
       expect(result.current.isSyncing).toBe(false);
       expect(result.current.error).toBeNull();
+    });
+
+    it("syncNow 実行中に再度 syncNow が呼び出された場合、多重実行がガードされること (R1-35)", async () => {
+      const bridge = createMockBridge({
+        status: "connected",
+        email: "user@example.com",
+      });
+      const appSettings = createMockAppSettings();
+      let resolveSync!: () => void;
+      const syncEngine = createMockSyncEngine();
+      vi.mocked(syncEngine.sync).mockImplementation(
+        () =>
+          new Promise<{ pulled: boolean; mergedNovels: number }>((resolve) => {
+            resolveSync = () => resolve({ pulled: true, mergedNovels: 0 });
+          }),
+      );
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+          syncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.authState.status).toBe("connected");
+      });
+
+      // 1回目の同期を開始
+      let promise1: Promise<void>;
+      act(() => {
+        promise1 = result.current.syncNow();
+      });
+
+      // 2回目の同期を即座に呼び出す（ガードされる）
+      await act(async () => {
+        await result.current.syncNow();
+      });
+
+      expect(syncEngine.sync).toHaveBeenCalledTimes(1);
+
+      // 1回目の同期を完了
+      await act(async () => {
+        resolveSync();
+        await promise1!;
+      });
+
+      expect(result.current.isSyncing).toBe(false);
+    });
+
+    it("signOut 操作中に syncNow が呼び出された場合、isOperating ガードにより早期リターンすること (R1-35)", async () => {
+      let resolveSignOut!: () => void;
+      const bridge = createMockBridge({
+        status: "connected",
+        email: "user@example.com",
+      });
+      vi.mocked(bridge.signOut).mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveSignOut = resolve;
+          }),
+      );
+      const appSettings = createMockAppSettings();
+      const syncEngine = createMockSyncEngine();
+
+      const { result } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+          syncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.authState.status).toBe("connected");
+      });
+
+      // signOut 操作を開始
+      let signOutPromise: Promise<void>;
+      act(() => {
+        signOutPromise = result.current.signOut();
+      });
+
+      // 操作中に syncNow を呼ぶ（ガードされる）
+      await act(async () => {
+        await result.current.syncNow();
+      });
+
+      expect(syncEngine.sync).not.toHaveBeenCalled();
+
+      // signOut を完了
+      await act(async () => {
+        resolveSignOut();
+        await signOutPromise!;
+      });
     });
 
     it("syncNow 実行中に 401 Unauthorized エラーが発生した場合、自動的に未連携へフォールバックし通知されること (AC-ST-11)", async () => {

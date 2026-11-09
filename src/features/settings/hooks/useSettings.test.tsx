@@ -207,6 +207,47 @@ describe("useSettings", () => {
         writingMode: "vertical-rl",
       });
     });
+
+    it("toggleWritingMode 実行中に再度呼び出された場合、多重発火がガードされること (R1-35)", async () => {
+      let resolveUpdate: () => void = () => {};
+      const updatePromise = new Promise<void>((resolve) => {
+        resolveUpdate = () => resolve();
+      });
+      const updateReaderSettings = vi.fn().mockReturnValue(updatePromise);
+      const services = createMockServices({
+        settingsRepoOverrides: { updateReaderSettings },
+      });
+
+      const { result } = renderHook(() => useSettings(), {
+        wrapper: createWrapper(services),
+      });
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      // 1回目のトグル開始（未完了）
+      let promise1: Promise<void>;
+      act(() => {
+        promise1 = result.current.toggleWritingMode();
+      });
+
+      // 2回目のトグル（多重発火）
+      let promise2: Promise<void>;
+      act(() => {
+        promise2 = result.current.toggleWritingMode();
+      });
+
+      // 1回目の未完了中に 2 回目はガードされる
+      expect(updateReaderSettings).toHaveBeenCalledTimes(1);
+
+      // 完了させる
+      await act(async () => {
+        resolveUpdate();
+        await promise1!;
+        await promise2!;
+      });
+
+      expect(updateReaderSettings).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("カラーテーマ切替 (changeTheme)", () => {
@@ -580,6 +621,47 @@ describe("useSettings", () => {
 
       expect(result.current.error).toBe("Volume key paging save error");
       expect(result.current.enableVolumeKeyPaging).toBe(false);
+    });
+
+    it("toggleVolumeKeyPaging 実行中に再度呼び出された場合、多重発火がガードされること (R1-35)", async () => {
+      let resolveUpdate: () => void = () => {};
+      const updatePromise = new Promise<void>((resolve) => {
+        resolveUpdate = () => resolve();
+      });
+      const updateReaderSettings = vi.fn().mockReturnValue(updatePromise);
+      const services = createMockServices({
+        settingsRepoOverrides: { updateReaderSettings },
+      });
+
+      const { result } = renderHook(() => useSettings(), {
+        wrapper: createWrapper(services),
+      });
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      // 1回目のトグル開始（未完了）
+      let promise1: Promise<void>;
+      act(() => {
+        promise1 = result.current.toggleVolumeKeyPaging();
+      });
+
+      // 2回目のトグル（多重発火）
+      let promise2: Promise<void>;
+      act(() => {
+        promise2 = result.current.toggleVolumeKeyPaging();
+      });
+
+      // 1回目の未完了中に 2 回目はガードされる
+      expect(updateReaderSettings).toHaveBeenCalledTimes(1);
+
+      // 完了させる
+      await act(async () => {
+        resolveUpdate();
+        await promise1!;
+        await promise2!;
+      });
+
+      expect(updateReaderSettings).toHaveBeenCalledTimes(1);
     });
   });
 

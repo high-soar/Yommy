@@ -425,6 +425,7 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
         onPointerCancel={handleTouchZonePointerCancel}
         onKeyDown={handleTouchZoneKeyDown}
         aria-label="下部ナビゲーション表示"
+        aria-expanded={isOpen}
         role="button"
         tabIndex={0}
       />
