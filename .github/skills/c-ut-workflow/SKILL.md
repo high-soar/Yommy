@@ -92,6 +92,12 @@ MK 作業はファイル編集数やテスト・VRT 実行ログが多く、メ�
     - `novels.updated_at`（および React State の `novel.updatedAt`）はユーザーの明示的な作品設定変更時のみ更新し、定常処理（目次更新・しおり・本文キャッシュ・再集計・`startBatchCache` ループ）で更新しないこと。また `SyncEngine.mergeNewNovel` 初回 Pull 時は `createdAt` / `updatedAt` の双方を復元し、IT（`SCN-03`, `SCN-05`）では `T1 < T2 < now` タイムラインで定常処理後の LWW 勝敗を検証すること。
     - 外部サイト検索フィルタ実装時は複合クエリパラメータ（カクヨム短編の `serial_status=completed&total_character_count_range=-20000` 等）を実サイト仕様で確認し、`useNovelSearch.loadMore` は `committedQueryRef` の確定条件を使用、IT（`SCN-02`）では `expect.poll` で送信 URL クエリパラメータ実体を全種別アサートすること。
     - 375px モバイル狭幅ヘッダーの補助フィルタボタンはアイコンのみ（`★`/`☆` ＋ `aria-label`）＋ `shrink-0 whitespace-nowrap` とし、トグルボタンは ON/OFF 双方で常時 1px `border` と固定文字数ラベル（`★ お気に入り` / `☆ お気に入り`）を維持して 2px 高さ変化や横幅ちらつきを防止すること。また折りたたみパネルの `aria-controls` は `useId()` を用い展開時のみ出力し、非同期トグル操作には作品 ID 単位（`Set<string>` ref）または操作単位の連打排他ガードを設けること。
+  - **WebView DOM インポート・永続キュー一括キャッシュ・Android ネイティブ安全性・結合テスト状態収束（原因 `L`/`D`/`S` 再発防止: `v0.9 Kaizen`）**:
+    - `useWebViewImport` では `canonicalUrl` 完全一致検証と話数解決の安全ガード（別話上書き遮断）を設け、`isMountedRef` による画面離脱時の非同期 State 更新遮断および Bridge クリーンアップ（`close()`）呼び出し、`httpClient` 未渡下時の non-null アサーション排除と防御的フォールバックを徹底すること。
+    - Android ネイティブの WebView 拡張プラグイン（`WebViewDomPlugin.java`）では `setAllowFileAccess(false)`, `setAllowContentAccess(false)`、大文字小文字非依存スキーム判定、Dialog 閉鎖時/破棄時の `destroy()` 解放、および `domCaptured` リスナーの確実なバインドを行うこと。
+    - 一括キャッシュ進行中のヘッダー表示（`NovelDetailHeader`）には `[失敗 N話]` を警告色（アンバー）でリアルタイム表示し、`startBatchCache` 開始時に前回の失敗状態（`setFailedCacheCount(0)`, `setFailedChapterIndexes([])`）を確実にリセットすること。
+    - 非同期永続化（一括キャッシュ、再試行、キュー更新）の結合テスト（IT）では固定待機 `waitForTimeout` を排除し、`expect.poll` による状態駆動アサーションに一本化すること。
+    - 共通子コンポーネント（`BottomTabBar` 等）を持つ親コンポーネントのテストでは、隠し要素による検証を排除し、直下の子への Props 配線検証のみを行う親子分離を徹底すること。
   - `*.test.tsx` で `composeStories` による全 Story 実行＋内部ロジック補完テストを記述する。
 - **失敗確認とコミット**: `npx vitest run <対象テスト>` を実行し、未実装により期待通り失敗することを確認して `test(<scope>): ...（Red）` をコミットする。
 
