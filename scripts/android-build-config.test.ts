@@ -348,5 +348,27 @@ describe("Android ビルド設定および署名・バージョン管理検証 (
       expect(content).toMatch(/evaluateJavascript/);
       expect(content).toMatch(/document\.documentElement\.outerHTML/);
     });
+
+    it("shouldOverrideUrlLoading で request == null || request.getUrl() == null を安全に遮断していること (R1-41)", () => {
+      const content = fs.readFileSync(webViewDomPluginPath, "utf-8");
+
+      expect(content).toMatch(
+        /request\s*==\s*null\s*\|\|\s*request\.getUrl\(\)\s*==\s*null/,
+      );
+    });
+
+    it("evaluateJavascript のコールバック内で webView == null の NPE 防止ガードが存在すること (R1-22)", () => {
+      const content = fs.readFileSync(webViewDomPluginPath, "utf-8");
+
+      expect(content).toMatch(
+        /evaluateJavascript\([\s\S]*?if\s*\(\s*webView\s*==\s*null\s*\)/,
+      );
+    });
+
+    it("captureDom で webView が null の場合でもキャッシュから安全に復元するガードが存在すること (R1-41)", () => {
+      const content = fs.readFileSync(webViewDomPluginPath, "utf-8");
+
+      expect(content).toMatch(/lastCapturedHtml/);
+    });
   });
 });

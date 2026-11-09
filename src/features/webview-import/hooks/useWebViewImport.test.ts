@@ -607,6 +607,303 @@ describe("useWebViewImport", () => {
       expect(mockNarouParser.parseChapterContent).toHaveBeenCalled();
       expect(mockChapterRepo.saveChapterBody).toHaveBeenCalled();
     });
+
+    it("nextTocPageUrl !== null の複数ページ目次インポート時、fetchFullNovelIndex を介して全話取得して保存すること (R1-01)", async () => {
+      bridge.setMockPage({
+        html: "<html><body>1ページ目</body></html>",
+        url: "https://ncode.syosetu.com/n9669bk/",
+        title: "複数ページ連載作品",
+      });
+
+      const mockIndexP1: ParsedNovelIndex = {
+        siteType: "narou",
+        remoteWorkId: "n9669bk",
+        canonicalUrl: "https://ncode.syosetu.com/n9669bk/",
+        title: "複数ページ連載作品",
+        author: "作者",
+        synopsis: "",
+        chapters: [
+          {
+            chapterIndex: 1,
+            remoteChapterId: "1",
+            partTitle: null,
+            title: "第1話",
+            url: "https://ncode.syosetu.com/n9669bk/1/",
+            publishedAt: null,
+          },
+        ],
+        nextTocPageUrl: "https://ncode.syosetu.com/n9669bk/?p=2",
+      };
+
+      const mockFullIndex: ParsedNovelIndex = {
+        ...mockIndexP1,
+        chapters: [
+          ...mockIndexP1.chapters,
+          {
+            chapterIndex: 2,
+            remoteChapterId: "2",
+            partTitle: null,
+            title: "第2話",
+            url: "https://ncode.syosetu.com/n9669bk/2/",
+            publishedAt: null,
+          },
+        ],
+        nextTocPageUrl: null,
+      };
+
+      (
+        mockNarouParser.parseNovelIndex as ReturnType<typeof vi.fn>
+      ).mockReturnValue(mockIndexP1);
+
+      const mockFetchFull = vi.fn().mockResolvedValue(mockFullIndex);
+
+      const { result } = renderHook(() =>
+        useWebViewImport({
+          initialUrl: "https://ncode.syosetu.com/n9669bk/",
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          parserRegistry: mockParserRegistry,
+          httpClient: mockHttpClient,
+          fetchFullNovelIndex: mockFetchFull,
+        }),
+      );
+
+      let importResult: unknown = null;
+      await act(async () => {
+        importResult = await result.current.importCurrentDom();
+      });
+
+      expect(mockFetchFull).toHaveBeenCalledWith(
+        mockHttpClient,
+        mockNarouParser,
+        "https://ncode.syosetu.com/n9669bk/",
+      );
+      expect(mockNovelRepo.upsertNovelWithToc).toHaveBeenCalledWith(
+        mockFullIndex,
+        expect.any(String),
+      );
+      expect(importResult).not.toBeNull();
+    });
+
+    it("fetchFullNovelIndex が未指定の場合、デフォルトの fetchFullNovelIndex 実装が使用されること (R1-01)", async () => {
+      bridge.setMockPage({
+        html: "<html><body>1ページ目</body></html>",
+        url: "https://ncode.syosetu.com/n9669bk/",
+        title: "複数ページ連載作品",
+      });
+
+      const mockIndexP1: ParsedNovelIndex = {
+        siteType: "narou",
+        remoteWorkId: "n9669bk",
+        canonicalUrl: "https://ncode.syosetu.com/n9669bk/",
+        title: "複数ページ連載作品",
+        author: "作者",
+        synopsis: "",
+        chapters: [],
+        nextTocPageUrl: "https://ncode.syosetu.com/n9669bk/?p=2",
+      };
+
+      (
+        mockNarouParser.parseNovelIndex as ReturnType<typeof vi.fn>
+      ).mockReturnValue(mockIndexP1);
+
+      (mockHttpClient.getHtml as ReturnType<typeof vi.fn>).mockResolvedValue({
+        status: 200,
+        url: "https://ncode.syosetu.com/n9669bk/",
+        headers: {},
+        html: "<html>目次</html>",
+      });
+
+      // fetchFullNovelIndex を省略してフックを初期化
+      const { result } = renderHook(() =>
+        useWebViewImport({
+          initialUrl: "https://ncode.syosetu.com/n9669bk/",
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          parserRegistry: mockParserRegistry,
+          httpClient: mockHttpClient,
+        }),
+      );
+
+      let importResult: unknown = null;
+      await act(async () => {
+        importResult = await result.current.importCurrentDom();
+      });
+
+      expect(mockNovelRepo.upsertNovelWithToc).toHaveBeenCalled();
+      expect(importResult).not.toBeNull();
+    });
+
+    it("キャプチャ URL に ?p=2 等のページ指定がある場合、fetchFullNovelIndex を介して全話取得して保存すること (R1-01)", async () => {
+      bridge.setMockPage({
+        html: "<html><body>2ページ目</body></html>",
+        url: "https://ncode.syosetu.com/n9669bk/?p=2",
+        title: "複数ページ連載作品 2ページ目",
+      });
+
+      const mockIndexP2: ParsedNovelIndex = {
+        siteType: "narou",
+        remoteWorkId: "n9669bk",
+        canonicalUrl: "https://ncode.syosetu.com/n9669bk/",
+        title: "複数ページ連載作品",
+        author: "作者",
+        synopsis: "",
+        chapters: [
+          {
+            chapterIndex: 2,
+            remoteChapterId: "2",
+            partTitle: null,
+            title: "第2話",
+            url: "https://ncode.syosetu.com/n9669bk/2/",
+            publishedAt: null,
+          },
+        ],
+        nextTocPageUrl: null,
+      };
+
+      const mockFullIndex: ParsedNovelIndex = {
+        ...mockIndexP2,
+        chapters: [
+          {
+            chapterIndex: 1,
+            remoteChapterId: "1",
+            partTitle: null,
+            title: "第1話",
+            url: "https://ncode.syosetu.com/n9669bk/1/",
+            publishedAt: null,
+          },
+          ...mockIndexP2.chapters,
+        ],
+        nextTocPageUrl: null,
+      };
+
+      (
+        mockNarouParser.parseNovelIndex as ReturnType<typeof vi.fn>
+      ).mockReturnValue(mockIndexP2);
+
+      const mockFetchFull = vi.fn().mockResolvedValue(mockFullIndex);
+
+      const { result } = renderHook(() =>
+        useWebViewImport({
+          initialUrl: "https://ncode.syosetu.com/n9669bk/?p=2",
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          parserRegistry: mockParserRegistry,
+          httpClient: mockHttpClient,
+          fetchFullNovelIndex: mockFetchFull,
+        }),
+      );
+
+      let importResult: unknown = null;
+      await act(async () => {
+        importResult = await result.current.importCurrentDom();
+      });
+
+      expect(mockFetchFull).toHaveBeenCalledWith(
+        mockHttpClient,
+        mockNarouParser,
+        "https://ncode.syosetu.com/n9669bk/",
+      );
+      expect(mockNovelRepo.upsertNovelWithToc).toHaveBeenCalledWith(
+        mockFullIndex,
+        expect.any(String),
+      );
+      expect(importResult).not.toBeNull();
+    });
+
+    it("複数ページ目次であるにもかかわらず httpClient が未渡下の場合、エラーを設定して中断すること (R1-01)", async () => {
+      bridge.setMockPage({
+        html: "<html><body>1ページ目</body></html>",
+        url: "https://ncode.syosetu.com/n9669bk/",
+        title: "複数ページ連載作品",
+      });
+
+      const mockIndexP1: ParsedNovelIndex = {
+        siteType: "narou",
+        remoteWorkId: "n9669bk",
+        canonicalUrl: "https://ncode.syosetu.com/n9669bk/",
+        title: "複数ページ連載作品",
+        author: "作者",
+        synopsis: "",
+        chapters: [],
+        nextTocPageUrl: "https://ncode.syosetu.com/n9669bk/?p=2",
+      };
+
+      (
+        mockNarouParser.parseNovelIndex as ReturnType<typeof vi.fn>
+      ).mockReturnValue(mockIndexP1);
+
+      const { result } = renderHook(() =>
+        useWebViewImport({
+          initialUrl: "https://ncode.syosetu.com/n9669bk/",
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          parserRegistry: mockParserRegistry,
+          // httpClient 未渡下
+        }),
+      );
+
+      let importResult: unknown = null;
+      await act(async () => {
+        importResult = await result.current.importCurrentDom();
+      });
+
+      expect(importResult).toBeNull();
+      expect(result.current.error).toBe(
+        "複数ページ目次の取得にはネットワーク接続が必要です",
+      );
+    });
+
+    it("複数ページ目次の fetchFullNovelIndex が例外を送出した場合、エラーを設定して中断すること (R1-01)", async () => {
+      bridge.setMockPage({
+        html: "<html><body>1ページ目</body></html>",
+        url: "https://ncode.syosetu.com/n9669bk/",
+        title: "複数ページ連載作品",
+      });
+
+      const mockIndexP1: ParsedNovelIndex = {
+        siteType: "narou",
+        remoteWorkId: "n9669bk",
+        canonicalUrl: "https://ncode.syosetu.com/n9669bk/",
+        title: "複数ページ連載作品",
+        author: "作者",
+        synopsis: "",
+        chapters: [],
+        nextTocPageUrl: "https://ncode.syosetu.com/n9669bk/?p=2",
+      };
+
+      (
+        mockNarouParser.parseNovelIndex as ReturnType<typeof vi.fn>
+      ).mockReturnValue(mockIndexP1);
+
+      const mockFetchFull = vi
+        .fn()
+        .mockRejectedValue(new Error("Network timeout"));
+
+      const { result } = renderHook(() =>
+        useWebViewImport({
+          initialUrl: "https://ncode.syosetu.com/n9669bk/",
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          parserRegistry: mockParserRegistry,
+          httpClient: mockHttpClient,
+          fetchFullNovelIndex: mockFetchFull,
+        }),
+      );
+
+      let importResult: unknown = null;
+      await act(async () => {
+        importResult = await result.current.importCurrentDom();
+      });
+
+      expect(importResult).toBeNull();
+      expect(result.current.error).toBe("複数ページ目次の取得に失敗しました");
+    });
   });
 
   describe("各話エピソード（本文）DOM インポート保存 (AC-WV-06, TR-11)", () => {
@@ -1169,6 +1466,24 @@ describe("useWebViewImport", () => {
       expect(closeSpy).not.toHaveBeenCalled();
       unmount();
       expect(closeSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("画面アンマウント時に webViewDomBridge.close() が例外を reject した場合でも unhandled rejection にならず安全に catch されること (R1-45)", () => {
+      vi.spyOn(bridge, "close").mockRejectedValue(
+        new Error("Bridge close error"),
+      );
+
+      const { unmount } = renderHook(() =>
+        useWebViewImport({
+          initialUrl: sampleNovel.canonicalUrl,
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          parserRegistry: mockParserRegistry,
+        }),
+      );
+
+      expect(() => unmount()).not.toThrow();
     });
 
     it("未登録作品エピソードで fetchFullNovelIndex が未指定の場合、エラーとなること", async () => {

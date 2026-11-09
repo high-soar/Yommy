@@ -42,13 +42,16 @@ export class CapacitorVolumeKeyBridge implements VolumeKeyBridge {
       "volumeKeyEvent",
       listener,
     );
+    void handlePromise.catch(() => {});
 
     return () => {
       if (isRemoved) return;
       isRemoved = true;
-      void handlePromise.then((handle) => {
-        void handle.remove();
-      });
+      void handlePromise
+        .then((handle) => {
+          void handle.remove().catch(() => {});
+        })
+        .catch(() => {});
     };
   }
 }

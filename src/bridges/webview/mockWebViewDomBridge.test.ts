@@ -10,10 +10,14 @@ describe("MockWebViewDomBridge", () => {
   });
 
   describe("canHandle", () => {
-    it("http: および https: の安全なURLに対して true を返却すること", () => {
+    it("https: の安全なURLに対して true を返却すること", () => {
       expect(bridge.canHandle("https://kakuyomu.jp/works/123")).toBe(true);
-      expect(bridge.canHandle("http://example.com/page")).toBe(true);
+      expect(bridge.canHandle("https://example.com/page")).toBe(true);
       expect(bridge.canHandle("https://ncode.syosetu.com/n1234/")).toBe(true);
+    });
+
+    it("http: を含む非 https スキームに対して false を返却すること", () => {
+      expect(bridge.canHandle("http://example.com/page")).toBe(false);
     });
 
     it("危険なスキーム（javascript:, data:, file:, intent: 等）に対して false を返却すること", () => {

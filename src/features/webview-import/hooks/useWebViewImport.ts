@@ -6,6 +6,7 @@ import type {
 } from "../types";
 import type { NovelRecord } from "../../../storage/types";
 import type { CapturedDomResult } from "../../../bridges/webview/types";
+import { fetchFullNovelIndex as defaultFetchFullNovelIndex } from "../../../parsers/fetchFullNovelIndex";
 
 /**
  * 対象 URL が各話エピソード（本文）ページか判定する
@@ -56,7 +57,7 @@ export function useWebViewImport({
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      void webViewDomBridge.close();
+      void Promise.resolve(webViewDomBridge.close()).catch(() => {});
     };
   }, [webViewDomBridge]);
 
@@ -158,10 +159,41 @@ export function useWebViewImport({
 
           if (!isChapter) {
             // 1. 作品トップ（目次）インポート
-            const novelIndex = parser.parseNovelIndex(
+            let novelIndex = parser.parseNovelIndex(
               captured.html,
               captured.url,
             );
+
+            // 複数ページ目次判定（nextTocPageUrl !== null または URL にページ指定がある場合） (R1-01)
+            const hasMultiplePages = Boolean(
+              novelIndex.nextTocPageUrl !== null ||
+              /[?&]p=\d+/i.test(captured.url),
+            );
+
+            if (hasMultiplePages) {
+              if (!httpClient) {
+                if (isMountedRef.current) {
+                  setError(
+                    "複数ページ目次の取得にはネットワーク接続が必要です",
+                  );
+                }
+                return null;
+              }
+              const fetchFn = fetchFullNovelIndex ?? defaultFetchFullNovelIndex;
+              try {
+                novelIndex = await fetchFn(
+                  httpClient,
+                  parser,
+                  novelIndex.canonicalUrl,
+                );
+              } catch {
+                if (isMountedRef.current) {
+                  setError("複数ページ目次の取得に失敗しました");
+                }
+                return null;
+              }
+            }
+
             const now = new Date().toISOString();
             const savedNovel = await novelRepository.upsertNovelWithToc(
               novelIndex,

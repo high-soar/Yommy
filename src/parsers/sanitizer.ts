@@ -65,7 +65,9 @@ function cleanNode(node: Node): void {
   // 許可タグの場合の属性フィルタリング
   if (ALLOWED_TAGS.has(tagName)) {
     if (tagName === "em") {
-      const hasBouten = el.classList.contains("bouten");
+      const hasBouten =
+        el.classList.contains("bouten") ||
+        el.classList.contains("emphasisDots");
       while (el.attributes.length > 0) {
         el.removeAttribute(el.attributes[0].name);
       }

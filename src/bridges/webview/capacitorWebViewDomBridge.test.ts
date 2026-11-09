@@ -26,10 +26,10 @@ describe("CapacitorWebViewDomBridge", () => {
   });
 
   describe("canHandle", () => {
-    it("http: および https: の安全なURLに対して true を返却すること", () => {
+    it("https: の安全なURLに対して true を返却し、平文 http: は false を返却すること (R1-23)", () => {
       expect(bridge.canHandle("https://kakuyomu.jp/works/123")).toBe(true);
-      expect(bridge.canHandle("http://example.com/novel/1")).toBe(true);
       expect(bridge.canHandle("https://ncode.syosetu.com/n12345/")).toBe(true);
+      expect(bridge.canHandle("http://example.com/novel/1")).toBe(false);
     });
 
     it("危険なスキーム（javascript:, data:, file:, intent: 等）に対して false を返却すること", () => {
@@ -204,6 +204,31 @@ describe("CapacitorWebViewDomBridge", () => {
 
       const unsubscribe = bridge.addDomCapturedListener(vi.fn());
       expect(() => unsubscribe()).not.toThrow();
+    });
+
+    it("addListener や remove が例外を reject した場合でも unhandled rejection にならず安全に catch されること (R1-45)", async () => {
+      const mockRemove = vi
+        .fn()
+        .mockRejectedValue(new Error("Native remove error"));
+      const addListenerMock = vi.fn().mockResolvedValue({ remove: mockRemove });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (WebViewDomNative as any).addListener = addListenerMock;
+
+      const unsubscribe = bridge.addDomCapturedListener(vi.fn());
+      await Promise.resolve();
+
+      expect(() => unsubscribe()).not.toThrow();
+      await Promise.resolve();
+
+      // addListener が reject する場合
+      const failingAddListenerMock = vi
+        .fn()
+        .mockRejectedValue(new Error("Native addListener error"));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (WebViewDomNative as any).addListener = failingAddListenerMock;
+
+      expect(() => bridge.addDomCapturedListener(vi.fn())).not.toThrow();
+      await Promise.resolve();
     });
   });
 });

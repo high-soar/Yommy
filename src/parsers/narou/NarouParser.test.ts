@@ -257,12 +257,42 @@ describe("NarouParser", () => {
       );
     });
 
-    it("2ページ目（最終ページ）では nextTocPageUrl が null であること", () => {
+    it("2ページ目（最終ページ）では nextTocPageUrl が null であり、chapterIndex が remoteChapterId に基づいて正しく導出されること (R1-01)", () => {
       const html = loadFixture("work_index_page2.html");
       const pageUrl = "https://ncode.syosetu.com/n9669bk/?p=2";
       const result = parser.parseNovelIndex(html, pageUrl);
 
       expect(result.nextTocPageUrl).toBeNull();
+      expect(result.chapters[0].remoteChapterId).toBe("4");
+      expect(result.chapters[0].chapterIndex).toBe(4);
+      expect(result.chapters[1].remoteChapterId).toBe("5");
+      expect(result.chapters[1].chapterIndex).toBe(5);
+    });
+
+    it("目次項目にエピソードIDを抽出できない壊れたリンクが含まれる場合は除外すること (R1-09)", () => {
+      const html = `
+        <!DOCTYPE html><html><body>
+          <div class="p-novel"><h1 class="p-novel__title">テスト作品</h1></div>
+          <div class="p-eplist">
+            <div class="p-eplist__sublist"><a class="p-eplist__subtitle" href="/n9669bk/1/">第1話</a></div>
+            <div class="p-eplist__sublist"><a class="p-eplist__subtitle" href="/n9669bk/">壊れたリンク</a></div>
+            <div class="p-eplist__sublist"><a class="p-eplist__subtitle" href="/invalid/path/">無関係リンク</a></div>
+            <div class="p-eplist__sublist"><a class="p-eplist__subtitle" href="/n9669bk/0/">第0話（フォールバック）</a></div>
+            <div class="p-eplist__sublist"><a class="p-eplist__subtitle" href="/n9669bk/2/">第2話</a></div>
+          </div>
+        </body></html>
+      `;
+      const result = parser.parseNovelIndex(
+        html,
+        "https://ncode.syosetu.com/n9669bk/",
+      );
+      expect(result.chapters).toHaveLength(3);
+      expect(result.chapters[0].remoteChapterId).toBe("1");
+      expect(result.chapters[0].chapterIndex).toBe(1);
+      expect(result.chapters[1].remoteChapterId).toBe("0");
+      expect(result.chapters[1].chapterIndex).toBe(1); // chapterIndex++ フォールバック
+      expect(result.chapters[2].remoteChapterId).toBe("2");
+      expect(result.chapters[2].chapterIndex).toBe(2);
     });
 
     it("次ページリンクが外部ドメイン、http、別作品パス、18禁サイトの場合は null にすること (SSRF防止)", () => {
@@ -737,7 +767,7 @@ describe("NarouParser", () => {
       expect(result.bodyHtml).not.toContain("────────────");
     });
 
-    it("目次アイテムのリンクに href 属性がない場合やエピソードIDが数字でない場合、日付がマッチしない場合のハンドリング", () => {
+    it("目次アイテムのリンクに href 属性がない場合やエピソードIDが数字でない場合除外され、日付がマッチしない場合は publishedAt が null になること (R1-09)", () => {
       const html = `
         <!DOCTYPE html><html><body>
           <h1 class="p-novel__title">作品</h1>
@@ -747,6 +777,10 @@ describe("NarouParser", () => {
               <a class="p-eplist__subtitle" href="/n9669bk/abc/">数字なし</a>
               <div class="p-eplist__update">更新未定</div>
             </div>
+            <div class="p-eplist__sublist">
+              <a class="p-eplist__subtitle" href="/n9669bk/1/">有効エピソード</a>
+              <div class="p-eplist__update">更新未定</div>
+            </div>
           </div>
         </body></html>
       `;
@@ -754,10 +788,9 @@ describe("NarouParser", () => {
         html,
         "https://ncode.syosetu.com/n9669bk/",
       );
-      expect(result.chapters).toHaveLength(2);
-      expect(result.chapters[0].remoteChapterId).toBe("");
-      expect(result.chapters[1].remoteChapterId).toBe("");
-      expect(result.chapters[1].publishedAt).toBeNull();
+      expect(result.chapters).toHaveLength(1);
+      expect(result.chapters[0].remoteChapterId).toBe("1");
+      expect(result.chapters[0].publishedAt).toBeNull();
     });
 
     it("meta タグに content 属性が存在しない場合のハンドリング", () => {

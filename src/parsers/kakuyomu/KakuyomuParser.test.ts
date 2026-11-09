@@ -43,6 +43,13 @@ describe("KakuyomuParser", () => {
       expect(parser.canParse("https://kakuyomu.jp/users/onozaki")).toBe(false);
       expect(parser.canParse("not-a-valid-url")).toBe(false);
       expect(parser.canParse("")).toBe(false);
+      expect(
+        parser.canParse("javascript:alert(1)//kakuyomu.jp/works/12345"),
+      ).toBe(false);
+      expect(parser.canParse("file:///kakuyomu.jp/works/12345")).toBe(false);
+      expect(parser.canParse("data:text/html;kakuyomu.jp/works/12345")).toBe(
+        false,
+      );
     });
 
     it("作品トップ URL・エピソード URL・クエリやハッシュ付き URL を作品トップ URL へ正規化すること", () => {
@@ -475,6 +482,53 @@ describe("KakuyomuParser", () => {
         "https://kakuyomu.jp/works/1177354054881162325/episodes/1177354054881162328",
       );
       expect(result.nextChapterUrl).toBeNull();
+    });
+
+    it("前後話リンクが外部ドメインや非 https スキーム、不正文字列の場合は null にすること (R1-20)", () => {
+      const html = `
+        <html><body>
+          <h1 class="widget-episodeTitle">エピソード</h1>
+          <div class="widget-episodeBody"><p>本文</p></div>
+          <a id="contentMain-previousEpisode" href="https://evil.com/works/1/episodes/0">前話</a>
+          <a id="contentMain-nextEpisode" href="javascript:alert(1)">次話</a>
+        </body></html>
+      `;
+      const result = parser.parseChapterContent(
+        html,
+        "https://kakuyomu.jp/works/1/episodes/1",
+      );
+      expect(result.prevChapterUrl).toBeNull();
+      expect(result.nextChapterUrl).toBeNull();
+
+      // URL コンストラクタ自体が例外を送出する不正な href
+      const htmlMalformed = `
+        <html><body>
+          <h1 class="widget-episodeTitle">エピソード</h1>
+          <div class="widget-episodeBody"><p>本文</p></div>
+          <a id="contentMain-previousEpisode" href="http://[invalid-ipv6">前話</a>
+        </body></html>
+      `;
+      const resultMalformed = parser.parseChapterContent(
+        htmlMalformed,
+        "https://kakuyomu.jp/works/1/episodes/1",
+      );
+      expect(resultMalformed.prevChapterUrl).toBeNull();
+    });
+
+    it("本文中のカクヨム傍点 markup (em.emphasisDots) を em.bouten に正規化すること (R1-42)", () => {
+      const html = `
+        <html><body>
+          <h1 class="widget-episodeTitle">傍点テスト</h1>
+          <div class="widget-episodeBody"><p>ここが<em class="emphasisDots">傍点文字</em>です</p></div>
+        </body></html>
+      `;
+      const result = parser.parseChapterContent(
+        html,
+        "https://kakuyomu.jp/works/1/episodes/1",
+      );
+      expect(result.bodyHtml).toBe(
+        '<p>ここが<em class="bouten">傍点文字</em>です</p>',
+      );
     });
   });
 

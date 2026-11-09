@@ -3,7 +3,12 @@ import {
   CapacitorHttp,
   type HttpResponse as CapHttpResponse,
 } from "@capacitor/core";
-import { CapacitorHttpClient, HttpError } from "./capacitorHttpClient";
+import {
+  CapacitorHttpClient,
+  DEFAULT_HTTP_TIMEOUT_MS,
+  DEFAULT_USER_AGENT,
+  HttpError,
+} from "./capacitorHttpClient";
 
 vi.mock("@capacitor/core", () => ({
   CapacitorHttp: {
@@ -55,7 +60,7 @@ describe("CapacitorHttpClient", () => {
       });
     });
 
-    it("ヘッダーやタイムアウトが未指定の場合に余計なプロパティを設定せずに通信すること", async () => {
+    it("ヘッダーやタイムアウトが未指定の場合に既定の User-Agent と 15s タイムアウトを設定して通信すること (R1-08)", async () => {
       const getSpy = vi.spyOn(CapacitorHttp, "get").mockResolvedValueOnce({
         status: 200,
         url: "https://example.com/simple",
@@ -70,11 +75,36 @@ describe("CapacitorHttpClient", () => {
       expect(getSpy).toHaveBeenCalledWith({
         url: "https://example.com/simple",
         responseType: "text",
+        headers: { "User-Agent": DEFAULT_USER_AGENT },
+        connectTimeout: DEFAULT_HTTP_TIMEOUT_MS,
+        readTimeout: DEFAULT_HTTP_TIMEOUT_MS,
       });
       expect(res.status).toBe(200);
       expect(res.url).toBe("https://example.com/simple");
       expect(res.html).toBe("<p>シンプル</p>");
       expect(res.headers).toEqual({});
+    });
+
+    it("カスタム user-agent ヘッダー（小文字含む）が指定された場合は既定値を上書きすること", async () => {
+      const getSpy = vi.spyOn(CapacitorHttp, "get").mockResolvedValueOnce({
+        status: 200,
+        url: "https://example.com/custom",
+        data: "<p>カスタム</p>",
+        headers: {},
+      });
+
+      await client.getHtml({
+        url: "https://example.com/custom",
+        headers: { "user-agent": "MyCustomBot/2.0" },
+      });
+
+      expect(getSpy).toHaveBeenCalledWith({
+        url: "https://example.com/custom",
+        responseType: "text",
+        headers: { "user-agent": "MyCustomBot/2.0" },
+        connectTimeout: DEFAULT_HTTP_TIMEOUT_MS,
+        readTimeout: DEFAULT_HTTP_TIMEOUT_MS,
+      });
     });
 
     it("リダイレクト後の最終 URL が返された場合はその URL を採用すること", async () => {

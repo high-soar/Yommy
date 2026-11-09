@@ -37,20 +37,30 @@ function serializeData(data: unknown): string {
   return String(data);
 }
 
+export const DEFAULT_HTTP_TIMEOUT_MS = 15000;
+export const DEFAULT_USER_AGENT = "Yommy/1.0 (Android; WebNovelReader)";
+
 function buildHttpOptions(options: HttpRequestOptions): HttpOptions {
+  const timeoutMs =
+    typeof options.timeoutMs === "number"
+      ? options.timeoutMs
+      : DEFAULT_HTTP_TIMEOUT_MS;
+
+  const headers: Record<string, string> = { ...(options.headers || {}) };
+  const hasUserAgent = Object.keys(headers).some(
+    (key) => key.toLowerCase() === "user-agent",
+  );
+  if (!hasUserAgent) {
+    headers["User-Agent"] = DEFAULT_USER_AGENT;
+  }
+
   const httpOptions: HttpOptions = {
     url: options.url,
     responseType: "text",
+    headers,
+    connectTimeout: timeoutMs,
+    readTimeout: timeoutMs,
   };
-
-  if (options.headers) {
-    httpOptions.headers = options.headers;
-  }
-
-  if (typeof options.timeoutMs === "number") {
-    httpOptions.connectTimeout = options.timeoutMs;
-    httpOptions.readTimeout = options.timeoutMs;
-  }
 
   return httpOptions;
 }
