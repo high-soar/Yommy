@@ -2,8 +2,8 @@
 type: spec-requirements
 title: 全体要件定義・機能一覧・ロードマップ（App 全体正本）
 description: "Yommyのターゲット環境、小説サイト対応優先順位、全機能要件（SYS-REQ-01〜20）、およびミニMilestoneロードマップの正本。"
-status: "Review (#269)"
-updated: "2026-11-08"
+status: "Approved"
+updated: "2026-11-09"
 tags:
   - requirements
   - roadmap
@@ -61,6 +61,8 @@ tags:
   - ho-34
   - ho-35
 related_specs:
+  - docs/quality/reports/v0.9-persistent-queue-and-webview-fallback.md
+  - docs/quality/archive/v0.9-persistent-queue-and-webview-fallback-log.md
   - docs/specs/changes/archive/issue-269-webview-fallback-and-dom-import.md
   - docs/specs/features/webview-import.md
   - docs/specs/changes/archive/issue-268-persistent-download-queue.md
@@ -233,4 +235,4 @@ flowchart LR
 | **Milestone `v0.6`**<br>（Reader Animation, Overlay & Hardware Key UX） | リーダー水平スライドアニメーション（#201）、リーダー上下連動オーバーレイ＆RTLページシークバー（#202）、ハードウェア音量キーによるページ送り（#203）、および中間PRのAI自律マージ運用（#209）の実装と実機UX検証・完了精算（`HO-26`〜`HO-28`、#204）。                                                                                                                                                                                                                                                                        | `SYS-REQ-11（拡張）`, `12（拡張）`, `16（拡張）`                                                                                                                                                       |
 | **Milestone `v0.7`**<br>（Narou Site Support & Web Access Loading UX）  | Webアクセス発生時のローディング表示明示と操作重複抑止（#238）、小説家になろう（`NarouParser`）の作品情報・複数ページ目次連続取得・短編・本文・傍点正規化・クラウド同期対応（#239）、なろう検索・ランキング（なろう小説API JSON）および探索画面サイト切替 `SiteSelector`・サイト別ジャンル連動（#240）、全体横断レビュー是正（#259, #261）および実機検証完了精算（`HO-29`, `HO-30`、#241）。詳細: [v0.7 レポート](../quality/reports/v0.7-narou-site-support-and-loading-ux.md)。                                           | `SYS-REQ-01`〜`04（なろう・複数ページ目次拡張）`, `06（なろう同期拡張）`, `07（なろう傍点正規化）`, `11（未キャッシュ話遷移時ローディング明示 #238）`, `17`〜`19（なろう検索/ランキング・サイト切替）` |
 | **Milestone `v0.8`**<br>（探索フィルタ高度化 ＆ 本棚お気に入り管理）    | 高度検索フィルタ（除外キーワード・複数ジャンルピル、#264 / `HO-31`）、ランキング・検索の作品種別（すべて/短編/連載中/完結済、カクヨム短編検索 `total_character_count_range=-20000` 複合指定含む）フィルタ切替（#265）、作品のお気に入り（★）登録・クラウド同期双方向 LWW 連携と本棚お気に入りフィルタ機能（#266 / `HO-32`）、全体横断レビュー Round 1/2 是正（#288, #290）および実機検証完了精算（`HO-31`〜`HO-33`、#267）。詳細: [v0.8 レポート](../quality/reports/v0.8-discovery-filter-and-bookshelf-favorite-ux.md)。 | `SYS-REQ-04（拡張）`, `06（拡張）`, `17（拡張）`, `18（拡張）`                                                                                                                                         |
-| **Milestone `v0.9`**<br>（永続キュー ＆ WebView インポート）            | 永続ダウンロードキュー（`QueueRepository` / `download_queue`）の実装と一括キャッシュ中断再開・失敗話スキップ継続・再試行統合（#268 / `HO-34`）、および内蔵ブラウザ画面（`SCR-04`）と表示中 DOM インポート機能・フォールバック遷移（#269 / `HO-35`）。Yommy 全 7 画面（`SCR-01`〜`SCR-07`）および全システム要件（`SYS-REQ-01`〜`20`）のコンプリート。                                                                                                                                                                       | `SYS-REQ-02（拡張）`, `03（拡張）`, `05（拡張）`, `13`, `14`                                                                                                                                           |
+| **Milestone `v0.9`**<br>（永続キュー ＆ WebView インポート）            | 永続ダウンロードキュー（`QueueRepository` / `download_queue`）の実装と一括キャッシュ中断再開・失敗話スキップ継続・再試行統合（#268 / `HO-34`）、および内蔵ブラウザ画面（`SCR-04`）と表示中 DOM インポート機能・フォールバック遷移（#269 / `HO-35`）。Yommy 全 7 画面（`SCR-01`〜`SCR-07`）および全システム要件（`SYS-REQ-01`〜`20`）のコンプリート。詳細: [v0.9 レポート](../quality/reports/v0.9-persistent-queue-and-webview-fallback.md)。                                                                              | `SYS-REQ-02（拡張）`, `03（拡張）`, `05（拡張）`, `13`, `14`                                                                                                                                           |

@@ -3,7 +3,7 @@ type: guideline
 title: テスト・実装規律の正本（SSOT）
 description: Yommyの3層テスト体系（Parser/Storage/Viewer）、TDDコミット規約、1対1 Story/UT、親子分離、C0/C1 100%、縦書きVRT、および原因D設計同期ルールの正本。
 status: "Approved"
-updated: "2026-11-08"
+updated: "2026-11-09"
 tags: [testing, tdd, vrt, storybook, vitest, playwright, coverage]
 related_specs:
   - docs/index.md
@@ -191,6 +191,23 @@ Git Worktree を用いた並行開発やフォーク環境において、環境�
 4. **Markdown テーブル内のパイプ記号（`|`）禁止と原因 `D` 厳格分類（No. 234, 246, 261, 265: `R1-11`, `R2-03`, `R2-07` 再発防止）**:
    - Markdown テーブルセル内のインラインコードや本文では、Prettier 整形時の列分割破損を防ぐためパイプ記号（`|`）を使用せず、`/` 区切りや個別バッククォート併記（`` `A` / `B` ``）を使用すること。
    - バグ記録票において `docs/specs/` の正本仕様書修正を伴わないテスト・台帳・コメント修正は原因 `L` / `A` / `S` に分類し、原因 `D` に分類した項目には必ず具体的な設計書同期コミット SHA を記載すること。
+
+### 3.7 WebView DOM インポート・永続キュー一括キャッシュ・Android ネイティブ安全性・結合テスト状態収束規約（v0.9 Kaizen）
+
+1. **WebView DOM インポートにおける作品 URL 照合・エピソード一致検証と画面離脱保護（No. 284, 294, 295: `R1-01`, `R1-11`, `R1-12` 再発防止）**:
+   - `useWebViewImport` 等の外部 DOM インポート処理では、インポート対象作品の `canonicalUrl` 完全一致を厳密に検証し、またエピソード URL から対象話数が解決できない場合は別話の上書きを遮断して安全なエラーを返却すること。
+   - カスタム Hook 内で非同期通信（目次補完や本文保存）を行う際は、`isMountedRef` による画面離脱時の State 更新遮断を徹底し、アンマウント時にはネイティブ Bridge のクリーンアップ（`bridge.close()`）を呼び出すこと。また `httpClient` 等の依存オブジェクト未渡下時にも non-null アサーション（`!`）を用いず、防御的なフォールバックを設けること。
+2. **Android ネイティブプラグインのセキュリティ強化とライフサイクル連動破棄（No. 293, 303: `R1-10`, `R1-20` 再発防止）**:
+   - Android ネイティブの WebView 拡張プラグイン（`WebViewDomPlugin.java` 等）では、アプリ内部リソースやローカルファイルへの不正アクセスを防ぐため、`setAllowFileAccess(false)` および `setAllowContentAccess(false)` を明示的に設定すること。
+   - 読み込み URL の検証では、`HTTP:` / `HTTPS:` などの大文字スキーム入力でも安全に許可できるよう大文字小文字非依存の判定（`toLowerCase()` 等）を行い、`file:` や `content:` などの危険なスキームを確実に遮断すること。
+   - 全画面 Dialog 閉鎖時や Activity 破棄時には、WebView インスタンスを確実に解放（`destroy()`）し、JavaScript インジェクション用リスナー（`domCaptured`）の確実なバインド・破棄を行うこと。
+3. **一括キャッシュ進行中の失敗件数リアルタイム表示と前回の失敗状態クリア（No. 287, 306: `R1-04` 再発防止）**:
+   - 一括キャッシュ実行中に通信エラー等で各話取得失敗が発生した場合、画面ヘッダーの進捗表示（`NovelDetailHeader`）において `キャッシュ中 (${current}/${total}) [失敗 ${failedCacheCount}話]...` とリアルタイムに警告色（アンバー）で強調表示し、裏で全話失敗しているにもかかわらず正常進行しているように見える UX 誤認を防止すること。
+   - `startBatchCache` 実行開始時には、前回の失敗状態（`setFailedCacheCount(0)`, `setFailedChapterIndexes([])`）を確実にリセットし、再試行時に誤った過去の失敗数が残存しない状態管理規律を確立すること。
+4. **結合テスト（IT）における固定待機排除と状態駆動（`expect.poll`）アサーション（No. 292: `R1-09` 再発防止）**:
+   - 非同期永続化（SQLite 一括キャッシュ、再試行、ダウンロードキュー更新）を検証する E2E 結合テストにおいて、固定ミリ秒待機（`page.waitForTimeout` 等）による flake を排除し、`expect.poll` による決定論的状態収束待ち（キュー空、ステータス変更）を義務化すること。
+5. **UI コンポーネント単体テストにおける親子分離の徹底（No. 297: `R1-14` 再発防止）**:
+   - 複数画面共通の下部タブバー（`BottomTabBar`）等の子コンポーネントを配置する親コンポーネントのテストにおいて、不要な隠し要素（`browser-go-button` 等）による裏技的テストを排除し、親は「子コンポーネントへの Props 配線（`currentTab="browser"` 等）」のみを検証する親子分離規約を徹底すること。
 
 ---
 
