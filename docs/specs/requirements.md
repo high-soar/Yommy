@@ -2,11 +2,13 @@
 type: spec-requirements
 title: 全体要件定義・機能一覧・ロードマップ（App 全体正本）
 description: "Yommyのターゲット環境、小説サイト対応優先順位、全機能要件（SYS-REQ-01〜20）、およびミニMilestoneロードマップの正本。"
-status: "Approved"
+status: "Review (#304)"
 updated: "2026-11-09"
 tags:
   - requirements
   - roadmap
+  - milestone-v1.0
+  - release
   - kakuyomu
   - narou
   - reader
@@ -60,7 +62,9 @@ tags:
   - ho-33
   - ho-34
   - ho-35
+  - ho-36
 related_specs:
+  - docs/specs/changes/issue-304-v1-release-readiness.md
   - docs/quality/reports/v0.9-persistent-queue-and-webview-fallback.md
   - docs/quality/archive/v0.9-persistent-queue-and-webview-fallback-log.md
   - docs/specs/changes/archive/issue-269-webview-fallback-and-dom-import.md
@@ -220,8 +224,9 @@ flowchart LR
     M7["<b>Milestone v0.7 (Narou Site Support & Web Access Loading UX)</b><br>・Webアクセス時ローディング明示（#238）<br>・なろう目次/本文/複数ページ目次/同期（#239）<br>・なろう検索/ランキング＆サイト切替（#240）"]
     M8["<b>Milestone v0.8 (Search & Bookshelf Refinement)</b><br>・高度検索フィルタ（#264 / HO-31）<br>・作品種別フィルタ切替（#265）<br>・お気に入り登録＆フィルタ＆同期（#266 / HO-32）"]
     M9["<b>Milestone v0.9 (Persistent Queue & WebView Import)</b><br>・永続DLキュー＆一括キャッシュ再開/再試行（#268 / HO-34）<br>・内蔵WebView＆DOMインポート（#269 / HO-35）"]
+    M10["<b>Milestone v1.0 (Release Preparation & Quality Audit)</b><br>・バージョン1.0.0統一＆設定画面バージョン表示（#304）<br>・reference/撤去＆README.md正式化（#304）<br>・4領域ゼロベース全体横断監査＆実機総括検証（#305）"]
 
-    PoC --> M1 --> M2 --> M3 --> M4 --> M5 --> M6 --> M7 --> M8 --> M9
+    PoC --> M1 --> M2 --> M3 --> M4 --> M5 --> M6 --> M7 --> M8 --> M9 --> M10
 ```
 
 | フェーズ / Milestone                                                    | ゴールと対象画面・スコープ                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 主な対象要件 ID                                                                                                                                                                                        |
@@ -236,3 +241,4 @@ flowchart LR
 | **Milestone `v0.7`**<br>（Narou Site Support & Web Access Loading UX）  | Webアクセス発生時のローディング表示明示と操作重複抑止（#238）、小説家になろう（`NarouParser`）の作品情報・複数ページ目次連続取得・短編・本文・傍点正規化・クラウド同期対応（#239）、なろう検索・ランキング（なろう小説API JSON）および探索画面サイト切替 `SiteSelector`・サイト別ジャンル連動（#240）、全体横断レビュー是正（#259, #261）および実機検証完了精算（`HO-29`, `HO-30`、#241）。詳細: [v0.7 レポート](../quality/reports/v0.7-narou-site-support-and-loading-ux.md)。                                           | `SYS-REQ-01`〜`04（なろう・複数ページ目次拡張）`, `06（なろう同期拡張）`, `07（なろう傍点正規化）`, `11（未キャッシュ話遷移時ローディング明示 #238）`, `17`〜`19（なろう検索/ランキング・サイト切替）` |
 | **Milestone `v0.8`**<br>（探索フィルタ高度化 ＆ 本棚お気に入り管理）    | 高度検索フィルタ（除外キーワード・複数ジャンルピル、#264 / `HO-31`）、ランキング・検索の作品種別（すべて/短編/連載中/完結済、カクヨム短編検索 `total_character_count_range=-20000` 複合指定含む）フィルタ切替（#265）、作品のお気に入り（★）登録・クラウド同期双方向 LWW 連携と本棚お気に入りフィルタ機能（#266 / `HO-32`）、全体横断レビュー Round 1/2 是正（#288, #290）および実機検証完了精算（`HO-31`〜`HO-33`、#267）。詳細: [v0.8 レポート](../quality/reports/v0.8-discovery-filter-and-bookshelf-favorite-ux.md)。 | `SYS-REQ-04（拡張）`, `06（拡張）`, `17（拡張）`, `18（拡張）`                                                                                                                                         |
 | **Milestone `v0.9`**<br>（永続キュー ＆ WebView インポート）            | 永続ダウンロードキュー（`QueueRepository` / `download_queue`）の実装と一括キャッシュ中断再開・失敗話スキップ継続・再試行統合（#268 / `HO-34`）、および内蔵ブラウザ画面（`SCR-04`）と表示中 DOM インポート機能・フォールバック遷移（#269 / `HO-35`）。Yommy 全 7 画面（`SCR-01`〜`SCR-07`）および全システム要件（`SYS-REQ-01`〜`20`）のコンプリート。詳細: [v0.9 レポート](../quality/reports/v0.9-persistent-queue-and-webview-fallback.md)。                                                                              | `SYS-REQ-02（拡張）`, `03（拡張）`, `05（拡張）`, `13`, `14`                                                                                                                                           |
+| **Milestone `v1.0`**<br>（リリース整備 ＆ システム全体横断品質監査）    | バージョンメタデータ（`package.json`, `build.gradle`）の `1.0.0` 統一、設定画面（`SCR-05`）フッターでのアプリバージョン表示（`Yommy v1.0.0`）、初期立ち上げ一時ディレクトリ `reference/` の完全撤去、アイコン生成スクリプト厳格化、および `README.md` の正式版ドキュメント化（#304）。システム全体 4 領域（Parser/Bridge/Security, Storage/Sync, UI/Pagination/State, E2E/Architecture）ゼロベース横断品質監査、全画面実機総括検証、および Phase 3 PoC からの全期間品質分析レポート（Kaizen）・v1.0 最終承認（#305）。     | `SYS-REQ-15（アイコン生成厳格化）`, `SYS-REQ-16（設定画面バージョン表示 #304）`                                                                                                                        |

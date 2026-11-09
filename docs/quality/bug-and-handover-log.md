@@ -6,6 +6,7 @@ status: "Approved"
 updated: "2026-11-09"
 tags: [quality, bug-log, handover, dre, kaizen]
 related_specs:
+  - docs/specs/changes/issue-304-v1-release-readiness.md
   - docs/quality/archive/v0.9-persistent-queue-and-webview-fallback-log.md
   - docs/quality/reports/v0.9-persistent-queue-and-webview-fallback.md
   - docs/specs/changes/archive/issue-269-webview-fallback-and-dom-import.md
@@ -115,11 +116,11 @@ related_tests: []
 > - Milestone `v0.8` で解決済みの申し送り（`HO-31`〜`HO-33`）: [docs/quality/archive/v0.8-discovery-filter-and-bookshelf-favorite-ux-log.md](archive/v0.8-discovery-filter-and-bookshelf-favorite-ux-log.md)
 > - Milestone `v0.9` で解決済みの申し送り（`HO-34`, `HO-35`）: [docs/quality/archive/v0.9-persistent-queue-and-webview-fallback-log.md](archive/v0.9-persistent-queue-and-webview-fallback-log.md)
 
-現在、未解決（`Open`）の申し送り事項は **0 件** です。
+現在、未解決（`Open`）の申し送り事項は **1 件** です。
 
-| ID  | 起票元 Issue / PR | 申し送り事項の内容                       | 解決先（対象 Issue / 成果物） | 完了ゲート | 状態 (`Open` / `Resolved`) |
-| :-: | :---------------: | :--------------------------------------- | :---------------------------- | :--------: | :------------------------: |
-|  —  |         —         | （現在未解決の申し送り事項はありません） | —                             |     —      |             —              |
+|     ID      | 起票元 Issue / PR | 申し送り事項の内容                                                                                   | 解決先（対象 Issue / 成果物）          |       完了ゲート        | 状態 (`Open` / `Resolved`) |
+| :---------: | :---------------: | :--------------------------------------------------------------------------------------------------- | :------------------------------------- | :---------------------: | :------------------------: |
+| **`HO-36`** |    Issue #304     | Android 実機における設定画面フッターのアプリバージョン表示（`Yommy v1.0.0`）および全画面スモーク確認 | Milestone `v1.0` 実機検証 / Issue #305 | Milestone `v1.0` 完了前 |           `Open`           |
 
 ---
 
