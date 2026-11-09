@@ -6,7 +6,7 @@ android {
 
     // AC-APK-02: CI ランナー (BUILD_NUMBER) または Gradle プロパティから versionCode / versionName を動的に解決
     def appVersionCode = Integer.parseInt(System.getenv("BUILD_NUMBER") ?: (project.findProperty("versionCode") ?: "1"))
-    def appVersionName = System.getenv("BUILD_NAME") ?: (project.findProperty("versionName") ?: "0.3.0")
+    def appVersionName = System.getenv("BUILD_NAME") ?: (project.findProperty("versionName") ?: "1.0.0")
 
     defaultConfig {
         applicationId "com.yommy.app"

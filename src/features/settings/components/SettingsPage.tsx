@@ -19,6 +19,7 @@ import {
   PAGE_MARGIN_STEP_PX,
   clampPageMargin,
 } from "../../../shared/constants/typography";
+import { APP_NAME, APP_VERSION } from "../../../shared/constants/app";
 
 export interface SettingsPageProps {
   /** 現在の組み方向 */
@@ -201,12 +202,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   storageCacheError = null,
   initialShowStorageCacheDialog = false,
   onClearStorageCache,
-  appName,
-  appVersion,
+  appName = APP_NAME,
+  appVersion = APP_VERSION,
   className,
 }) => {
-  void appName;
-  void appVersion;
   const rootClasses =
     `h-full flex flex-col overflow-y-auto bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 ${className ?? ""}`.trim();
 
@@ -605,6 +604,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           initialShowDialog={initialShowStorageCacheDialog}
           onClearCache={onClearStorageCache}
         />
+
+        <footer
+          data-testid="settings-version-footer"
+          className="mt-8 mb-6 text-center text-xs text-slate-500 dark:text-slate-400"
+        >
+          {appName} v{appVersion}
+        </footer>
       </div>
     </div>
   );
