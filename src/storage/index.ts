@@ -7,3 +7,4 @@ export * from "./repositories/novelRepository";
 export * from "./repositories/chapterRepository";
 export * from "./repositories/settingsRepository";
 export * from "./repositories/appSettingsRepository";
+export * from "./repositories/queueRepository";

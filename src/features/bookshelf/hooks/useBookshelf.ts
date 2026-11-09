@@ -151,6 +151,7 @@ export function useBookshelf(
             await novelRepository.upsertNovelWithToc(
               parsedIndex,
               new Date().toISOString(),
+              { updateOnly: true },
             );
           } catch (err: unknown) {
             console.error("Failed to check update for novel:", target.id, err);

@@ -185,7 +185,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
 
       if (!isMountedRef.current) return;
       setPendingCacheCount(pCount);
-      setFailedCacheCount(fItems.length);
+      setFailedCacheCount(uncachedFailedIndexes.length);
       setFailedChapterIndexes(uncachedFailedIndexes);
     },
     [queueRepository],
@@ -290,10 +290,14 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
         normalizedUrl,
       );
 
-      await novelRepository.upsertNovelWithToc(
+      const upserted = await novelRepository.upsertNovelWithToc(
         novelIndex,
         new Date().toISOString(),
+        { updateOnly: true },
       );
+      if (!upserted) {
+        return false;
+      }
 
       const [updatedNovel, updatedChapters] = await Promise.all([
         novelRepository.getNovelById(novelId),
@@ -581,9 +585,6 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
         const failedItems = remainingItems.filter(
           (item) => item.status === "failed",
         );
-        const completedItems = remainingItems.filter(
-          (item) => item.status === "completed",
-        );
 
         if (failedItems.length === 0) {
           await queueRepository.clearNovelQueue(novelId);
@@ -597,12 +598,6 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
             setNovel(latestNovel);
           }
         } else {
-          if (completedItems.length > 0) {
-            await queueRepository.deleteByNovelAndChapters(
-              novelId,
-              completedItems.map((i) => i.chapterIndex),
-            );
-          }
           setPendingCacheCount(0);
           setFailedCacheCount(failedItems.length);
           setFailedChapterIndexes(

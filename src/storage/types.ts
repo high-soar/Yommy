@@ -91,14 +91,25 @@ export interface NovelRepository {
   upsertNovelWithToc(
     index: ParsedNovelIndex,
     fetchedAt: string,
+    options: { updateOnly: true },
+  ): Promise<NovelRecord | null>;
+  upsertNovelWithToc(
+    index: ParsedNovelIndex,
+    fetchedAt: string,
+    options?: { updateOnly?: false },
   ): Promise<NovelRecord>;
+  upsertNovelWithToc(
+    index: ParsedNovelIndex,
+    fetchedAt: string,
+    options?: { updateOnly?: boolean },
+  ): Promise<NovelRecord | null>;
   updateBookmark(
     novelId: string,
     chapterIndex: number,
     scrollProgress: number,
   ): Promise<void>;
   setFavorite(novelId: string, isFavorite: boolean): Promise<void>;
-  deleteNovel(novelId: string): Promise<void>;
+  deleteNovel(novelId: string, deletedAt?: number): Promise<void>;
   clearNewUpdate(novelId: string): Promise<void>;
   updateLastCheckedAt(novelId: string, checkedAt: string): Promise<void>;
   getDeletedNovels?(): Promise<DeletedNovelRecord[]>;

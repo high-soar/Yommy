@@ -209,7 +209,7 @@ function createMockSettingsRepo(
 const mockDatabaseAdapter: DatabaseAdapter = {
   execute: async () => {},
   query: async () => [],
-  runTransaction: async (fn) => fn(),
+  runTransaction: async (fn) => fn(mockDatabaseAdapter),
   close: async () => {},
 };
 

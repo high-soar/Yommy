@@ -1105,6 +1105,72 @@ describe("useBookshelf", () => {
       expect(result.current.isCheckingUpdates).toBe(false);
       expect(result.current.updateCheckProgress).toBeNull();
     });
+
+    it("更新チェック実行中に作品が削除された場合、upsertNovelWithToc が updateOnly: true で実行されるため削除作品が復活せず Tombstone も維持されること (R1-02)", async () => {
+      const db = await resetTestDb();
+      const repo = new SqlNovelRepository(db);
+
+      const targetId = "kakuyomu:1177354054881162399";
+      const targetUrl = "https://kakuyomu.jp/works/1177354054881162399";
+
+      // 作品を1件登録
+      await repo.upsertNovelWithToc(
+        {
+          siteType: "kakuyomu",
+          remoteWorkId: "1177354054881162399",
+          canonicalUrl: targetUrl,
+          title: "削除予定作品",
+          author: "作者",
+          synopsis: "あらすじ",
+          chapters: [],
+          nextTocPageUrl: null,
+        },
+        "2026-01-01T00:00:00Z",
+      );
+
+      const mockHttp = new MockHttpClient();
+      mockHttp.setResponse(targetUrl, (options) => {
+        return {
+          status: 200,
+          url: options.url,
+          headers: {},
+          html: workIndexHtml,
+        };
+      });
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          novelRepository: repo,
+          httpClient: mockHttp,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // 更新チェック前に作品を削除し Tombstone を記録
+      const deletedAt = 1730000000000;
+      await repo.deleteNovel(targetId, deletedAt);
+
+      // 手動更新チェックを実行（内部で upsertNovelWithToc が updateOnly: true で走る）
+      await act(async () => {
+        await result.current.checkUpdates(true);
+      });
+
+      // 作品が復活していないこと
+      const novel = await repo.getNovelById(targetId);
+      expect(novel).toBeNull();
+
+      // Tombstone が消去されずに残っていること
+      const deletedNovels = await repo.getDeletedNovels();
+      expect(deletedNovels).toEqual([
+        {
+          id: targetId,
+          deletedAt,
+        },
+      ]);
+    });
   });
 
   describe("手動リロード (reloadNovels)", () => {

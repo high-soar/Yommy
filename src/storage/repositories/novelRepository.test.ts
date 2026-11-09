@@ -336,6 +336,121 @@ describe("SqlNovelRepository", () => {
       expect(ep2[0].chapter_index).toBe(3);
       expect(ep2[0].body_html).toBe("<p>ep2の本文</p>");
     });
+
+    it("options.updateOnly: true の場合、既存レコードが存在しなければ INSERT も Tombstone 消去も行わず null を返すこと (R1-02)", async () => {
+      const adapter = await initTestDb();
+      // deleted_novels に Tombstone を登録しておく
+      await adapter.execute(
+        "INSERT INTO deleted_novels (id, deleted_at) VALUES ('kakuyomu:1177354054881162325', 1730000000000);",
+      );
+
+      const result = await repository.upsertNovelWithToc(
+        sampleParsedIndex,
+        "2026-01-10T00:00:00Z",
+        { updateOnly: true },
+      );
+
+      // null が返ること
+      expect(result).toBeNull();
+
+      // novels に登録されていないこと
+      const novel = await repository.getNovelById(
+        "kakuyomu:1177354054881162325",
+      );
+      expect(novel).toBeNull();
+
+      // Tombstone が消去されずに残っていること
+      const deleted = await repository.getDeletedNovels();
+      expect(deleted).toHaveLength(1);
+      expect(deleted[0].id).toBe("kakuyomu:1177354054881162325");
+    });
+
+    it("options.updateOnly: true の場合、既存レコードが存在すれば通常通り目次が更新されること (R1-02)", async () => {
+      await repository.upsertNovelWithToc(
+        sampleParsedIndex,
+        "2026-01-01T00:00:00Z",
+      );
+
+      const updated = await repository.upsertNovelWithToc(
+        {
+          ...sampleParsedIndex,
+          title: "更新後タイトル",
+        },
+        "2026-01-02T00:00:00Z",
+        { updateOnly: true },
+      );
+
+      expect(updated).not.toBeNull();
+      expect(updated?.title).toBe("更新後タイトル");
+    });
+
+    it("新しい目次から消えたエピソードが chapters および download_queue から削除され統計情報が再集計されること (R1-03)", async () => {
+      // 1話、2話で登録
+      await repository.upsertNovelWithToc(
+        sampleParsedIndex,
+        "2026-01-01T00:00:00Z",
+      );
+      const adapter = await initTestDb();
+
+      // ep1 と ep2 に本文を保存
+      await adapter.execute(
+        "UPDATE chapters SET body_html = '<p>ep1</p>', byte_size = 100 WHERE remote_chapter_id = 'ep1';",
+      );
+      await adapter.execute(
+        "UPDATE chapters SET body_html = '<p>ep2</p>', byte_size = 200 WHERE remote_chapter_id = 'ep2';",
+      );
+      // download_queue に ep2 用キューを挿入
+      await adapter.execute(
+        `INSERT INTO download_queue (novel_id, chapter_index, target_url, status, created_at, updated_at)
+         VALUES ('kakuyomu:1177354054881162325', 2, 'https://example.com/2', 'failed', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
+      );
+
+      // 新しい目次は [ep1: 1, ep3: 2]（ep2 が消滅し、ep3 が新設された）
+      const newIndex: ParsedNovelIndex = {
+        ...sampleParsedIndex,
+        chapters: [
+          sampleParsedIndex.chapters[0], // ep1 (index 1)
+          {
+            chapterIndex: 2,
+            remoteChapterId: "ep3",
+            partTitle: "第1章",
+            title: "第3話 代替話",
+            url: "https://kakuyomu.jp/works/1177354054881162325/episodes/ep3",
+            publishedAt: "2026-01-03T10:00:00Z",
+          },
+        ],
+      };
+
+      const updated = await repository.upsertNovelWithToc(
+        newIndex,
+        "2026-01-03T00:00:00Z",
+      );
+
+      // 消えた ep2 の行が chapters から削除されていること
+      const chapters = await adapter.query<{
+        remote_chapter_id: string;
+        chapter_index: number;
+      }>(
+        "SELECT remote_chapter_id, chapter_index FROM chapters WHERE novel_id = ? ORDER BY chapter_index ASC;",
+        ["kakuyomu:1177354054881162325"],
+      );
+      expect(chapters).toEqual([
+        { remote_chapter_id: "ep1", chapter_index: 1 },
+        { remote_chapter_id: "ep3", chapter_index: 2 },
+      ]);
+
+      // ep2 の download_queue レコードも削除されていること
+      const queueRows = await adapter.query(
+        "SELECT * FROM download_queue WHERE novel_id = ? AND chapter_index = 2;",
+        ["kakuyomu:1177354054881162325"],
+      );
+      expect(queueRows).toHaveLength(0);
+
+      // 作品統計情報が再集計されていること（総話数2, キャッシュ話数1, 合計100バイト）
+      expect(updated?.totalChapters).toBe(2);
+      expect(updated?.cachedChapters).toBe(1);
+      expect(updated?.totalByteSize).toBe(100);
+    });
   });
 
   describe("clearNewUpdate", () => {
@@ -765,6 +880,27 @@ describe("SqlNovelRepository", () => {
       });
 
       dateNowSpy.mockRestore();
+    });
+
+    it("deleteNovel に deletedAt を明示的に渡した場合、現在時刻ではなく渡された deletedAt が deleted_novels に記録されること (R1-06)", async () => {
+      const explicitDeletedAt = 1730500000000;
+      await repository.upsertNovelWithToc(
+        sampleParsedIndex,
+        "2026-01-01T00:00:00Z",
+      );
+
+      await repository.deleteNovel(
+        "kakuyomu:1177354054881162325",
+        explicitDeletedAt,
+      );
+
+      const deleted = await repository.getDeletedNovels();
+      expect(deleted).toEqual([
+        {
+          id: "kakuyomu:1177354054881162325",
+          deletedAt: explicitDeletedAt,
+        },
+      ]);
     });
 
     it("getDeletedNovels は deletedAt の降順（新しい順）でレコードを返却すること", async () => {

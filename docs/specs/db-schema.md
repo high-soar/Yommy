@@ -1,7 +1,7 @@
 ---
 type: spec-db-schema
 title: ローカル DB スキーマ定義（App 全体正本）
-description: SQLite（novels, chapters, download_queue, reader_settings, app_settings）のER図、テーブル構造、およびDDL定義の正本。
+description: SQLite（novels, chapters, download_queue, reader_settings, app_settings, deleted_novels）のER図、テーブル構造、およびDDL定義の正本。
 status: "Approved"
 updated: "2026-11-09"
 tags:
@@ -201,7 +201,7 @@ CREATE INDEX IF NOT EXISTS idx_novels_title ON novels(title COLLATE NOCASE ASC);
 
 ### 3.2 `chapters` テーブル（各話目次・本文 HTML キャッシュ）
 
-目次取得時は `body_html = NULL`, `byte_size = 0` でレコードを作成し、本文ダウンロード完了時にサニタイズ済み HTML と `byte_size`, `downloaded_at` を保存します。各話の一意性は `(novel_id, remote_chapter_id)` で保証されるため、連載途中でエピソードが挿入・削除されて `chapter_index` がずれた場合でも、本文キャッシュが別話へ誤って引き継がれることなく安全に維持されます。キャッシュ削除時（作品詳細での整理または設定画面での一括整理：`v0.5` Issue #170）は、目次情報・既読フラグ（`is_read`）・しおり位置を完全に残したまま、対象話の `body_html = NULL`, `byte_size = 0`, `downloaded_at = NULL` に更新します（既読話のみ削除時: `body_html IS NOT NULL AND is_read = 1`、全話削除時: `body_html IS NOT NULL`）。さらに同一トランザクション内で、削除対象話に対応する `download_queue` レコードも同時に削除（クリーンアップ）し、親作品レコードの `novels.cached_chapters` および `novels.total_byte_size` を即時再集計して更新します（`v0.9` Issue #268）。この際、クラウド同期の整合性維持（LWW および Tombstone 誤判定防止）のため、`novels.updated_at` は更新せず従前の値を維持します（R1-01）。
+目次取得時は `body_html = NULL`, `byte_size = 0` でレコードを作成し、本文ダウンロード完了時にサニタイズ済み HTML と `byte_size`, `downloaded_at` を保存します。各話の一意性は `(novel_id, remote_chapter_id)` で保証されるため、連載途中でエピソードが挿入・削除されて `chapter_index` がずれた場合でも、本文キャッシュが別話へ誤って引き継がれることなく安全に維持されます。なお、作品サイト側でエピソードが削除されて最新目次に含まれなくなった場合、`upsertNovelWithToc` 実行時に新しい目次に存在しない古い `remote_chapter_id` のレコードを `chapters` テーブルから削除し、該当エピソードの `download_queue` も整理・削除した上で、作品レコードの `total_chapters`, `cached_chapters`, `total_byte_size` を即時再集計して整合性を維持します（R1-03）。キャッシュ削除時（作品詳細での整理または設定画面での一括整理：`v0.5` Issue #170）は、目次情報・既読フラグ（`is_read`）・しおり位置を完全に残したまま、対象話の `body_html = NULL`, `byte_size = 0`, `downloaded_at = NULL` に更新します（既読話のみ削除時: `body_html IS NOT NULL AND is_read = 1`、全話削除時: `body_html IS NOT NULL`）。さらに同一トランザクション内で、削除対象話に対応する `download_queue` レコードも同時に削除（クリーンアップ）し、親作品レコードの `novels.cached_chapters` および `novels.total_byte_size` を即時再集計して更新します（`v0.9` Issue #268, R1-18）。個別本文キャッシュ保存時（`saveChapterBody`）にも、該当話の `download_queue` レコード（pending / failed）を自動的に解消（DELETE）します（R1-44）。この際、クラウド同期の整合性維持（LWW および Tombstone 誤判定防止）のため、`novels.updated_at` は更新せず従前の値を維持します（R1-01）。
 
 なお、`downloaded_at` はキャッシュ鮮度管理（TTL 7日間判定：`now - downloaded_at < 7 days` での通信スキップ、7日経過後の 3秒短タイムアウト再取得と既存キャッシュフォールバック）の判定基準日時として利用されます（`v0.3` Issue #81）。
 

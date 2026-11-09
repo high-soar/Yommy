@@ -236,12 +236,12 @@ export function validateSyncState(jsonStringOrObj: unknown): YommySyncState {
       );
     }
     // novels と deletedNovels の双方に同一キーが存在する場合のタイムスタンプ競合調停:
-    // novels[novelId].updatedAt >= deletedAt の場合は再登録が新しいため deletedNovels から除外
-    // deletedAt > novels[novelId].updatedAt の場合は削除の方が新しいため novels から除去して deletedNovels を優先
+    // novels[novelId].createdAt > deletedAt の場合は削除後の明示的な再登録が新しいため deletedNovels から除外
+    // deletedAt >= novels[novelId].createdAt の場合は削除の方が新しいため novels から除去して deletedNovels を優先 (R1-05)
     if (novels[novelId]) {
-      const updatedAtMs = Date.parse(novels[novelId].updatedAt);
+      const createdAtMs = Date.parse(novels[novelId].createdAt);
       const deletedAtMs = Date.parse(deletedAt);
-      if (updatedAtMs >= deletedAtMs) {
+      if (createdAtMs > deletedAtMs) {
         continue;
       }
       delete novels[novelId];
@@ -389,19 +389,18 @@ export class SyncEngine {
     for (const [novelId, deletedAtStr] of Object.entries(deletedNovels)) {
       const remoteDeletedAt = Date.parse(deletedAtStr);
       if (remoteNovels && remoteNovels[novelId]) {
-        const remoteNovelUpdatedAt = Date.parse(
-          remoteNovels[novelId].updatedAt,
+        const remoteNovelCreatedAt = Date.parse(
+          remoteNovels[novelId].createdAt,
         );
-        if (remoteNovelUpdatedAt >= remoteDeletedAt) {
-          continue; // リモート再登録作品と判定してローカル削除伝播をスキップ
+        if (remoteNovelCreatedAt > remoteDeletedAt) {
+          continue; // リモート再登録作品と判定してローカル削除伝播をスキップ (R1-05)
         }
       }
       const localNovel = await this.deps.novelRepository.getNovelById(novelId);
       if (localNovel) {
         const localCreated = Date.parse(localNovel.createdAt);
-        const localUpdated = Date.parse(localNovel.updatedAt);
-        if (remoteDeletedAt > Math.max(localCreated, localUpdated)) {
-          await this.deps.novelRepository.deleteNovel(novelId);
+        if (remoteDeletedAt >= localCreated) {
+          await this.deps.novelRepository.deleteNovel(novelId, remoteDeletedAt);
         }
       }
     }
@@ -500,6 +499,10 @@ export class SyncEngine {
           0.0,
         );
       }
+      // updateBookmark による lastReadAt のローカル現在時刻上書きを防ぎ、リモートの lastReadAt を復元 (R1-07)
+      await this.deps.novelRepository.updateSyncMetadata?.(novelId, {
+        lastReadAt: remoteNovel.lastReadAt,
+      });
     }
 
     // 3. リモートの updatedAt が新しい場合（LWW）、isFavorite と updatedAt を反映
@@ -659,6 +662,19 @@ export class SyncEngine {
   ): Record<string, SyncNovelData> {
     const merged: Record<string, SyncNovelData> = { ...localNovels };
     if (remoteState) {
+      // リモート Tombstone に存在する作品がローカルに残っている場合、削除優先なら除外 (R1-43)
+      for (const [id, deletedAtStr] of Object.entries(
+        remoteState.deletedNovels,
+      )) {
+        if (merged[id]) {
+          const remoteDeletedAt = Date.parse(deletedAtStr);
+          const localCreatedAt = Date.parse(merged[id].createdAt);
+          if (remoteDeletedAt >= localCreatedAt) {
+            delete merged[id];
+          }
+        }
+      }
+
       for (const [id, remoteNovel] of Object.entries(remoteState.novels)) {
         const localDeletedAt = localTombstoneMap.get(id);
         if (localDeletedAt !== undefined) {
@@ -759,6 +775,11 @@ export class SyncEngine {
       const remoteRaw = await this.deps.bridge.pullFile();
       if (remoteRaw) {
         remoteState = validateSyncState(remoteRaw);
+        // リモートの Tombstone をローカルに伝播・適用してゾンビ復活を防止 (R1-43)
+        await this.propagateTombstones(
+          remoteState.deletedNovels,
+          remoteState.novels,
+        );
       }
 
       const localSyncNovels = await this.buildSyncNovels();

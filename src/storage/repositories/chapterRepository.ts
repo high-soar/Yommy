@@ -81,9 +81,13 @@ export class SqlChapterRepository implements ChapterRepository {
    * （本文保存・キャッシュ削除ともにローカル端末のストレージ操作であり作品メタデータ不変のため、
    *   クラウド同期 LWW 判定保護のために novels.updated_at は更新しない: R1-01）
    * @param novelId 作品ID
+   * @param db 実行データベースアダプター（省略時は this.db）
    */
-  private async recalculateNovelStats(novelId: string): Promise<void> {
-    await this.db.execute(
+  private async recalculateNovelStats(
+    novelId: string,
+    db: DatabaseAdapter = this.db,
+  ): Promise<void> {
+    await db.execute(
       `UPDATE novels
        SET
          cached_chapters = (SELECT COUNT(*) FROM chapters WHERE novel_id = ? AND body_html IS NOT NULL),
@@ -99,8 +103,8 @@ export class SqlChapterRepository implements ChapterRepository {
     content: ParsedChapterContent,
     downloadedAt: string,
   ): Promise<void> {
-    await this.db.runTransaction(async () => {
-      await this.db.execute(
+    await this.db.runTransaction(async (tx) => {
+      await tx.execute(
         `UPDATE chapters
          SET body_html = ?, byte_size = ?, downloaded_at = ?
          WHERE novel_id = ? AND chapter_index = ?;`,
@@ -113,7 +117,13 @@ export class SqlChapterRepository implements ChapterRepository {
         ],
       );
 
-      await this.recalculateNovelStats(novelId);
+      // 本文保存時に該当話の download_queue（pending/failed）を解消 (R1-44)
+      await tx.execute(
+        `DELETE FROM download_queue WHERE novel_id = ? AND chapter_index = ?;`,
+        [novelId, chapterIndex],
+      );
+
+      await this.recalculateNovelStats(novelId, tx);
     });
   }
 
@@ -129,51 +139,56 @@ export class SqlChapterRepository implements ChapterRepository {
   }
 
   /**
-   * 指定作品の本文キャッシュを削除し、同時に download_queue の該当レコードもクリーンアップする（Issue #268）。
+   * 指定作品の本文キャッシュを削除し、同時に download_queue の該当レコードもクリーンアップする（Issue #268, R1-18）。
    * （クラウド同期 LWW タイムスタンプ保護規約 R1-01 に従い、novels.updated_at は更新しない）
    */
   async deleteCachedBodies(
     novelId: string,
     options?: { onlyRead?: boolean },
   ): Promise<number> {
-    return await this.db.runTransaction(async () => {
+    return await this.db.runTransaction(async (tx) => {
       const condition = options?.onlyRead
         ? "novel_id = ? AND body_html IS NOT NULL AND is_read = 1"
         : "novel_id = ? AND body_html IS NOT NULL";
 
-      const countRows = await this.db.query<{ count: number }>(
-        `SELECT COUNT(*) as count FROM chapters WHERE ${condition};`,
+      // 1. キャッシュ削除対象の話数 index を事前に特定 (R1-18)
+      const targetRows = await tx.query<{ chapter_index: number }>(
+        `SELECT chapter_index FROM chapters WHERE ${condition};`,
         [novelId],
       );
-      const count = countRows[0].count;
-      if (count > 0) {
-        await this.db.execute(
-          `UPDATE chapters
-           SET body_html = NULL, byte_size = 0, downloaded_at = NULL
-           WHERE ${condition};`,
-          [novelId],
-        );
 
-        // キャッシュ削除時は作品メタデータ不変のため updated_at を更新せず容量と話数のみ更新 (R1-01)
-        await this.recalculateNovelStats(novelId);
+      if (targetRows.length === 0) {
+        return 0;
       }
 
+      // 2. download_queue のクリーンアップ
+      // onlyRead 時は本文キャッシュが存在した既読話のキューのみ削除 (R1-18)
+      // 全削除時は当該作品のキューを全削除 (Issue #268)
       if (options?.onlyRead) {
-        await this.db.execute(
-          `DELETE FROM download_queue
-           WHERE novel_id = ? AND chapter_index IN (
-             SELECT chapter_index FROM chapters WHERE novel_id = ? AND is_read = 1
-           );`,
-          [novelId, novelId],
-        );
+        for (const row of targetRows) {
+          await tx.execute(
+            `DELETE FROM download_queue WHERE novel_id = ? AND chapter_index = ?;`,
+            [novelId, row.chapter_index],
+          );
+        }
       } else {
-        await this.db.execute(
-          "DELETE FROM download_queue WHERE novel_id = ?;",
-          [novelId],
-        );
+        await tx.execute("DELETE FROM download_queue WHERE novel_id = ?;", [
+          novelId,
+        ]);
       }
 
-      return count;
+      // 3. 本文キャッシュをクリア
+      await tx.execute(
+        `UPDATE chapters
+         SET body_html = NULL, byte_size = 0, downloaded_at = NULL
+         WHERE ${condition};`,
+        [novelId],
+      );
+
+      // 4. キャッシュ削除時は作品メタデータ不変のため updated_at を更新せず容量と話数のみ更新 (R1-01)
+      await this.recalculateNovelStats(novelId, tx);
+
+      return targetRows.length;
     });
   }
 
@@ -200,53 +215,50 @@ export class SqlChapterRepository implements ChapterRepository {
   }
 
   /**
-   * 全作品の本文キャッシュを一括削除し、同時に download_queue の該当レコードもクリーンアップする（Issue #268）。
+   * 全作品の本文キャッシュを一括削除し、同時に download_queue の該当レコードもクリーンアップする（Issue #268, R1-18）。
    * （クラウド同期 LWW タイムスタンプ保護規約 R1-01 に従い、novels.updated_at は更新しない）
    */
   async deleteAllCachedBodies(options?: {
     onlyRead?: boolean;
   }): Promise<number> {
-    return await this.db.runTransaction(async () => {
+    return await this.db.runTransaction(async (tx) => {
       const condition = options?.onlyRead
         ? "body_html IS NOT NULL AND is_read = 1"
         : "body_html IS NOT NULL";
 
-      const countRows = await this.db.query<{ count: number }>(
-        `SELECT COUNT(*) AS count FROM chapters WHERE ${condition};`,
-      );
-      const count = countRows[0].count;
-      if (count > 0) {
-        const novelRows = await this.db.query<{ novel_id: string }>(
-          `SELECT DISTINCT novel_id FROM chapters WHERE ${condition};`,
-        );
+      const targetRows = await tx.query<{
+        novel_id: string;
+        chapter_index: number;
+      }>(`SELECT novel_id, chapter_index FROM chapters WHERE ${condition};`);
 
-        await this.db.execute(
-          `UPDATE chapters
-           SET body_html = NULL, byte_size = 0, downloaded_at = NULL
-           WHERE ${condition};`,
-        );
-
-        // キャッシュ削除時は作品メタデータ不変のため updated_at を更新せず容量と話数のみ更新 (R1-01)
-        for (const row of novelRows) {
-          await this.recalculateNovelStats(row.novel_id);
-        }
+      if (targetRows.length === 0) {
+        return 0;
       }
+
+      const novelIds = Array.from(new Set(targetRows.map((r) => r.novel_id)));
 
       if (options?.onlyRead) {
-        await this.db.execute(
-          `DELETE FROM download_queue
-           WHERE EXISTS (
-             SELECT 1 FROM chapters
-             WHERE chapters.novel_id = download_queue.novel_id
-               AND chapters.chapter_index = download_queue.chapter_index
-               AND chapters.is_read = 1
-           );`,
-        );
+        for (const row of targetRows) {
+          await tx.execute(
+            `DELETE FROM download_queue WHERE novel_id = ? AND chapter_index = ?;`,
+            [row.novel_id, row.chapter_index],
+          );
+        }
       } else {
-        await this.db.execute("DELETE FROM download_queue;");
+        await tx.execute("DELETE FROM download_queue;");
       }
 
-      return count;
+      await tx.execute(
+        `UPDATE chapters
+         SET body_html = NULL, byte_size = 0, downloaded_at = NULL
+         WHERE ${condition};`,
+      );
+
+      for (const novelId of novelIds) {
+        await this.recalculateNovelStats(novelId, tx);
+      }
+
+      return targetRows.length;
     });
   }
 }

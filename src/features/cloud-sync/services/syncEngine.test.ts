@@ -12,7 +12,7 @@ import { SqlAppSettingsRepository } from "../../../storage/repositories/appSetti
 import workIndexHtml from "../../../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 import narouWorkIndexSerializedHtml from "../../../parsers/narou/__fixtures__/work_index_serialized.html?raw";
 import narouWorkIndexPage2Html from "../../../parsers/narou/__fixtures__/work_index_page2.html?raw";
-import type { YommySyncState } from "../types";
+import type { SyncNovelData, YommySyncState } from "../types";
 import {
   SyncEngine,
   validateSyncState,
@@ -365,12 +365,18 @@ describe("syncEngine", () => {
       ).toThrow(/key must be non-empty/i);
     });
 
-    it("raw.novels と raw.deletedNovels の双方に同一キーが存在する場合、タイムスタンプ比較により新しい方を採用すること", () => {
-      // ケース1: novels の updatedAt >= deletedNovels の deletedAt -> novels 優先、deletedNovels から除外
+    it("raw.novels と raw.deletedNovels の双方に同一キーが存在する場合、タイムスタンプ比較（createdAt > deletedAt）により新しい方を採用すること (R1-05)", () => {
+      // ケース1: novels の createdAt > deletedNovels の deletedAt -> 再登録優先、deletedNovels から除外
       const stateWithReaddedNovel = {
         ...validState,
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            ...validState.novels["kakuyomu:16817330658027210412"],
+            createdAt: "2026-10-26T00:00:00.000Z", // deletedAt (2026-10-25) より新しい再登録
+          },
+        },
         deletedNovels: {
-          "kakuyomu:16817330658027210412": "2026-10-25T08:00:00.000Z", // validState の updatedAt (2026-10-31) より古い
+          "kakuyomu:16817330658027210412": "2026-10-25T08:00:00.000Z",
           "kakuyomu:other-deleted": "2026-10-20T08:00:00.000Z",
         },
       };
@@ -383,11 +389,32 @@ describe("syncEngine", () => {
         "2026-10-20T08:00:00.000Z",
       );
 
-      // ケース2: deletedNovels の deletedAt > novels の updatedAt -> 削除優先、novels から除去
+      // ケース1.5 (R1-05): 単なる updatedAt が deletedAt より新しくても createdAt <= deletedAt の場合は削除優先
+      const stateWithOnlyUpdatedNewer = {
+        ...validState,
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            ...validState.novels["kakuyomu:16817330658027210412"],
+            createdAt: "2026-10-01T00:00:00.000Z", // 削除より前
+            updatedAt: "2026-10-31T00:00:00.000Z", // 削除より新しい
+          },
+        },
+        deletedNovels: {
+          "kakuyomu:16817330658027210412": "2026-10-25T08:00:00.000Z",
+          "kakuyomu:other-deleted": "2026-10-20T08:00:00.000Z",
+        },
+      };
+      const result1_5 = validateSyncState(stateWithOnlyUpdatedNewer);
+      expect(result1_5.novels["kakuyomu:16817330658027210412"]).toBeUndefined();
+      expect(result1_5.deletedNovels["kakuyomu:16817330658027210412"]).toBe(
+        "2026-10-25T08:00:00.000Z",
+      );
+
+      // ケース2: deletedNovels の deletedAt >= novels の createdAt -> 削除優先、novels から除去
       const stateWithDeletedPriority = {
         ...validState,
         deletedNovels: {
-          "kakuyomu:16817330658027210412": "2026-11-05T08:00:00.000Z", // validState の updatedAt より新しい
+          "kakuyomu:16817330658027210412": "2026-11-05T08:00:00.000Z", // createdAt (2026-10-01) より新しい
           "kakuyomu:other-deleted": "2026-10-20T08:00:00.000Z",
         },
       };
@@ -977,7 +1004,7 @@ describe("syncEngine", () => {
       expect(purgeSpy).toHaveBeenCalledWith(["kakuyomu:16817330658027210412"]);
     });
 
-    it("propagateTombstones: remoteNovels に該当作品が存在する場合、updatedAt と deletedAt の新旧比較に従って削除制御を行うこと", async () => {
+    it("propagateTombstones: remoteNovels に該当作品が存在する場合、createdAt と deletedAt の新旧比較に従って削除制御を行うこと (R1-05)", async () => {
       const parser = parserRegistry.requireParser(
         "https://kakuyomu.jp/works/16817330658027210412",
       );
@@ -990,16 +1017,20 @@ describe("syncEngine", () => {
       const engineWithPrivates = engine as unknown as {
         propagateTombstones: (
           deletedNovels: Record<string, string>,
-          remoteNovels?: Record<string, { updatedAt: string }>,
+          remoteNovels?: Record<
+            string,
+            { createdAt: string; updatedAt: string }
+          >,
         ) => Promise<void>;
       };
 
-      // 1. updatedAt >= deletedAt の場合 -> 削除スキップ
+      // 1. remoteNovel.createdAt > deletedAt の場合 -> リモート再登録作品と判定してローカル削除スキップ
       await engineWithPrivates.propagateTombstones(
         { "kakuyomu:16817330658027210412": "2026-10-15T00:00:00.000Z" },
         {
           "kakuyomu:16817330658027210412": {
-            updatedAt: "2026-10-15T12:00:00.000Z",
+            createdAt: "2026-10-16T00:00:00.000Z",
+            updatedAt: "2026-10-16T12:00:00.000Z",
           },
         },
       );
@@ -1007,18 +1038,50 @@ describe("syncEngine", () => {
         await novelRepo.getNovelById("kakuyomu:16817330658027210412"),
       ).not.toBeNull();
 
-      // 2. updatedAt < deletedAt の場合 -> ローカル削除伝播が実行される
+      // 2. remoteNovel.createdAt <= deletedAt かつ 単なる updatedAt だけが新しい場合 -> 削除スキップされずローカル削除伝播が実行される (R1-05)
       await engineWithPrivates.propagateTombstones(
-        { "kakuyomu:16817330658027210412": "2026-10-20T00:00:00.000Z" },
+        { "kakuyomu:16817330658027210412": "2026-10-15T00:00:00.000Z" },
         {
           "kakuyomu:16817330658027210412": {
-            updatedAt: "2026-10-12T00:00:00.000Z",
+            createdAt: "2026-10-10T00:00:00.000Z",
+            updatedAt: "2026-10-20T00:00:00.000Z",
           },
         },
       );
       expect(
         await novelRepo.getNovelById("kakuyomu:16817330658027210412"),
       ).toBeNull();
+    });
+
+    it("propagateTombstones: リモートの Tombstone 伝播によるローカル削除時、リモートの deletedAt がローカル DB に保持されること (R1-06)", async () => {
+      const parser = parserRegistry.requireParser(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      const index = parser.parseNovelIndex(
+        workIndexHtml,
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      await novelRepo.upsertNovelWithToc(index, "2026-10-10T00:00:00.000Z");
+
+      const remoteDeletedAtMs = Date.parse("2026-10-20T15:30:00.000Z");
+      const engineWithPrivates = engine as unknown as {
+        propagateTombstones: (
+          deletedNovels: Record<string, string>,
+        ) => Promise<void>;
+      };
+
+      await engineWithPrivates.propagateTombstones({
+        "kakuyomu:16817330658027210412": new Date(
+          remoteDeletedAtMs,
+        ).toISOString(),
+      });
+
+      const deletedNovels = (await novelRepo.getDeletedNovels?.()) ?? [];
+      const record = deletedNovels.find(
+        (t) => t.id === "kakuyomu:16817330658027210412",
+      );
+      expect(record).toBeDefined();
+      expect(record?.deletedAt).toBe(remoteDeletedAtMs);
     });
 
     it("pullAndMerge: ローカルに Tombstone が存在し削除日時がリモート更新日時より新しい場合、リモート作品を復元せずスキップすること", async () => {
@@ -1195,6 +1258,8 @@ describe("syncEngine", () => {
       );
       expect(local?.bookmarkChapterIndex).toBe(2);
       expect(local?.bookmarkScrollProgress).toBe(0.0);
+      // R1-07: updateBookmark による現在時刻上書きを防ぎ、リモートの lastReadAt が復元されていること
+      expect(local?.lastReadAt).toBe("2029-01-01T10:00:00.000Z");
     });
 
     it("pullAndMerge: 同一作品でリモートとしおり話数が同じ場合、ローカルのスクロール進捗率をそのまま維持すること", async () => {
@@ -1708,7 +1773,7 @@ describe("syncEngine", () => {
       ).toBeDefined();
     });
 
-    it("pushCurrentState: 本棚に現存する作品の作品 ID が Tombstone に含まれていても除外され、purgeDeletedNovels が実行されること", async () => {
+    it("pushCurrentState: 再登録作品（createdAt > deletedAt）の作品 ID が Tombstone に含まれていても除外され、purgeDeletedNovels が実行されること", async () => {
       const baseNow = Date.now();
       const purgeSpy = vi.spyOn(novelRepo, "purgeDeletedNovels");
       const parser = parserRegistry.requireParser(
@@ -1718,16 +1783,17 @@ describe("syncEngine", () => {
         workIndexHtml,
         "https://kakuyomu.jp/works/16817330658027210412",
       );
+      // 再登録日時（2日前）がリモートの古い Tombstone（5日前）より新しい状態
       await novelRepo.upsertNovelWithToc(
         index,
-        new Date(baseNow - 10 * 86400000).toISOString(),
+        new Date(baseNow - 2 * 86400000).toISOString(),
       );
 
       // リモート側に該当作品の古い Tombstone（30日保持期間内）が残存している状態をシミュレート
       const recentTombstoneIso = new Date(baseNow - 5 * 86400000).toISOString();
       const remoteState: YommySyncState = {
         version: 1,
-        lastSyncedAt: new Date(baseNow - 2 * 86400000).toISOString(),
+        lastSyncedAt: new Date(baseNow - 3 * 86400000).toISOString(),
         novels: {},
         deletedNovels: {
           "kakuyomu:16817330658027210412": recentTombstoneIso,
@@ -1745,6 +1811,98 @@ describe("syncEngine", () => {
         state.deletedNovels["kakuyomu:16817330658027210412"],
       ).toBeUndefined();
       expect(state.deletedNovels["kakuyomu:deleted-other"]).toBeDefined();
+    });
+
+    it("pushCurrentState: リモートの deletedNovels に存在する削除作品（deletedAt >= createdAt）がローカルに残存している場合、ローカル DB から削除され Push ペイロードから除外されること (R1-43)", async () => {
+      const baseNow = Date.now();
+      const parser = parserRegistry.requireParser(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      const index = parser.parseNovelIndex(
+        workIndexHtml,
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      // 端末 A で 10日前に作品を登録
+      await novelRepo.upsertNovelWithToc(
+        index,
+        new Date(baseNow - 10 * 86400000).toISOString(),
+      );
+
+      // リモート側で 5日前に作品が削除され Tombstone が記録されている
+      const remoteDeletedAt = new Date(baseNow - 5 * 86400000).toISOString();
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: new Date(baseNow - 4 * 86400000).toISOString(),
+        novels: {},
+        deletedNovels: {
+          "kakuyomu:16817330658027210412": remoteDeletedAt,
+        },
+      };
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      // 未 Pull のまま pushCurrentState を実行
+      await engine.pushCurrentState();
+
+      // 1. ローカル DB から作品が削除されていること
+      expect(
+        await novelRepo.getNovelById("kakuyomu:16817330658027210412"),
+      ).toBeNull();
+
+      // 2. Push された state において、novels に作品が含まれず、deletedNovels に維持されていること (ゾンビ復活防止)
+      const pushedContent = bridge.getFileContent();
+      const state = JSON.parse(pushedContent!) as YommySyncState;
+      expect(state.novels["kakuyomu:16817330658027210412"]).toBeUndefined();
+      expect(state.deletedNovels["kakuyomu:16817330658027210412"]).toBe(
+        remoteDeletedAt,
+      );
+    });
+
+    it("buildMergedSyncNovels: remoteState.deletedNovels に含まれる作品が localNovels に存在し削除優先条件を満たす場合、除外されること (R1-43)", () => {
+      const engineWithPrivates = engine as unknown as {
+        buildMergedSyncNovels: (
+          localNovels: Record<string, SyncNovelData>,
+          localTombstoneMap: Map<string, number>,
+          remoteState: YommySyncState | null,
+        ) => Record<string, SyncNovelData>;
+      };
+
+      const localNovels: Record<string, SyncNovelData> = {
+        "kakuyomu:1": {
+          id: "kakuyomu:1",
+          siteType: "kakuyomu",
+          remoteWorkId: "1",
+          canonicalUrl: "https://kakuyomu.jp/works/1",
+          title: "テスト小説",
+          author: "テスト作者",
+          synopsis: "あらすじ",
+          totalChapters: 3,
+          isFavorite: 0,
+          hasNewUpdate: 0,
+          latestEpisodePublishedAt: "2026-10-01T00:00:00.000Z",
+          bookmarkChapterIndex: 1,
+          lastReadAt: null,
+          readChapterIds: [],
+          createdAt: "2026-10-01T00:00:00.000Z",
+          updatedAt: "2026-10-01T00:00:00.000Z",
+        },
+      };
+
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: "2026-10-15T00:00:00.000Z",
+        novels: {},
+        deletedNovels: {
+          "kakuyomu:1": "2026-10-10T00:00:00.000Z",
+        },
+      };
+
+      const result = engineWithPrivates.buildMergedSyncNovels(
+        localNovels,
+        new Map(),
+        remoteState,
+      );
+
+      expect(result["kakuyomu:1"]).toBeUndefined();
     });
 
     it("pushCurrentState: 401 エラー発生時に連携解除へ自動フォールバックすること", async () => {

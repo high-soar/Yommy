@@ -13,19 +13,22 @@ describe("InMemoryDatabaseAdapter", () => {
   });
 
   describe("初期化とリセット (initTestDb / resetTestDb)", () => {
-    it("initTestDb で4つのテーブルが定義され reader_settings の初期行が挿入されること", async () => {
+    it("initTestDb で6つのテーブルが定義され reader_settings の初期行が挿入されること", async () => {
       const adapter = await initTestDb();
       expect(adapter).toBeInstanceOf(InMemoryDatabaseAdapter);
 
-      // 各テーブルの存在確認
+      // 各テーブルの存在確認（全6テーブル）
       const tables = await adapter.query<{ name: string }>(
         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name ASC;",
       );
       const tableNames = tables.map((t) => t.name);
+      expect(tableNames).toHaveLength(6);
       expect(tableNames).toContain("novels");
       expect(tableNames).toContain("chapters");
       expect(tableNames).toContain("download_queue");
       expect(tableNames).toContain("reader_settings");
+      expect(tableNames).toContain("app_settings");
+      expect(tableNames).toContain("deleted_novels");
 
       // reader_settings の初期行確認
       const settings = await adapter.query<{
