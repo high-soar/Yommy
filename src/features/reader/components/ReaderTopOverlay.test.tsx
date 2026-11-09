@@ -14,6 +14,7 @@ describe("ReaderTopOverlay", () => {
       const overlay = screen.getByTestId("reader-top-overlay");
       expect(overlay).toBeInTheDocument();
       expect(overlay).toHaveAttribute("aria-hidden", "false");
+      expect(overlay).not.toHaveAttribute("inert");
       expect(overlay).toHaveClass("translate-y-0");
       expect(overlay).not.toHaveClass("-translate-y-full");
       expect(overlay).not.toHaveClass("pointer-events-none");
@@ -44,6 +45,7 @@ describe("ReaderTopOverlay", () => {
       const overlay = screen.getByTestId("reader-top-overlay");
       expect(overlay).toBeInTheDocument();
       expect(overlay).toHaveAttribute("aria-hidden", "true");
+      expect(overlay).toHaveAttribute("inert");
       expect(overlay).toHaveClass("-translate-y-full");
       expect(overlay).toHaveClass("pointer-events-none");
       expect(overlay).not.toHaveClass("translate-y-0");

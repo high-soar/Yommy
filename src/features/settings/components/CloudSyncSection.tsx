@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import type { CloudSyncAuthState } from "../../../bridges/cloud-sync/types";
 
 export interface CloudSyncSectionProps {
@@ -67,6 +67,30 @@ export const CloudSyncSection: React.FC<CloudSyncSectionProps> = ({
   const [showDisconnectDialog, setShowDisconnectDialog] = useState<boolean>(
     initialShowDisconnectDialog,
   );
+  const [isDisconnecting, setIsDisconnecting] = useState<boolean>(false);
+
+  const handleCancelDisconnect = useCallback(() => {
+    if (isDisconnecting) return;
+    setShowDisconnectDialog(false);
+  }, [isDisconnecting]);
+
+  // ダイアログ表示時の Escape キー制御（testing.md §3.4）
+  useEffect(() => {
+    if (!showDisconnectDialog) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        handleCancelDisconnect();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showDisconnectDialog, handleCancelDisconnect]);
 
   const statusText = resolveStatusText(authState);
   const lastSyncedText = formatLastSyncedAt(lastSyncedAt);
@@ -74,12 +98,15 @@ export const CloudSyncSection: React.FC<CloudSyncSectionProps> = ({
   const isAuthenticating = authState.status === "authenticating";
 
   const handleConfirmDisconnect = async () => {
-    setShowDisconnectDialog(false);
-    await onSignOut?.();
-  };
-
-  const handleCancelDisconnect = () => {
-    setShowDisconnectDialog(false);
+    setIsDisconnecting(true);
+    try {
+      await onSignOut?.();
+    } catch {
+      // testing.md §3.4: コールバック例外時でも Unhandled Rejection を防止
+    } finally {
+      setIsDisconnecting(false);
+      setShowDisconnectDialog(false);
+    }
   };
 
   return (
@@ -168,7 +195,13 @@ export const CloudSyncSection: React.FC<CloudSyncSectionProps> = ({
           role="dialog"
           aria-modal="true"
           aria-labelledby="disconnect-dialog-title"
+          aria-describedby="disconnect-dialog-description"
           data-testid="cloud-sync-disconnect-dialog"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              handleCancelDisconnect();
+            }
+          }}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
         >
           <div className="bg-white dark:bg-slate-800 rounded-xl max-w-sm w-full p-5 shadow-xl border border-slate-200 dark:border-slate-700 space-y-4">
@@ -178,7 +211,10 @@ export const CloudSyncSection: React.FC<CloudSyncSectionProps> = ({
             >
               Google アカウントの連携解除
             </h3>
-            <p className="text-xs md:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            <p
+              id="disconnect-dialog-description"
+              className="text-xs md:text-sm text-slate-600 dark:text-slate-300 leading-relaxed"
+            >
               連携を解除しますか？
               <br />
               端末内の本棚・しおりデータは消去されずそのまま保持されます。
@@ -187,18 +223,20 @@ export const CloudSyncSection: React.FC<CloudSyncSectionProps> = ({
               <button
                 type="button"
                 data-testid="cloud-sync-disconnect-cancel-button"
+                disabled={isDisconnecting}
                 onClick={handleCancelDisconnect}
-                className="px-3.5 py-1.5 text-xs md:text-sm font-medium rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors cursor-pointer"
+                className="px-3.5 py-1.5 text-xs md:text-sm font-medium rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 キャンセル
               </button>
               <button
                 type="button"
                 data-testid="cloud-sync-disconnect-confirm-button"
+                disabled={isDisconnecting}
                 onClick={handleConfirmDisconnect}
-                className="px-3.5 py-1.5 text-xs md:text-sm font-medium rounded-lg bg-rose-600 hover:bg-rose-700 text-white transition-colors cursor-pointer shadow-xs"
+                className="px-3.5 py-1.5 text-xs md:text-sm font-medium rounded-lg bg-rose-600 hover:bg-rose-700 text-white transition-colors cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                解除する
+                {isDisconnecting ? "解除中..." : "解除する"}
               </button>
             </div>
           </div>

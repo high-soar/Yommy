@@ -54,9 +54,14 @@ describe("NovelCard", () => {
         "data-novel-id",
         dummyNovelWithBookmark.id,
       );
-      expect(screen.getByTestId("novel-card-title")).toHaveTextContent(
-        "境界迷宮と異界の魔術師",
-      );
+      const titleEl = screen.getByTestId("novel-card-title");
+      expect(titleEl).toHaveTextContent("境界迷宮と異界の魔術師");
+      expect(titleEl.tagName.toLowerCase()).toBe("span");
+      expect(titleEl).toHaveAttribute("role", "heading");
+      expect(titleEl).toHaveAttribute("aria-level", "3");
+      expect(
+        screen.getByTestId("novel-card-author").tagName.toLowerCase(),
+      ).toBe("span");
       expect(screen.getByTestId("novel-card-author")).toHaveTextContent(
         "小野崎",
       );

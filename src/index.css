@@ -15,4 +15,11 @@
     -webkit-text-emphasis: filled sesame;
     text-emphasis: filled sesame;
   }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }

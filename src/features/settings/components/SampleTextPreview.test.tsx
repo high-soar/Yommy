@@ -68,6 +68,7 @@ describe("SampleTextPreview", () => {
         fontSize: "18px",
         lineHeight: "1.8",
         fontFamily: FONT_FAMILY_STACKS["biz-ud-mincho"],
+        wordBreak: "break-word",
         padding: "20px",
       });
 

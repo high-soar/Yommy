@@ -27,6 +27,7 @@ describe("ReaderBottomOverlay", () => {
       const overlay = screen.getByTestId("reader-bottom-overlay");
       expect(overlay).toBeInTheDocument();
       expect(overlay).toHaveAttribute("aria-hidden", "false");
+      expect(overlay).not.toHaveAttribute("inert");
       expect(overlay).toHaveClass("translate-y-0");
       expect(overlay).not.toHaveClass("translate-y-full");
 
@@ -74,6 +75,7 @@ describe("ReaderBottomOverlay", () => {
       const overlay = screen.getByTestId("reader-bottom-overlay");
       expect(overlay).toBeInTheDocument();
       expect(overlay).toHaveAttribute("aria-hidden", "true");
+      expect(overlay).toHaveAttribute("inert");
       expect(overlay).toHaveClass("translate-y-full");
       expect(overlay).toHaveClass("pointer-events-none");
       expect(overlay).not.toHaveClass("translate-y-0");
@@ -166,6 +168,7 @@ describe("ReaderBottomOverlay", () => {
       expect(seekbar).toHaveAttribute("min", "1");
       expect(seekbar).toHaveAttribute("max", "5");
       expect(seekbar).toHaveValue("2");
+      expect(seekbar).toHaveAttribute("aria-valuetext", "2 / 5 ページ");
       expect(seekbar).not.toBeDisabled();
 
       const label = screen.getByTestId("reader-page-seekbar-label");

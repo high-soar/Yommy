@@ -158,6 +158,8 @@ src/features/settings/
   - `data-line-height`: 現在の行間倍率（`String(lineHeight)`）
   - `data-font-family`: 現在のフォント種別文字列（`fontFamily`、v0.5 Issue #169）
   - `data-page-margin`: 現在の画面余白数値（`String(pageMarginPx)`、v0.5 Issue #169）
+- **共通スタイル・禁則処理**:
+  本文リーダー画面（`SCR-03`）と同一の CSS フォントスタックおよび禁則処理（`line-break: strict; word-break: break-word`）を適用する。
 - **サンプル文章固定テキスト**:
   本文リーダー画面（`SCR-03`）と同じく、ルビ（`<ruby>`）および傍点（`<em class="bouten">`）を含む以下の固定テキストをサニタイズ描画する：
   ```html

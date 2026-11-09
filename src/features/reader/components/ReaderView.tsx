@@ -384,6 +384,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         fontSize: `${fontSizePx}px`,
         lineHeight,
         fontFamily: FONT_FAMILY_STACKS[fontFamily],
+        lineBreak: "strict",
+        wordBreak: "break-word",
         ...(!isPaged ? { padding: `${pageMarginPx}px` } : {}),
       }}
     >

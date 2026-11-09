@@ -28,6 +28,7 @@ export const ReaderTopOverlay: React.FC<ReaderTopOverlayProps> = ({
     <header
       data-testid="reader-top-overlay"
       aria-hidden={!isOpen}
+      inert={!isOpen ? true : undefined}
       className={`fixed top-0 left-0 right-0 z-40 bg-white/95 dark:bg-zinc-900/95 shadow-md border-b border-zinc-200 dark:border-zinc-800 transition-transform duration-200 ease-in-out ${
         isOpen ? "translate-y-0" : "-translate-y-full pointer-events-none"
       }`}

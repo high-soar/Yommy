@@ -1718,30 +1718,126 @@ describe("useReader", () => {
         await result.current.updateScrollProgress(0.42);
       });
       expect(result.current.scrollProgress).toBe(0.42);
-      let dbNovel = await novelRepo.getNovelById(seeded.id);
-      expect(dbNovel?.bookmarkScrollProgress).toBe(0.42);
+      await waitFor(async () => {
+        const dbNovel = await novelRepo.getNovelById(seeded.id);
+        expect(dbNovel?.bookmarkScrollProgress).toBe(0.42);
+      });
 
       // 下限クランプ (-0.2 -> 0.0)
       await act(async () => {
         await result.current.updateScrollProgress(-0.2);
       });
       expect(result.current.scrollProgress).toBe(0);
-      dbNovel = await novelRepo.getNovelById(seeded.id);
-      expect(dbNovel?.bookmarkScrollProgress).toBe(0);
+      await waitFor(async () => {
+        const dbNovel = await novelRepo.getNovelById(seeded.id);
+        expect(dbNovel?.bookmarkScrollProgress).toBe(0);
+      });
 
       // 上限クランプ (1.5 -> 1.0)
       await act(async () => {
         await result.current.updateScrollProgress(1.5);
       });
       expect(result.current.scrollProgress).toBe(1);
-      dbNovel = await novelRepo.getNovelById(seeded.id);
-      expect(dbNovel?.bookmarkScrollProgress).toBe(1);
+      await waitFor(async () => {
+        const dbNovel = await novelRepo.getNovelById(seeded.id);
+        expect(dbNovel?.bookmarkScrollProgress).toBe(1);
+      });
 
       // 非有限値 (NaN -> 0.0)
       await act(async () => {
         await result.current.updateScrollProgress(Number.NaN);
       });
       expect(result.current.scrollProgress).toBe(0);
+    });
+
+    it("updateScrollProgress が連続呼び出しされた場合、300ms デバウンスされて最後の値のみが DB に保存されること (R1-12)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 2,
+        cachedCount: 2,
+      });
+
+      const updateBookmarkSpy = vi.spyOn(novelRepo, "updateBookmark");
+
+      const { result } = renderHook(
+        () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+        {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      updateBookmarkSpy.mockClear();
+
+      // 連続スクロール呼び出し
+      await act(async () => {
+        void result.current.updateScrollProgress(0.1);
+        void result.current.updateScrollProgress(0.2);
+        void result.current.updateScrollProgress(0.35);
+      });
+
+      // 呼び出し直後はステートのみ更新され、DB 保存はまだ実行されていない
+      expect(result.current.scrollProgress).toBe(0.35);
+      expect(updateBookmarkSpy).not.toHaveBeenCalled();
+
+      // 300ms 後にデバウンスが発火し、最後の値 0.35 のみ保存される
+      await waitFor(async () => {
+        expect(updateBookmarkSpy).toHaveBeenCalledTimes(1);
+        expect(updateBookmarkSpy).toHaveBeenCalledWith(seeded.id, 1, 0.35);
+        const dbNovel = await novelRepo.getNovelById(seeded.id);
+        expect(dbNovel?.bookmarkScrollProgress).toBe(0.35);
+      });
+    });
+
+    it("updateScrollProgress の 300ms デバウンス待機中に flushBookmark を呼ぶとタイマーがキャンセルされ即時保存されること (R1-12)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 2,
+        cachedCount: 2,
+      });
+
+      const updateBookmarkSpy = vi.spyOn(novelRepo, "updateBookmark");
+
+      const { result } = renderHook(
+        () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+        {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      updateBookmarkSpy.mockClear();
+
+      // スクロール進捗を更新後、デバウンス待機完了前に即時 flushBookmark
+      await act(async () => {
+        void result.current.updateScrollProgress(0.7);
+        await result.current.flushBookmark();
+      });
+
+      // flushBookmark により即座に DB 保存される
+      expect(updateBookmarkSpy).toHaveBeenCalledWith(seeded.id, 1, 0.7);
+      const dbNovel = await novelRepo.getNovelById(seeded.id);
+      expect(dbNovel?.bookmarkScrollProgress).toBe(0.7);
+
+      // さらに 350ms 経過後も二重呼び出しされていないこと
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      expect(updateBookmarkSpy).toHaveBeenCalledTimes(1);
     });
 
     it("flushBookmark で最新の (chapterIndex, scrollProgress) が DB に即時保存されること (AC-RD-08)", async () => {
@@ -1780,6 +1876,41 @@ describe("useReader", () => {
       });
 
       expect(updateBookmarkSpy).toHaveBeenCalledWith(seeded.id, 1, 0.5);
+    });
+
+    it("flushBookmark の参照が作品情報の更新等で不要に変更されず安定していること (R1-12)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 2,
+        cachedCount: 2,
+      });
+
+      const { result, rerender } = renderHook(
+        () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+        {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      const initialFlushBookmark = result.current.flushBookmark;
+
+      // スクロール進捗を更新して再レンダーを発生させる
+      await act(async () => {
+        void result.current.updateScrollProgress(0.3);
+      });
+
+      rerender();
+
+      expect(result.current.flushBookmark).toBe(initialFlushBookmark);
     });
 
     it("novel === null の状態で updateScrollProgress や flushBookmark を呼び出しても例外が発生しないこと", async () => {
@@ -1834,7 +1965,9 @@ describe("useReader", () => {
       await act(async () => {
         await result.current.updateScrollProgress(0.5);
       });
-      expect(result.current.error).toBe("しおり更新例外");
+      await waitFor(() => {
+        expect(result.current.error).toBe("しおり更新例外");
+      });
 
       await act(async () => {
         await result.current.flushBookmark();
@@ -2949,6 +3082,7 @@ describe("useReader", () => {
         expect(result.current.error).toContain(
           "エピソードの取得に失敗しました (HTTP 500)",
         );
+        expect(result.current.chapterIndex).toBe(2);
         expect(result.current.chapter?.chapterIndex).toBe(2);
         expect(result.current.chapter?.url).toBe(ch2!.url);
       });
@@ -4037,9 +4171,11 @@ describe("useReader", () => {
         expect(result.current.currentPage).toBe(3);
         expect(result.current.scrollProgress).toBe(0.5);
 
-        const reloadedNovel = await novelRepo.getNovelById(seeded.id);
-        expect(reloadedNovel?.bookmarkChapterIndex).toBe(1);
-        expect(reloadedNovel?.bookmarkScrollProgress).toBe(0.5);
+        await waitFor(async () => {
+          const reloadedNovel = await novelRepo.getNovelById(seeded.id);
+          expect(reloadedNovel?.bookmarkChapterIndex).toBe(1);
+          expect(reloadedNovel?.bookmarkScrollProgress).toBe(0.5);
+        });
       });
 
       it("goToPage で第1ページ（1）に遷移した場合、進捗率は 0.0 となること", async () => {

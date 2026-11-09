@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, act, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
@@ -248,6 +248,137 @@ describe("CloudSyncSection", () => {
       expect(screen.getByTestId("cloud-sync-last-synced-at")).toHaveTextContent(
         "最終同期: 未同期",
       );
+    });
+
+    it("ダイアログ表示時に Escape キー押下でダイアログが閉じること (R1-46, testing.md §3.4)", async () => {
+      const user = userEvent.setup();
+      render(
+        <CloudSyncSection
+          authState={{ status: "connected", email: "user@example.com" }}
+          isSyncing={false}
+          lastSyncedAt={null}
+          initialShowDisconnectDialog={true}
+        />,
+      );
+
+      const dialog = screen.getByTestId("cloud-sync-disconnect-dialog");
+      expect(dialog).toBeInTheDocument();
+      expect(dialog).toHaveAttribute(
+        "aria-describedby",
+        "disconnect-dialog-description",
+      );
+
+      await user.keyboard("{Escape}");
+      expect(
+        screen.queryByTestId("cloud-sync-disconnect-dialog"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("ダイアログ外周クリックで閉じ、内部クリックでは閉じないこと (R1-46, testing.md §3.4)", async () => {
+      const user = userEvent.setup();
+      render(
+        <CloudSyncSection
+          authState={{ status: "connected", email: "user@example.com" }}
+          isSyncing={false}
+          lastSyncedAt={null}
+          initialShowDisconnectDialog={true}
+        />,
+      );
+
+      const dialog = screen.getByTestId("cloud-sync-disconnect-dialog");
+      // 内部見出しをクリックしても閉じない
+      const title = screen.getByText("Google アカウントの連携解除");
+      await user.click(title);
+      expect(
+        screen.getByTestId("cloud-sync-disconnect-dialog"),
+      ).toBeInTheDocument();
+
+      // 外周 backdrop をクリックすると閉じる
+      await user.click(dialog);
+      expect(
+        screen.queryByTestId("cloud-sync-disconnect-dialog"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("onSignOut が例外をスローした場合でも try/catch/finally で捕捉されダイアログが閉じること (R1-46, testing.md §3.4)", async () => {
+      const user = userEvent.setup();
+      const onSignOut = vi
+        .fn()
+        .mockRejectedValue(new Error("ネットワークエラー"));
+
+      render(
+        <CloudSyncSection
+          authState={{ status: "connected", email: "user@example.com" }}
+          isSyncing={false}
+          lastSyncedAt={null}
+          initialShowDisconnectDialog={true}
+          onSignOut={onSignOut}
+        />,
+      );
+
+      const confirmBtn = screen.getByTestId(
+        "cloud-sync-disconnect-confirm-button",
+      );
+      await user.click(confirmBtn);
+
+      expect(onSignOut).toHaveBeenCalledTimes(1);
+      expect(
+        screen.queryByTestId("cloud-sync-disconnect-dialog"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("連携解除実行中（isDisconnecting）はキャンセルボタン押下でもダイアログが閉じないこと (R1-46)", async () => {
+      const user = userEvent.setup();
+      let resolveSignOut!: () => void;
+      const onSignOut = vi.fn().mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveSignOut = resolve;
+          }),
+      );
+
+      render(
+        <CloudSyncSection
+          authState={{ status: "connected", email: "user@example.com" }}
+          isSyncing={false}
+          lastSyncedAt={null}
+          initialShowDisconnectDialog={true}
+          onSignOut={onSignOut}
+        />,
+      );
+
+      const confirmBtn = screen.getByTestId(
+        "cloud-sync-disconnect-confirm-button",
+      );
+      await user.click(confirmBtn);
+
+      // 解除処理中
+      expect(confirmBtn).toBeDisabled();
+
+      const dialog = screen.getByTestId("cloud-sync-disconnect-dialog");
+      // 外周クリックしても閉じない（isDisconnecting ガード）
+      await user.click(dialog);
+      expect(dialog).toBeInTheDocument();
+
+      // Escape キーを押しても閉じない（isDisconnecting ガード）
+      await user.keyboard("{Escape}");
+      expect(dialog).toBeInTheDocument();
+
+      const cancelBtn = screen.getByTestId(
+        "cloud-sync-disconnect-cancel-button",
+      );
+      // キャンセルボタンクリック（fireEvent）でも閉じない（isDisconnecting ガード）
+      fireEvent.click(cancelBtn);
+      expect(dialog).toBeInTheDocument();
+
+      // サインアウト完了
+      await act(async () => {
+        resolveSignOut();
+      });
+
+      expect(
+        screen.queryByTestId("cloud-sync-disconnect-dialog"),
+      ).not.toBeInTheDocument();
     });
   });
 });

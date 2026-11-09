@@ -724,6 +724,33 @@ describe("App コンポーネント", () => {
       );
     });
 
+    it("本棚画面 (SCR-01) でトースト表示中にタブ切り替えで他画面へ遷移したとき、確認トーストが即座に消去されること (TR-13, R1-11)", async () => {
+      const mockAppBridge = new MockAppBridge();
+      render(<App initialPath="/" appBridge={mockAppBridge} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+      });
+
+      // 1回目の戻るボタン押下でトースト表示
+      await act(async () => {
+        await mockAppBridge.triggerBackButton();
+      });
+      expect(screen.getByTestId("exit-app-toast")).toBeInTheDocument();
+
+      // 検索タブを押下して画面遷移
+      const searchTabButton = screen.getByTestId("tab-search");
+      await act(async () => {
+        searchTabButton.click();
+      });
+
+      // 検索画面へ遷移し、トーストが消えていること
+      await waitFor(() => {
+        expect(screen.getByTestId("search-page")).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId("exit-app-toast")).not.toBeInTheDocument();
+    });
+
     it("本棚画面 (SCR-01) で2秒以内に連続2回戻るボタンを押下した場合は exitApp が呼ばれること (AC-AB-06, TR-13)", async () => {
       const mockAppBridge = new MockAppBridge();
       render(<App initialPath="/" appBridge={mockAppBridge} />);

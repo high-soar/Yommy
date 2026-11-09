@@ -102,6 +102,8 @@ export const SampleTextPreview: React.FC<SampleTextPreviewProps> = ({
         fontSize: `${fontSizePx}px`,
         lineHeight,
         fontFamily: FONT_FAMILY_STACKS[fontFamily],
+        lineBreak: "strict",
+        wordBreak: "break-word",
         padding: `${pageMarginPx}px`,
       }}
     >

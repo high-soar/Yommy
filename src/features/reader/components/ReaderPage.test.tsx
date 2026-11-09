@@ -127,9 +127,9 @@ describe("ReaderPage", () => {
       expect(screen.getByTestId("reader-view")).toBeInTheDocument();
 
       // 最下部タッチゾーン
-      expect(
-        screen.getByTestId("reader-bottom-touch-zone"),
-      ).toBeInTheDocument();
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+      expect(touchZone).toBeInTheDocument();
+      expect(touchZone).toHaveAttribute("aria-expanded", "false");
 
       // 上部オーバーレイは初期非表示（aria-hidden=true）
       const topOverlay = screen.getByTestId("reader-top-overlay");
@@ -376,6 +376,7 @@ describe("ReaderPage", () => {
       const overlay = screen.getByTestId("reader-bottom-overlay");
 
       expect(overlay).toHaveAttribute("aria-hidden", "true");
+      expect(touchZone).toHaveAttribute("aria-expanded", "false");
 
       // 1回目のタップ（展開）
       const now = Date.now();
@@ -386,6 +387,7 @@ describe("ReaderPage", () => {
 
       expect(overlay).toHaveAttribute("aria-hidden", "false");
       expect(overlay).toHaveClass("translate-y-0");
+      expect(touchZone).toHaveAttribute("aria-expanded", "true");
 
       // 2回目のタップ（閉じる）
       vi.spyOn(Date, "now").mockReturnValue(now + 200);
@@ -394,6 +396,7 @@ describe("ReaderPage", () => {
       firePointer(touchZone, "pointerup", { clientX: 100, clientY: 500 });
 
       expect(overlay).toHaveAttribute("aria-hidden", "true");
+      expect(touchZone).toHaveAttribute("aria-expanded", "false");
     });
 
     it("タッチ移動距離が10px以上のスワイプ・ドラッグ操作ではオーバーレイが開かないこと", () => {

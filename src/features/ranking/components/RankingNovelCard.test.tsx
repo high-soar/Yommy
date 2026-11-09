@@ -20,12 +20,17 @@ describe("RankingNovelCard コンポーネント", () => {
   it("Rank1Gold ストーリー: 1位のゴールドバッジおよび全作品メタデータが描画されること (AC-RK-04, AC-RK-05)", () => {
     render(<Rank1Gold />);
 
-    expect(
-      screen.getByTestId("ranking-novel-card-16817330658027210412"),
-    ).toBeInTheDocument();
+    const card = screen.getByTestId("ranking-novel-card-16817330658027210412");
+    expect(card).toBeInTheDocument();
+    expect(card).not.toHaveAttribute("role", "button");
+    expect(card).not.toHaveAttribute("tabindex");
 
     const rankBadge = screen.getByTestId("ranking-card-rank-badge");
     expect(rankBadge).toHaveTextContent("1位");
+
+    const titleButton = screen.getByTestId("ranking-card-title-button");
+    expect(titleButton).toBeInTheDocument();
+    expect(titleButton).toHaveTextContent("境界迷宮と異界の魔術師");
 
     expect(screen.getByTestId("ranking-card-title")).toHaveTextContent(
       "境界迷宮と異界の魔術師",
@@ -153,7 +158,7 @@ describe("RankingNovelCard コンポーネント", () => {
     expect(handleSelect).toHaveBeenCalledTimes(1);
   });
 
-  it("キーボード操作（Enter / Space）でカード本体の onSelect が呼び出されること", async () => {
+  it("キーボード操作（Enter / Space）でカードタイトルボタンの onSelect が呼び出されること", async () => {
     const user = userEvent.setup();
     const handleSelect = vi.fn();
 
@@ -167,8 +172,8 @@ describe("RankingNovelCard コンポーネント", () => {
       />,
     );
 
-    const card = screen.getByTestId("ranking-novel-card-16817330658027210412");
-    card.focus();
+    const titleButton = screen.getByTestId("ranking-card-title-button");
+    titleButton.focus();
     await user.keyboard("{Enter}");
     expect(handleSelect).toHaveBeenCalledTimes(1);
 

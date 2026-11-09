@@ -87,6 +87,7 @@ export const ReaderBottomOverlay: React.FC<ReaderBottomOverlayProps> = ({
       data-testid="reader-bottom-overlay"
       data-active-tab={activeTab}
       aria-hidden={!isOpen}
+      inert={!isOpen ? true : undefined}
       className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-zinc-900/95 shadow-lg border-t border-zinc-200 dark:border-zinc-800 transition-transform duration-200 ease-in-out ${
         isOpen ? "translate-y-0" : "translate-y-full pointer-events-none"
       }`}
@@ -115,6 +116,7 @@ export const ReaderBottomOverlay: React.FC<ReaderBottomOverlayProps> = ({
             disabled={totalPages <= 1 || isLoading}
             onChange={(e) => onPageChange?.(Number(e.target.value))}
             aria-label="ページ位置シークバー"
+            aria-valuetext={`${currentPage} / ${totalPages} ページ`}
             className="w-full h-2 bg-zinc-200 dark:bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-emerald-600 dark:accent-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed"
           />
         </div>

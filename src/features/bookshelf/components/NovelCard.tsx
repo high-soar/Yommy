@@ -49,7 +49,7 @@ export const NovelCard: React.FC<NovelCardProps> = ({
           onClick={() => onSelect(novel.id)}
           className="cursor-pointer group flex-1 min-w-0 focus:outline-hidden focus:ring-2 focus:ring-blue-500 rounded-lg p-1 -m-1 text-left"
         >
-          <div className="flex items-center gap-1.5 min-w-0 mb-2">
+          <span className="flex items-center gap-1.5 min-w-0 mb-2">
             {novel.hasNewUpdate && (
               <span
                 data-testid="novel-card-new-badge"
@@ -58,27 +58,29 @@ export const NovelCard: React.FC<NovelCardProps> = ({
                 NEW
               </span>
             )}
-            <h3
+            <span
+              role="heading"
+              aria-level={3}
               data-testid="novel-card-title"
               className="text-base font-bold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2"
             >
               {novel.title}
-            </h3>
-          </div>
+            </span>
+          </span>
 
-          <p
+          <span
             data-testid="novel-card-author"
-            className="text-xs text-slate-600 dark:text-slate-400 mb-3"
+            className="block text-xs text-slate-600 dark:text-slate-400 mb-3"
           >
             {novel.author || "著者不明"}
-          </p>
+          </span>
 
-          <p
+          <span
             data-testid="novel-card-chapters"
-            className="text-xs text-slate-500 dark:text-slate-400 mb-4"
+            className="block text-xs text-slate-500 dark:text-slate-400 mb-4"
           >
             全 {novel.totalChapters} 話（取得済み {novel.cachedChapters} 話）
-          </p>
+          </span>
         </button>
 
         <div className="flex items-center gap-1.5 shrink-0">

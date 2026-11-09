@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useServices } from "../../../app/ServiceProvider";
 import type {
   ReaderFontFamily,
@@ -22,6 +22,7 @@ export interface UseSettingsResult {
   pagingMode: ReaderPagingMode;
   enableVolumeKeyPaging: boolean;
   isLoading: boolean;
+  isUpdating: boolean;
   error: string | null;
   toggleWritingMode: () => Promise<void>;
   changeTheme: (theme: ReaderTheme) => Promise<void>;
@@ -59,7 +60,14 @@ export function useSettings(): UseSettingsResult {
   const [enableVolumeKeyPaging, setEnableVolumeKeyPaging] =
     useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isUpdating, setIsUpdating] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isTogglingRef = useRef<boolean>(false);
+  const writingModeRef = useRef<WritingMode>(writingMode);
+  writingModeRef.current = writingMode;
+  const enableVolumeKeyPagingRef = useRef<boolean>(enableVolumeKeyPaging);
+  enableVolumeKeyPagingRef.current = enableVolumeKeyPaging;
 
   useEffect(() => {
     if (!isReady) {
@@ -108,18 +116,26 @@ export function useSettings(): UseSettingsResult {
   }, [isReady, settingsRepository]);
 
   const toggleWritingMode = useCallback(async (): Promise<void> => {
-    const prevMode = writingMode;
+    if (isTogglingRef.current) return;
+    isTogglingRef.current = true;
+    setIsUpdating(true);
+    const prevMode = writingModeRef.current;
     const nextMode: WritingMode =
       prevMode === "vertical-rl" ? "horizontal-tb" : "vertical-rl";
+    writingModeRef.current = nextMode;
     setWritingMode(nextMode);
     try {
       await settingsRepository.updateReaderSettings({ writingMode: nextMode });
       setError(null);
     } catch (err: unknown) {
+      writingModeRef.current = prevMode;
       setWritingMode(prevMode);
       setError(toErrorMessage(err));
+    } finally {
+      isTogglingRef.current = false;
+      setIsUpdating(false);
     }
-  }, [writingMode, settingsRepository]);
+  }, [settingsRepository]);
 
   const changeTheme = useCallback(
     async (nextTheme: ReaderTheme): Promise<void> => {
@@ -222,8 +238,12 @@ export function useSettings(): UseSettingsResult {
   );
 
   const toggleVolumeKeyPaging = useCallback(async (): Promise<void> => {
-    const prev = enableVolumeKeyPaging;
+    if (isTogglingRef.current) return;
+    isTogglingRef.current = true;
+    setIsUpdating(true);
+    const prev = enableVolumeKeyPagingRef.current;
     const next = !prev;
+    enableVolumeKeyPagingRef.current = next;
     setEnableVolumeKeyPaging(next);
     try {
       await settingsRepository.updateReaderSettings({
@@ -231,10 +251,14 @@ export function useSettings(): UseSettingsResult {
       });
       setError(null);
     } catch (err: unknown) {
+      enableVolumeKeyPagingRef.current = prev;
       setEnableVolumeKeyPaging(prev);
       setError(toErrorMessage(err));
+    } finally {
+      isTogglingRef.current = false;
+      setIsUpdating(false);
     }
-  }, [enableVolumeKeyPaging, settingsRepository]);
+  }, [settingsRepository]);
 
   return {
     writingMode,
@@ -246,6 +270,7 @@ export function useSettings(): UseSettingsResult {
     pagingMode,
     enableVolumeKeyPaging,
     isLoading,
+    isUpdating,
     error,
     toggleWritingMode,
     changeTheme,

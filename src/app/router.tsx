@@ -231,6 +231,10 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
   const [previousPath, setPreviousPath] = useState<string | undefined>(
     undefined,
   );
+  const previousPathRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    previousPathRef.current = previousPath;
+  }, [previousPath]);
   const [novelOrigin, setNovelOrigin] = useState<string | null>(null);
   const novelOriginRef = useRef<string | null>(null);
   const [settingsOrigin, setSettingsOrigin] = useState<string | null>(null);
@@ -283,71 +287,81 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
     };
   }, []);
 
-  const navigate = useCallback((to: string) => {
-    if (currentPathRef.current === to) {
-      return;
-    }
-    const current = currentPathRef.current;
+  const navigate = useCallback(
+    (to: string, options?: { replace?: boolean }) => {
+      if (currentPathRef.current === to) {
+        return;
+      }
+      const current = currentPathRef.current;
 
-    // settingsOrigin 管理: /settings への遷移時、直前が /novels/ (SCR-02 or SCR-03) であれば保持
-    if (to === "/settings") {
-      if (current.startsWith("/novels/")) {
-        settingsOriginRef.current = current;
-        setSettingsOrigin(current);
+      // settingsOrigin 管理: /settings への遷移時、直前が /novels/ (SCR-02 or SCR-03) であれば保持
+      if (to === "/settings") {
+        if (current.startsWith("/novels/")) {
+          settingsOriginRef.current = current;
+          setSettingsOrigin(current);
+        } else {
+          settingsOriginRef.current = null;
+          setSettingsOrigin(null);
+        }
       } else {
         settingsOriginRef.current = null;
         setSettingsOrigin(null);
       }
-    } else {
-      settingsOriginRef.current = null;
-      setSettingsOrigin(null);
-    }
 
-    // browserOrigin (TR-12 復帰元) 管理:
-    // to が /browser の場合: originPath クエリがあればそれを優先、なければ直前パス（/browser 以外）を保持
-    if (to.startsWith("/browser")) {
-      const searchStr = to.split("?")[1] ?? "";
-      const originParam = new URLSearchParams(searchStr).get("originPath");
-      const explicitOrigin = originParam
-        ? safeDecodeURIComponent(originParam).trim()
-        : undefined;
-      if (explicitOrigin) {
-        browserOriginRef.current = explicitOrigin;
-        setBrowserOrigin(explicitOrigin);
-      } else if (!current.startsWith("/browser")) {
-        browserOriginRef.current = current;
-        setBrowserOrigin(current);
+      // browserOrigin (TR-12 復帰元) 管理:
+      // to が /browser の場合: originPath クエリがあればそれを優先、なければ直前パス（/browser 以外）を保持
+      if (to.startsWith("/browser")) {
+        const searchStr = to.split("?")[1] ?? "";
+        const originParam = new URLSearchParams(searchStr).get("originPath");
+        const explicitOrigin = originParam
+          ? safeDecodeURIComponent(originParam).trim()
+          : undefined;
+        if (explicitOrigin) {
+          browserOriginRef.current = explicitOrigin;
+          setBrowserOrigin(explicitOrigin);
+        } else if (!current.startsWith("/browser")) {
+          browserOriginRef.current = current;
+          setBrowserOrigin(current);
+        }
+      } else if (to !== "/settings") {
+        browserOriginRef.current = null;
+        setBrowserOrigin(null);
       }
-    } else if (to !== "/settings") {
-      browserOriginRef.current = null;
-      setBrowserOrigin(null);
-    }
 
-    // novelOrigin (TR-07 探索元) 管理:
-    // to が /novels/ の場合: 直前が /search または /ranking であれば探索元としてセット
-    // ※ただし、/settings から /novels/ への復帰時や明示的に origin が設定済みの場合は上書きしない
-    if (to.startsWith("/novels/")) {
-      if (
-        !novelOriginRef.current &&
-        !current.startsWith("/novels/") &&
-        current !== "/settings"
-      ) {
-        novelOriginRef.current = current;
-        setNovelOrigin(current);
+      // novelOrigin (TR-07 探索元) 管理:
+      // to が /novels/ の場合: 直前が /search または /ranking であれば探索元としてセット
+      // ※ただし、/settings から /novels/ への復帰時や明示的に origin が設定済みの場合は上書きしない
+      // R1-48: /browser からの遷移時も探索元として誤セットしない
+      if (to.startsWith("/novels/")) {
+        if (
+          !novelOriginRef.current &&
+          !current.startsWith("/novels/") &&
+          current !== "/settings" &&
+          !current.startsWith("/browser")
+        ) {
+          novelOriginRef.current = current;
+          setNovelOrigin(current);
+        }
+      } else if (to !== "/settings" && !to.startsWith("/browser")) {
+        // /settings や /browser への一時退避以外で /novels/ から離脱した場合は探索元をクリア
+        novelOriginRef.current = null;
+        setNovelOrigin(null);
       }
-    } else if (to !== "/settings" && !to.startsWith("/browser")) {
-      // /settings や /browser への一時退避以外で /novels/ から離脱した場合は探索元をクリア
-      novelOriginRef.current = null;
-      setNovelOrigin(null);
-    }
 
-    window.history.pushState(null, "", to);
-    currentPathRef.current = to;
-    setCurrentPath((prev) => {
-      setPreviousPath(prev);
-      return to;
-    });
-  }, []);
+      if (options?.replace) {
+        window.history.replaceState(null, "", to);
+      } else {
+        window.history.pushState(null, "", to);
+      }
+      currentPathRef.current = to;
+      previousPathRef.current = current;
+      setCurrentPath((prev) => {
+        setPreviousPath(prev);
+        return to;
+      });
+    },
+    [],
+  );
 
   const navigateToBookshelf = useCallback(() => {
     navigate("/");
@@ -447,16 +461,14 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
   const route = useMemo(() => matchRoute(currentPath), [currentPath]);
 
   const back = useCallback(() => {
+    let target: string | null = null;
+
     // 論理階層遷移制御
     // 1. 各話View (SCR-03: reader) -> 目次画面 (SCR-02: novel-detail)
     if (route.name === "reader") {
-      const detailPath = `/novels/${encodeURIComponent(route.novelId)}`;
-      navigate(detailPath);
-      return;
-    }
-
-    // 2. 目次画面 (SCR-02: novel-detail) -> 直前探索元 (TR-07: /search または /ranking、デフォルトは "/")
-    if (route.name === "novel-detail") {
+      target = `/novels/${encodeURIComponent(route.novelId)}`;
+    } else if (route.name === "novel-detail") {
+      // 2. 目次画面 (SCR-02: novel-detail) -> 直前探索元 (TR-07: /search または /ranking、デフォルトは "/")
       const origin =
         novelOriginRef.current === "/search" ||
         novelOriginRef.current === "/ranking"
@@ -464,12 +476,9 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
           : "/";
       novelOriginRef.current = null;
       setNovelOrigin(null);
-      navigate(origin);
-      return;
-    }
-
-    // 3. 設定画面 (SCR-05) -> 直前画面（リーダー SCR-03、作品詳細 SCR-02）またはホーム本棚画面 "/" (TR-12)
-    if (route.name === "settings") {
+      target = origin;
+    } else if (route.name === "settings") {
+      // 3. 設定画面 (SCR-05) -> 直前画面（リーダー SCR-03、作品詳細 SCR-02）またはホーム本棚画面 "/" (TR-12)
       if (
         settingsOriginRef.current &&
         settingsOriginRef.current.startsWith("/novels/")
@@ -477,34 +486,31 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
         const origin = settingsOriginRef.current;
         settingsOriginRef.current = null;
         setSettingsOrigin(null);
-        navigate(origin);
-        return;
+        target = origin;
+      } else {
+        settingsOriginRef.current = null;
+        setSettingsOrigin(null);
+        target = "/";
       }
-      settingsOriginRef.current = null;
-      setSettingsOrigin(null);
-      navigate("/");
-      return;
-    }
-
-    // 4. 検索画面 (SCR-06) / ランキング画面 (SCR-07) -> ホーム本棚画面 "/" (TR-12)
-    if (route.name === "search" || route.name === "ranking") {
-      navigate("/");
-      return;
-    }
-
-    // 5. 内蔵ブラウザ画面 (SCR-04: browser) -> 直前画面（originPath / browserOrigin / 作品詳細 SCR-02 / ホーム本棚 SCR-01）(TR-12)
-    if (route.name === "browser") {
-      const target =
+    } else if (route.name === "search" || route.name === "ranking") {
+      // 4. 検索画面 (SCR-06) / ランキング画面 (SCR-07) -> ホーム本棚画面 "/" (TR-12)
+      target = "/";
+    } else if (route.name === "browser") {
+      // 5. 内蔵ブラウザ画面 (SCR-04: browser) -> 直前画面（originPath / browserOrigin / 作品詳細 SCR-02 / ホーム本棚 SCR-01）(TR-12)
+      target =
         route.originPath ??
         browserOriginRef.current ??
         (route.novelId ? `/novels/${encodeURIComponent(route.novelId)}` : "/");
       browserOriginRef.current = null;
       setBrowserOrigin(null);
-      navigate(target);
-      return;
     }
-
     // 6. 本棚画面 (SCR-01: bookshelf) -> ルート（何もしない、TR-13）
+
+    if (target) {
+      // R1-25: 戻り先が直前の履歴エントリと一致する場合は replaceState で戻し、履歴の無限増殖を防止
+      const shouldReplace = target === previousPathRef.current;
+      navigate(target, { replace: shouldReplace });
+    }
   }, [route, navigate]);
 
   const contextValue = useMemo<RouterContextValue>(

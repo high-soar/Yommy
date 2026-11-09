@@ -66,6 +66,7 @@ export const WebViewImportPage: React.FC<WebViewImportPageProps> = ({
           <input
             type="url"
             data-testid="browser-url-input"
+            aria-label="URLを入力"
             value={url}
             onChange={(e) => onUrlChange(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -110,7 +111,7 @@ export const WebViewImportPage: React.FC<WebViewImportPageProps> = ({
       </section>
 
       {/* 中央プレビュー / ステータス表示領域 */}
-      <main
+      <div
         data-testid="browser-preview-area"
         className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4"
       >
@@ -188,7 +189,7 @@ export const WebViewImportPage: React.FC<WebViewImportPageProps> = ({
             {currentCapturedUrl || url || "（URL 未指定）"}
           </div>
         </div>
-      </main>
+      </div>
 
       {/* 下部 4 タブバー */}
       <BottomTabBar

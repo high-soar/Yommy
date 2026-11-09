@@ -936,5 +936,25 @@ describe("SettingsPage", () => {
       expect(footer).toBeInTheDocument();
       expect(footer).toHaveTextContent("CustomReader v2.5.0");
     });
+
+    it("isUpdating=true のとき、組み方向切替ボタンと音量キートグルスイッチが無効化されること (R1-35)", () => {
+      render(
+        <SettingsPage
+          writingMode="vertical-rl"
+          theme="light"
+          isUpdating={true}
+          onToggleWritingMode={vi.fn()}
+          onChangeTheme={vi.fn()}
+          onChangeFontSize={vi.fn()}
+          onChangeLineHeight={vi.fn()}
+        />,
+      );
+
+      const orientationBtn = screen.getByTestId("toggle-orientation");
+      expect(orientationBtn).toBeDisabled();
+
+      const volumeKeySwitch = screen.getByTestId("toggle-volume-key-paging");
+      expect(volumeKeySwitch).toBeDisabled();
+    });
   });
 });
