@@ -32,8 +32,8 @@ docs/
 │   │   ├── kakuyomu.md                # カクヨム パーサー・スクレイピング仕様書（kakuyomu.jp）
 │   │   └── narou.md                   # 小説家になろう パーサー・スクレイピング仕様書（ncode.syosetu.com）
 │   └── changes/                       # [差分仕様 (Delta Specs)] 要望（親Issue）ごとの設計差分・テスト計画・Sub-issue分割
-│       ├── issue-304-v1-release-readiness.md # [Review] v1.0 リリース整備（バージョン1.0.0統一・設定画面バージョン表示・reference/撤去・README.md整備）の差分仕様 (#304)
 │       └── archive/                   # 完了済みの差分仕様アーカイブ（親Issueクローズ時に git mv で移動）
+│           ├── issue-304-v1-release-readiness.md # [Archived] v1.0 リリース整備（バージョン1.0.0統一・設定画面バージョン表示・reference/撤去・README.md整備）の差分仕様 (#304)
 │           ├── issue-269-webview-fallback-and-dom-import.md # [Archived] 内蔵ブラウザ画面（SCR-04）とWebView表示中DOM手動インポート・フォールバック遷移（TR-09〜11）の実装差分仕様 (#269)
 │           ├── issue-268-persistent-download-queue.md # [Archived] 永続ダウンロードキュー（QueueRepository / download_queue）の実装と一括キャッシュ中断再開・再試行統合の差分仕様 (#268)
 │           ├── issue-266-bookshelf-favorite-and-sync.md # [Archived] 作品のお気に入り（★）登録・クラウド同期連携と本棚お気に入りフィルタ機能の差分仕様 (#266)
