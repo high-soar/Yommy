@@ -13,30 +13,31 @@ describe("Android ビルド設定および署名・バージョン管理検証 (
   );
 
   describe("固定 Debug Keystore の配置検証 (AC-APK-01)", () => {
+    let opensslAvailable = false;
+    try {
+      execSync("which openssl", { stdio: "ignore" });
+      opensslAvailable = true;
+    } catch {
+      opensslAvailable = false;
+    }
+
     it("android/debug.keystore が存在し、ファイルサイズが正であること", () => {
       expect(fs.existsSync(keystorePath)).toBe(true);
       const stat = fs.statSync(keystorePath);
       expect(stat.size).toBeGreaterThan(0);
     });
 
-    it("openssl が利用可能な場合、キーストアのエイリアスとパスワードが正常に読めること", () => {
-      let opensslAvailable = false;
-      try {
-        execSync("which openssl", { stdio: "ignore" });
-        opensslAvailable = true;
-      } catch {
-        opensslAvailable = false;
-      }
-
-      if (opensslAvailable) {
+    it.skipIf(!opensslAvailable)(
+      "openssl が利用可能な場合、キーストアのエイリアスとパスワードが正常に読めること",
+      () => {
         const output = execSync(
           `openssl pkcs12 -info -in "${keystorePath}" -nodes -passin pass:android`,
           { encoding: "utf-8" },
         );
         expect(output).toContain("friendlyName: androiddebugkey");
         expect(output).toContain("CN=Android Debug");
-      }
-    });
+      },
+    );
   });
 
   describe("android/app/build.gradle 署名構成検証 (AC-APK-01)", () => {

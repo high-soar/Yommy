@@ -223,6 +223,10 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       .getByTestId("episode-uncached-badge");
     await expect(firstUncachedBadge).toBeVisible();
 
+    // エピソード一覧コンテナがスクロール可能となるよう一時的にビューポート高さを縮小（R1-17 / AC-ND-08 空振り防止）
+    const defaultViewport = page.viewportSize();
+    await page.setViewportSize({ width: 1280, height: 400 });
+
     // エピソード一覧コンテナをスクロールさせ、scrollTop を設定（R1-02 / AC-ND-08）
     await episodeListContainer.evaluate((el) => {
       el.scrollTop = 50;
@@ -231,7 +235,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     const scrolledTop = await episodeListContainer.evaluate(
       (el) => el.scrollTop,
     );
-    expect(scrolledTop).toBeGreaterThanOrEqual(0);
+    expect(scrolledTop).toBeGreaterThan(0);
 
     // 「目次を更新」ボタン押下で最新状態が通知され、スクロール位置が維持されることを確認（AC-ND-05, AC-ND-08）
     const refreshButton = page.getByTestId("refresh-toc-button");
@@ -247,6 +251,11 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       (el) => el.scrollTop,
     );
     expect(maintainedTop).toBe(scrolledTop);
+
+    // ビューポートサイズを復元
+    if (defaultViewport) {
+      await page.setViewportSize(defaultViewport);
+    }
 
     // 5. 目次一覧から第1話エピソード行を選択して /novels/:novelId/chapters/1（SCR-03）へ遷移（TR-04）
     await episodeItems.first().click();

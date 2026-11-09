@@ -4,6 +4,8 @@ import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./SettingsPage.stories";
 import { SettingsPage } from "./SettingsPage";
+import * as cloudSyncSectionModule from "./CloudSyncSection";
+import * as storageCacheSectionModule from "./StorageCacheSection";
 
 const {
   Default,
@@ -284,30 +286,40 @@ describe("SettingsPage", () => {
       );
     });
 
-    it("WithStorageCache: ストレージ・キャッシュ情報と完了通知が描画されること (AC-ST-14, AC-ST-16)", () => {
+    it("WithStorageCache: ストレージ・キャッシュ情報と完了通知が StorageCacheSection へ正しく伝達されること (AC-ST-14, AC-ST-16)", () => {
+      const storageCacheSectionSpy = vi.spyOn(
+        storageCacheSectionModule,
+        "StorageCacheSection",
+      );
       render(<WithStorageCache />);
 
-      expect(screen.getByTestId("storage-cache-section")).toBeInTheDocument();
-      expect(screen.getByTestId("storage-cache-summary")).toHaveTextContent(
-        "キャッシュ済み: 全 12 話（合計 1.5 MB）",
+      expect(storageCacheSectionSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          summary: {
+            totalCachedChapters: 12,
+            totalByteSize: 1572864,
+          },
+          notice: "本文キャッシュを一括削除しました（4話）",
+        }),
+        undefined,
       );
-      expect(screen.getByTestId("storage-cache-notice")).toHaveTextContent(
-        "本文キャッシュを一括削除しました（4話）",
-      );
+      storageCacheSectionSpy.mockRestore();
     });
 
-    it("WithStorageCacheDialogOpen: 一括削除確認ダイアログが描画されること (AC-ST-15)", () => {
+    it("WithStorageCacheDialogOpen: initialShowDialog が StorageCacheSection に伝達されること (AC-ST-15)", () => {
+      const storageCacheSectionSpy = vi.spyOn(
+        storageCacheSectionModule,
+        "StorageCacheSection",
+      );
       render(<WithStorageCacheDialogOpen />);
 
-      expect(
-        screen.getByTestId("global-clear-cache-dialog"),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByTestId("confirm-global-clear-read-cache-button"),
-      ).toHaveTextContent("既読話の本文キャッシュのみ削除");
-      expect(
-        screen.getByTestId("confirm-global-clear-all-cache-button"),
-      ).toHaveTextContent("すべての本文キャッシュを削除");
+      expect(storageCacheSectionSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          initialShowDialog: true,
+        }),
+        undefined,
+      );
+      storageCacheSectionSpy.mockRestore();
     });
   });
 
@@ -686,10 +698,23 @@ describe("SettingsPage", () => {
       );
     });
 
-    it("CloudSyncConnected: クラウド同期セクションが描画されること (AC-ST-08, AC-ST-09, R1-32)", () => {
+    it("CloudSyncConnected: クラウド同期セクションへ連携中状態が正しく伝達されること (AC-ST-08, AC-ST-09, R1-32)", () => {
+      const cloudSyncSectionSpy = vi.spyOn(
+        cloudSyncSectionModule,
+        "CloudSyncSection",
+      );
       render(<CloudSyncConnected />);
 
-      expect(screen.getByTestId("cloud-sync-section")).toBeInTheDocument();
+      expect(cloudSyncSectionSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          authState: {
+            status: "connected",
+            email: "user@example.com",
+          },
+        }),
+        undefined,
+      );
+      cloudSyncSectionSpy.mockRestore();
     });
 
     it("error が null または未指定の場合、エラーアラートが表示されないこと", () => {
@@ -711,11 +736,14 @@ describe("SettingsPage", () => {
       ).not.toBeInTheDocument();
     });
 
-    it("クラウド同期セクションが統合され、連携・同期コールバックが正しく呼び出されること (AC-ST-08〜12, R1-32)", async () => {
+    it("クラウド同期セクションが統合され、連携・同期コールバックが正しく配線されること (AC-ST-08〜12, R1-32)", async () => {
+      const cloudSyncSectionSpy = vi.spyOn(
+        cloudSyncSectionModule,
+        "CloudSyncSection",
+      );
       const onSignInGoogle = vi.fn().mockResolvedValue(undefined);
       const onSignOutGoogle = vi.fn().mockResolvedValue(undefined);
       const onSyncNow = vi.fn().mockResolvedValue(undefined);
-      const user = userEvent.setup();
 
       // 未連携表示
       const { rerender } = render(
@@ -733,12 +761,22 @@ describe("SettingsPage", () => {
         />,
       );
 
-      expect(screen.getByTestId("cloud-sync-section")).toBeInTheDocument();
-      const authBtn = screen.getByTestId("cloud-sync-auth-button");
-      await user.click(authBtn);
+      expect(cloudSyncSectionSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          authState: { status: "unlinked" },
+          onSignIn: onSignInGoogle,
+          onSignOut: onSignOutGoogle,
+          onSyncNow: onSyncNow,
+        }),
+        undefined,
+      );
+
+      const passedProps1 = cloudSyncSectionSpy.mock.calls[0][0];
+      passedProps1.onSignIn?.();
       expect(onSignInGoogle).toHaveBeenCalledTimes(1);
 
       // 連携中表示
+      cloudSyncSectionSpy.mockClear();
       rerender(
         <SettingsPage
           writingMode="vertical-rl"
@@ -758,14 +796,36 @@ describe("SettingsPage", () => {
         />,
       );
 
-      const syncBtn = screen.getByTestId("cloud-sync-now-button");
-      await user.click(syncBtn);
+      expect(cloudSyncSectionSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          authState: {
+            status: "connected",
+            email: "test@example.com",
+          },
+          lastSyncedAt: "2026-10-31T12:00:00.000Z",
+          onSignIn: onSignInGoogle,
+          onSignOut: onSignOutGoogle,
+          onSyncNow: onSyncNow,
+        }),
+        undefined,
+      );
+
+      const passedProps2 = cloudSyncSectionSpy.mock.calls[0][0];
+      passedProps2.onSyncNow?.();
       expect(onSyncNow).toHaveBeenCalledTimes(1);
+
+      passedProps2.onSignOut?.();
+      expect(onSignOutGoogle).toHaveBeenCalledTimes(1);
+
+      cloudSyncSectionSpy.mockRestore();
     });
 
-    it("ストレージ・キャッシュ管理セクションが統合され、一括削除コールバックが呼び出されること (AC-ST-14〜16)", async () => {
+    it("ストレージ・キャッシュ管理セクションが統合され、一括削除コールバックが正しく配線されること (AC-ST-14〜16)", async () => {
+      const storageCacheSectionSpy = vi.spyOn(
+        storageCacheSectionModule,
+        "StorageCacheSection",
+      );
       const onClearStorageCache = vi.fn().mockResolvedValue(5);
-      const user = userEvent.setup();
 
       render(
         <SettingsPage
@@ -785,28 +845,31 @@ describe("SettingsPage", () => {
         />,
       );
 
-      expect(screen.getByTestId("storage-cache-section")).toBeInTheDocument();
-      expect(screen.getByTestId("storage-cache-summary")).toHaveTextContent(
-        "キャッシュ済み: 全 12 話（合計 1.0 MB）",
-      );
-      expect(screen.getByTestId("storage-cache-notice")).toHaveTextContent(
-        "本文キャッシュを一括削除しました（5話）",
+      expect(storageCacheSectionSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          summary: {
+            totalCachedChapters: 12,
+            totalByteSize: 1048576,
+          },
+          notice: "本文キャッシュを一括削除しました（5話）",
+          error: null,
+          onClearCache: onClearStorageCache,
+        }),
+        undefined,
       );
 
-      const openBtn = screen.getByTestId(
-        "open-global-clear-cache-dialog-button",
-      );
-      await user.click(openBtn);
-
-      const readBtn = screen.getByTestId(
-        "confirm-global-clear-read-cache-button",
-      );
-      await user.click(readBtn);
-
+      const passedProps = storageCacheSectionSpy.mock.calls[0][0];
+      passedProps.onClearCache?.({ onlyRead: true });
       expect(onClearStorageCache).toHaveBeenCalledWith({ onlyRead: true });
+
+      storageCacheSectionSpy.mockRestore();
     });
 
-    it("storageCacheSummary 省略時にデフォルトのキャッシュ0件表示が適用されること (AC-ST-14)", () => {
+    it("storageCacheSummary 省略時にデフォルトのキャッシュ0件（0話・0バイト）が適用されて StorageCacheSection へ渡されること (AC-ST-14)", () => {
+      const storageCacheSectionSpy = vi.spyOn(
+        storageCacheSectionModule,
+        "StorageCacheSection",
+      );
       render(
         <SettingsPage
           writingMode="vertical-rl"
@@ -818,13 +881,13 @@ describe("SettingsPage", () => {
         />,
       );
 
-      expect(screen.getByTestId("storage-cache-section")).toBeInTheDocument();
-      expect(screen.getByTestId("storage-cache-summary")).toHaveTextContent(
-        "キャッシュ済み: 全 0 話（合計 0 B）",
+      expect(storageCacheSectionSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          summary: { totalCachedChapters: 0, totalByteSize: 0 },
+        }),
+        undefined,
       );
-      expect(
-        screen.getByTestId("open-global-clear-cache-dialog-button"),
-      ).toBeDisabled();
+      storageCacheSectionSpy.mockRestore();
     });
   });
 

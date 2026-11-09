@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./RankingNovelCard.stories";
 import { RankingNovelCard } from "./RankingNovelCard";
-import { sampleRankingItem1 } from "../types";
+import { sampleRankingItem1 } from "../__fixtures__/rankingFixtures";
 
 const {
   Rank1Gold,

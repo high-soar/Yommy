@@ -1,6 +1,6 @@
 import React from "react";
 import type { NovelSiteType } from "../../../parsers/types";
-import { SEARCH_SITES } from "../types";
+import { SEARCH_SITES } from "../constants";
 
 export interface SiteSelectorProps {
   selectedSite: NovelSiteType;

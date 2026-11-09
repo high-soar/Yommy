@@ -8,7 +8,7 @@ import {
   RANKING_GENRES,
   RANKING_PERIODS,
   RANKING_WORK_VARIATIONS,
-} from "../types";
+} from "../constants";
 import { NAROU_RANKING_GENRES } from "../../../parsers/narou/genres";
 
 export interface RankingFilterBarProps {

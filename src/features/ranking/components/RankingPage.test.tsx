@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./RankingPage.stories";
 import { RankingPage } from "./RankingPage";
-import { sampleRankingItem1 } from "../types";
+import { sampleRankingItem1 } from "../__fixtures__/rankingFixtures";
 import * as siteSelectorModule from "./SiteSelector";
 import * as rankingFilterBarModule from "./RankingFilterBar";
 

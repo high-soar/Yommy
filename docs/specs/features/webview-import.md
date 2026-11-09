@@ -3,7 +3,7 @@ type: spec-feature
 title: "内蔵ブラウザ・DOMインポート画面仕様書（SCR-04: WebView Fallback & DOM Import）"
 description: "対象小説ページを内蔵 WebView で直接閲覧し、表示中 DOM を手動インポートして作品目次または各話本文をローカルキャッシュ DB に保存・閲覧再開する内蔵ブラウザ・DOMインポート画面（SCR-04）の正本仕様。"
 status: "Approved"
-updated: "2026-11-09"
+updated: "2026-11-10"
 tags:
   [
     webview-import,
@@ -35,6 +35,10 @@ related_specs:
 related_tests:
   - src/app/ServiceProvider.test.tsx
   - src/bridges/webview/capacitorWebViewDomBridge.test.ts
+  - src/bridges/webview/mockWebViewDomBridge.test.ts
+  - src/bridges/webview/urlUtils.test.ts
+  - src/bridges/webview/index.test.ts
+  - src/features/webview-import/index.test.ts
   - src/features/webview-import/components/WebViewImportPage.test.tsx
   - src/features/webview-import/components/WebViewImportContainer.test.tsx
   - src/features/webview-import/hooks/useWebViewImport.test.ts
@@ -182,6 +186,33 @@ export interface UseWebViewImportReturn {
   openNativeBrowser: () => Promise<void>;
   importCurrentDom: () => Promise<ImportSuccessResult | null>;
   goBack: () => void;
+}
+```
+
+### 3.2 内蔵ブラウザ Bridge 契約（`WebViewDomBridge`）
+
+`src/bridges/webview/types.ts` において定義されるネイティブ内蔵ブラウザ DOM キャプチャ Bridge インターフェース契約：
+
+```ts
+export interface OpenWebViewOptions {
+  url: string;
+  title?: string;
+}
+
+export interface CapturedDomResult {
+  html: string;
+  url: string;
+  title: string;
+}
+
+export interface WebViewDomBridge {
+  open(options: OpenWebViewOptions): Promise<void>;
+  close(): Promise<void>;
+  captureDom(): Promise<CapturedDomResult>;
+  canHandle(url: string): boolean;
+  addDomCapturedListener?(
+    listener: (result: CapturedDomResult) => void,
+  ): () => void;
 }
 ```
 
