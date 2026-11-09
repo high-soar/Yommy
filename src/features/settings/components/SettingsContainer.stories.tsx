@@ -82,7 +82,7 @@ export default meta;
 type Story = StoryObj<typeof SettingsContainer>;
 
 /**
- * デフォルト表示（縦書き・ライトテーマ、文字サイズ 18px、行間 1.8）
+ * デフォルト表示（縦書き・ライトテーマ、文字サイズ 18px、行間 1.8、フッターバージョン Yommy v1.0.0）
  */
 export const Default: Story = {
   name: "デフォルト表示",
