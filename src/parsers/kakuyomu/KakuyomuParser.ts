@@ -545,6 +545,9 @@ export class KakuyomuParser implements NovelParser {
   canParse(url: string): boolean {
     try {
       const parsed = new URL(url);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        return false;
+      }
       const isKakuyomuHost =
         parsed.hostname === "kakuyomu.jp" ||
         parsed.hostname.endsWith(".kakuyomu.jp");
@@ -748,13 +751,28 @@ export class KakuyomuParser implements NovelParser {
     const bodyHtml = bodyEl ? sanitizeChapterHtml(bodyEl.innerHTML) : "";
     const byteSize = new TextEncoder().encode(bodyHtml).length;
 
+    const resolveEpisodeUrl = (href?: string | null): string | null => {
+      if (!href) return null;
+      try {
+        const resolved = new URL(href, pageUrl);
+        if (
+          resolved.protocol === "https:" &&
+          (resolved.hostname === "kakuyomu.jp" ||
+            resolved.hostname.endsWith(".kakuyomu.jp"))
+        ) {
+          return resolved.href;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    };
+
     const prevEl = queryFirst<HTMLAnchorElement>(doc, SELECTORS.prevEpisode);
-    const prevHref = prevEl?.getAttribute("href");
-    const prevChapterUrl = prevHref ? new URL(prevHref, pageUrl).href : null;
+    const prevChapterUrl = resolveEpisodeUrl(prevEl?.getAttribute("href"));
 
     const nextEl = queryFirst<HTMLAnchorElement>(doc, SELECTORS.nextEpisode);
-    const nextHref = nextEl?.getAttribute("href");
-    const nextChapterUrl = nextHref ? new URL(nextHref, pageUrl).href : null;
+    const nextChapterUrl = resolveEpisodeUrl(nextEl?.getAttribute("href"));
 
     return {
       remoteChapterId,

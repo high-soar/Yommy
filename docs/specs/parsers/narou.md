@@ -117,7 +117,8 @@ DOM 要素の抽出は文書順ではなく、以下の優先順位リストに�
    - 章見出し要素（`.p-eplist__chapter-title` または `.chapter_title`）が出現した場合、そのトリム済みテキストを現在の `currentPartTitle` として保持する（空文字の場合は `null`）。
    - エピソード要素（`.p-eplist__sublist` または `.novel_sublist2`）が出現した場合：
      - リンク要素（`a.p-eplist__subtitle` または `.subtitle a`）から `href` とサブタイトル文字列（`title`）を取得する。
-     - `href`（例: `/n9669bk/1/`）からエピソード識別子 `remoteChapterId`（例: `"1"`）を抽出し、正規化 URL `https://ncode.syosetu.com/${remoteWorkId}/${remoteChapterId}/` を構築する。
+     - `href`（例: `/n9669bk/1/`）からエピソード識別子 `remoteChapterId`（例: `"1"`）を抽出し、正規化 URL `https://ncode.syosetu.com/${remoteWorkId}/${remoteChapterId}/` を構築する。エピソード識別子が抽出できない不正・壊れた URL のリンク項目は安全のためスキップ（除外）する。
+     - 単体で `?p=2` 等の目次ページをパースした際、`remoteChapterId` が数値であればエピソード番号に基づき `chapterIndex` を導出（`parseInt(remoteChapterId, 10)`）し、エピソード番号と整合したインデックスを付与する。
      - 公開日時要素（`.p-eplist__update` または `.long_update`）から **初回公開日時**（先頭の `YYYY/MM/DD HH:mm` または `YYYY/MM/DD` 形式の文字列、例: `"2012/11/22 17:00"`）を正規表現 `/(\d{4}\/\d{2}\/\d{2}(?:\s+\d{2}:\d{2})?)/` で抽出し `publishedAt` に設定する（改稿日時 `<span title="... 改稿">` や `（... 改稿）` が付属していても初回公開日時を採用し、過去話の誤字修正による本棚ソート逆転を防止する）。
 
 ### 3.3 短編作品（1 話完結・`.p-eplist` なし）の擬似 1 話目次生成

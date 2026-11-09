@@ -27,6 +27,7 @@ export interface ParsedNovelIndex {
   synopsis: string; // あらすじテキスト
   chapters: ParsedTocItem[]; // エピソード目次一覧
   nextTocPageUrl: string | null; // 目次が複数ページに分かれる場合の次ページURL（なろう等）
+  truncated?: boolean; // maxPages 等により目次取得が途中で打ち切られたかどうかのフラグ (R1-24)
 }
 
 /**

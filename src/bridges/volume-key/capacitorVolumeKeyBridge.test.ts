@@ -76,4 +76,26 @@ describe("CapacitorVolumeKeyBridge", () => {
     unsubscribe();
     expect(mockRemove).toHaveBeenCalledTimes(1);
   });
+
+  it("addListener や remove が例外を reject した場合でも unhandled rejection にならず安全に catch されること (R1-45)", async () => {
+    const mockRemove = vi
+      .fn()
+      .mockRejectedValue(new Error("Native remove error"));
+    vi.mocked(VolumeKeyNative.addListener).mockResolvedValue({
+      remove: mockRemove,
+    });
+
+    const bridge = new CapacitorVolumeKeyBridge();
+    const unsubscribe = bridge.addVolumeKeyListener(vi.fn());
+
+    expect(() => unsubscribe()).not.toThrow();
+    await Promise.resolve();
+
+    // addListener 自体が reject する場合
+    vi.mocked(VolumeKeyNative.addListener).mockRejectedValue(
+      new Error("Native addListener error"),
+    );
+    expect(() => bridge.addVolumeKeyListener(vi.fn())).not.toThrow();
+    await Promise.resolve();
+  });
 });

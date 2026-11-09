@@ -64,8 +64,8 @@ related_tests:
 ### 2.2 メソッド契約
 
 - **`canParse(url: string): boolean`**:
-  - ホスト名が `kakuyomu.jp` またはそのサブドメイン（`*.kakuyomu.jp`。`www.kakuyomu.jp` 含む）であり、パスが `/works/` で始まる場合に `true` を返す。
-  - それ以外（他サイト URL や無効な文字列）は `false` を返す。
+  - プロトコルが `http:` または `https:` であり、ホスト名が `kakuyomu.jp` またはそのサブドメイン（`*.kakuyomu.jp`。`www.kakuyomu.jp` 含む）であり、パスが `/works/` で始まる場合に `true` を返す。
+  - 危険スキーム（`javascript:`, `file:`, `data:` 等）や他プロトコル、他サイト URL や無効な文字列は `false` を返す。
 - **`normalizeWorkUrl(url: string): string`**:
   - まず `this.canParse(url)` でカクヨム作品 URL ドメインおよびパス形式を検証し、他サイト URL（例: `https://example.com/works/12345`）や非作品パスはエラー（`Error: Invalid Kakuyomu work URL`）を送出して拒否する。
   - 作品トップ URL、エピソード URL、およびクエリパラメータやフラグメント（`?foo=bar#p1`）が付与された URL から、作品トップの正規化 URL（`https://kakuyomu.jp/works/{workId}`）を生成して返却する。
@@ -112,14 +112,14 @@ DOM 要素の抽出は文書順ではなく、以下の優先順位リストに�
 
 ### 4.1 抽出対象と DOM セレクタ一覧
 
-| フィールド名      | 型               | 抽出元 DOM セレクタ（優先順位リスト）                                                              | 対応 AC / 要件                      |
-| :---------------- | :--------------- | :------------------------------------------------------------------------------------------------- | :---------------------------------- |
-| `remoteChapterId` | `string`         | URL パス `/episodes/([0-9]+)` から抽出                                                             | `AC-04`                             |
-| `title`           | `string`         | 1. `.widget-episodeTitle`<br>2. `.episode-title`<br>3. `header h1`                                 | `AC-04`                             |
-| `bodyHtml`        | `string`         | 本文コンテナ（1. `.widget-episodeBody`<br>2. `.js-episode-body`）の innerHTML をサニタイズしたもの | `SYS-REQ-02`, `SYS-REQ-07`, `AC-04` |
-| `byteSize`        | `number`         | サニタイズ後 `bodyHtml` の UTF-8 バイト長（`new TextEncoder().encode(bodyHtml).length`）           | `AC-04`                             |
-| `prevChapterUrl`  | `string \| null` | 1. `a#contentMain-previousEpisode`<br>2. `a[rel="prev"]` の `href`（絶対 URL 化。なければ `null`） | `AC-06`                             |
-| `nextChapterUrl`  | `string \| null` | 1. `a#contentMain-nextEpisode`<br>2. `a[rel="next"]` の `href`（絶対 URL 化。なければ `null`）     | `AC-06`                             |
+| フィールド名      | 型               | 抽出元 DOM セレクタ（優先順位リスト）                                                                                                  | 対応 AC / 要件                      |
+| :---------------- | :--------------- | :------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------- |
+| `remoteChapterId` | `string`         | URL パス `/episodes/([0-9]+)` から抽出                                                                                                 | `AC-04`                             |
+| `title`           | `string`         | 1. `.widget-episodeTitle`<br>2. `.episode-title`<br>3. `header h1`                                                                     | `AC-04`                             |
+| `bodyHtml`        | `string`         | 本文コンテナ（1. `.widget-episodeBody`<br>2. `.js-episode-body`）の innerHTML をサニタイズしたもの                                     | `SYS-REQ-02`, `SYS-REQ-07`, `AC-04` |
+| `byteSize`        | `number`         | サニタイズ後 `bodyHtml` の UTF-8 バイト長（`new TextEncoder().encode(bodyHtml).length`）                                               | `AC-04`                             |
+| `prevChapterUrl`  | `string \| null` | 1. `a#contentMain-previousEpisode`<br>2. `a[rel="prev"]` の `href`（`https:` かつ `kakuyomu.jp` のみ絶対 URL 化。解決失敗時は `null`） | `AC-06`                             |
+| `nextChapterUrl`  | `string \| null` | 1. `a#contentMain-nextEpisode`<br>2. `a[rel="next"]` の `href`（`https:` かつ `kakuyomu.jp` のみ絶対 URL 化。解決失敗時は `null`）     | `AC-06`                             |
 
 ### 4.2 本文 HTML サニタイズ＆ルビ・傍点規約（`HtmlSanitizer`）
 
@@ -128,7 +128,7 @@ DOM 要素の抽出は文書順ではなく、以下の優先順位リストに�
 2. **許可する HTML タグ**:
    - `<p>`, `<br>`, `<ruby>`, `<rb>`, `<rt>`, `<rp>`, `<em class="bouten">`
 3. **カクヨム固有表現の正規化**:
-   - カクヨム本文中の傍点マークアップ（`<em class="bouten">`）はクラス `class="bouten"` を維持する。
+   - カクヨム本文中の傍点マークアップ（`<em class="emphasisDots">` または `<em class="bouten">`）はクラス `<em class="bouten">` へ正規化する（SYS-REQ-07 準拠）。
    - 未許可タグはタグを取り除き、テキストおよび内部の許可子孫タグを展開する。
 
 ---

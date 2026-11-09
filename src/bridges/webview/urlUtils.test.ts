@@ -3,11 +3,11 @@ import { isValidHttpUrl, createUnsafeSchemeError } from "./urlUtils";
 
 describe("bridges/webview/urlUtils", () => {
   describe("isValidHttpUrl", () => {
-    it("http: および https: の有効なURLで true を返却すること", () => {
-      expect(isValidHttpUrl("http://example.com")).toBe(true);
+    it("https: の有効なURLで true を返却し、平文 http: は false を返却すること (R1-23)", () => {
       expect(isValidHttpUrl("https://kakuyomu.jp/works/12345")).toBe(true);
       expect(isValidHttpUrl("https://ncode.syosetu.com/n12345/1/")).toBe(true);
       expect(isValidHttpUrl("  https://kakuyomu.jp/  ")).toBe(true);
+      expect(isValidHttpUrl("http://example.com")).toBe(false);
     });
 
     it("危険なスキーム（javascript:, data:, file:, intent: 等）で false を返却すること", () => {

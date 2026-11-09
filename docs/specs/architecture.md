@@ -312,6 +312,8 @@ export interface HttpClientBridge {
   /**
    * 指定URLからHTMLテキストを取得する。
    * Android実機では CapacitorHttp を用いてCORSを回避し、テスト環境ではローカルFixtureを返す。
+   * 実機実装（CapacitorHttpClient）では既定タイムアウト 15秒（15000ms）および既定 User-Agent
+   * （"Yommy/1.0 (Android; WebNovelReader)"）を適用し、fetchFullNovelIndex 等からの伝播を保証する。
    */
   getHtml(options: HttpRequestOptions): Promise<HttpResponse>;
 }

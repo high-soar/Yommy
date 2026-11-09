@@ -506,7 +506,15 @@ export class NarouParser implements NovelParser {
           }
           const href = link.getAttribute("href") ?? "";
           const chapterMatch = href.match(CHAPTER_ID_REGEX);
-          const remoteChapterId = chapterMatch ? chapterMatch[1] : "";
+          if (!chapterMatch || !chapterMatch[1]) {
+            continue;
+          }
+          const remoteChapterId = chapterMatch[1];
+          const parsedId = parseInt(remoteChapterId, 10);
+          const currentChapterIndex =
+            Number.isInteger(parsedId) && parsedId > 0
+              ? parsedId
+              : chapterIndex++;
           const chapterTitle = link.textContent!.trim();
           const chapterUrl = `https://ncode.syosetu.com/${remoteWorkId}/${remoteChapterId}/`;
 
@@ -517,7 +525,7 @@ export class NarouParser implements NovelParser {
           const publishedAt = dateMatch ? dateMatch[1] : null;
 
           chapters.push({
-            chapterIndex: chapterIndex++,
+            chapterIndex: currentChapterIndex,
             remoteChapterId,
             partTitle: currentPartTitle,
             title: chapterTitle,

@@ -14,13 +14,16 @@ export class CapacitorAppBridge implements AppBridge {
   addBackButtonListener(listener: BackButtonListener): () => void {
     let isRemoved = false;
     const handlePromise = App.addListener("backButton", listener);
+    void handlePromise.catch(() => {});
 
     return () => {
       if (isRemoved) return;
       isRemoved = true;
-      void handlePromise.then((handle) => {
-        handle.remove();
-      });
+      void handlePromise
+        .then((handle) => {
+          void handle.remove().catch(() => {});
+        })
+        .catch(() => {});
     };
   }
 

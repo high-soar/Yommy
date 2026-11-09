@@ -9,8 +9,12 @@ export interface FetchFullNovelIndexOptions {
   intervalMs?: number;
   /** 最大取得ページ数上限（既定値: 100ページ = 最大10,000話） */
   maxPages?: number;
+  /** 各 HTTP リクエストのタイムアウト（ミリ秒） (R1-08) */
+  timeoutMs?: number;
   /** 中断シグナル */
   signal?: AbortSignal;
+  /** 警告発生時の通知コールバック（未指定時は console.warn） (R1-39) */
+  onWarning?: (message: string) => void;
 }
 
 function checkAbort(signal?: AbortSignal): void {
@@ -61,11 +65,17 @@ export async function fetchFullNovelIndex(
 
   const intervalMs = options?.intervalMs ?? DEFAULT_TOC_PAGE_INTERVAL_MS;
   const maxPages = options?.maxPages ?? MAX_TOC_PAGES;
+  const timeoutMs = options?.timeoutMs;
+  const warn = options?.onWarning ?? ((msg: string) => console.warn(msg));
 
   const canonicalUrl = parser.normalizeWorkUrl(workUrl);
 
   // 1ページ目の取得・パース
-  const firstRes = await httpClient.getHtml({ url: canonicalUrl, signal });
+  const firstRes = await httpClient.getHtml({
+    url: canonicalUrl,
+    signal,
+    timeoutMs,
+  });
   checkAbort(signal);
 
   const firstIndex = parser.parseNovelIndex(firstRes.html, canonicalUrl);
@@ -80,21 +90,23 @@ export async function fetchFullNovelIndex(
   const visitedUrls = new Set<string>([canonicalUrl]);
   let pageCount = 1;
   let nextUrl = firstIndex.nextTocPageUrl;
+  let isTruncated = false;
 
   while (nextUrl !== null) {
     checkAbort(signal);
 
     // maxPages 上限ガード
     if (pageCount >= maxPages) {
-      console.warn(
+      warn(
         `[fetchFullNovelIndex] Reached maxPages (${maxPages}) limit for ${canonicalUrl}`,
       );
+      isTruncated = true;
       break;
     }
 
     // 同一URL再訪（循環参照）防止
     if (visitedUrls.has(nextUrl)) {
-      console.warn(
+      warn(
         `[fetchFullNovelIndex] Circular reference detected for ${nextUrl} in ${canonicalUrl}`,
       );
       break;
@@ -102,7 +114,7 @@ export async function fetchFullNovelIndex(
 
     // SSRF・同一作品検証
     if (!nextUrl.startsWith("https:") || !parser.canParse(nextUrl)) {
-      console.warn(
+      warn(
         `[fetchFullNovelIndex] Invalid nextTocPageUrl scheme or unsupported parser: ${nextUrl}`,
       );
       break;
@@ -111,13 +123,13 @@ export async function fetchFullNovelIndex(
     try {
       normalizedNext = parser.normalizeWorkUrl(nextUrl);
     } catch {
-      console.warn(
+      warn(
         `[fetchFullNovelIndex] Failed to normalize nextTocPageUrl: ${nextUrl}`,
       );
       break;
     }
     if (normalizedNext !== canonicalUrl) {
-      console.warn(
+      warn(
         `[fetchFullNovelIndex] nextTocPageUrl points to different work: ${nextUrl} !== ${canonicalUrl}`,
       );
       break;
@@ -132,7 +144,11 @@ export async function fetchFullNovelIndex(
     checkAbort(signal);
 
     // 次ページの取得・パース（通信/パースエラー時はそのまま例外送出）
-    const pageRes = await httpClient.getHtml({ url: nextUrl, signal });
+    const pageRes = await httpClient.getHtml({
+      url: nextUrl,
+      signal,
+      timeoutMs,
+    });
     checkAbort(signal);
 
     const pageIndex = parser.parseNovelIndex(pageRes.html, nextUrl);
@@ -162,5 +178,6 @@ export async function fetchFullNovelIndex(
     ...firstIndex,
     chapters: reindexedChapters,
     nextTocPageUrl: null,
+    truncated: isTruncated,
   };
 }

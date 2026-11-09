@@ -27,7 +27,7 @@ export const WebViewDomNative =
  */
 export class CapacitorWebViewDomBridge implements WebViewDomBridge {
   /**
-   * 指定 URL が http: または https: の安全なスキームか検証する。
+   * 指定 URL が https: の安全なスキームか検証する。
    */
   canHandle(url: string): boolean {
     return isValidHttpUrl(url);
@@ -80,19 +80,21 @@ export class CapacitorWebViewDomBridge implements WebViewDomBridge {
         (data: CapturedDomResult) => {
           listener(data);
         },
-      ).then((h) => {
-        if (isRemoved) {
-          void h.remove();
-        } else {
-          handle = h;
-        }
-      });
+      )
+        .then((h) => {
+          if (isRemoved) {
+            void h.remove().catch(() => {});
+          } else {
+            handle = h;
+          }
+        })
+        .catch(() => {});
     }
 
     return () => {
       isRemoved = true;
       if (handle) {
-        void handle.remove();
+        void handle.remove().catch(() => {});
         handle = null;
       }
     };

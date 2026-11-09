@@ -817,5 +817,193 @@ describe("fetchFullNovelIndex: 複数ページ目次連続取得パイプライ�
         ),
       ).rejects.toThrow("Invalid Narou work URL");
     });
+
+    it("options.timeoutMs が指定された場合、各ページの getHtml に伝播されること (R1-08)", async () => {
+      const canonicalUrl = "https://ncode.syosetu.com/n9669bk/";
+      const p2Url = "https://ncode.syosetu.com/n9669bk/?p=2";
+
+      mockHttpClient.setResponse(canonicalUrl, () => ({
+        status: 200,
+        url: canonicalUrl,
+        headers: {},
+        html: "p1",
+      }));
+      mockHttpClient.setResponse(p2Url, () => ({
+        status: 200,
+        url: p2Url,
+        headers: {},
+        html: "p2",
+      }));
+
+      const getHtmlSpy = vi.spyOn(mockHttpClient, "getHtml");
+
+      vi.mocked(mockParser.parseNovelIndex)
+        .mockReturnValueOnce({
+          siteType: "narou",
+          remoteWorkId: "n9669bk",
+          canonicalUrl,
+          title: "作品",
+          author: "作者",
+          synopsis: "",
+          chapters: [
+            {
+              chapterIndex: 1,
+              remoteChapterId: "1",
+              partTitle: null,
+              title: "1",
+              url: `${canonicalUrl}1/`,
+              publishedAt: null,
+            },
+          ],
+          nextTocPageUrl: p2Url,
+        })
+        .mockReturnValueOnce({
+          siteType: "narou",
+          remoteWorkId: "n9669bk",
+          canonicalUrl,
+          title: "作品",
+          author: "作者",
+          synopsis: "",
+          chapters: [
+            {
+              chapterIndex: 2,
+              remoteChapterId: "2",
+              partTitle: null,
+              title: "2",
+              url: `${canonicalUrl}2/`,
+              publishedAt: null,
+            },
+          ],
+          nextTocPageUrl: null,
+        });
+
+      await fetchFullNovelIndex(mockHttpClient, mockParser, canonicalUrl, {
+        timeoutMs: 8000,
+        intervalMs: 0,
+      });
+
+      expect(getHtmlSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ timeoutMs: 8000 }),
+      );
+    });
+
+    it("maxPages 到達時に truncated: true が設定され、通常時は truncated: false であること (R1-24)", async () => {
+      const canonicalUrl = "https://ncode.syosetu.com/n9669bk/";
+      const p2Url = "https://ncode.syosetu.com/n9669bk/?p=2";
+
+      mockHttpClient.setResponse(canonicalUrl, () => ({
+        status: 200,
+        url: canonicalUrl,
+        headers: {},
+        html: "p1",
+      }));
+
+      vi.mocked(mockParser.parseNovelIndex).mockReturnValueOnce({
+        siteType: "narou",
+        remoteWorkId: "n9669bk",
+        canonicalUrl,
+        title: "作品",
+        author: "作者",
+        synopsis: "",
+        chapters: [
+          {
+            chapterIndex: 1,
+            remoteChapterId: "1",
+            partTitle: null,
+            title: "1",
+            url: `${canonicalUrl}1/`,
+            publishedAt: null,
+          },
+        ],
+        nextTocPageUrl: p2Url,
+      });
+
+      const truncatedResult = await fetchFullNovelIndex(
+        mockHttpClient,
+        mockParser,
+        canonicalUrl,
+        {
+          maxPages: 1,
+          intervalMs: 0,
+        },
+      );
+      expect(truncatedResult.truncated).toBe(true);
+
+      // 通常時（単一ページまたは完結取得）
+      vi.mocked(mockParser.parseNovelIndex).mockReturnValueOnce({
+        siteType: "narou",
+        remoteWorkId: "n9669bk",
+        canonicalUrl,
+        title: "作品",
+        author: "作者",
+        synopsis: "",
+        chapters: [
+          {
+            chapterIndex: 1,
+            remoteChapterId: "1",
+            partTitle: null,
+            title: "1",
+            url: `${canonicalUrl}1/`,
+            publishedAt: null,
+          },
+        ],
+        nextTocPageUrl: null,
+      });
+
+      const normalResult = await fetchFullNovelIndex(
+        mockHttpClient,
+        mockParser,
+        canonicalUrl,
+      );
+      expect(normalResult.truncated).toBe(false);
+    });
+
+    it("options.onWarning が指定された場合、console.warn の代わりにコールバックが呼ばれること (R1-39)", async () => {
+      const canonicalUrl = "https://ncode.syosetu.com/n9669bk/";
+      mockHttpClient.setResponse(canonicalUrl, () => ({
+        status: 200,
+        url: canonicalUrl,
+        headers: {},
+        html: "p1",
+      }));
+
+      vi.mocked(mockParser.parseNovelIndex).mockReturnValueOnce({
+        siteType: "narou",
+        remoteWorkId: "n9669bk",
+        canonicalUrl,
+        title: "作品",
+        author: "作者",
+        synopsis: "",
+        chapters: [
+          {
+            chapterIndex: 1,
+            remoteChapterId: "1",
+            partTitle: null,
+            title: "1",
+            url: `${canonicalUrl}1/`,
+            publishedAt: null,
+          },
+        ],
+        nextTocPageUrl: "https://evil.com/other",
+      });
+
+      const onWarning = vi.fn();
+      const consoleWarnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
+
+      await fetchFullNovelIndex(mockHttpClient, mockParser, canonicalUrl, {
+        onWarning,
+        intervalMs: 0,
+      });
+
+      expect(onWarning).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "Invalid nextTocPageUrl scheme or unsupported parser",
+        ),
+      );
+      expect(consoleWarnSpy).not.toHaveBeenCalled();
+      consoleWarnSpy.mockRestore();
+    });
   });
 });

@@ -31,19 +31,28 @@ import org.json.JSONTokener;
 public class WebViewDomPlugin extends Plugin {
     private Dialog dialog;
     private WebView webView;
+    private String lastCapturedHtml = "";
+    private String lastCapturedUrl = "";
+    private String lastCapturedTitle = "";
 
     @Override
     public void load() {
         super.load();
+        lastCapturedHtml = "";
+        lastCapturedUrl = "";
+        lastCapturedTitle = "";
     }
 
     @Override
     protected void handleOnDestroy() {
         dismissAndDestroyDialog();
+        lastCapturedHtml = "";
+        lastCapturedUrl = "";
+        lastCapturedTitle = "";
         super.handleOnDestroy();
     }
 
-    private void dismissAndDestroyDialog() {
+    private void dismissDialogOnly() {
         if (dialog != null) {
             try {
                 if (dialog.isShowing()) {
@@ -52,6 +61,10 @@ public class WebViewDomPlugin extends Plugin {
             } catch (Exception ignored) {}
             dialog = null;
         }
+    }
+
+    private void dismissAndDestroyDialog() {
+        dismissDialogOnly();
         if (webView != null) {
             try {
                 webView.stopLoading();
@@ -161,13 +174,14 @@ public class WebViewDomPlugin extends Plugin {
             webView.setWebViewClient(new WebViewClient() {
                 @Override
                 public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                    if (request == null || request.getUrl() == null) {
+                        return true;
+                    }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                         Uri requestUri = request.getUrl();
-                        if (requestUri != null) {
-                            String scheme = requestUri.getScheme();
-                            if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
-                                return true; // 危険スキーム（javascript:, data:, file:, intent: 等）を即時遮断
-                            }
+                        String scheme = requestUri.getScheme();
+                        if (scheme == null || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))) {
+                            return true; // 危険スキーム（javascript:, data:, file:, intent: 等）を即時遮断
                         }
                     }
                     return false;
@@ -197,6 +211,22 @@ public class WebViewDomPlugin extends Plugin {
                     }
                     btnBack.setEnabled(view.canGoBack());
                     btnForward.setEnabled(view.canGoForward());
+
+                    lastCapturedUrl = loadedUrl != null ? loadedUrl : "";
+                    lastCapturedTitle = pageTitle != null ? pageTitle : "";
+
+                    // 直近ロード済みページの DOM キャッシュを更新
+                    if (webView != null) {
+                        webView.evaluateJavascript("(function(){return document.documentElement.outerHTML;})()", value -> {
+                            if (webView == null) {
+                                return;
+                            }
+                            String html = decodeJsString(value);
+                            if (!TextUtils.isEmpty(html)) {
+                                lastCapturedHtml = html;
+                            }
+                        });
+                    }
                 }
             });
 
@@ -218,20 +248,29 @@ public class WebViewDomPlugin extends Plugin {
                 }
             });
 
-            btnClose.setOnClickListener(v -> dismissAndDestroyDialog());
+            // ✕ ボタン押下時は WebView を破棄せずダイアログのみ非表示化し、直近キャッシュまたは DOM を維持 (R1-41)
+            btnClose.setOnClickListener(v -> dismissDialogOnly());
 
             btnCapture.setOnClickListener(v -> {
                 if (webView != null) {
                     webView.evaluateJavascript("(function(){return document.documentElement.outerHTML;})()", value -> {
+                        if (webView == null) {
+                            return;
+                        }
                         String html = decodeJsString(value);
                         String currentUrl = webView.getUrl() != null ? webView.getUrl() : "";
                         String currentTitle = webView.getTitle() != null ? webView.getTitle() : "";
+
+                        lastCapturedHtml = html;
+                        lastCapturedUrl = currentUrl;
+                        lastCapturedTitle = currentTitle;
+
                         JSObject data = new JSObject();
                         data.put("html", html);
                         data.put("url", currentUrl);
                         data.put("title", currentTitle);
                         notifyListeners("domCaptured", data);
-                        dismissAndDestroyDialog();
+                        dismissDialogOnly();
                     });
                 }
             });
@@ -240,7 +279,7 @@ public class WebViewDomPlugin extends Plugin {
             rootLayout.addView(webView);
 
             dialog.setContentView(rootLayout);
-            dialog.setOnDismissListener(d -> dismissAndDestroyDialog());
+            dialog.setOnDismissListener(d -> dismissDialogOnly());
             dialog.show();
 
             webView.loadUrl(url);
@@ -254,7 +293,7 @@ public class WebViewDomPlugin extends Plugin {
     @PluginMethod
     public void close(PluginCall call) {
         getActivity().runOnUiThread(() -> {
-            dismissAndDestroyDialog();
+            dismissDialogOnly();
             call.resolve();
         });
     }
@@ -265,22 +304,43 @@ public class WebViewDomPlugin extends Plugin {
     @PluginMethod
     public void captureDom(PluginCall call) {
         getActivity().runOnUiThread(() -> {
-            if (webView == null) {
-                call.reject("WebView is not opened");
-                return;
-            }
+            if (webView != null) {
+                webView.evaluateJavascript("(function(){return document.documentElement.outerHTML;})()", value -> {
+                    if (webView == null) {
+                        if (!TextUtils.isEmpty(lastCapturedHtml)) {
+                            JSObject ret = new JSObject();
+                            ret.put("html", lastCapturedHtml);
+                            ret.put("url", lastCapturedUrl);
+                            ret.put("title", lastCapturedTitle);
+                            call.resolve(ret);
+                            return;
+                        }
+                        call.reject("WebView was destroyed during capture");
+                        return;
+                    }
+                    String html = decodeJsString(value);
+                    String currentUrl = webView.getUrl() != null ? webView.getUrl() : "";
+                    String currentTitle = webView.getTitle() != null ? webView.getTitle() : "";
 
-            webView.evaluateJavascript("(function(){return document.documentElement.outerHTML;})()", value -> {
-                String html = decodeJsString(value);
-                String currentUrl = webView.getUrl() != null ? webView.getUrl() : "";
-                String currentTitle = webView.getTitle() != null ? webView.getTitle() : "";
+                    lastCapturedHtml = html;
+                    lastCapturedUrl = currentUrl;
+                    lastCapturedTitle = currentTitle;
 
+                    JSObject ret = new JSObject();
+                    ret.put("html", html);
+                    ret.put("url", currentUrl);
+                    ret.put("title", currentTitle);
+                    call.resolve(ret);
+                });
+            } else if (!TextUtils.isEmpty(lastCapturedHtml)) {
                 JSObject ret = new JSObject();
-                ret.put("html", html);
-                ret.put("url", currentUrl);
-                ret.put("title", currentTitle);
+                ret.put("html", lastCapturedHtml);
+                ret.put("url", lastCapturedUrl);
+                ret.put("title", lastCapturedTitle);
                 call.resolve(ret);
-            });
+            } else {
+                call.reject("WebView is not opened");
+            }
         });
     }
 

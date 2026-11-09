@@ -1,8 +1,9 @@
 /**
- * 指定された URL が http: または https: の安全な Web URL スキームであるか判定する。
+ * 指定された URL が https: の安全な Web URL スキームであるか判定する。
+ * （平文 http: は Android cleartextTraffic 制限およびセキュリティ境界の観点から遮断し https: のみ許可）
  *
  * @param url 検証対象の URL 文字列
- * @returns http: または https: の場合 true、危険スキームや不正な形式の場合 false
+ * @returns https: の場合 true、危険スキームや平文 http・不正な形式の場合 false
  */
 export function isValidHttpUrl(url: string): boolean {
   if (!url || typeof url !== "string") {
@@ -10,7 +11,7 @@ export function isValidHttpUrl(url: string): boolean {
   }
   try {
     const parsed = new URL(url.trim());
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
+    return parsed.protocol === "https:";
   } catch {
     return false;
   }
