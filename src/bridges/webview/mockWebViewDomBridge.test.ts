@@ -119,4 +119,44 @@ describe("MockWebViewDomBridge", () => {
       expect(result.html).toContain("<!DOCTYPE html>");
     });
   });
+
+  describe("addDomCapturedListener and emitDomCaptured", () => {
+    it("リスナーを登録し、emitDomCaptured で通知を受信できること", () => {
+      const received: CapturedDomResult[] = [];
+      const unsubscribe = bridge.addDomCapturedListener((data) => {
+        received.push(data);
+      });
+
+      bridge.emitDomCaptured();
+      expect(received).toHaveLength(1);
+      expect(received[0].html).toContain("<!DOCTYPE html>");
+
+      const custom: CapturedDomResult = {
+        html: "<p>カスタム通知</p>",
+        url: "https://kakuyomu.jp/works/1",
+        title: "カスタム",
+      };
+      bridge.emitDomCaptured(custom);
+      expect(received).toHaveLength(2);
+      expect(received[1]).toEqual(custom);
+
+      unsubscribe();
+      bridge.emitDomCaptured();
+      expect(received).toHaveLength(2); // 増えないこと
+    });
+
+    it("reset() で登録されたリスナーがすべてクリアされること", () => {
+      let count = 0;
+      bridge.addDomCapturedListener(() => {
+        count++;
+      });
+
+      bridge.emitDomCaptured();
+      expect(count).toBe(1);
+
+      bridge.reset();
+      bridge.emitDomCaptured();
+      expect(count).toBe(1); // リセット後は発火しない
+    });
+  });
 });

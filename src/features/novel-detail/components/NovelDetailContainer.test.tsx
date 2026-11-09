@@ -1090,7 +1090,7 @@ describe("NovelDetailContainer", () => {
       pageSpy.mockRestore();
     });
 
-    it("onOpenWebView が省略された場合、デフォルトで router.navigate により /browser へ遷移すること (Issue #269, TR-09)", async () => {
+    it("onOpenWebView が省略された場合、デフォルトで router.navigateToBrowser により /browser へ遷移すること (Issue #269, TR-09, R1-19)", async () => {
       const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
 
       const Harness: React.FC = () => {
@@ -1098,6 +1098,9 @@ describe("NovelDetailContainer", () => {
         return (
           <div>
             <div data-testid="observed-current-path">{router.currentPath}</div>
+            <div data-testid="observed-browser-origin">
+              {router.browserOrigin ?? ""}
+            </div>
             <ServiceProvider
               services={{
                 novelRepository: createMockNovelRepo(sampleNovel),
@@ -1133,6 +1136,9 @@ describe("NovelDetailContainer", () => {
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           `/browser?url=${encodeURIComponent(sampleNovel.canonicalUrl)}&novelId=${encodeURIComponent(sampleNovel.id)}`,
+        );
+        expect(screen.getByTestId("observed-browser-origin")).toHaveTextContent(
+          `/novels/${sampleNovel.id}`,
         );
       });
 

@@ -34,9 +34,13 @@ related_specs:
   - docs/quality/bug-and-handover-log.md
 related_tests:
   - src/app/ServiceProvider.test.tsx
+  - src/bridges/webview/capacitorWebViewDomBridge.test.ts
+  - src/features/webview-import/components/WebViewImportPage.test.tsx
+  - src/features/webview-import/components/WebViewImportContainer.test.tsx
+  - src/features/webview-import/hooks/useWebViewImport.test.ts
   - src/features/novel-detail/components/NovelDetailHeader.test.tsx
   - src/features/reader/components/ReaderPage.test.tsx
-  - test/it/scenarios/scn01-poc-vertical-reader.spec.ts
+  - test/it/scenarios/scn07-webview-import-fallback.spec.ts
 ---
 
 # 内蔵ブラウザ・DOMインポート画面仕様書（SCR-04）
@@ -88,22 +92,53 @@ flowchart TD
    - インポート成功時（`onImportSuccess`）に `TR-11`（作品詳細 `/novels/:novelId` またはリーダー `/novels/:novelId/chapters/:chapterIndex`）へルーティングする。
    - 「← 戻る」押下時（`onBack`）に `TR-12`（直前画面または本棚 `/`）へルーティングする。
 
+| プロパティ名      | 型                                      | 必須/任意 | 説明                                                            |
+| :---------------- | :-------------------------------------- | :-------: | :-------------------------------------------------------------- |
+| `initialUrl`      | `string`                                |   任意    | 初期表示対象の Web 小説 URL（クエリ `url` 経由）                |
+| `novelId`         | `string`                                |   任意    | 関連付けられた作品 ID（クエリ `novelId` 経由）                  |
+| `chapterIndex`    | `number`                                |   任意    | 関連付けられたエピソード話数番号（クエリ `chapterIndex` 経由）  |
+| `activeTab`       | `BottomTab`                             |   任意    | 下部 4 タブバーのアクティブタブ（デフォルト: `"bookshelf"`）    |
+| `onBack`          | `() => void`                            |   任意    | 戻るボタン押下時のカスタムハンドラ（省略時は `router.back()`）  |
+| `onImportSuccess` | `(result: ImportSuccessResult) => void` |   任意    | インポート成功時のカスタムハンドラ（省略時は `TR-11` 自動遷移） |
+
 2. **`WebViewImportPage` (`src/features/webview-import/components/WebViewImportPage.tsx`)**:
    - `WebViewImportContainer` からステート・コールバックを受け取って UI を描画するプレゼンテーショナルコンポーネント。
-   - **主要要素と `data-testid`**:
-     - `data-testid="webview-import-page"`: 画面全体のルートコンテナ（`role="main"`）。
-     - `data-testid="browser-back-button"`: ヘッダー左端の「← 戻る」ボタン（`aria-label="戻る"`）。
-     - `data-testid="browser-url-input"`: URL 表示および手動入力テキストボックス（`input type="url"`）。
-     - `data-testid="browser-navigate-button"`: URL 移動ボタン（「移動」）。
-     - `data-testid="open-native-browser-button"`: Android ネイティブ WebView ダイアログ起動ボタン（「内蔵ブラウザで直接操作」）。
-     - `data-testid="import-dom-button"`: DOM インポート実行確定ボタン（「表示中ページを取り込む」）。
-     - `data-testid="browser-preview-area"`: ページ情報・DOM 抽出ステータス表示領域。
-     - `data-testid="browser-target-title"`: 読み込み中・表示中ページのタイトル。
-     - `data-testid="browser-target-url"`: 最終遷移先 URL 表示。
-     - `data-testid="browser-unsupported-warning"`: 対応外 URL（カクヨム・なろう以外の一般サイトやログイン・検索画面等）表示時の警告トースト（`role="alert"`）。
-     - `data-testid="browser-loading"`: ページ読み込み中・DOM キャプチャ中のローディングスピナー。
-     - `data-testid="browser-notice"`: インポート成功・保存完了インライン通知（`role="status"`）。
-     - `data-testid="browser-error"`: インポート失敗・パース失敗・不正 URL エラーアラート（`role="alert"`）。
+
+| プロパティ名          | 型                            | 必須/任意 | 説明                                                             |
+| :-------------------- | :---------------------------- | :-------: | :--------------------------------------------------------------- |
+| `url`                 | `string`                      |   必須    | URL 入力バーの表示値                                             |
+| `pageTitle`           | `string`                      |   必須    | 読み込み中・表示中ページのタイトル                               |
+| `currentCapturedUrl`  | `string`                      |   必須    | 最終キャプチャ完了 URL                                           |
+| `canImport`           | `boolean`                     |   必須    | 取り込み可能判定（パーサー適合 URL かつ `isChapter` または目次） |
+| `isLoading`           | `boolean`                     |   必須    | 読み込み中ローディング状態                                       |
+| `isImporting`         | `boolean`                     |   必須    | DOM インポート処理中状態                                         |
+| `notice`              | `string \| null`              |   必須    | 成功通知メッセージ（表示なし時は `null`）                        |
+| `error`               | `string \| null`              |   必須    | エラーメッセージ（表示なし時は `null`）                          |
+| `activeTab`           | `BottomTab`                   |   任意    | 下部タブバーのアクティブタブ                                     |
+| `onUrlChange`         | `(url: string) => void`       |   必須    | URL 入力テキストボックスの入力変更ハンドラ                       |
+| `onNavigateUrl`       | `() => void \| Promise<void>` |   必須    | 「移動」ボタン押下ハンドラ                                       |
+| `onOpenNativeBrowser` | `() => void \| Promise<void>` |   必須    | 「内蔵ブラウザで直接操作」ボタン押下ハンドラ                     |
+| `onImportCurrentDom`  | `() => void \| Promise<void>` |   必須    | 「表示中ページを取り込む」ボタン押下ハンドラ                     |
+| `onBack`              | `() => void`                  |   必須    | ヘッダーの「← 戻る」ボタン押下ハンドラ                           |
+| `onSelectBookshelf`   | `() => void`                  |   任意    | 下部タブ 本棚 選択ハンドラ                                       |
+| `onSelectSearch`      | `() => void`                  |   任意    | 下部タブ 検索 選択ハンドラ                                       |
+| `onSelectRanking`     | `() => void`                  |   任意    | 下部タブ ランキング 選択ハンドラ                                 |
+| `onSelectSettings`    | `() => void`                  |   任意    | 下部タブ 設定 選択ハンドラ                                       |
+
+- **主要要素と `data-testid`**:
+  - `data-testid="webview-import-page"`: 画面全体のルートコンテナ（`role="main"`）。
+  - `data-testid="browser-back-button"`: ヘッダー左端の「← 戻る」ボタン（`aria-label="戻る"`）。
+  - `data-testid="browser-url-input"`: URL 表示および手動入力テキストボックス（`input type="url"`）。
+  - `data-testid="browser-navigate-button"`: URL 移動ボタン（「移動」）。
+  - `data-testid="open-native-browser-button"`: Android ネイティブ WebView ダイアログ起動ボタン（「内蔵ブラウザで直接操作」）。
+  - `data-testid="import-dom-button"`: DOM インポート実行確定ボタン（「表示中ページを取り込む」）。
+  - `data-testid="browser-preview-area"`: ページ情報・DOM 抽出ステータス表示領域。
+  - `data-testid="browser-target-title"`: 読み込み中・表示中ページのタイトル。
+  - `data-testid="browser-target-url"`: 最終遷移先 URL 表示。
+  - `data-testid="browser-unsupported-warning"`: 対応外 URL（カクヨム・なろう以外の一般サイトやログイン・検索画面等）表示時の警告トースト（`role="alert"`）。
+  - `data-testid="browser-loading"`: ページ読み込み中・DOM キャプチャ中のローディングスピナー。
+  - `data-testid="browser-notice"`: インポート成功・保存完了インライン通知（`role="status"`）。
+  - `data-testid="browser-error"`: インポート失敗・パース失敗・不正 URL エラーアラート（`role="alert"`）。
 
 ---
 
@@ -122,7 +157,9 @@ export interface UseWebViewImportOptions {
   novelRepository: NovelRepository;
   chapterRepository: ChapterRepository;
   parserRegistry: ParserRegistry;
+  httpClient?: HttpClientBridge;
   syncEngine?: SyncEngine | null;
+  fetchFullNovelIndex?: typeof fetchFullNovelIndex;
   onImportComplete?: (result: ImportSuccessResult) => void;
   onNavigateBack?: () => void;
 }
@@ -218,7 +255,7 @@ sequenceDiagram
 
 ### 4.2 なろう短編の特殊ハンドリング
 
-なろう短編作品（1話完結）は作品トップ目次ページ内にそのまま本文が含まれます。目次として `parseNovelIndex` を実行した際、`novelIndex.novel.isShortStory === true`（または `chapters.length === 1` かつ短編種別）である場合は、同一 HTML から `parseChapterContent` を実行して `chapterRepository.saveChapterBody` を同時に呼び出し、本文まで一括保存します。
+なろう短編作品（1話完結）は作品トップ目次ページ内にそのまま本文が含まれます。目次として `parseNovelIndex` を実行した際、`novelIndex.siteType === "narou" && novelIndex.chapters.length === 1` かつ（第1話 URL が作品 URL と同一、または HTML 本文中に `id="novel_honbun"` / `class="p-novel__body"` 等のなろう本文ブロックが存在する）場合は、同一 HTML から `parseChapterContent` を実行して `chapterRepository.saveChapterBody` を同時に呼び出し、本文まで一括保存します。
 
 ---
 

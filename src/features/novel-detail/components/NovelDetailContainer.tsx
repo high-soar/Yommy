@@ -99,9 +99,7 @@ export const NovelDetailContainer: React.FC<NovelDetailContainerProps> = ({
       if (onOpenWebView) {
         onOpenWebView(url);
       } else {
-        router.navigate(
-          `/browser?url=${encodeURIComponent(url)}&novelId=${encodeURIComponent(novelId)}`,
-        );
+        router.navigateToBrowser(url, { novelId });
       }
     },
     [novelId, onOpenWebView, router],

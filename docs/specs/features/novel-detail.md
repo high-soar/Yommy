@@ -75,6 +75,7 @@ related_tests:
   - test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts
   - test/it/scenarios/scn04-prefetch-and-cache.spec.ts
   - test/it/scenarios/scn05-cloud-sync.spec.ts
+  - test/it/scenarios/scn07-webview-import-fallback.spec.ts
 ---
 
 # 作品詳細・目次画面仕様書（SCR-02）

@@ -18,6 +18,8 @@ export class MockWebViewDomBridge implements WebViewDomBridge {
   private opened = false;
   private currentOptions: OpenWebViewOptions | null = null;
   private mockPage: CapturedDomResult = { ...DEFAULT_MOCK_PAGE };
+  private domCapturedListeners: Set<(result: CapturedDomResult) => void> =
+    new Set();
 
   /**
    * WebView が開いているかどうかを取得する（テスト・Storybook 検証用）。
@@ -47,6 +49,7 @@ export class MockWebViewDomBridge implements WebViewDomBridge {
     this.opened = false;
     this.currentOptions = null;
     this.mockPage = { ...DEFAULT_MOCK_PAGE };
+    this.domCapturedListeners.clear();
   }
 
   /**
@@ -82,5 +85,27 @@ export class MockWebViewDomBridge implements WebViewDomBridge {
    */
   async captureDom(): Promise<CapturedDomResult> {
     return Promise.resolve({ ...this.mockPage });
+  }
+
+  /**
+   * DOM キャプチャイベントのリスナーを登録する。
+   */
+  addDomCapturedListener(
+    listener: (result: CapturedDomResult) => void,
+  ): () => void {
+    this.domCapturedListeners.add(listener);
+    return () => {
+      this.domCapturedListeners.delete(listener);
+    };
+  }
+
+  /**
+   * テスト用に DOM キャプチャイベントを発火する。
+   */
+  emitDomCaptured(result?: CapturedDomResult): void {
+    const data = result ? { ...result } : { ...this.mockPage };
+    for (const listener of this.domCapturedListeners) {
+      listener(data);
+    }
   }
 }

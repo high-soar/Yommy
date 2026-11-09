@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
+import * as BottomTabBarModule from "../../../shared/ui/BottomTabBar";
 import * as stories from "./WebViewImportPage.stories";
 import { WebViewImportPage } from "./WebViewImportPage";
 
@@ -152,10 +153,45 @@ describe("WebViewImportPage", () => {
     expect(onNavigateUrlMock).toHaveBeenCalledTimes(1);
   });
 
-  it("タブバーのコールバックが省略された場合でも、タブ選択時にエラーが発生しないこと", async () => {
-    const user = userEvent.setup();
+  it("タブバーのコールバックおよび Props が正しく配線され、省略時もエラーが発生しないこと (R1-14)", () => {
+    const bottomTabBarSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
+    const onSelectBookshelf = vi.fn();
+    const onSelectSearch = vi.fn();
+    const onSelectRanking = vi.fn();
+    const onSelectSettings = vi.fn();
 
-    render(
+    const { rerender } = render(
+      <WebViewImportPage
+        url="https://example.com"
+        pageTitle="テスト"
+        currentCapturedUrl="https://example.com"
+        canImport={true}
+        isLoading={false}
+        isImporting={false}
+        notice={null}
+        error={null}
+        activeTab="search"
+        onUrlChange={vi.fn()}
+        onNavigateUrl={vi.fn()}
+        onOpenNativeBrowser={vi.fn()}
+        onImportCurrentDom={vi.fn()}
+        onBack={vi.fn()}
+        onSelectBookshelf={onSelectBookshelf}
+        onSelectSearch={onSelectSearch}
+        onSelectRanking={onSelectRanking}
+        onSelectSettings={onSelectSettings}
+      />,
+    );
+
+    const firstCallProps = bottomTabBarSpy.mock.calls[0][0];
+    expect(firstCallProps.activeTab).toBe("search");
+    expect(firstCallProps.onSelectBookshelf).toBe(onSelectBookshelf);
+    expect(firstCallProps.onSelectSearch).toBe(onSelectSearch);
+    expect(firstCallProps.onSelectRanking).toBe(onSelectRanking);
+    expect(firstCallProps.onSelectSettings).toBe(onSelectSettings);
+
+    // コールバック省略時
+    rerender(
       <WebViewImportPage
         url="https://example.com"
         pageTitle="テスト"
@@ -173,18 +209,17 @@ describe("WebViewImportPage", () => {
       />,
     );
 
-    // 下部タブバーの各タブをクリック
-    const bookshelfTab = screen.getByTestId("tab-bookshelf");
-    await user.click(bookshelfTab);
+    const lastCallProps =
+      bottomTabBarSpy.mock.calls[bottomTabBarSpy.mock.calls.length - 1][0];
+    expect(lastCallProps.activeTab).toBe("bookshelf");
+    expect(() => {
+      lastCallProps.onSelectBookshelf?.();
+      lastCallProps.onSelectSearch?.();
+      lastCallProps.onSelectRanking?.();
+      lastCallProps.onSelectSettings?.();
+    }).not.toThrow();
 
-    const searchTab = screen.getByTestId("tab-search");
-    await user.click(searchTab);
-
-    const rankingTab = screen.getByTestId("tab-ranking");
-    await user.click(rankingTab);
-
-    const settingsTab = screen.getByTestId("tab-settings");
-    await user.click(settingsTab);
+    bottomTabBarSpy.mockRestore();
   });
 
   it("isLoading のみ true のときは『読み込み中...』が表示されること", () => {

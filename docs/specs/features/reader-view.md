@@ -100,6 +100,7 @@ related_tests:
   - test/it/scenarios/scn04-prefetch-and-cache.spec.ts
   - test/it/scenarios/scn05-cloud-sync.spec.ts
   - test/it/scenarios/scn06-volume-key-paging.spec.ts
+  - test/it/scenarios/scn07-webview-import-fallback.spec.ts
 ---
 
 # 小説リーダー画面仕様書（SCR-03）

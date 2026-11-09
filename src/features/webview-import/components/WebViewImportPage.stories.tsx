@@ -33,10 +33,13 @@ export default meta;
 type Story = StoryObj<typeof WebViewImportPage>;
 
 /** 通常の対応 URL 表示（インポート可能） */
-export const Default: Story = {};
+export const Default: Story = {
+  name: "通常表示（インポート可能）",
+};
 
 /** 非対応 URL（一般サイトや検索等）表示時（警告トースト表示、取り込みボタン disabled） */
 export const UnsupportedUrl: Story = {
+  name: "非対応URL表示",
   args: {
     url: "https://example.com/login",
     pageTitle: "Example Domain",
@@ -47,6 +50,7 @@ export const UnsupportedUrl: Story = {
 
 /** 読み込み中・インポート処理中状態 */
 export const Loading: Story = {
+  name: "読み込み・インポート中",
   args: {
     isLoading: true,
     isImporting: true,
@@ -55,6 +59,7 @@ export const Loading: Story = {
 
 /** インポート成功・保存完了通知表示状態 */
 export const WithNotice: Story = {
+  name: "通知表示",
   args: {
     notice: "作品目次を取り込みました。作品詳細へ移動します。",
   },
@@ -62,6 +67,7 @@ export const WithNotice: Story = {
 
 /** 不正 URL またはインポート失敗エラー表示状態 */
 export const WithError: Story = {
+  name: "エラー表示",
   args: {
     error: "安全でない URL スキームは開けません",
     canImport: false,
