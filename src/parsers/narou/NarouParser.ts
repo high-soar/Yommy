@@ -199,6 +199,34 @@ function extractAbsoluteUrl(
   }
 }
 
+const ALLOWED_EPISODE_HOSTS = new Set([
+  "ncode.syosetu.com",
+  "novel18.syosetu.com",
+]);
+
+/**
+ * 各話エピソードの前後リンクを安全に抽出する
+ * （URL スキームが https: かつ許可ドメインであることを検証）(R2-11)
+ */
+function extractAllowedEpisodeUrl(
+  doc: Document,
+  selectors: readonly string[],
+  baseUrl: string,
+): string | null {
+  const url = extractAbsoluteUrl(doc, selectors, baseUrl);
+  if (!url) {
+    return null;
+  }
+  const parsed = new URL(url);
+  if (
+    parsed.protocol === "https:" &&
+    ALLOWED_EPISODE_HOSTS.has(parsed.hostname.toLowerCase())
+  ) {
+    return parsed.href;
+  }
+  return null;
+}
+
 /**
  * pageUrl から開始位置 st、現在ページ番号 currentPage、および order を算出する
  */
@@ -624,13 +652,13 @@ export class NarouParser implements NovelParser {
     const bodyHtml = sanitizeChapterHtml(rawCombinedHtml);
     const byteSize = new TextEncoder().encode(bodyHtml).length;
 
-    // 4. 前後リンク抽出 (AC-NR-09)
-    const prevChapterUrl = extractAbsoluteUrl(
+    // 4. 前後リンク抽出 (AC-NR-09, R2-11)
+    const prevChapterUrl = extractAllowedEpisodeUrl(
       doc,
       SELECTORS.prevChapter,
       pageUrl,
     );
-    const nextChapterUrl = extractAbsoluteUrl(
+    const nextChapterUrl = extractAllowedEpisodeUrl(
       doc,
       SELECTORS.nextChapter,
       pageUrl,

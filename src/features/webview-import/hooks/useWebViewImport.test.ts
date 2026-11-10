@@ -1056,6 +1056,58 @@ describe("useWebViewImport", () => {
       expect(importResult).not.toBeNull();
     });
 
+    it("未登録作品のエピソード表示時に fetchFullNovelIndex が未指定でも defaultFetchFullNovelIndex を介して目次自動補完され本文保存されること (R2-21)", async () => {
+      (
+        mockNovelRepo.getNovelById as ReturnType<typeof vi.fn>
+      ).mockResolvedValue(null);
+      (mockNovelRepo.listNovels as ReturnType<typeof vi.fn>).mockResolvedValue(
+        [],
+      );
+      (mockHttpClient.getHtml as ReturnType<typeof vi.fn>).mockResolvedValue({
+        status: 200,
+        url: "https://kakuyomu.jp/works/16817330658027210412",
+        headers: {},
+        html: "<html>目次</html>",
+      });
+
+      bridge.setMockPage({
+        html: "<html><body><div class='widget-episodeBody'>本文</div></body></html>",
+        url: "https://kakuyomu.jp/works/16817330658027210412/episodes/16817330658027210413",
+        title: "第1話",
+      });
+
+      const onImportCompleteMock = vi.fn();
+
+      const { result } = renderHook(() =>
+        useWebViewImport({
+          initialUrl:
+            "https://kakuyomu.jp/works/16817330658027210412/episodes/16817330658027210413",
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          parserRegistry: mockParserRegistry,
+          httpClient: mockHttpClient,
+          // fetchFullNovelIndex は未指定
+          onImportComplete: onImportCompleteMock,
+        }),
+      );
+
+      let importResult: unknown = null;
+      await act(async () => {
+        importResult = await result.current.importCurrentDom();
+      });
+
+      expect(mockHttpClient.getHtml).toHaveBeenCalled();
+      expect(mockNovelRepo.upsertNovelWithToc).toHaveBeenCalled();
+      expect(mockChapterRepo.saveChapterBody).toHaveBeenCalled();
+      expect(onImportCompleteMock).toHaveBeenCalledWith({
+        type: "chapter",
+        novelId: sampleNovel.id,
+        chapterIndex: 1,
+      });
+      expect(importResult).not.toBeNull();
+    });
+
     it("未登録作品で目次自動補完が失敗した場合、エラー案内を表示し保存しないこと (AC-WV-07)", async () => {
       (
         mockNovelRepo.getNovelById as ReturnType<typeof vi.fn>
@@ -1249,6 +1301,64 @@ describe("useWebViewImport", () => {
         expect.anything(),
         expect.any(String),
       );
+    });
+
+    it("章一覧に存在しない話で fetchFullNovelIndex が未指定でも defaultFetchFullNovelIndex を介して目次再取得され正常に保存されること (R2-21)", async () => {
+      const updatedChapters: ChapterSummary[] = [
+        {
+          id: "kakuyomu:16817330658027210412:1",
+          novelId: sampleNovel.id,
+          chapterIndex: 1,
+          remoteChapterId: "16817330658027210413",
+          partTitle: null,
+          title: "プロローグ",
+          url: "https://kakuyomu.jp/works/16817330658027210412/episodes/16817330658027210413",
+          byteSize: 0,
+          isRead: false,
+          publishedAt: "2026-10-01",
+          downloadedAt: null,
+        },
+      ];
+      (mockChapterRepo.listChaptersByNovelId as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce(updatedChapters);
+
+      (mockHttpClient.getHtml as ReturnType<typeof vi.fn>).mockResolvedValue({
+        status: 200,
+        url: "https://kakuyomu.jp/works/16817330658027210412",
+        headers: {},
+        html: "<html>目次</html>",
+      });
+
+      bridge.setMockPage({
+        html: "<html><body><div class='widget-episodeBody'>新着本文</div></body></html>",
+        url: "https://kakuyomu.jp/works/16817330658027210412/episodes/16817330658027210413",
+        title: "第1話",
+      });
+
+      const { result } = renderHook(() =>
+        useWebViewImport({
+          initialUrl:
+            "https://kakuyomu.jp/works/16817330658027210412/episodes/16817330658027210413",
+          initialNovelId: sampleNovel.id,
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          parserRegistry: mockParserRegistry,
+          httpClient: mockHttpClient,
+          // fetchFullNovelIndex は未指定
+        }),
+      );
+
+      let importResult: unknown = null;
+      await act(async () => {
+        importResult = await result.current.importCurrentDom();
+      });
+
+      expect(mockHttpClient.getHtml).toHaveBeenCalled();
+      expect(mockNovelRepo.upsertNovelWithToc).toHaveBeenCalled();
+      expect(mockChapterRepo.saveChapterBody).toHaveBeenCalled();
+      expect(importResult).not.toBeNull();
     });
 
     it("章一覧に存在しない話で fetchFullNovelIndex 呼び出し時に例外が発生した場合でもクラッシュせず、エラーメッセージが設定されて null を返すこと (R1-01)", async () => {
@@ -1486,7 +1596,7 @@ describe("useWebViewImport", () => {
       expect(() => unmount()).not.toThrow();
     });
 
-    it("未登録作品エピソードで fetchFullNovelIndex が未指定の場合、エラーとなること", async () => {
+    it("未登録作品エピソードで httpClient が未指定の場合、エラーとなること", async () => {
       (
         mockNovelRepo.getNovelById as ReturnType<typeof vi.fn>
       ).mockResolvedValue(null);

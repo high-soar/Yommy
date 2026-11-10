@@ -881,7 +881,7 @@ export class KakuyomuParser implements NovelParser {
 
     const hasNextPage = Boolean(
       doc.querySelector(
-        'a[rel="next"], [class*="pager"] a, [class*="pagination"] [class*="next"]',
+        'a[rel="next"], [class*="pager"] [class*="next"] a, [class*="pager"] a[class*="next"], [class*="pagination"] [class*="next"]',
       ),
     );
 
@@ -898,10 +898,8 @@ export class KakuyomuParser implements NovelParser {
    * ランキング URL を構築する（純粋関数）
    */
   buildRankingUrl(options?: NovelRankingOptions): string {
-    const genre =
-      options?.genre && options.genre !== "all"
-        ? options.genre.toLowerCase()
-        : "all";
+    const rawGenre = options?.genre?.trim().toLowerCase();
+    const genre = rawGenre && rawGenre !== "all" ? rawGenre : "all";
     const period = options?.period ?? "weekly";
     const url = new URL(`https://kakuyomu.jp/rankings/${genre}/${period}`);
     url.searchParams.set("work_variation", options?.workVariation ?? "long");
@@ -982,7 +980,7 @@ export class KakuyomuParser implements NovelParser {
 
     const hasNextPage = Boolean(
       doc.querySelector(
-        'a[rel="next"], [class*="pager"] a, [class*="pagination"] [class*="next"]',
+        'a[rel="next"], [class*="pager"] [class*="next"] a, [class*="pager"] a[class*="next"], [class*="pagination"] [class*="next"]',
       ),
     );
 

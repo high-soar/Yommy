@@ -209,6 +209,7 @@ export interface WebViewDomBridge {
   open(options: OpenWebViewOptions): Promise<void>;
   close(): Promise<void>;
   captureDom(): Promise<CapturedDomResult>;
+  /** 指定 URL が https: の安全なスキームか検証する。 */
   canHandle(url: string): boolean;
   addDomCapturedListener?(
     listener: (result: CapturedDomResult) => void,
