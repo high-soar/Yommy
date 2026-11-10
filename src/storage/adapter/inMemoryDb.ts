@@ -8,6 +8,7 @@ import { DDL_STATEMENTS } from "../schema";
  */
 export class InMemoryDatabaseAdapter implements DatabaseAdapter {
   private inTransaction = false;
+  private transactionMutex: Promise<void> = Promise.resolve();
 
   constructor(
     private db: Database,
@@ -56,19 +57,28 @@ export class InMemoryDatabaseAdapter implements DatabaseAdapter {
   async runTransaction<T>(
     action: (tx: DatabaseAdapter) => Promise<T>,
   ): Promise<T> {
-    this.inTransaction = true;
-    this.db.run("BEGIN TRANSACTION;");
-    try {
-      const result = await action(this);
-      this.db.run("COMMIT;");
-      this.inTransaction = false;
-      this.onUpdate?.();
-      return result;
-    } catch (err) {
-      this.inTransaction = false;
-      this.db.run("ROLLBACK;");
-      throw err;
-    }
+    const next = this.transactionMutex.then(async () => {
+      this.inTransaction = true;
+      this.db.run("BEGIN TRANSACTION;");
+      try {
+        const result = await action(this);
+        this.db.run("COMMIT;");
+        this.inTransaction = false;
+        this.onUpdate?.();
+        return result;
+      } catch (err) {
+        this.inTransaction = false;
+        this.db.run("ROLLBACK;");
+        throw err;
+      }
+    });
+
+    this.transactionMutex = next.then(
+      () => {},
+      () => {},
+    );
+
+    return next;
   }
 
   async close(): Promise<void> {

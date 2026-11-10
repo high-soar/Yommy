@@ -451,6 +451,73 @@ describe("SqlNovelRepository", () => {
       expect(updated?.cachedChapters).toBe(1);
       expect(updated?.totalByteSize).toBe(100);
     });
+
+    it("目次の話数が減少・シフトした際に新目次の話数範囲を超える余剰 download_queue エントリがクリーンアップされること (R2-05)", async () => {
+      // 3話で登録
+      const threeChaptersIndex: ParsedNovelIndex = {
+        ...sampleParsedIndex,
+        chapters: [
+          ...sampleParsedIndex.chapters,
+          {
+            chapterIndex: 3,
+            remoteChapterId: "ep3",
+            partTitle: null,
+            title: "第3話",
+            url: "https://kakuyomu.jp/works/1177354054881162325/episodes/ep3",
+            publishedAt: "2026-01-03T10:00:00Z",
+          },
+        ],
+      };
+      await repository.upsertNovelWithToc(
+        threeChaptersIndex,
+        "2026-01-01T00:00:00Z",
+      );
+
+      const adapter = await initTestDb();
+      // download_queue に 1話、3話のエントリを登録
+      await adapter.execute(
+        `INSERT INTO download_queue (novel_id, chapter_index, target_url, status, created_at, updated_at)
+         VALUES ('kakuyomu:1177354054881162325', 1, 'https://example.com/1', 'pending', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
+      );
+      await adapter.execute(
+        `INSERT INTO download_queue (novel_id, chapter_index, target_url, status, created_at, updated_at)
+         VALUES ('kakuyomu:1177354054881162325', 3, 'https://example.com/3', 'failed', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
+      );
+
+      // 中間話削除などにより、全2話 [ep2: 1, ep3: 2] にシフトした新目次で更新
+      // 旧 ep1 が削除され、旧 ep3 は chapterIndex: 2 にシフト、新目次の話数は 2 となる
+      const shiftedIndex: ParsedNovelIndex = {
+        ...sampleParsedIndex,
+        chapters: [
+          {
+            chapterIndex: 1,
+            remoteChapterId: "ep2",
+            partTitle: null,
+            title: "第2話（新1話）",
+            url: "https://kakuyomu.jp/works/1177354054881162325/episodes/ep2",
+            publishedAt: "2026-01-02T10:00:00Z",
+          },
+          {
+            chapterIndex: 2,
+            remoteChapterId: "ep3",
+            partTitle: null,
+            title: "第3話（新2話）",
+            url: "https://kakuyomu.jp/works/1177354054881162325/episodes/ep3",
+            publishedAt: "2026-01-03T10:00:00Z",
+          },
+        ],
+      };
+
+      await repository.upsertNovelWithToc(shiftedIndex, "2026-01-02T00:00:00Z");
+
+      // 旧 ep1 の chapter_index: 1 は removedChapters により削除され、
+      // かつ新目次の最大話数 (2) を超える旧 chapter_index: 3 のキューもクリーンアップされていること
+      const remainingQueues = await adapter.query<{ chapter_index: number }>(
+        "SELECT chapter_index FROM download_queue WHERE novel_id = ? ORDER BY chapter_index ASC;",
+        ["kakuyomu:1177354054881162325"],
+      );
+      expect(remainingQueues).toHaveLength(0);
+    });
   });
 
   describe("clearNewUpdate", () => {

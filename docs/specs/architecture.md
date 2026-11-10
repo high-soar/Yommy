@@ -381,6 +381,7 @@ export interface ParsedNovelIndex {
   synopsis: string; // あらすじテキスト
   chapters: ParsedTocItem[]; // エピソード目次一覧
   nextTocPageUrl: string | null; // 目次が複数ページに分かれる場合の次ページURL（なろう等）
+  truncated?: boolean; // maxPages 等により目次取得が途中で打ち切られたかどうかのフラグ (R1-24, R2-12)
 }
 
 /** 各話ページから抽出される本文データ */
@@ -550,14 +551,15 @@ export interface NovelRepository {
   upsertNovelWithToc(
     index: ParsedNovelIndex,
     fetchedAt: string,
-  ): Promise<NovelRecord>;
+    options?: { updateOnly?: boolean },
+  ): Promise<NovelRecord | null>;
   updateBookmark(
     novelId: string,
     chapterIndex: number,
     scrollProgress: number,
   ): Promise<void>;
   setFavorite(novelId: string, isFavorite: boolean): Promise<void>;
-  deleteNovel(novelId: string): Promise<void>;
+  deleteNovel(novelId: string, deletedAt?: number): Promise<void>;
   clearNewUpdate(novelId: string): Promise<void>;
   updateLastCheckedAt(novelId: string, checkedAt: string): Promise<void>;
   getDeletedNovels?(): Promise<DeletedNovelRecord[]>;

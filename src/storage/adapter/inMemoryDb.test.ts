@@ -222,6 +222,80 @@ describe("InMemoryDatabaseAdapter", () => {
       );
       expect(rows).toHaveLength(0);
     });
+
+    it("並行する runTransaction が直列化され順序正しく実行されること (R2-07)", async () => {
+      const adapter = await resetTestDb();
+      const events: string[] = [];
+
+      const tx1 = adapter.runTransaction(async () => {
+        events.push("tx1:start");
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        await adapter.execute(
+          `INSERT INTO novels (id, site_type, remote_work_id, canonical_url, title, created_at, updated_at)
+           VALUES ('t:parallel1', 'kakuyomu', 'p1', 'https://kakuyomu.jp/works/p1', '並行1', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
+        );
+        events.push("tx1:end");
+        return "res1";
+      });
+
+      const tx2 = adapter.runTransaction(async () => {
+        events.push("tx2:start");
+        await adapter.execute(
+          `INSERT INTO novels (id, site_type, remote_work_id, canonical_url, title, created_at, updated_at)
+           VALUES ('t:parallel2', 'kakuyomu', 'p2', 'https://kakuyomu.jp/works/p2', '並行2', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
+        );
+        events.push("tx2:end");
+        return "res2";
+      });
+
+      const results = await Promise.all([tx1, tx2]);
+      expect(results).toEqual(["res1", "res2"]);
+      expect(events).toEqual(["tx1:start", "tx1:end", "tx2:start", "tx2:end"]);
+
+      const rows = await adapter.query(
+        "SELECT id FROM novels ORDER BY id ASC;",
+      );
+      expect(rows).toEqual([{ id: "t:parallel1" }, { id: "t:parallel2" }]);
+    });
+
+    it("先行する runTransaction がエラーでロールバックしても後続の runTransaction が正常に直列実行されること (R2-07)", async () => {
+      const adapter = await resetTestDb();
+      const events: string[] = [];
+
+      const txFail = adapter.runTransaction(async () => {
+        events.push("fail:start");
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        await adapter.execute(
+          `INSERT INTO novels (id, site_type, remote_work_id, canonical_url, title, created_at, updated_at)
+           VALUES ('t:fail', 'kakuyomu', 'fail', 'https://kakuyomu.jp/works/fail', '失敗', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
+        );
+        events.push("fail:error");
+        throw new Error("意図的エラー");
+      });
+
+      const txSuccess = adapter.runTransaction(async () => {
+        events.push("success:start");
+        await adapter.execute(
+          `INSERT INTO novels (id, site_type, remote_work_id, canonical_url, title, created_at, updated_at)
+           VALUES ('t:success', 'kakuyomu', 'ok', 'https://kakuyomu.jp/works/ok', '成功', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
+        );
+        events.push("success:end");
+        return "ok";
+      });
+
+      await expect(txFail).rejects.toThrow("意図的エラー");
+      const successResult = await txSuccess;
+      expect(successResult).toBe("ok");
+      expect(events).toEqual([
+        "fail:start",
+        "fail:error",
+        "success:start",
+        "success:end",
+      ]);
+
+      const rows = await adapter.query("SELECT id FROM novels;");
+      expect(rows).toEqual([{ id: "t:success" }]);
+    });
   });
 
   describe("close", () => {
