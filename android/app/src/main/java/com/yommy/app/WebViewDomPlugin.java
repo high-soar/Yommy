@@ -76,6 +76,13 @@ public class WebViewDomPlugin extends Plugin {
             } catch (Exception ignored) {}
             webView = null;
         }
+        lastCapturedHtml = "";
+        lastCapturedUrl = "";
+        lastCapturedTitle = "";
+    }
+
+    private boolean isAllowedScheme(String scheme) {
+        return "https".equalsIgnoreCase(scheme);
     }
 
     /**
@@ -88,8 +95,8 @@ public class WebViewDomPlugin extends Plugin {
 
         Uri parsedUri = url != null ? Uri.parse(url) : null;
         String scheme = parsedUri != null ? parsedUri.getScheme() : null;
-        if (url == null || scheme == null || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))) {
-            call.reject("Invalid or unsafe URL scheme: " + url);
+        if (url == null || scheme == null || !isAllowedScheme(scheme)) {
+            call.reject("Invalid or unsafe URL scheme: " + url + " (only https is allowed)");
             return;
         }
 
@@ -180,8 +187,8 @@ public class WebViewDomPlugin extends Plugin {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                         Uri requestUri = request.getUrl();
                         String scheme = requestUri.getScheme();
-                        if (scheme == null || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))) {
-                            return true; // 危険スキーム（javascript:, data:, file:, intent: 等）を即時遮断
+                        if (scheme == null || !isAllowedScheme(scheme)) {
+                            return true; // 危険・平文スキーム（http:, javascript:, data:, file:, intent: 等）を即時遮断 (R2-08)
                         }
                     }
                     return false;
@@ -194,8 +201,8 @@ public class WebViewDomPlugin extends Plugin {
                     }
                     Uri parsed = Uri.parse(requestUrl);
                     String s = parsed != null ? parsed.getScheme() : null;
-                    if (s == null || (!"http".equalsIgnoreCase(s) && !"https".equalsIgnoreCase(s))) {
-                        return true; // 危険スキーム遮断
+                    if (s == null || !isAllowedScheme(s)) {
+                        return true; // 危険・平文スキーム遮断 (R2-08)
                     }
                     return false;
                 }
@@ -289,11 +296,12 @@ public class WebViewDomPlugin extends Plugin {
 
     /**
      * 内蔵 WebView ダイアログを閉じる。
+     * WebView 本体および直近 DOM キャッシュを確実に破棄する (R2-18)。
      */
     @PluginMethod
     public void close(PluginCall call) {
         getActivity().runOnUiThread(() -> {
-            dismissDialogOnly();
+            dismissAndDestroyDialog();
             call.resolve();
         });
     }

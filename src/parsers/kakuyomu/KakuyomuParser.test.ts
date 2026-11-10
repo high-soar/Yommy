@@ -1113,6 +1113,19 @@ describe("KakuyomuParser", () => {
       expect(second.lastEpisodePublishedAt).toBe("2026-10-21T15:00:00Z");
     });
 
+    it("静的 DOM フィクスチャ（最終ページ search_results_dom_last_page.html）で hasNextPage が false になること (R2-03)", () => {
+      const html = loadFixture("search_results_dom_last_page.html");
+      const result = parser.searchNovels(
+        html,
+        "https://kakuyomu.jp/search?q=test&page=2",
+      );
+
+      expect(result.pageInfo.currentPage).toBe(2);
+      expect(result.pageInfo.hasNextPage).toBe(false);
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].remoteWorkId).toBe("16817330658027210005");
+    });
+
     it("Apollo State が壊れた JSON や ROOT_QUERY が欠損している場合でも DOM 抽出へ安全にフォールバックすること", () => {
       const brokenHtml = `
         <html><body>
@@ -1182,6 +1195,12 @@ describe("KakuyomuParser", () => {
         "https://kakuyomu.jp/rankings/sf/weekly?work_variation=long",
       );
       expect(parser.buildRankingUrl({ genre: "all" })).toBe(
+        "https://kakuyomu.jp/rankings/all/weekly?work_variation=long",
+      );
+      expect(parser.buildRankingUrl({ genre: "  fantasy  " })).toBe(
+        "https://kakuyomu.jp/rankings/fantasy/weekly?work_variation=long",
+      );
+      expect(parser.buildRankingUrl({ genre: "  all  " })).toBe(
         "https://kakuyomu.jp/rankings/all/weekly?work_variation=long",
       );
     });
@@ -1313,6 +1332,20 @@ describe("KakuyomuParser", () => {
       expect(second.reviewPoints).toBe(800);
       expect(second.tags).toEqual(["純愛"]);
       expect(second.lastEpisodePublishedAt).toBe("2026-10-27T12:00:00Z");
+    });
+
+    it("静的 DOM フィクスチャ（最終ページ ranking_results_dom_last_page.html）で hasNextPage が false になること (R2-03)", () => {
+      const html = loadFixture("ranking_results_dom_last_page.html");
+      const result = parser.getRanking(
+        html,
+        "https://kakuyomu.jp/rankings/all/weekly?work_variation=long&page=2",
+      );
+
+      expect(result.pageInfo.currentPage).toBe(2);
+      expect(result.pageInfo.hasNextPage).toBe(false);
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].rank).toBe(3);
+      expect(result.items[0].remoteWorkId).toBe("16817330658027210203");
     });
 
     it("Apollo State が壊れている場合でも DOM 抽出へ安全にフォールバックすること", () => {

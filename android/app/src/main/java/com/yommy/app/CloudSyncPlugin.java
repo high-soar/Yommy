@@ -288,6 +288,7 @@ public class CloudSyncPlugin extends Plugin {
 
         executor.execute(() -> {
             if (token != null && !token.isEmpty()) {
+                clearCachedToken(token);
                 HttpURLConnection conn = null;
                 try {
                     URL url = new URL(REVOKE_ENDPOINT + token);

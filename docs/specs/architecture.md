@@ -1046,7 +1046,7 @@ export interface WebViewDomBridge {
   captureDom(): Promise<CapturedDomResult>;
 
   /**
-   * 指定 URL が http: または https: の安全なスキームか検証する。
+   * 指定 URL が https: の安全なスキームか検証する。
    */
   canHandle(url: string): boolean;
 
@@ -1065,8 +1065,8 @@ export interface WebViewDomBridge {
 1. **`WebViewDomPlugin`（`@CapacitorPlugin(name = "WebViewDom")`）**:
    - `android.app.Dialog` 上に全画面 `android.webkit.WebView` と操作バー（URL 表示、戻る/進む/リロード、「取り込み」確定ボタン、閉じるボタン）を展開。
    - `evaluateJavascript("(function(){return document.documentElement.outerHTML;})()", ...)` を実行し、表示中 DOM を抽出して React 側へ返却。
-   - **スキーム検証とセキュリティ保護**: `WebViewClient.shouldOverrideUrlLoading` で `http:` / `https:` 以外の危険なスキーム（`javascript:`, `data:`, `file:`, `intent:` 等）を即時遮断。
-   - **ライフサイクル破棄保護**: `handleOnDestroy()` およびダイアログ閉塞時に `webView.destroy()` を実行しリソースリークを防止。
+   - **スキーム検証とセキュリティ保護**: `WebViewClient.shouldOverrideUrlLoading` で `https:` 以外の危険・平文スキーム（平文 `http:`, `javascript:`, `data:`, `file:`, `intent:` 等）を即時遮断（平文 http は Android cleartextTraffic 制限およびセキュリティ境界の観点から遮断）。
+   - **ライフサイクル破棄保護**: `close()` / `handleOnDestroy()` およびダイアログ閉塞時に `webView.destroy()` を実行し、直近 DOM キャッシュを確実に破棄してリソースリークを防止。
 2. **`MainActivity.java`**:
    - `registerPlugin(WebViewDomPlugin.class);` を登録。
 3. **ブラウザ／テスト用モック（`MockWebViewDomBridge`）**:

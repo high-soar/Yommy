@@ -684,6 +684,42 @@ describe("NarouParser", () => {
       expect(result.prevChapterUrl).toBeNull();
       expect(result.nextChapterUrl).toBeNull();
     });
+
+    it("前後リンクが平文 http: や不正な外部ドメインの場合は null に除外すること (R2-11)", () => {
+      const html = `
+        <div class="p-novel__text"><p>本文</p></div>
+        <div class="c-pager">
+          <a class="c-pager__item--before" href="http://ncode.syosetu.com/n9669bk/1/">前へ（平文http）</a>
+          <a class="c-pager__item--next" href="https://malicious-site.com/n9669bk/3/">次へ（外部ドメイン）</a>
+        </div>
+      `;
+      const result = parser.parseChapterContent(
+        html,
+        "https://ncode.syosetu.com/n9669bk/2/",
+      );
+      expect(result.prevChapterUrl).toBeNull();
+      expect(result.nextChapterUrl).toBeNull();
+    });
+
+    it("前後リンクが novel18.syosetu.com かつ https: の場合は許可されて正しく抽出されること (R2-11)", () => {
+      const html = `
+        <div class="p-novel__text"><p>本文</p></div>
+        <div class="c-pager">
+          <a class="c-pager__item--before" href="https://novel18.syosetu.com/n9669bk/1/">前へ</a>
+          <a class="c-pager__item--next" href="https://novel18.syosetu.com/n9669bk/3/">次へ</a>
+        </div>
+      `;
+      const result = parser.parseChapterContent(
+        html,
+        "https://novel18.syosetu.com/n9669bk/2/",
+      );
+      expect(result.prevChapterUrl).toBe(
+        "https://novel18.syosetu.com/n9669bk/1/",
+      );
+      expect(result.nextChapterUrl).toBe(
+        "https://novel18.syosetu.com/n9669bk/3/",
+      );
+    });
   });
 
   describe("境界値・異常系カバレッジ", () => {

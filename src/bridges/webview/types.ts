@@ -35,7 +35,7 @@ export interface WebViewDomBridge {
   captureDom(): Promise<CapturedDomResult>;
 
   /**
-   * 指定 URL が http: または https: の安全なスキームか検証する。
+   * 指定 URL が https: の安全なスキームか検証する。
    */
   canHandle(url: string): boolean;
 

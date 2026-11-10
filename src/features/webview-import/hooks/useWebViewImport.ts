@@ -68,7 +68,7 @@ export function useWebViewImport({
         return false;
       }
 
-      // 危険スキーム遮断（http: / https: 以外を拒否）
+      // 危険スキーム遮断（https: 以外を拒否） (R2-08)
       if (!webViewDomBridge.canHandle(toLoad)) {
         if (isMountedRef.current) {
           setError("安全でない URL スキームは開けません");
@@ -145,6 +145,8 @@ export function useWebViewImport({
           setCurrentCapturedUrl(captured.url);
         }
 
+        const fetchFn = fetchFullNovelIndex ?? defaultFetchFullNovelIndex;
+
         const parser = parserRegistry.getParser(captured.url);
         if (!parser || !parser.canParse(captured.url)) {
           if (isMountedRef.current) {
@@ -179,7 +181,6 @@ export function useWebViewImport({
                 }
                 return null;
               }
-              const fetchFn = fetchFullNovelIndex ?? defaultFetchFullNovelIndex;
               try {
                 novelIndex = await fetchFn(
                   httpClient,
@@ -260,11 +261,11 @@ export function useWebViewImport({
               }
             }
 
-            // 未登録作品の場合は目次自動補完を試行（R1-12: httpClient の安全な存在チェック）
+            // 未登録作品の場合は目次自動補完を試行（R1-12: httpClient の安全な存在チェック, R2-21: fetchFn フォールバック統一）
             if (!targetNovel) {
-              if (fetchFullNovelIndex && httpClient) {
+              if (httpClient) {
                 try {
-                  const fullIndex = await fetchFullNovelIndex(
+                  const fullIndex = await fetchFn(
                     httpClient,
                     parser,
                     canonicalUrl,
@@ -295,10 +296,10 @@ export function useWebViewImport({
               (c) => c.remoteChapterId === parsedChapter.remoteChapterId,
             );
 
-            // 目次にない場合、目次自動更新を試行
-            if (!matched && fetchFullNovelIndex && httpClient) {
+            // 目次にない場合、目次自動更新を試行 (R2-21: fetchFn フォールバック統一)
+            if (!matched && httpClient) {
               try {
-                const fullIndex = await fetchFullNovelIndex(
+                const fullIndex = await fetchFn(
                   httpClient,
                   parser,
                   canonicalUrl,
