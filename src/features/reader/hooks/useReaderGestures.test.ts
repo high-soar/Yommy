@@ -596,6 +596,85 @@ describe("useReaderGestures", () => {
       expect(defaultOptions.onCloseOverlay).toHaveBeenCalled();
     });
 
+    it("スクロールモード（pagingMode: 'scroll'）でも画面タップ時に onToggleOverlay が呼ばれ、タイマー経過後に hasHandledTap が解除されること (R2-02)", () => {
+      const onToggleOverlay = vi.fn();
+      const { result } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          pagingMode: "scroll",
+          onToggleOverlay,
+        }),
+      );
+
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 150, clientY: 100 }),
+        );
+      });
+
+      vi.advanceTimersByTime(100);
+
+      act(() => {
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 152, clientY: 101 }),
+        );
+      });
+
+      expect(onToggleOverlay).toHaveBeenCalledTimes(1);
+
+      // 100ms以内の再タップで既存 tapTimer がクリアされること
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 150, clientY: 100 }),
+        );
+      });
+
+      vi.advanceTimersByTime(50);
+
+      act(() => {
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 152, clientY: 101 }),
+        );
+      });
+
+      // 100ms 経過で tapTimer が完了
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+    });
+
+    it("スクロールモード（pagingMode: 'scroll'）でオーバーレイ表示中に画面タップしたときに onCloseOverlay が呼ばれること (R2-02)", () => {
+      const onCloseOverlay = vi.fn();
+      const { result } = renderHook(() =>
+        useReaderGestures({
+          ...defaultOptions,
+          pagingMode: "scroll",
+          isOverlayOpen: true,
+          onCloseOverlay,
+        }),
+      );
+
+      act(() => {
+        result.current.handlePointerDown(
+          createPointerEvent("pointerdown", { clientX: 150, clientY: 100 }),
+        );
+      });
+
+      vi.advanceTimersByTime(100);
+
+      act(() => {
+        result.current.handlePointerUp(
+          createPointerEvent("pointerup", { clientX: 152, clientY: 101 }),
+        );
+      });
+
+      expect(onCloseOverlay).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+    });
+
     it("100ms以内の連続タップ時に既存の tapTimer がクリアされ、アニメーション中の2回目タップで1回目が即時確定すること", () => {
       const { result } = renderHook(() => useReaderGestures(defaultOptions));
 

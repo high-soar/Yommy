@@ -8,6 +8,7 @@ import { sampleSearchItem } from "../__fixtures__/searchFixtures";
 import * as siteSelectorModule from "./SiteSelector";
 import * as searchFilterBarModule from "./SearchFilterBar";
 import * as searchInputBarModule from "./SearchInputBar";
+import * as searchNovelCardModule from "./SearchNovelCard";
 
 const {
   Initial,
@@ -353,8 +354,8 @@ describe("SearchPage コンポーネント", () => {
     filterBarSpy.mockRestore();
   });
 
-  it("カード本体および本棚に追加ボタンを押下した際、onSelectCard および onAddNovel が正しく呼び出されること", async () => {
-    const user = userEvent.setup();
+  it("親子分離: SearchNovelCard へ item, onAdd, onSelect が正しく伝播し、コールバック呼び出し時に onSelectCard および onAddNovel が正しく呼び出されること", () => {
+    const cardSpy = vi.spyOn(searchNovelCardModule, "SearchNovelCard");
     const handleAddNovel = vi.fn();
     const handleSelectCard = vi.fn();
 
@@ -386,15 +387,25 @@ describe("SearchPage コンポーネント", () => {
       />,
     );
 
-    const card = screen.getByTestId(
-      `search-novel-card-${sampleSearchItem.remoteWorkId}`,
+    expect(cardSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        item: sampleSearchItem,
+        isRegistered: false,
+        isAdding: false,
+        onAdd: expect.any(Function),
+        onSelect: expect.any(Function),
+      }),
+      undefined,
     );
-    await user.click(card);
+
+    const cardProps = cardSpy.mock.calls[0][0];
+    cardProps.onSelect();
     expect(handleSelectCard).toHaveBeenCalledWith(sampleSearchItem);
 
-    const addBtn = screen.getByTestId("search-card-add-button");
-    await user.click(addBtn);
+    cardProps.onAdd();
     expect(handleAddNovel).toHaveBeenCalledWith(sampleSearchItem);
+
+    cardSpy.mockRestore();
   });
 
   it("WithAdvancedFilters ストーリー: 除外キーワード展開および複数ジャンル指定が反映されていること (v0.8 Issue #264 / AC-SE-11)", () => {

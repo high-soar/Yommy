@@ -901,10 +901,12 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             }
           } catch (fetchErr) {
             // エラー時も内蔵ブラウザ連携 (TR-10) のために対象話メタデータ・目標話数を保持 (R1-27)
+            // R2-01: 旧話のスクロール進捗が残ったまま新話のしおりへ誤保存されないようリセット
             if (isMountedRef.current) {
               setChapter(targetChapter);
               setCurrentChapterIndex(targetChapterIndex);
               currentChapterIndexRef.current = targetChapterIndex;
+              resetPaginationState(0, 0);
             }
             throw fetchErr;
           }
@@ -964,8 +966,10 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         if (isMountedRef.current) {
           setError(toErrorMessage(err));
           // R1-27: 取得失敗時でも目標話数 index を保持して表示・遷移パラメータが食い違わないよう是正
+          // R2-01: 話移動失敗時に旧話のスクロール進捗が新話しおりへ保存されないようリセット
           setCurrentChapterIndex(targetChapterIndex);
           currentChapterIndexRef.current = targetChapterIndex;
+          resetPaginationState(0, 0);
         }
         isSuccess = false;
       } finally {

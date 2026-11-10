@@ -903,6 +903,33 @@ describe("ReaderPage", () => {
       expect(overlay).toHaveAttribute("aria-hidden", "true");
     });
 
+    it("連続スクロールモード（pagingMode: 'scroll'）でも画面中央タップで下部オーバーレイ開閉がトグルすること (R2-02)", () => {
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            pagingMode: "scroll",
+            initialOverlayOpen: false,
+          })}
+        />,
+      );
+
+      const overlay = screen.getByTestId("reader-bottom-overlay");
+      expect(overlay).toHaveAttribute("aria-hidden", "true");
+
+      const main = screen.getByRole("main");
+      setupContainerDimensions(main, 300);
+
+      // 1回目タップで展開
+      firePointer(main, "pointerdown", { clientX: 150, clientY: 100 });
+      firePointer(main, "pointerup", { clientX: 151, clientY: 100 });
+      expect(overlay).toHaveAttribute("aria-hidden", "false");
+
+      // 2回目タップで閉じる
+      firePointer(main, "pointerdown", { clientX: 150, clientY: 100 });
+      firePointer(main, "pointerup", { clientX: 150, clientY: 100 });
+      expect(overlay).toHaveAttribute("aria-hidden", "true");
+    });
+
     it("水平ドラッグ移動量 30% 以上の指離しで次ページ遷移が確定すること（AC-RD-17）", () => {
       vi.useFakeTimers();
       try {

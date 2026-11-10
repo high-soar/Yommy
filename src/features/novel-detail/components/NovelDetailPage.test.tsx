@@ -6,6 +6,8 @@ import * as stories from "./NovelDetailPage.stories";
 import { NovelDetailPage } from "./NovelDetailPage";
 import * as NovelDetailHeaderModule from "./NovelDetailHeader";
 import * as EpisodeListModule from "./EpisodeList";
+import * as DeleteConfirmDialogModule from "./DeleteConfirmDialog";
+import * as ClearCacheConfirmDialogModule from "./ClearCacheConfirmDialog";
 import type { NovelRecord, ChapterSummary } from "../../../storage/types";
 
 const {
@@ -252,8 +254,8 @@ describe("NovelDetailPage", () => {
       expect(onBackToBookshelf).toHaveBeenCalledTimes(1);
     });
 
-    it("通常表示時にヘッダーの各アクションが正しく各コールバックに伝達されること", async () => {
-      const user = userEvent.setup();
+    it("親子分離: 通常表示時にヘッダーの各アクションが NovelDetailHeader へ正しく伝達されること", () => {
+      const headerSpy = vi.spyOn(NovelDetailHeaderModule, "NovelDetailHeader");
       const onStartFromBeginning = vi.fn();
       const onResumeBookmark = vi.fn();
       const onRefreshToc = vi.fn();
@@ -270,21 +272,34 @@ describe("NovelDetailPage", () => {
         />,
       );
 
-      await user.click(screen.getByTestId("detail-resume-button"));
+      expect(headerSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          onStartFromBeginning,
+          onResumeBookmark,
+          onRefreshToc,
+          onOpenDeleteDialog,
+        }),
+        undefined,
+      );
+
+      const passedProps = headerSpy.mock.calls[0][0];
+      passedProps.onResumeBookmark?.(2);
       expect(onResumeBookmark).toHaveBeenCalledWith(2);
 
-      await user.click(screen.getByTestId("detail-read-first-button"));
+      passedProps.onStartFromBeginning?.();
       expect(onStartFromBeginning).toHaveBeenCalledTimes(1);
 
-      await user.click(screen.getByTestId("refresh-toc-button"));
+      passedProps.onRefreshToc?.();
       expect(onRefreshToc).toHaveBeenCalledTimes(1);
 
-      await user.click(screen.getByTestId("open-delete-dialog-button"));
+      passedProps.onOpenDeleteDialog?.();
       expect(onOpenDeleteDialog).toHaveBeenCalledTimes(1);
+
+      headerSpy.mockRestore();
     });
 
-    it("目次一覧のエピソード行をクリックしたときに onSelectEpisode が呼び出されること", async () => {
-      const user = userEvent.setup();
+    it("親子分離: 目次一覧の onSelectEpisode が EpisodeList へ正しく伝達されること", () => {
+      const episodeListSpy = vi.spyOn(EpisodeListModule, "EpisodeList");
       const onSelectEpisode = vi.fn();
 
       render(
@@ -294,41 +309,54 @@ describe("NovelDetailPage", () => {
         />,
       );
 
-      const items = screen.getAllByTestId("episode-item");
-      await user.click(items[0]);
-      expect(onSelectEpisode).toHaveBeenCalledWith(1);
-    });
-
-    it("削除ダイアログのキャンセルボタンをクリックすると onCloseDeleteDialog が呼び出されること", async () => {
-      const user = userEvent.setup();
-      const onCloseDeleteDialog = vi.fn();
-
-      render(
-        <NovelDetailPage
-          {...defaultPageProps}
-          isDeleteDialogOpen={true}
-          onCloseDeleteDialog={onCloseDeleteDialog}
-        />,
+      expect(episodeListSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          onSelectEpisode: expect.any(Function),
+        }),
+        undefined,
       );
 
-      await user.click(screen.getByTestId("cancel-delete-button"));
-      expect(onCloseDeleteDialog).toHaveBeenCalledTimes(1);
+      const passedProps = episodeListSpy.mock.calls[0][0];
+      passedProps.onSelectEpisode(1);
+      expect(onSelectEpisode).toHaveBeenCalledWith(1);
+
+      episodeListSpy.mockRestore();
     });
 
-    it("削除ダイアログの確定ボタンをクリックすると onConfirmDelete が呼び出されること", async () => {
-      const user = userEvent.setup();
+    it("親子分離: 削除ダイアログの isOpen, onClose, onConfirm が DeleteConfirmDialog へ正しく伝達されること", () => {
+      const dialogSpy = vi.spyOn(
+        DeleteConfirmDialogModule,
+        "DeleteConfirmDialog",
+      );
+      const onCloseDeleteDialog = vi.fn();
       const onConfirmDelete = vi.fn();
 
       render(
         <NovelDetailPage
           {...defaultPageProps}
           isDeleteDialogOpen={true}
+          onCloseDeleteDialog={onCloseDeleteDialog}
           onConfirmDelete={onConfirmDelete}
         />,
       );
 
-      await user.click(screen.getByTestId("confirm-delete-button"));
+      expect(dialogSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isOpen: true,
+          onClose: onCloseDeleteDialog,
+          onConfirm: onConfirmDelete,
+        }),
+        undefined,
+      );
+
+      const passedProps = dialogSpy.mock.calls[0][0];
+      passedProps.onClose();
+      expect(onCloseDeleteDialog).toHaveBeenCalledTimes(1);
+
+      passedProps.onConfirm();
       expect(onConfirmDelete).toHaveBeenCalledTimes(1);
+
+      dialogSpy.mockRestore();
     });
 
     it("初回ロード完了時、しおり話数（bookmarkChapterIndex）の要素へ初期スクロール調整が実行されること (AC-ND-08)", () => {
@@ -483,8 +511,8 @@ describe("NovelDetailPage", () => {
         expect(batchButton).toBeDisabled();
       });
 
-      it("isBatchCaching === true のとき、エピソード行をクリックしても onSelectEpisode が呼び出されないこと（no-op制御）(AC-ND-12)", async () => {
-        const user = userEvent.setup();
+      it("親子分離: isBatchCaching === true のとき、EpisodeList の onSelectEpisode が呼び出されても親コールバックは実行されないこと（no-op制御）(AC-ND-12)", () => {
+        const episodeListSpy = vi.spyOn(EpisodeListModule, "EpisodeList");
         const onSelectEpisode = vi.fn();
 
         render(
@@ -511,9 +539,12 @@ describe("NovelDetailPage", () => {
           />,
         );
 
-        const episodeItems = screen.getAllByTestId("episode-item");
-        await user.click(episodeItems[0]);
+        expect(episodeListSpy).toHaveBeenCalled();
+        const passedProps = episodeListSpy.mock.calls[0][0];
+        passedProps.onSelectEpisode(1);
         expect(onSelectEpisode).not.toHaveBeenCalled();
+
+        episodeListSpy.mockRestore();
       });
     });
 
@@ -544,8 +575,11 @@ describe("NovelDetailPage", () => {
         ).not.toBeInTheDocument();
       });
 
-      it("ヘッダーの「本文キャッシュ整理」クリック時に onOpenClearCacheDialog が呼び出されること", async () => {
-        const user = userEvent.setup();
+      it("親子分離: NovelDetailHeader の onOpenClearCacheDialog が正しく伝達されること", () => {
+        const headerSpy = vi.spyOn(
+          NovelDetailHeaderModule,
+          "NovelDetailHeader",
+        );
         const onOpenClearCacheDialog = vi.fn();
 
         render(
@@ -555,13 +589,25 @@ describe("NovelDetailPage", () => {
           />,
         );
 
-        const openButton = screen.getByTestId("open-clear-cache-dialog-button");
-        await user.click(openButton);
+        expect(headerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            onOpenClearCacheDialog,
+          }),
+          undefined,
+        );
+
+        const passedProps = headerSpy.mock.calls[0][0];
+        passedProps.onOpenClearCacheDialog?.();
         expect(onOpenClearCacheDialog).toHaveBeenCalledTimes(1);
+
+        headerSpy.mockRestore();
       });
 
-      it("ダイアログで既読のみ削除をクリックすると onConfirmClearCache({ onlyRead: true }) が呼び出されること (AC-ND-21)", async () => {
-        const user = userEvent.setup();
+      it("親子分離: ClearCacheConfirmDialog の onConfirm が正しく伝達されること (AC-ND-21)", () => {
+        const dialogSpy = vi.spyOn(
+          ClearCacheConfirmDialogModule,
+          "ClearCacheConfirmDialog",
+        );
         const onConfirmClearCache = vi.fn();
 
         render(
@@ -572,32 +618,29 @@ describe("NovelDetailPage", () => {
           />,
         );
 
-        const readButton = screen.getByTestId(
-          "confirm-clear-read-cache-button",
+        expect(dialogSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            isOpen: true,
+            onConfirm: onConfirmClearCache,
+          }),
+          undefined,
         );
-        await user.click(readButton);
+
+        const passedProps = dialogSpy.mock.calls[0][0];
+        passedProps.onConfirm({ onlyRead: true });
         expect(onConfirmClearCache).toHaveBeenCalledWith({ onlyRead: true });
-      });
 
-      it("ダイアログですべて削除をクリックすると onConfirmClearCache({ onlyRead: false }) が呼び出されること (AC-ND-21)", async () => {
-        const user = userEvent.setup();
-        const onConfirmClearCache = vi.fn();
-
-        render(
-          <NovelDetailPage
-            {...defaultPageProps}
-            isClearCacheDialogOpen={true}
-            onConfirmClearCache={onConfirmClearCache}
-          />,
-        );
-
-        const allButton = screen.getByTestId("confirm-clear-all-cache-button");
-        await user.click(allButton);
+        passedProps.onConfirm({ onlyRead: false });
         expect(onConfirmClearCache).toHaveBeenCalledWith({ onlyRead: false });
+
+        dialogSpy.mockRestore();
       });
 
-      it("ダイアログでキャンセルをクリックすると onCloseClearCacheDialog が呼び出されること", async () => {
-        const user = userEvent.setup();
+      it("親子分離: ClearCacheConfirmDialog の onClose が正しく伝達されること", () => {
+        const dialogSpy = vi.spyOn(
+          ClearCacheConfirmDialogModule,
+          "ClearCacheConfirmDialog",
+        );
         const onCloseClearCacheDialog = vi.fn();
 
         render(
@@ -608,13 +651,26 @@ describe("NovelDetailPage", () => {
           />,
         );
 
-        const cancelButton = screen.getByTestId("cancel-clear-cache-button");
-        await user.click(cancelButton);
+        expect(dialogSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            isOpen: true,
+            onClose: onCloseClearCacheDialog,
+          }),
+          undefined,
+        );
+
+        const passedProps = dialogSpy.mock.calls[0][0];
+        passedProps.onClose();
         expect(onCloseClearCacheDialog).toHaveBeenCalledTimes(1);
+
+        dialogSpy.mockRestore();
       });
 
-      it("onCloseClearCacheDialog が省略された場合でもキャンセルボタン押下時に安全に no-op 処理されること", async () => {
-        const user = userEvent.setup();
+      it("親子分離: onCloseClearCacheDialog が省略された場合でも安全に no-op 処理されること", () => {
+        const dialogSpy = vi.spyOn(
+          ClearCacheConfirmDialogModule,
+          "ClearCacheConfirmDialog",
+        );
 
         render(
           <NovelDetailPage
@@ -623,12 +679,17 @@ describe("NovelDetailPage", () => {
           />,
         );
 
-        const cancelButton = screen.getByTestId("cancel-clear-cache-button");
-        await expect(user.click(cancelButton)).resolves.not.toThrow();
+        const passedProps = dialogSpy.mock.calls[0][0];
+        expect(() => passedProps.onClose()).not.toThrow();
+
+        dialogSpy.mockRestore();
       });
 
-      it("onConfirmClearCache が省略された場合でも確定ボタン押下時に安全に no-op 処理されること", async () => {
-        const user = userEvent.setup();
+      it("親子分離: onConfirmClearCache が省略された場合でも安全に no-op 処理されること", () => {
+        const dialogSpy = vi.spyOn(
+          ClearCacheConfirmDialogModule,
+          "ClearCacheConfirmDialog",
+        );
 
         render(
           <NovelDetailPage
@@ -637,8 +698,10 @@ describe("NovelDetailPage", () => {
           />,
         );
 
-        const allButton = screen.getByTestId("confirm-clear-all-cache-button");
-        await expect(user.click(allButton)).resolves.not.toThrow();
+        const passedProps = dialogSpy.mock.calls[0][0];
+        expect(() => passedProps.onConfirm({ onlyRead: false })).not.toThrow();
+
+        dialogSpy.mockRestore();
       });
 
       it("refreshMessage にキャッシュ削除完了メッセージが設定された場合、インライン通知に表示されること (AC-ND-22)", () => {

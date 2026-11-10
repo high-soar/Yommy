@@ -3086,6 +3086,68 @@ describe("useReader", () => {
         expect(result.current.chapter?.chapterIndex).toBe(2);
         expect(result.current.chapter?.url).toBe(ch2!.url);
       });
+
+      it("goToChapter 失敗時に旧話の進捗がリセットされ、flushBookmark で新話進捗 0 が保存されること (R2-01)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 3,
+          cachedCount: 1,
+        });
+
+        const ch2 = await chapterRepo.getChapter(seeded.id, 2);
+        expect(ch2).not.toBeNull();
+
+        const httpClient = createMockHttpClient();
+        httpClient.setResponse(ch2!.url, {
+          status: 500,
+          headers: {},
+          html: "",
+        });
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              httpClient,
+            }),
+          },
+        );
+
+        await act(async () => {
+          await Promise.resolve();
+        });
+
+        // 第1話でスクロール進捗を 0.8 に進めて確定
+        await act(async () => {
+          result.current.updateScrollProgress(0.8);
+          await result.current.flushBookmark();
+        });
+
+        expect(result.current.scrollProgress).toBe(0.8);
+
+        // 第2話へ遷移を試行（通信エラーで失敗）
+        let success = true;
+        await act(async () => {
+          success = await result.current.goToChapter(2);
+        });
+
+        expect(success).toBe(false);
+        expect(result.current.chapterIndex).toBe(2);
+        expect(result.current.scrollProgress).toBe(0);
+
+        // 失敗後に flushBookmark を呼び出した場合、旧話の 0.8 ではなく新話の進捗 0 で保存されること (R2-01)
+        await act(async () => {
+          await result.current.flushBookmark();
+        });
+
+        const updatedNovel = await novelRepo.getNovelById(seeded.id);
+        expect(updatedNovel?.bookmarkChapterIndex).toBe(2);
+        expect(updatedNovel?.bookmarkScrollProgress).toBe(0);
+      });
     });
 
     describe("読書中5話自動先読み (AC-RD-12)", () => {
