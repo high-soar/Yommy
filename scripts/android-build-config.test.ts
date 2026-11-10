@@ -237,6 +237,14 @@ describe("Android ビルド設定および署名・バージョン管理検証 (
       expect(content).toMatch(/uploadType=multipart/);
       expect(content).toMatch(/multipart\/related/);
     });
+
+    it("signOut() 実行時にワーカースレッド内で clearCachedToken を呼び出してローカルキャッシュトークンを破棄していること (R2-20)", () => {
+      const content = fs.readFileSync(pluginPath, "utf-8");
+
+      expect(content).toMatch(
+        /public\s+void\s+signOut\s*\(\s*PluginCall\s+call\s*\)[\s\S]*?executor\.execute\s*\(\s*\(\)\s*->\s*\{[\s\S]*?clearCachedToken\s*\(\s*token\s*\)/,
+      );
+    });
   });
 
   describe("VolumeKeyPlugin.java および MainActivity.java 音量キー連携検証 (AC-RD-26, Issue #203)", () => {
@@ -370,6 +378,26 @@ describe("Android ビルド設定および署名・バージョン管理検証 (
       const content = fs.readFileSync(webViewDomPluginPath, "utf-8");
 
       expect(content).toMatch(/lastCapturedHtml/);
+    });
+
+    it("WebViewDomPlugin.java の isAllowedScheme メソッドで https スキームのみを許可していること (R2-08)", () => {
+      const content = fs.readFileSync(webViewDomPluginPath, "utf-8");
+
+      expect(content).toMatch(
+        /private\s+boolean\s+isAllowedScheme\s*\(\s*String\s+scheme\s*\)\s*\{[\s\S]*?return\s+["']https["']\.equalsIgnoreCase\s*\(\s*scheme\s*\)\s*;/,
+      );
+      expect(content).toMatch(/!isAllowedScheme\s*\(\s*scheme\s*\)/);
+    });
+
+    it("WebViewDomPlugin.java の close() で dismissAndDestroyDialog() を呼び出し、WebView 本体と直近 DOM キャッシュを確実に破棄していること (R2-18)", () => {
+      const content = fs.readFileSync(webViewDomPluginPath, "utf-8");
+
+      expect(content).toMatch(
+        /public\s+void\s+close\s*\(\s*PluginCall\s+call\s*\)[\s\S]*?dismissAndDestroyDialog\s*\(\s*\)/,
+      );
+      expect(content).toMatch(
+        /private\s+void\s+dismissAndDestroyDialog\s*\(\s*\)[\s\S]*?lastCapturedHtml\s*=\s*""\s*;[\s\S]*?lastCapturedUrl\s*=\s*""\s*;[\s\S]*?lastCapturedTitle\s*=\s*""\s*;/,
+      );
     });
   });
 });
