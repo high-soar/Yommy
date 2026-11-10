@@ -1,9 +1,9 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./EpisodeList.stories";
 import { EpisodeList } from "./EpisodeList";
+import * as EpisodeListItemModule from "./EpisodeListItem";
 import type { ChapterSummary } from "../../../storage/types";
 
 const { Default, Empty, WithoutPartTitle, WithFailedChapters } =
@@ -131,8 +131,8 @@ describe("EpisodeList", () => {
       expect(items).toHaveLength(4);
     });
 
-    it("エピソード行をクリックすると onSelectEpisode が選択された話数で呼び出されること (AC-ND-04)", async () => {
-      const user = userEvent.setup();
+    it("親子分離: EpisodeListItem へ onSelectEpisode が伝達され、コールバック呼び出し時に指定話数で発火すること (AC-ND-04)", () => {
+      const itemSpy = vi.spyOn(EpisodeListItemModule, "EpisodeListItem");
       const onSelectEpisode = vi.fn();
 
       render(
@@ -143,13 +143,25 @@ describe("EpisodeList", () => {
         />,
       );
 
-      const items = screen.getAllByTestId("episode-item");
-      await user.click(items[1]); // chapterIndex: 2
+      expect(itemSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          chapter: testChapters[1],
+          onSelectEpisode,
+        }),
+        undefined,
+      );
+
+      const passedProps = itemSpy.mock.calls[1][0];
+      passedProps.onSelectEpisode(2);
       expect(onSelectEpisode).toHaveBeenCalledTimes(1);
       expect(onSelectEpisode).toHaveBeenCalledWith(2);
+
+      itemSpy.mockRestore();
     });
 
-    it("bookmarkChapterIndex と一致するエピソード行にしおり状態が伝達されること", () => {
+    it("親子分離: bookmarkChapterIndex と一致するエピソード行に isBookmarked: true が伝達されること", () => {
+      const itemSpy = vi.spyOn(EpisodeListItemModule, "EpisodeListItem");
+
       render(
         <EpisodeList
           chapters={testChapters}
@@ -158,15 +170,17 @@ describe("EpisodeList", () => {
         />,
       );
 
-      // 第2話にしおりバッジが存在し、第1話・第3話・第4話には存在しないこと
-      const bookmarkBadges = screen.getAllByTestId("episode-bookmark-badge");
-      expect(bookmarkBadges).toHaveLength(1);
-      expect(
-        bookmarkBadges[0].closest("[data-chapter-index='2']"),
-      ).not.toBeNull();
+      // 第1話: false, 第2話: true, 第3話: false, 第4話: false
+      expect(itemSpy.mock.calls[0][0].isBookmarked).toBe(false);
+      expect(itemSpy.mock.calls[1][0].isBookmarked).toBe(true);
+      expect(itemSpy.mock.calls[2][0].isBookmarked).toBe(false);
+      expect(itemSpy.mock.calls[3][0].isBookmarked).toBe(false);
+
+      itemSpy.mockRestore();
     });
 
-    it("failedChapterIndexes に含まれる話数に isDownloadFailed が伝達されて取得失敗バッジが表示されること (AC-ND-25)", () => {
+    it("親子分離: failedChapterIndexes に含まれる話数に isDownloadFailed: true が伝達されること (AC-ND-25)", () => {
+      const itemSpy = vi.spyOn(EpisodeListItemModule, "EpisodeListItem");
       const uncachedChapters: ChapterSummary[] = testChapters.map((c) => ({
         ...c,
         byteSize: 0,
@@ -182,14 +196,12 @@ describe("EpisodeList", () => {
         />,
       );
 
-      const failedBadges = screen.getAllByTestId("episode-failed-badge");
-      expect(failedBadges).toHaveLength(2);
-      expect(
-        failedBadges[0].closest("[data-chapter-index='1']"),
-      ).not.toBeNull();
-      expect(
-        failedBadges[1].closest("[data-chapter-index='4']"),
-      ).not.toBeNull();
+      expect(itemSpy.mock.calls[0][0].isDownloadFailed).toBe(true);
+      expect(itemSpy.mock.calls[1][0].isDownloadFailed).toBe(false);
+      expect(itemSpy.mock.calls[2][0].isDownloadFailed).toBe(false);
+      expect(itemSpy.mock.calls[3][0].isDownloadFailed).toBe(true);
+
+      itemSpy.mockRestore();
     });
   });
 });

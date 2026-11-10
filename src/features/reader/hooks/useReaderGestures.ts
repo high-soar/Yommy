@@ -476,6 +476,25 @@ export function useReaderGestures({
       if (!isPaged) {
         wasAtEndOnDownRef.current = false;
         wasAtStartOnDownRef.current = false;
+
+        // スクロールモード時のタップ判定（10px 未満 かつ 300ms 未満: R2-02）
+        if (distance < 10 && dt < 300) {
+          hasHandledTapRef.current = true;
+          if (tapTimerRef.current) {
+            clearTimeout(tapTimerRef.current);
+          }
+          tapTimerRef.current = setTimeout(() => {
+            hasHandledTapRef.current = false;
+            tapTimerRef.current = null;
+          }, 100);
+
+          clearBoundaryTap();
+          if (isOverlayOpen) {
+            onCloseOverlay();
+          } else {
+            onToggleOverlay();
+          }
+        }
         return;
       }
 

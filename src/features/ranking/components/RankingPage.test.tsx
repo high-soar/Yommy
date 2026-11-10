@@ -7,6 +7,7 @@ import { RankingPage } from "./RankingPage";
 import { sampleRankingItem1 } from "../__fixtures__/rankingFixtures";
 import * as siteSelectorModule from "./SiteSelector";
 import * as rankingFilterBarModule from "./RankingFilterBar";
+import * as rankingNovelCardModule from "./RankingNovelCard";
 
 const {
   WeeklyOverall,
@@ -159,9 +160,9 @@ describe("RankingPage コンポーネント", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("ヘッダーおよびフィルタの変更操作コールバックが伝達されること", async () => {
-    const user = userEvent.setup();
-    const handleSelectSite = vi.fn();
+  it("親子分離: フィルタおよびカードの各操作コールバックが子コンポーネントへ正しく伝達されること", () => {
+    const filterBarSpy = vi.spyOn(rankingFilterBarModule, "RankingFilterBar");
+    const cardSpy = vi.spyOn(rankingNovelCardModule, "RankingNovelCard");
     const handleSelectPeriod = vi.fn();
     const handleSelectGenre = vi.fn();
     const handleAddNovel = vi.fn();
@@ -170,7 +171,7 @@ describe("RankingPage コンポーネント", () => {
     render(
       <RankingPage
         selectedSite="kakuyomu"
-        onSelectSite={handleSelectSite}
+        onSelectSite={vi.fn()}
         selectedPeriod="weekly"
         onSelectPeriod={handleSelectPeriod}
         selectedGenre={undefined}
@@ -186,25 +187,38 @@ describe("RankingPage コンポーネント", () => {
       />,
     );
 
-    // 期間変更
-    const dailyBtn = screen.getByTestId("ranking-period-daily");
-    await user.click(dailyBtn);
+    // フィルタバーへの Props 伝播およびコールバック発火
+    expect(filterBarSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selectedPeriod: "weekly",
+        onSelectPeriod: handleSelectPeriod,
+        onSelectGenre: handleSelectGenre,
+      }),
+      undefined,
+    );
+    const filterBarProps = filterBarSpy.mock.calls[0][0];
+    filterBarProps.onSelectPeriod("daily");
     expect(handleSelectPeriod).toHaveBeenCalledWith("daily");
-
-    // ジャンル変更
-    const sfBtn = screen.getByTestId("ranking-genre-sf");
-    await user.click(sfBtn);
+    filterBarProps.onSelectGenre("sf");
     expect(handleSelectGenre).toHaveBeenCalledWith("sf");
 
-    // カード内「＋ 本棚に追加」押下
-    const addBtn = screen.getByTestId("ranking-card-add-button");
-    await user.click(addBtn);
+    // カードへの Props 伝播およびコールバック発火
+    expect(cardSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        item: sampleRankingItem1,
+        onAdd: expect.any(Function),
+        onSelect: expect.any(Function),
+      }),
+      undefined,
+    );
+    const cardProps = cardSpy.mock.calls[0][0];
+    cardProps.onAdd();
     expect(handleAddNovel).toHaveBeenCalledWith(sampleRankingItem1);
-
-    // カードタップ
-    const card = screen.getByTestId("ranking-novel-card-16817330658027210412");
-    await user.click(card);
+    cardProps.onSelect();
     expect(handleSelectCard).toHaveBeenCalledWith(sampleRankingItem1);
+
+    filterBarSpy.mockRestore();
+    cardSpy.mockRestore();
   });
 
   it("親子分離: selectedSite が SiteSelector および RankingFilterBar へ正しく伝播すること (AC-RK-09)", () => {

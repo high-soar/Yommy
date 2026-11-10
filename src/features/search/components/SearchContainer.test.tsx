@@ -1,5 +1,4 @@
 import { render, screen, waitFor, act } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./SearchContainer.stories";
@@ -87,178 +86,247 @@ describe("SearchContainer コンポーネント", () => {
   });
 
   it("検索実行前に入力欄へキーワードを入力しても初期状態表示が維持されること", async () => {
-    const user = userEvent.setup();
+    const pageSpy = vi.spyOn(SearchPageModule, "SearchPage");
     renderWithProviders();
 
     await waitFor(() => {
-      expect(screen.getByTestId("search-input")).toBeInTheDocument();
+      expect(pageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          keyword: "",
+          hasSearched: false,
+        }),
+        undefined,
+      );
     });
 
-    const input = screen.getByTestId("search-input");
-    await user.type(input, "異世界");
+    const lastCallProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+    act(() => {
+      lastCallProps.onChangeKeyword("異世界");
+    });
 
-    expect(screen.getByTestId("search-initial-state")).toBeInTheDocument();
-    expect(screen.queryByTestId("search-empty-state")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(pageSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          keyword: "異世界",
+          hasSearched: false,
+        }),
+        undefined,
+      );
+    });
+
+    pageSpy.mockRestore();
   });
 
   it("キーワードを入力して検索を実行し、カード一覧が表示されること (AC-SE-02)", async () => {
-    const user = userEvent.setup();
+    const pageSpy = vi.spyOn(SearchPageModule, "SearchPage");
     renderWithProviders();
 
     await waitFor(() => {
-      expect(screen.getByTestId("search-input")).toBeInTheDocument();
+      expect(pageSpy).toHaveBeenCalled();
     });
 
-    const input = screen.getByTestId("search-input");
-    await user.type(input, "異世界");
-
-    const submitBtn = screen.getByTestId("search-submit-button");
-    await user.click(submitBtn);
+    const lastCallProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+    act(() => {
+      lastCallProps.onChangeKeyword("異世界");
+      lastCallProps.onSubmitSearch();
+    });
 
     await waitFor(() => {
-      expect(screen.getByTestId("search-results-list")).toBeInTheDocument();
+      const currentProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      expect(currentProps.items.length).toBeGreaterThan(0);
+      expect(currentProps.hasSearched).toBe(true);
     });
+
+    pageSpy.mockRestore();
   });
 
-  it("カードの「＋ 本棚に追加」ボタンを押下すると本棚に登録され「✓ 登録済み」となること (AC-SE-06)", async () => {
-    const user = userEvent.setup();
+  it("カードの onAddNovel 呼び出しで本棚に登録され registeredWorkIds に追加されること (AC-SE-06)", async () => {
+    const pageSpy = vi.spyOn(SearchPageModule, "SearchPage");
     renderWithProviders();
 
     await waitFor(() => {
-      expect(screen.getByTestId("search-input")).toBeInTheDocument();
+      expect(pageSpy).toHaveBeenCalled();
     });
 
-    const input = screen.getByTestId("search-input");
-    await user.type(input, "異世界{Enter}");
+    let lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+    act(() => {
+      lastProps.onChangeKeyword("異世界");
+      lastProps.onSubmitSearch();
+    });
 
     await waitFor(() => {
-      expect(
-        screen.getAllByTestId("search-card-add-button").length,
-      ).toBeGreaterThan(0);
+      lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      expect(lastProps.items.length).toBeGreaterThan(0);
     });
 
-    const addButtons = screen.getAllByTestId("search-card-add-button");
-    await user.click(addButtons[0]);
+    const targetItem = lastProps.items[0];
+
+    act(() => {
+      lastProps.onAddNovel(targetItem);
+    });
 
     await waitFor(() => {
-      expect(
-        screen.getByTestId("search-card-registered-button"),
-      ).toBeInTheDocument();
+      const currentProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      expect(currentProps.registeredWorkIds.has(targetItem.remoteWorkId)).toBe(
+        true,
+      );
     });
+
+    pageSpy.mockRestore();
   });
 
-  it("カスタム onSelectNovel が提供されている場合、カード本体タップ時にそれが呼ばれること", async () => {
-    const user = userEvent.setup();
+  it("カスタム onSelectNovel が提供されている場合、未登録カードの onSelectCard 呼び出しで本棚追加の上で onSelectNovel が呼ばれること", async () => {
+    const pageSpy = vi.spyOn(SearchPageModule, "SearchPage");
     const handleSelectNovel = vi.fn();
 
     renderWithProviders({ onSelectNovel: handleSelectNovel });
 
     await waitFor(() => {
-      expect(screen.getByTestId("search-input")).toBeInTheDocument();
+      expect(pageSpy).toHaveBeenCalled();
     });
 
-    const input = screen.getByTestId("search-input");
-    await user.type(input, "異世界{Enter}");
+    let lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+    act(() => {
+      lastProps.onChangeKeyword("異世界");
+      lastProps.onSubmitSearch();
+    });
 
     await waitFor(() => {
-      expect(screen.getByTestId("search-results-list")).toBeInTheDocument();
+      lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      expect(lastProps.items.length).toBeGreaterThan(0);
     });
 
-    // 最初のカードを取得
-    const cards = screen.getAllByTestId(/^search-novel-card-/);
-    await user.click(cards[0]);
+    const targetItem = lastProps.items[0];
+
+    act(() => {
+      lastProps.onSelectCard(targetItem);
+    });
 
     await waitFor(() => {
       expect(handleSelectNovel).toHaveBeenCalled();
     });
+
+    pageSpy.mockRestore();
   });
 
-  it("登録済み作品カードをカスタム onSelectNovel 存在時にタップすると直接コールバックが呼ばれること", async () => {
-    const user = userEvent.setup();
+  it("登録済み作品カードをカスタム onSelectNovel 存在時に onSelectCard 呼び出しすると直接コールバックが呼ばれること", async () => {
+    const pageSpy = vi.spyOn(SearchPageModule, "SearchPage");
     const handleSelectNovel = vi.fn();
 
     renderWithProviders({ onSelectNovel: handleSelectNovel });
 
     await waitFor(() => {
-      expect(screen.getByTestId("search-input")).toBeInTheDocument();
+      expect(pageSpy).toHaveBeenCalled();
     });
 
-    const input = screen.getByTestId("search-input");
-    await user.type(input, "異世界{Enter}");
+    let lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+    act(() => {
+      lastProps.onChangeKeyword("異世界");
+      lastProps.onSubmitSearch();
+    });
 
     await waitFor(() => {
-      expect(
-        screen.getAllByTestId("search-card-add-button").length,
-      ).toBeGreaterThan(0);
+      lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      expect(lastProps.items.length).toBeGreaterThan(0);
     });
+
+    const targetItem = lastProps.items[0];
 
     // まず本棚に追加して登録済みにする
-    const addButtons = screen.getAllByTestId("search-card-add-button");
-    await user.click(addButtons[0]);
-
-    await waitFor(() => {
-      expect(
-        screen.getByTestId("search-card-registered-button"),
-      ).toBeInTheDocument();
+    act(() => {
+      lastProps.onAddNovel(targetItem);
     });
 
-    // 登録済みカード本体をタップ
-    const cards = screen.getAllByTestId(/^search-novel-card-/);
-    await user.click(cards[0]);
+    await waitFor(() => {
+      const currentProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      expect(currentProps.registeredWorkIds.has(targetItem.remoteWorkId)).toBe(
+        true,
+      );
+    });
+
+    // 登録済み状態でカードタップ
+    lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+    act(() => {
+      lastProps.onSelectCard(targetItem);
+    });
 
     expect(handleSelectNovel).toHaveBeenCalledWith(
       expect.stringContaining("kakuyomu:"),
     );
+
+    pageSpy.mockRestore();
   });
 
-  it("カスタム onSelectNovel が未指定（デフォルト）の場合、カード本体タップで router の詳細画面へ遷移すること", async () => {
-    const user = userEvent.setup();
+  it("カスタム onSelectNovel が未指定（デフォルト）の場合、カードの onSelectCard 呼び出しで router の詳細画面へ遷移すること", async () => {
+    const pageSpy = vi.spyOn(SearchPageModule, "SearchPage");
     renderWithProviders();
 
     await waitFor(() => {
-      expect(screen.getByTestId("search-input")).toBeInTheDocument();
+      expect(pageSpy).toHaveBeenCalled();
     });
 
-    const input = screen.getByTestId("search-input");
-    await user.type(input, "異世界{Enter}");
+    let lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+    act(() => {
+      lastProps.onChangeKeyword("異世界");
+      lastProps.onSubmitSearch();
+    });
 
     await waitFor(() => {
-      expect(screen.getByTestId("search-results-list")).toBeInTheDocument();
+      lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      expect(lastProps.items.length).toBeGreaterThan(0);
     });
 
-    const cards = screen.getAllByTestId(/^search-novel-card-/);
-    await user.click(cards[0]);
+    const targetItem = lastProps.items[0];
+
+    act(() => {
+      lastProps.onSelectCard(targetItem);
+    });
 
     await waitFor(() => {
       expect(window.location.pathname).toContain("/novels/kakuyomu%3A");
     });
+
+    pageSpy.mockRestore();
   });
 
   it("カスタム onSelectNovel 存在時に作品の自動追加が失敗した場合は onSelectNovel が呼ばれないこと", async () => {
-    const user = userEvent.setup();
     const handleSelectNovel = vi.fn();
 
     mockHttpClient.setResponse(/^https:\/\/kakuyomu\.jp\/works\/\d+$/, () => {
       throw new Error("作品取得エラー");
     });
 
+    const pageSpy = vi.spyOn(SearchPageModule, "SearchPage");
     renderWithProviders({ onSelectNovel: handleSelectNovel });
 
     await waitFor(() => {
-      expect(screen.getByTestId("search-input")).toBeInTheDocument();
+      expect(pageSpy).toHaveBeenCalled();
     });
 
-    const input = screen.getByTestId("search-input");
-    await user.type(input, "異世界{Enter}");
+    let lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+    act(() => {
+      lastProps.onChangeKeyword("異世界");
+      lastProps.onSubmitSearch();
+    });
 
     await waitFor(() => {
-      expect(screen.getByTestId("search-results-list")).toBeInTheDocument();
+      lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      expect(lastProps.items.length).toBeGreaterThan(0);
     });
 
-    const cards = screen.getAllByTestId(/^search-novel-card-/);
-    await user.click(cards[0]);
+    const targetItem = lastProps.items[0];
+
+    act(() => {
+      lastProps.onSelectCard(targetItem);
+    });
+
+    await waitFor(() => {
+      const currentProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      expect(currentProps.error).not.toBeNull();
+    });
 
     expect(handleSelectNovel).not.toHaveBeenCalled();
+    pageSpy.mockRestore();
   });
 
   it("SiteSelector によるサイト切替コールバック（onSelectSite）呼び出し時に、子コンポーネント（SearchPage）へ selectedSite が伝搬すること (AC-SE-10, R1-21)", async () => {

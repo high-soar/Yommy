@@ -1,5 +1,4 @@
 import { render, screen, waitFor, act } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./RankingContainer.stories";
@@ -87,125 +86,179 @@ describe("RankingContainer コンポーネント", () => {
   });
 
   it("期間セレクタで集計期間を切り替えた際にランキングが再取得されること (AC-RK-02)", async () => {
-    const user = userEvent.setup();
+    const pageSpy = vi.spyOn(RankingPageModule, "RankingPage");
     renderWithProviders();
 
     await waitFor(() => {
-      expect(screen.getByTestId("ranking-results-list")).toBeInTheDocument();
+      expect(pageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selectedPeriod: "weekly",
+        }),
+        undefined,
+      );
     });
 
-    const monthlyPill = screen.getByTestId("ranking-period-monthly");
-    await user.click(monthlyPill);
+    const lastCallProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+    act(() => {
+      lastCallProps.onSelectPeriod("monthly");
+    });
 
     await waitFor(() => {
-      expect(monthlyPill).toHaveAttribute("aria-pressed", "true");
+      expect(pageSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          selectedPeriod: "monthly",
+        }),
+        undefined,
+      );
     });
+
+    pageSpy.mockRestore();
   });
 
   it("ジャンルピルでジャンルを切り替えた際にランキングが再取得されること (AC-RK-03)", async () => {
-    const user = userEvent.setup();
+    const pageSpy = vi.spyOn(RankingPageModule, "RankingPage");
     renderWithProviders();
 
     await waitFor(() => {
-      expect(screen.getByTestId("ranking-results-list")).toBeInTheDocument();
+      expect(pageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selectedGenre: undefined,
+        }),
+        undefined,
+      );
     });
 
-    const fantasyPill = screen.getByTestId("ranking-genre-fantasy");
-    await user.click(fantasyPill);
+    const lastCallProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+    act(() => {
+      lastCallProps.onSelectGenre("fantasy");
+    });
 
     await waitFor(() => {
-      expect(fantasyPill).toHaveAttribute("aria-pressed", "true");
+      expect(pageSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          selectedGenre: "fantasy",
+        }),
+        undefined,
+      );
     });
+
+    pageSpy.mockRestore();
   });
 
-  it("カードの「＋ 本棚に追加」ボタンを押下すると本棚に登録され「✓ 登録済み」となること (AC-RK-06)", async () => {
-    const user = userEvent.setup();
+  it("カードの onAddNovel 呼び出しで本棚に登録され registeredWorkIds に追加されること (AC-RK-06)", async () => {
+    const pageSpy = vi.spyOn(RankingPageModule, "RankingPage");
     renderWithProviders();
 
     await waitFor(() => {
-      expect(
-        screen.getAllByTestId("ranking-card-add-button").length,
-      ).toBeGreaterThan(0);
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      expect(lastProps.items.length).toBeGreaterThan(0);
     });
 
-    const addButtons = screen.getAllByTestId("ranking-card-add-button");
-    await user.click(addButtons[0]);
+    const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+    const targetItem = lastProps.items[0];
+
+    act(() => {
+      lastProps.onAddNovel(targetItem);
+    });
 
     await waitFor(() => {
-      expect(
-        screen.getAllByTestId("ranking-card-registered-button").length,
-      ).toBeGreaterThan(0);
+      const currentProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      expect(currentProps.registeredWorkIds.has(targetItem.remoteWorkId)).toBe(
+        true,
+      );
     });
+
+    pageSpy.mockRestore();
   });
 
   it("onSelectNovel が指定されている場合、未登録カードタップ時に本棚追加の上で onSelectNovel が呼ばれること (AC-RK-07)", async () => {
-    const user = userEvent.setup();
+    const pageSpy = vi.spyOn(RankingPageModule, "RankingPage");
     const handleSelectNovel = vi.fn();
 
     renderWithProviders({ onSelectNovel: handleSelectNovel });
 
     await waitFor(() => {
-      expect(screen.getByTestId("ranking-results-list")).toBeInTheDocument();
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      expect(lastProps.items.length).toBeGreaterThan(0);
     });
 
-    const novelCards = screen.getAllByTestId(/^ranking-novel-card-/);
+    const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+    const targetItem = lastProps.items[0];
 
-    await user.click(novelCards[0]);
+    act(() => {
+      lastProps.onSelectCard(targetItem);
+    });
 
     await waitFor(() => {
       expect(handleSelectNovel).toHaveBeenCalledTimes(1);
     });
+
+    pageSpy.mockRestore();
   });
 
   it("onSelectNovel が指定されている場合、すでに登録済みのカードタップ時は即座に onSelectNovel が呼ばれること (AC-RK-07)", async () => {
-    const user = userEvent.setup();
+    const pageSpy = vi.spyOn(RankingPageModule, "RankingPage");
     const handleSelectNovel = vi.fn();
 
     renderWithProviders({ onSelectNovel: handleSelectNovel });
 
     await waitFor(() => {
-      expect(
-        screen.getAllByTestId("ranking-card-add-button").length,
-      ).toBeGreaterThan(0);
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      expect(lastProps.items.length).toBeGreaterThan(0);
     });
 
-    // まず登録ボタンを押下
-    const addButtons = screen.getAllByTestId("ranking-card-add-button");
-    await user.click(addButtons[0]);
+    let lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+    const targetItem = lastProps.items[0];
+
+    // まず本棚に追加
+    act(() => {
+      lastProps.onAddNovel(targetItem);
+    });
 
     await waitFor(() => {
-      expect(
-        screen.getAllByTestId("ranking-card-registered-button").length,
-      ).toBeGreaterThan(0);
+      const currentProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      expect(currentProps.registeredWorkIds.has(targetItem.remoteWorkId)).toBe(
+        true,
+      );
     });
 
-    // 登録済みカード本体をタップ
-    const novelCards = screen.getAllByTestId(/^ranking-novel-card-/);
-
-    await user.click(novelCards[0]);
+    // 登録済み状態でカードタップ
+    lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+    act(() => {
+      lastProps.onSelectCard(targetItem);
+    });
 
     await waitFor(() => {
       expect(handleSelectNovel).toHaveBeenCalledTimes(1);
     });
+
+    pageSpy.mockRestore();
   });
 
-  it("onSelectNovel が指定されていない場合、カード本体タップで内部の handleCardSelect が実行されること", async () => {
-    const user = userEvent.setup();
+  it("onSelectNovel が指定されていない場合、未登録作品の onSelectCard 呼び出しで作品が自動登録されること", async () => {
+    const pageSpy = vi.spyOn(RankingPageModule, "RankingPage");
     renderWithProviders();
 
     await waitFor(() => {
-      expect(screen.getByTestId("ranking-results-list")).toBeInTheDocument();
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      expect(lastProps.items.length).toBeGreaterThan(0);
     });
 
-    const novelCards = screen.getAllByTestId(/^ranking-novel-card-/);
+    const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+    const targetItem = lastProps.items[0];
 
-    await user.click(novelCards[0]);
+    act(() => {
+      lastProps.onSelectCard(targetItem);
+    });
 
     await waitFor(() => {
-      expect(
-        screen.getAllByTestId("ranking-card-registered-button").length,
-      ).toBeGreaterThan(0);
+      const currentProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      expect(currentProps.registeredWorkIds.has(targetItem.remoteWorkId)).toBe(
+        true,
+      );
     });
+
+    pageSpy.mockRestore();
   });
 
   it("onSelectNovel 指定時に未登録作品の追加が失敗した場合は onSelectNovel が呼ばれないこと", async () => {
@@ -213,24 +266,30 @@ describe("RankingContainer コンポーネント", () => {
       throw new Error("TOC Fetch Failed");
     });
 
-    const user = userEvent.setup();
+    const pageSpy = vi.spyOn(RankingPageModule, "RankingPage");
     const handleSelectNovel = vi.fn();
 
     renderWithProviders({ onSelectNovel: handleSelectNovel });
 
     await waitFor(() => {
-      expect(screen.getByTestId("ranking-results-list")).toBeInTheDocument();
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      expect(lastProps.items.length).toBeGreaterThan(0);
     });
 
-    const novelCards = screen.getAllByTestId(/^ranking-novel-card-/);
+    const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+    const targetItem = lastProps.items[0];
 
-    await user.click(novelCards[0]);
+    act(() => {
+      lastProps.onSelectCard(targetItem);
+    });
 
     await waitFor(() => {
-      expect(screen.getByTestId("ranking-error")).toBeInTheDocument();
+      const currentProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      expect(currentProps.error).not.toBeNull();
     });
 
     expect(handleSelectNovel).not.toHaveBeenCalled();
+    pageSpy.mockRestore();
   });
 
   it("SiteSelector によるサイト切替コールバック（onSelectSite）呼び出し時に、子コンポーネント（RankingPage）へ selectedSite が伝搬すること (AC-RK-09, R1-21)", async () => {
