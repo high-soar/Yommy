@@ -289,7 +289,7 @@ describe("ReaderView", () => {
   });
 
   describe("HTML 要素・ルビ・傍点描画の検証", () => {
-    it("ルビ (<ruby><rt>) および傍点 (<em class='bouten'>) が正しくレンダリングされること", () => {
+    it("ルビ (<ruby><rt>) および傍点 (<em class='bouten'>) が正しくレンダリングされること (AC-RD-02)", () => {
       const html =
         '<p>二つの<ruby><rb>太陽</rb><rt>たいよう</rt></ruby>と<em class="bouten">信じがたい</em>光景</p>';
       render(<ReaderView bodyHtml={html} />);

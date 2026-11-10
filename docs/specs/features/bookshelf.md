@@ -338,7 +338,7 @@ export interface UseBookshelfResult {
 
 本棚画面（`SCR-01`）に関連する E2E 動作は、`test/it/scenarios/` 配下の以下のシナリオで継続回帰検証されます（詳細は [docs/specs/screen-transitions.md §4](../screen-transitions.md#4-playwright-システム結合テストe2e-シナリオ-scn-01--scn-07マッピング) を参照）：
 
-- **`SCN-01`（`test/it/scenarios/scn01-poc-vertical-reader.spec.ts`）**: 空状態表示、作品カード表示、作品詳細遷移、「続きから読む」によるリーダー直行としおり復元、OS バックキー2回押下終了トースト（`TR-02`, `TR-03`, `TR-13`, `AC-BS-01`〜`07`, `12`）。
+- **`SCN-01`（`test/it/scenarios/scn01-poc-vertical-reader.spec.ts`）**: 空状態表示、作品カード表示、作品詳細遷移、「続きから読む」によるリーダー直行としおり復元、OS バックキー2回押下終了トースト（`TR-02`, `TR-03`, `TR-13`, `AC-BS-01`, `04`〜`07`, `12`）。
 - **`SCN-02`（`test/it/scenarios/scn02-search-ranking-discovery.spec.ts`）**: 空状態からの検索・ランキング画面への誘導導線および探索画面からの作品追加反映（`TR-15`, `AC-BS-01`）。
 - **`SCN-03`（`test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts`）**: 本棚表示時の自動/手動一括更新チェック、「NEW」バッジ表示と作品詳細/リーダー閲覧による解除、5種ソート切替と永続化、お気に入り登録・解除、本棚お気に入りフィルタ切替・永続化・0件空状態・フィルタ連動手動更新（`TR-02`, `TR-03`, `TR-16`, `TR-17`, `AC-BS-08`〜`11`, `14`, `15`）。
 - **`SCN-05`（`test/it/scenarios/scn05-cloud-sync.spec.ts`）**: Google Drive クラウド同期によるリモート作品・しおり・既読・お気に入り状態（LWW）の本棚自動反映およびお気に入り変更・作品削除時の自動 Push / Tombstone 伝播（`AC-BS-13`, `14`）。

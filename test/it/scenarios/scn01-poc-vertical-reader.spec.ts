@@ -737,7 +737,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await tabSettings.click();
     await expect(page).toHaveURL("/settings");
 
-    // ブラウザ戻る操作（TR-12）1回でリーダー画面（SCR-03）へ正しく復帰することを確認（R1-03, R1-21）
+    // ブラウザ戻る操作（TR-12, AC-ST-06）1回でリーダー画面（SCR-03）へ正しく復帰することを確認（R1-03, R1-21）
     await page.goBack();
     await expect(page).toHaveURL(
       /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1/,
@@ -757,7 +757,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     // 連続スクロールモードではページインジケーター（reader-page-indicator）が非表示であること
     await expect(page.getByTestId("reader-page-indicator")).not.toBeAttached();
 
-    // 8. 本文内の <ruby>（ルビ）および <em class="bouten">（傍点）が可視状態で正しくレンダリングされていることを確認
+    // 8. 本文内の <ruby>（ルビ）および <em class="bouten">（傍点）が可視状態で正しくレンダリングされていることを確認（AC-RD-02）
     const rubyElement = readerView.locator("ruby").first();
     await expect(rubyElement).toBeVisible();
 
@@ -1032,7 +1032,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     );
     await expect(page.getByTestId("novel-detail-page")).toBeVisible();
 
-    // 11. 目次画面（SCR-02）から設定画面（SCR-05）へ遷移し、ブラウザ戻る操作で目次画面へ復帰することを確認（TR-12 改善）
+    // 11. 目次画面（SCR-02）から設定画面（SCR-05）へ遷移し、ブラウザ戻る操作で目次画面へ復帰することを確認（TR-12, AC-ST-06 改善）
     await tabSettings.click();
     await expect(page).toHaveURL("/settings");
     await expect(tabSettings).toHaveAttribute("aria-selected", "true");
@@ -1111,7 +1111,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(page).toHaveURL("/");
     await expect(page.getByTestId("bookshelf-empty")).toBeVisible();
 
-    // 15. 本棚画面（/）での実機システム戻るボタン押下時の一時トースト表示および自動消去の検証（AC-AB-05, TR-13）
+    // 15. 本棚画面（/）での実機システム戻るボタン押下時の一時トースト表示および自動消去の検証（AC-AB-05, AC-BS-12, TR-13）
     await page.evaluate(() => {
       const bridge = (
         window as unknown as {
@@ -1132,7 +1132,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     // 2秒後にトーストが自動消滅することを確認
     await expect(exitToast).not.toBeVisible({ timeout: 4000 });
 
-    // 本棚画面で2秒以内に連続2回戻るボタンを押下した場合は exitApp が呼び出されること（AC-AB-06, TR-13）
+    // 本棚画面で2秒以内に連続2回戻るボタンを押下した場合は exitApp が呼び出されること（AC-AB-06, AC-BS-12, TR-13）
     await page.evaluate(async () => {
       const bridge = (
         window as unknown as {

@@ -39,6 +39,7 @@ related_specs:
 related_tests:
   - src/App.test.tsx
   - src/app/router.test.tsx
+  - src/features/search/constants.test.ts
   - src/features/search/components/SiteSelector.test.tsx
   - src/features/search/components/SearchInputBar.test.tsx
   - src/features/search/components/SearchFilterBar.test.tsx
@@ -78,6 +79,8 @@ related_tests:
 
 ```text
 src/features/search/
+├── __fixtures__/
+│   └── searchFixtures.ts             # 検索画面用静的モックデータ（pure static fixtures）
 ├── components/
 │   ├── SiteSelector.tsx              # 対象サイト切替ピル（カクヨム / 小説家になろう）
 │   ├── SiteSelector.stories.tsx
@@ -100,6 +103,8 @@ src/features/search/
 ├── hooks/
 │   ├── useNovelSearch.ts             # 検索状態管理・HTTP取得・DB登録カスタムフック
 │   └── useNovelSearch.test.ts
+├── constants.ts                      # 検索画面固有の実行時定数定義
+├── constants.test.ts                 # constants.ts 1対1単体テスト
 └── types.ts                          # 検索画面固有の UI 型定義
 ```
 

@@ -36,6 +36,7 @@ related_specs:
 related_tests:
   - src/App.test.tsx
   - src/app/router.test.tsx
+  - src/features/ranking/constants.test.ts
   - src/features/ranking/components/SiteSelector.test.tsx
   - src/features/ranking/components/RankingFilterBar.test.tsx
   - src/features/ranking/components/RankingNovelCard.test.tsx
@@ -74,6 +75,8 @@ related_tests:
 
 ```text
 src/features/ranking/
+├── __fixtures__/
+│   └── rankingFixtures.ts            # ランキング画面用静的モックデータ（pure static fixtures）
 ├── components/
 │   ├── SiteSelector.tsx              # 対象サイト切替ピル（カクヨム / 小説家になろう）
 │   ├── SiteSelector.stories.tsx
@@ -93,6 +96,8 @@ src/features/ranking/
 ├── hooks/
 │   ├── useNovelRanking.ts            # ランキング状態管理・HTTP取得・DB登録カスタムフック
 │   └── useNovelRanking.test.ts
+├── constants.ts                      # ランキング画面固有の実行時定数定義
+├── constants.test.ts                 # constants.ts 1対1単体テスト
 └── types.ts                          # ランキング画面固有の UI 型定義
 ```
 

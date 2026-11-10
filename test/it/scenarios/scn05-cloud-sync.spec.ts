@@ -325,7 +325,7 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
       /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
     );
 
-    // 既読バッジ同期復元の検証（R1-31, AC-RD-03 / AC-RD-07）: 端末 A で閲覧した第2話に既読バッジが表示されていることを確認
+    // 既読バッジ同期復元の検証（R1-31, AC-RD-07）: 端末 A で閲覧した第2話に既読バッジが表示されていることを確認
     const epItemsKakuyomu = page.getByTestId("episode-item");
     await expect(epItemsKakuyomu).toHaveCount(4);
     await expect(
