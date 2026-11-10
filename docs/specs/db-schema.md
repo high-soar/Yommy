@@ -53,6 +53,9 @@ related_specs:
   - docs/specs/changes/archive/issue-81-prefetch-and-cache-rules.md
 related_tests:
   - src/storage/schema.test.ts
+  - src/storage/index.test.ts
+  - src/storage/adapter/capacitorSqlite.test.ts
+  - src/storage/adapter/inMemoryDb.test.ts
   - src/storage/repositories/novelRepository.test.ts
   - src/storage/repositories/chapterRepository.test.ts
   - src/storage/repositories/queueRepository.test.ts

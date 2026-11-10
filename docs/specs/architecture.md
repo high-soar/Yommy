@@ -109,6 +109,9 @@ related_tests:
   - src/parsers/fetchFullNovelIndex.test.ts
   - src/shared/ui/BottomTabBar.test.tsx
   - src/storage/schema.test.ts
+  - src/storage/index.test.ts
+  - src/storage/adapter/capacitorSqlite.test.ts
+  - src/storage/adapter/inMemoryDb.test.ts
   - src/bridges/http/capacitorHttpClient.test.ts
   - src/bridges/http/mockHttpClient.test.ts
   - src/bridges/app/capacitorAppBridge.test.ts
@@ -137,6 +140,7 @@ related_tests:
   - test/it/scenarios/scn07-webview-import-fallback.spec.ts
   - src/shared/utils/cache.test.ts
   - src/shared/utils/formatByteSize.test.ts
+  - src/shared/constants/app.test.ts
   - src/shared/constants/cache.test.ts
   - src/shared/constants/typography.test.ts
   - scripts/generate-icons.test.ts
@@ -279,6 +283,8 @@ Yommy/
     │   ├── types.ts                   # エンティティ型および各 Repository インターフェース契約
     │   ├── schema.ts                  # SQLite テーブル DDL および初期行定義（実機・インメモリ共有）
     │   ├── schema.test.ts
+    │   ├── index.ts                   # Storage バレルエクスポート
+    │   ├── index.test.ts
     │   ├── adapter/
     │   │   ├── types.ts               # DatabaseAdapter インターフェース
     │   │   ├── capacitorSqlite.ts     # @capacitor-community/sqlite アダプター実装
@@ -290,7 +296,7 @@ Yommy/
     │       ├── appSettingsRepository.ts # app_settings 操作（ソート順等永続化）
     │       └── queueRepository.ts     # download_queue テーブル操作（永続ダウンロードキュー・中断再開・再試行管理、v0.9 Issue #268）
     └── shared/                        # 複数機能で共有する汎用 UI コンポーネント・ユーティリティ
-        ├── constants/                 # キャッシュ・レートリミット・タイポグラフィ等の共有定数（cache.ts, typography.ts）
+        ├── constants/                 # アプリ基本情報・キャッシュ・レートリミット・タイポグラフィ等の共有定数（app.ts, cache.ts, typography.ts）
         ├── utils/                     # キャッシュ判定・容量フォーマット等の共有ユーティリティ（cache.ts, formatByteSize.ts）
         └── ui/                        # BottomTabBar 等共通コンポーネント（モバイル幅での改行防止縦並び flex-col sm:flex-row ＋ whitespace-nowrap 最適化）
 ├── docs/                              # 【ドキュメント正本（OKF）】

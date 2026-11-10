@@ -20,7 +20,7 @@ describe("HtmlSanitizer", () => {
       expect(HtmlSanitizer.sanitizeChapterHtml(input)).toBe(expected);
     });
 
-    it("カクヨム現行マークアップの em class='emphasisDots' を class='bouten' へ正規化すること (R1-42 / SYS-REQ-07)", () => {
+    it("カクヨム現行マークアップの em class='emphasisDots' を class='bouten' へ正規化すること (R1-42 / SYS-REQ-07 / AC-RD-02)", () => {
       const input =
         '<p>少年にとって、それは<em class="emphasisDots" style="color:red">信じがたい光景</em>であった。</p>';
       const expected =
