@@ -303,6 +303,16 @@ export class SqlNovelRepository implements NovelRepository {
         }
       }
 
+      // 新目次の話数範囲を超える余剰 download_queue エントリをクリーンアップ (R2-05)
+      const maxChapterIndex = index.chapters.reduce(
+        (max, c) => Math.max(max, c.chapterIndex),
+        0,
+      );
+      await tx.execute(
+        `DELETE FROM download_queue WHERE novel_id = ? AND chapter_index > ?;`,
+        [id, maxChapterIndex],
+      );
+
       // 新しい目次エピソードの UPSERT
       for (const chapter of index.chapters) {
         const chapterId = `${id}:${chapter.remoteChapterId}`;
