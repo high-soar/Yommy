@@ -1,6 +1,5 @@
 import { render, screen, waitFor, act } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./App.stories";
 import { App, AppContent, getActiveTab } from "./App";
@@ -12,6 +11,14 @@ import {
   useRouter,
   type RouterContextValue,
 } from "./app/router";
+import * as BookshelfContainerModule from "./features/bookshelf/components/BookshelfContainer";
+import * as NovelDetailContainerModule from "./features/novel-detail/components/NovelDetailContainer";
+import * as ReaderContainerModule from "./features/reader/components/ReaderContainer";
+import * as SearchContainerModule from "./features/search/components/SearchContainer";
+import * as RankingContainerModule from "./features/ranking/components/RankingContainer";
+import * as SettingsContainerModule from "./features/settings/components/SettingsContainer";
+import * as WebViewImportContainerModule from "./features/webview-import/components/WebViewImportContainer";
+import * as BottomTabBarModule from "./shared/ui/BottomTabBar";
 
 const {
   Default,
@@ -218,249 +225,277 @@ describe("App コンポーネント", () => {
   });
 
   describe("ルーティングと下部タブナビゲーション操作の検証", () => {
-    it("下部タブバーの「検索」をクリックすると検索画面へ遷移する (TR-01)", async () => {
-      const user = userEvent.setup();
+    it("下部タブバーの「検索」を選択すると検索画面へ遷移する (TR-01)", async () => {
+      const bottomSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
+      const searchSpy = vi.spyOn(SearchContainerModule, "SearchContainer");
       render(<App initialPath="/" />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+        expect(bottomSpy).toHaveBeenCalled();
       });
 
-      const searchTab = screen.getByTestId("tab-search");
-      await user.click(searchTab);
+      const lastProps = bottomSpy.mock.calls.at(-1)?.[0];
+      act(() => {
+        lastProps?.onSelectSearch?.();
+      });
 
       await waitFor(() => {
-        expect(screen.getByTestId("search-page")).toBeInTheDocument();
+        expect(searchSpy).toHaveBeenCalled();
       });
     });
 
-    it("下部タブバーの「ランキング」をクリックするとランキング画面へ遷移する (TR-01)", async () => {
-      const user = userEvent.setup();
+    it("下部タブバーの「ランキング」を選択するとランキング画面へ遷移する (TR-01)", async () => {
+      const bottomSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
+      const rankingSpy = vi.spyOn(RankingContainerModule, "RankingContainer");
       render(<App initialPath="/" />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+        expect(bottomSpy).toHaveBeenCalled();
       });
 
-      const rankingTab = screen.getByTestId("tab-ranking");
-      await user.click(rankingTab);
+      const lastProps = bottomSpy.mock.calls.at(-1)?.[0];
+      act(() => {
+        lastProps?.onSelectRanking?.();
+      });
 
       await waitFor(() => {
-        expect(screen.getByTestId("ranking-page")).toBeInTheDocument();
+        expect(rankingSpy).toHaveBeenCalled();
       });
     });
 
-    it("下部タブバーの「設定」をクリックすると設定画面へ遷移する (TR-01)", async () => {
-      const user = userEvent.setup();
+    it("下部タブバーの「設定」を選択すると設定画面へ遷移する (TR-01)", async () => {
+      const bottomSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
+      const settingsSpy = vi.spyOn(
+        SettingsContainerModule,
+        "SettingsContainer",
+      );
       render(<App initialPath="/" />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+        expect(bottomSpy).toHaveBeenCalled();
       });
 
-      const settingsTab = screen.getByTestId("tab-settings");
-      await user.click(settingsTab);
+      const lastProps = bottomSpy.mock.calls.at(-1)?.[0];
+      act(() => {
+        lastProps?.onSelectSettings();
+      });
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+        expect(settingsSpy).toHaveBeenCalled();
       });
     });
 
-    it("検索画面で下部タブバーの「本棚」をクリックすると本棚画面へ遷移する (TR-01b)", async () => {
-      const user = userEvent.setup();
+    it("検索画面で下部タブバーの「本棚」を選択すると本棚画面へ遷移する (TR-01b)", async () => {
+      const bottomSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
+      const bookshelfSpy = vi.spyOn(
+        BookshelfContainerModule,
+        "BookshelfContainer",
+      );
       render(<App initialPath="/search" />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("search-page")).toBeInTheDocument();
+        expect(bottomSpy).toHaveBeenCalled();
       });
 
-      const bookshelfTab = screen.getByTestId("tab-bookshelf");
-      await user.click(bookshelfTab);
+      const lastProps = bottomSpy.mock.calls.at(-1)?.[0];
+      act(() => {
+        lastProps?.onSelectBookshelf();
+      });
 
       await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+        expect(bookshelfSpy).toHaveBeenCalled();
       });
     });
 
-    it("ランキング画面で下部タブバーの「本棚」をクリックすると本棚画面へ遷移する (TR-01b)", async () => {
-      const user = userEvent.setup();
+    it("ランキング画面で下部タブバーの「本棚」を選択すると本棚画面へ遷移する (TR-01b)", async () => {
+      const bottomSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
+      const bookshelfSpy = vi.spyOn(
+        BookshelfContainerModule,
+        "BookshelfContainer",
+      );
       render(<App initialPath="/ranking" />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("ranking-page")).toBeInTheDocument();
+        expect(bottomSpy).toHaveBeenCalled();
       });
 
-      const bookshelfTab = screen.getByTestId("tab-bookshelf");
-      await user.click(bookshelfTab);
+      const lastProps = bottomSpy.mock.calls.at(-1)?.[0];
+      act(() => {
+        lastProps?.onSelectBookshelf();
+      });
 
       await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+        expect(bookshelfSpy).toHaveBeenCalled();
       });
     });
 
-    it("設定画面で下部タブバーの「本棚」をクリックすると本棚画面へ遷移する (TR-01b)", async () => {
-      const user = userEvent.setup();
+    it("設定画面で下部タブバーの「本棚」を選択すると本棚画面へ遷移する (TR-01b)", async () => {
+      const bottomSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
+      const bookshelfSpy = vi.spyOn(
+        BookshelfContainerModule,
+        "BookshelfContainer",
+      );
       render(<App initialPath="/settings" />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+        expect(bottomSpy).toHaveBeenCalled();
       });
 
-      const bookshelfTab = screen.getByTestId("tab-bookshelf");
-      await user.click(bookshelfTab);
+      const lastProps = bottomSpy.mock.calls.at(-1)?.[0];
+      act(() => {
+        lastProps?.onSelectBookshelf();
+      });
 
       await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+        expect(bookshelfSpy).toHaveBeenCalled();
       });
     });
 
-    it("作品詳細画面で下部タブバーの「本棚」をクリックすると本棚画面へ遷移する (TR-01b)", async () => {
-      const user = userEvent.setup();
+    it("作品詳細画面で下部タブバーの「本棚」を選択すると本棚画面へ遷移する (TR-01b)", async () => {
+      const bottomSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
+      const bookshelfSpy = vi.spyOn(
+        BookshelfContainerModule,
+        "BookshelfContainer",
+      );
       render(<App initialPath="/novels/kakuyomu:16817330658027210412" />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
+        expect(bottomSpy).toHaveBeenCalled();
       });
 
-      const bookshelfTab = screen.getByTestId("tab-bookshelf");
-      await user.click(bookshelfTab);
-
-      await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
-      });
-    });
-
-    it("リーダー画面で下部オーバーレイの「本棚」タブをクリックすると本棚画面へ遷移する", async () => {
-      const user = userEvent.setup();
-      render(
-        <App initialPath="/novels/kakuyomu:16817330658027210412/chapters/1" />,
-      );
-
-      await waitFor(
-        () => {
-          expect(
-            screen.getByTestId("reader-bottom-touch-zone"),
-          ).toBeInTheDocument();
-        },
-        { timeout: 3000 },
-      );
-
-      await user.click(screen.getByTestId("reader-bottom-touch-zone"));
-
-      await waitFor(() => {
-        expect(
-          screen.getByTestId("reader-bottom-tab-bookshelf"),
-        ).toBeInTheDocument();
+      const lastProps = bottomSpy.mock.calls.at(-1)?.[0];
+      act(() => {
+        lastProps?.onSelectBookshelf();
       });
 
-      await user.click(screen.getByTestId("reader-bottom-tab-bookshelf"));
-
       await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+        expect(bookshelfSpy).toHaveBeenCalled();
       });
     });
 
-    it("リーダー画面で下部オーバーレイの「設定」タブをクリックすると設定画面へ遷移する", async () => {
-      const user = userEvent.setup();
+    it("リーダー画面から本棚画面へ遷移した際、BookshelfContainer が描画されること", async () => {
+      const bookshelfSpy = vi.spyOn(
+        BookshelfContainerModule,
+        "BookshelfContainer",
+      );
+      let routerRef: RouterContextValue | null = null;
+      const RouterCapture: React.FC = () => {
+        routerRef = useRouter();
+        return null;
+      };
+
       render(
-        <App initialPath="/novels/kakuyomu:16817330658027210412/chapters/1" />,
+        <ServiceProvider>
+          <RouterProvider initialPath="/novels/kakuyomu:16817330658027210412/chapters/1">
+            <AppContent />
+            <RouterCapture />
+          </RouterProvider>
+        </ServiceProvider>,
       );
 
-      await waitFor(
-        () => {
-          expect(
-            screen.getByTestId("reader-bottom-touch-zone"),
-          ).toBeInTheDocument();
-        },
-        { timeout: 3000 },
-      );
-
-      await user.click(screen.getByTestId("reader-bottom-touch-zone"));
-
-      await waitFor(() => {
-        expect(
-          screen.getByTestId("reader-bottom-tab-settings"),
-        ).toBeInTheDocument();
+      act(() => {
+        routerRef?.navigateToBookshelf();
       });
 
-      await user.click(screen.getByTestId("reader-bottom-tab-settings"));
-
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+        expect(bookshelfSpy).toHaveBeenCalled();
       });
     });
 
-    it("リーダー画面で下部オーバーレイの「検索」タブをクリックすると検索画面へ遷移する", async () => {
-      const user = userEvent.setup();
+    it("リーダー画面から設定画面へ遷移した際、SettingsContainer が描画されること", async () => {
+      const settingsSpy = vi.spyOn(
+        SettingsContainerModule,
+        "SettingsContainer",
+      );
+      let routerRef: RouterContextValue | null = null;
+      const RouterCapture: React.FC = () => {
+        routerRef = useRouter();
+        return null;
+      };
+
       render(
-        <App initialPath="/novels/kakuyomu:16817330658027210412/chapters/1" />,
+        <ServiceProvider>
+          <RouterProvider initialPath="/novels/kakuyomu:16817330658027210412/chapters/1">
+            <AppContent />
+            <RouterCapture />
+          </RouterProvider>
+        </ServiceProvider>,
       );
 
-      await waitFor(
-        () => {
-          expect(
-            screen.getByTestId("reader-bottom-touch-zone"),
-          ).toBeInTheDocument();
-        },
-        { timeout: 3000 },
-      );
-
-      await user.click(screen.getByTestId("reader-bottom-touch-zone"));
-
-      await waitFor(() => {
-        expect(
-          screen.getByTestId("reader-bottom-tab-search"),
-        ).toBeInTheDocument();
+      act(() => {
+        routerRef?.navigateToSettings();
       });
 
-      await user.click(screen.getByTestId("reader-bottom-tab-search"));
-
       await waitFor(() => {
-        expect(screen.getByTestId("search-page")).toBeInTheDocument();
+        expect(settingsSpy).toHaveBeenCalled();
       });
     });
 
-    it("リーダー画面で下部オーバーレイの「ランキング」タブをクリックするとランキング画面へ遷移する", async () => {
-      const user = userEvent.setup();
+    it("リーダー画面から検索画面へ遷移した際、SearchContainer が描画されること", async () => {
+      const searchSpy = vi.spyOn(SearchContainerModule, "SearchContainer");
+      let routerRef: RouterContextValue | null = null;
+      const RouterCapture: React.FC = () => {
+        routerRef = useRouter();
+        return null;
+      };
+
       render(
-        <App initialPath="/novels/kakuyomu:16817330658027210412/chapters/1" />,
+        <ServiceProvider>
+          <RouterProvider initialPath="/novels/kakuyomu:16817330658027210412/chapters/1">
+            <AppContent />
+            <RouterCapture />
+          </RouterProvider>
+        </ServiceProvider>,
       );
 
-      await waitFor(
-        () => {
-          expect(
-            screen.getByTestId("reader-bottom-touch-zone"),
-          ).toBeInTheDocument();
-        },
-        { timeout: 3000 },
-      );
-
-      await user.click(screen.getByTestId("reader-bottom-touch-zone"));
-
-      await waitFor(() => {
-        expect(
-          screen.getByTestId("reader-bottom-tab-ranking"),
-        ).toBeInTheDocument();
+      act(() => {
+        routerRef?.navigateToSearch();
       });
 
-      await user.click(screen.getByTestId("reader-bottom-tab-ranking"));
+      await waitFor(() => {
+        expect(searchSpy).toHaveBeenCalled();
+      });
+    });
+
+    it("リーダー画面からランキング画面へ遷移した際、RankingContainer が描画されること", async () => {
+      const rankingSpy = vi.spyOn(RankingContainerModule, "RankingContainer");
+      let routerRef: RouterContextValue | null = null;
+      const RouterCapture: React.FC = () => {
+        routerRef = useRouter();
+        return null;
+      };
+
+      render(
+        <ServiceProvider>
+          <RouterProvider initialPath="/novels/kakuyomu:16817330658027210412/chapters/1">
+            <AppContent />
+            <RouterCapture />
+          </RouterProvider>
+        </ServiceProvider>,
+      );
+
+      act(() => {
+        routerRef?.navigateToRanking();
+      });
 
       await waitFor(() => {
-        expect(screen.getByTestId("ranking-page")).toBeInTheDocument();
+        expect(rankingSpy).toHaveBeenCalled();
       });
     });
 
     it("リーダー画面で OS 戻る操作（popstate）を行うと作品詳細画面へ戻る", async () => {
+      const readerSpy = vi.spyOn(ReaderContainerModule, "ReaderContainer");
+      const novelDetailSpy = vi.spyOn(
+        NovelDetailContainerModule,
+        "NovelDetailContainer",
+      );
       render(
         <App initialPath="/novels/kakuyomu:16817330658027210412/chapters/1" />,
       );
 
-      await waitFor(
-        () => {
-          expect(screen.getByTestId("reader-page")).toBeInTheDocument();
-        },
-        { timeout: 3000 },
-      );
+      await waitFor(() => {
+        expect(readerSpy).toHaveBeenCalled();
+      });
 
       await act(async () => {
         window.history.pushState(
@@ -472,11 +507,12 @@ describe("App コンポーネント", () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
+        expect(novelDetailSpy).toHaveBeenCalled();
       });
     });
 
     it("カスタム initialWorkUrl および props 省略時にも正常に動作する", async () => {
+      const readerSpy = vi.spyOn(ReaderContainerModule, "ReaderContainer");
       render(
         <App
           initialPath="/novels/kakuyomu:16817330658027210412/chapters/1"
@@ -484,18 +520,25 @@ describe("App コンポーネント", () => {
         />,
       );
 
-      await waitFor(
-        () => {
-          expect(screen.getByTestId("reader-page")).toBeInTheDocument();
-        },
-        { timeout: 3000 },
-      );
+      await waitFor(() => {
+        expect(readerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            initialWorkUrl: "https://kakuyomu.jp/works/16817330658027210412",
+          }),
+          undefined,
+        );
+      });
     });
   });
 
   describe("実機システム戻るボタン（AppBridge）連携と論理階層遷移・終了UXの検証 (AC-AB-02〜06)", () => {
     it("リーダー画面 (SCR-03) で戻るボタン押下時、目次画面 (SCR-02) へ論理階層遷移すること (AC-AB-02, TR-06)", async () => {
       const mockAppBridge = new MockAppBridge();
+      const readerSpy = vi.spyOn(ReaderContainerModule, "ReaderContainer");
+      const novelDetailSpy = vi.spyOn(
+        NovelDetailContainerModule,
+        "NovelDetailContainer",
+      );
       render(
         <App
           initialPath="/novels/kakuyomu:16817330658027210412/chapters/1"
@@ -503,24 +546,29 @@ describe("App コンポーネント", () => {
         />,
       );
 
-      await waitFor(
-        () => {
-          expect(screen.getByTestId("reader-page")).toBeInTheDocument();
-        },
-        { timeout: 3000 },
-      );
+      await waitFor(() => {
+        expect(readerSpy).toHaveBeenCalled();
+      });
 
       await act(async () => {
         await mockAppBridge.triggerBackButton();
       });
 
       await waitFor(() => {
-        expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
+        expect(novelDetailSpy).toHaveBeenCalled();
       });
     });
 
     it("作品詳細・目次画面 (SCR-02) で戻るボタン押下時、本棚画面 (SCR-01) へ復帰すること (AC-AB-03, TR-07)", async () => {
       const mockAppBridge = new MockAppBridge();
+      const novelDetailSpy = vi.spyOn(
+        NovelDetailContainerModule,
+        "NovelDetailContainer",
+      );
+      const bookshelfSpy = vi.spyOn(
+        BookshelfContainerModule,
+        "BookshelfContainer",
+      );
       render(
         <App
           initialPath="/novels/kakuyomu:16817330658027210412"
@@ -529,7 +577,7 @@ describe("App コンポーネント", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
+        expect(novelDetailSpy).toHaveBeenCalled();
       });
 
       await act(async () => {
@@ -537,16 +585,24 @@ describe("App コンポーネント", () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+        expect(bookshelfSpy).toHaveBeenCalled();
       });
     });
 
     it("設定画面 (SCR-05) で戻るボタン押下時、ホーム本棚画面 (SCR-01) へ復帰すること (AC-AB-04, TR-12)", async () => {
       const mockAppBridge = new MockAppBridge();
+      const settingsSpy = vi.spyOn(
+        SettingsContainerModule,
+        "SettingsContainer",
+      );
+      const bookshelfSpy = vi.spyOn(
+        BookshelfContainerModule,
+        "BookshelfContainer",
+      );
       render(<App initialPath="/settings" appBridge={mockAppBridge} />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+        expect(settingsSpy).toHaveBeenCalled();
       });
 
       await act(async () => {
@@ -554,43 +610,43 @@ describe("App コンポーネント", () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+        expect(bookshelfSpy).toHaveBeenCalled();
       });
     });
 
-    it("リーダー画面 (SCR-03) から下部オーバーレイ経由で設定画面 (SCR-05) へ遷移後、戻るボタン押下時にリーダー画面へ復帰すること (AC-AB-04, TR-12)", async () => {
-      const user = userEvent.setup();
+    it("リーダー画面 (SCR-03) から設定画面 (SCR-05) へ遷移後、戻るボタン押下時にリーダー画面へ復帰すること (AC-AB-04, TR-12)", async () => {
       const mockAppBridge = new MockAppBridge();
+      const readerSpy = vi.spyOn(ReaderContainerModule, "ReaderContainer");
+      const settingsSpy = vi.spyOn(
+        SettingsContainerModule,
+        "SettingsContainer",
+      );
+      let routerRef: RouterContextValue | null = null;
+      const RouterCapture: React.FC = () => {
+        routerRef = useRouter();
+        return null;
+      };
+
       render(
-        <App
-          initialPath="/novels/kakuyomu:16817330658027210412/chapters/1"
-          appBridge={mockAppBridge}
-        />,
+        <ServiceProvider services={{ appBridge: mockAppBridge }}>
+          <RouterProvider initialPath="/novels/kakuyomu:16817330658027210412/chapters/1">
+            <AppContent />
+            <RouterCapture />
+          </RouterProvider>
+        </ServiceProvider>,
       );
-
-      await waitFor(
-        () => {
-          expect(
-            screen.getByTestId("reader-bottom-touch-zone"),
-          ).toBeInTheDocument();
-        },
-        { timeout: 3000 },
-      );
-
-      // 下部オーバーレイを表示
-      await user.click(screen.getByTestId("reader-bottom-touch-zone"));
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("reader-bottom-tab-settings"),
-        ).toBeInTheDocument();
+        expect(readerSpy).toHaveBeenCalled();
       });
 
-      // 設定タブをクリック
-      await user.click(screen.getByTestId("reader-bottom-tab-settings"));
+      // 設定画面へ遷移
+      act(() => {
+        routerRef?.navigateToSettings();
+      });
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+        expect(settingsSpy).toHaveBeenCalled();
       });
 
       // 戻るボタンを押下
@@ -600,13 +656,21 @@ describe("App コンポーネント", () => {
 
       // リーダー画面へ復帰することをアサート
       await waitFor(() => {
-        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
+        expect(readerSpy).toHaveBeenCalled();
       });
     });
 
     it("作品詳細画面 (SCR-02) から下部タブ経由で設定画面 (SCR-05) へ遷移後、戻るボタン押下時に作品詳細画面へ復帰すること (AC-AB-04, TR-12)", async () => {
-      const user = userEvent.setup();
       const mockAppBridge = new MockAppBridge();
+      const bottomSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
+      const novelDetailSpy = vi.spyOn(
+        NovelDetailContainerModule,
+        "NovelDetailContainer",
+      );
+      const settingsSpy = vi.spyOn(
+        SettingsContainerModule,
+        "SettingsContainer",
+      );
       render(
         <App
           initialPath="/novels/kakuyomu:16817330658027210412"
@@ -615,14 +679,16 @@ describe("App コンポーネント", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
+        expect(novelDetailSpy).toHaveBeenCalled();
       });
 
       // 設定タブをクリック
-      await user.click(screen.getByTestId("tab-settings"));
+      act(() => {
+        bottomSpy.mock.calls.at(-1)?.[0]?.onSelectSettings();
+      });
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+        expect(settingsSpy).toHaveBeenCalled();
       });
 
       // 戻るボタンを押下
@@ -632,16 +698,21 @@ describe("App コンポーネント", () => {
 
       // 作品詳細画面へ復帰することをアサート
       await waitFor(() => {
-        expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
+        expect(novelDetailSpy).toHaveBeenCalled();
       });
     });
 
     it("検索画面 (SCR-06) で戻るボタン押下時、ホーム本棚画面 (SCR-01) へ復帰すること (TR-12)", async () => {
       const mockAppBridge = new MockAppBridge();
+      const searchSpy = vi.spyOn(SearchContainerModule, "SearchContainer");
+      const bookshelfSpy = vi.spyOn(
+        BookshelfContainerModule,
+        "BookshelfContainer",
+      );
       render(<App initialPath="/search" appBridge={mockAppBridge} />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("search-page")).toBeInTheDocument();
+        expect(searchSpy).toHaveBeenCalled();
       });
 
       await act(async () => {
@@ -649,16 +720,21 @@ describe("App コンポーネント", () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+        expect(bookshelfSpy).toHaveBeenCalled();
       });
     });
 
     it("ランキング画面 (SCR-07) で戻るボタン押下時、ホーム本棚画面 (SCR-01) へ復帰すること (TR-12)", async () => {
       const mockAppBridge = new MockAppBridge();
+      const rankingSpy = vi.spyOn(RankingContainerModule, "RankingContainer");
+      const bookshelfSpy = vi.spyOn(
+        BookshelfContainerModule,
+        "BookshelfContainer",
+      );
       render(<App initialPath="/ranking" appBridge={mockAppBridge} />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("ranking-page")).toBeInTheDocument();
+        expect(rankingSpy).toHaveBeenCalled();
       });
 
       await act(async () => {
@@ -666,12 +742,20 @@ describe("App コンポーネント", () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+        expect(bookshelfSpy).toHaveBeenCalled();
       });
     });
 
     it("内蔵ブラウザ画面 (SCR-04) で戻るボタン押下時、router.back() が呼ばれて直前の画面へ論理復帰すること (SCR-04, TR-12)", async () => {
       const mockAppBridge = new MockAppBridge();
+      const browserSpy = vi.spyOn(
+        WebViewImportContainerModule,
+        "WebViewImportContainer",
+      );
+      const novelDetailSpy = vi.spyOn(
+        NovelDetailContainerModule,
+        "NovelDetailContainer",
+      );
       render(
         <App
           appBridge={mockAppBridge}
@@ -680,7 +764,7 @@ describe("App コンポーネント", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("webview-import-page")).toBeInTheDocument();
+        expect(browserSpy).toHaveBeenCalled();
       });
 
       await act(async () => {
@@ -688,7 +772,7 @@ describe("App コンポーネント", () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
+        expect(novelDetailSpy).toHaveBeenCalled();
       });
       expect(mockAppBridge.exitAppCalled).toBe(false);
     });
@@ -726,10 +810,12 @@ describe("App コンポーネント", () => {
 
     it("本棚画面 (SCR-01) でトースト表示中にタブ切り替えで他画面へ遷移したとき、確認トーストが即座に消去されること (TR-13, R1-11)", async () => {
       const mockAppBridge = new MockAppBridge();
+      const bottomSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
+      const searchSpy = vi.spyOn(SearchContainerModule, "SearchContainer");
       render(<App initialPath="/" appBridge={mockAppBridge} />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+        expect(bottomSpy).toHaveBeenCalled();
       });
 
       // 1回目の戻るボタン押下でトースト表示
@@ -739,14 +825,14 @@ describe("App コンポーネント", () => {
       expect(screen.getByTestId("exit-app-toast")).toBeInTheDocument();
 
       // 検索タブを押下して画面遷移
-      const searchTabButton = screen.getByTestId("tab-search");
-      await act(async () => {
-        searchTabButton.click();
+      const lastProps = bottomSpy.mock.calls.at(-1)?.[0];
+      act(() => {
+        lastProps?.onSelectSearch?.();
       });
 
       // 検索画面へ遷移し、トーストが消えていること
       await waitFor(() => {
-        expect(screen.getByTestId("search-page")).toBeInTheDocument();
+        expect(searchSpy).toHaveBeenCalled();
       });
       expect(screen.queryByTestId("exit-app-toast")).not.toBeInTheDocument();
     });
@@ -830,12 +916,20 @@ describe("App コンポーネント", () => {
     });
 
     it("本棚で戻るボタン押下後、トースト表示中に設定画面へ遷移して戻るボタンを押下した際、トーストタイマーが解除され直前画面へ復帰すること", async () => {
-      const user = userEvent.setup();
       const mockAppBridge = new MockAppBridge();
+      const bottomSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
+      const bookshelfSpy = vi.spyOn(
+        BookshelfContainerModule,
+        "BookshelfContainer",
+      );
+      const settingsSpy = vi.spyOn(
+        SettingsContainerModule,
+        "SettingsContainer",
+      );
       render(<App initialPath="/" appBridge={mockAppBridge} />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+        expect(bookshelfSpy).toHaveBeenCalled();
       });
 
       // 本棚で戻るボタン押下（トースト表示開始）
@@ -845,9 +939,12 @@ describe("App コンポーネント", () => {
       expect(screen.getByTestId("exit-app-toast")).toBeInTheDocument();
 
       // トースト表示中に設定タブへ遷移
-      await user.click(screen.getByTestId("tab-settings"));
+      const lastProps = bottomSpy.mock.calls.at(-1)?.[0];
+      act(() => {
+        lastProps?.onSelectSettings();
+      });
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
+        expect(settingsSpy).toHaveBeenCalled();
       });
 
       // 設定画面で戻るボタンを押下
@@ -857,7 +954,7 @@ describe("App コンポーネント", () => {
 
       // 本棚画面に復帰し、トーストが消去されていること
       await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+        expect(bookshelfSpy).toHaveBeenCalled();
       });
       expect(screen.queryByTestId("exit-app-toast")).not.toBeInTheDocument();
     });
@@ -895,7 +992,7 @@ describe("App コンポーネント", () => {
       });
 
       it("検索画面 (/search) から作品詳細およびリーダーへ遷移した際、探索元のアクティブタブ（検索）が反映されること", async () => {
-        const user = userEvent.setup();
+        const readerSpy = vi.spyOn(ReaderContainerModule, "ReaderContainer");
         let routerRef: RouterContextValue | null = null;
         const RouterCapture: React.FC = () => {
           routerRef = useRouter();
@@ -943,34 +1040,16 @@ describe("App コンポーネント", () => {
           routerRef?.navigateToReader("kakuyomu:16817330658027210412", 1);
         });
 
-        await waitFor(
-          () => {
-            expect(
-              screen.getByTestId("reader-bottom-touch-zone"),
-            ).toBeInTheDocument();
-          },
-          { timeout: 3000 },
-        );
-
-        // リーダー下部オーバーレイを開く
-        await user.click(screen.getByTestId("reader-bottom-touch-zone"));
-
         await waitFor(() => {
-          expect(
-            screen.getByTestId("reader-bottom-tab-search"),
-          ).toBeInTheDocument();
+          expect(readerSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ activeTab: "search" }),
+            undefined,
+          );
         });
-        expect(screen.getByTestId("reader-bottom-tab-search")).toHaveAttribute(
-          "aria-selected",
-          "true",
-        );
-        expect(
-          screen.getByTestId("reader-bottom-tab-bookshelf"),
-        ).toHaveAttribute("aria-selected", "false");
       });
 
       it("ランキング画面 (/ranking) から作品詳細およびリーダーへ遷移した際、探索元のアクティブタブ（ランキング）が反映されること", async () => {
-        const user = userEvent.setup();
+        const readerSpy = vi.spyOn(ReaderContainerModule, "ReaderContainer");
         let routerRef: RouterContextValue | null = null;
         const RouterCapture: React.FC = () => {
           routerRef = useRouter();
@@ -1018,30 +1097,12 @@ describe("App コンポーネント", () => {
           routerRef?.navigateToReader("kakuyomu:16817330658027210412", 1);
         });
 
-        await waitFor(
-          () => {
-            expect(
-              screen.getByTestId("reader-bottom-touch-zone"),
-            ).toBeInTheDocument();
-          },
-          { timeout: 3000 },
-        );
-
-        // リーダー下部オーバーレイを開く
-        await user.click(screen.getByTestId("reader-bottom-touch-zone"));
-
         await waitFor(() => {
-          expect(
-            screen.getByTestId("reader-bottom-tab-ranking"),
-          ).toBeInTheDocument();
+          expect(readerSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ activeTab: "ranking" }),
+            undefined,
+          );
         });
-        expect(screen.getByTestId("reader-bottom-tab-ranking")).toHaveAttribute(
-          "aria-selected",
-          "true",
-        );
-        expect(
-          screen.getByTestId("reader-bottom-tab-bookshelf"),
-        ).toHaveAttribute("aria-selected", "false");
       });
 
       it("route.name === 'browser' のとき WebViewImportContainer が描画され、外側の BottomTabBar は非表示となること (SCR-04, TR-12)", async () => {

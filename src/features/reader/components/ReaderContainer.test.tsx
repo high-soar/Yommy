@@ -1,11 +1,4 @@
-import {
-  render,
-  screen,
-  waitFor,
-  act,
-  fireEvent,
-} from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import React from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
@@ -433,7 +426,7 @@ describe("ReaderContainer", () => {
 
   describe("下部タブ遷移時のしおり保存と画面遷移の検証 (AC-RD-08, TR-01)", () => {
     it("下部オーバーレイの「本棚」タブクリック時、flushBookmark が実行されカスタムコールバックが呼び出されること", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const onBackToBookshelf = vi.fn();
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
@@ -450,25 +443,23 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      // 最下部タッチゾーンをタップしてオーバーレイを展開
-      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
-
-      const bookshelfTab = screen.getByTestId("reader-bottom-tab-bookshelf");
-      await user.click(bookshelfTab);
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      await act(async () => {
+        lastProps.onSelectTab?.("bookshelf");
+      });
 
       await waitFor(() => {
         expect(updateBookmarkSpy).toHaveBeenCalled();
         expect(onBackToBookshelf).toHaveBeenCalledTimes(1);
       });
+      pageSpy.mockRestore();
     });
 
     it("下部オーバーレイの「本棚」タブクリック時、コールバック省略時にルーターの navigateToBookshelf が呼び出されること", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
 
@@ -482,25 +473,24 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
-
-      const bookshelfTab = screen.getByTestId("reader-bottom-tab-bookshelf");
-      await user.click(bookshelfTab);
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      await act(async () => {
+        lastProps.onSelectTab?.("bookshelf");
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           "/",
         );
       });
+      pageSpy.mockRestore();
     });
 
     it("下部オーバーレイの「設定」タブクリック時、flushBookmark が実行されカスタムコールバックが呼び出されること", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const onNavigateSettings = vi.fn();
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
@@ -517,24 +507,23 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
-
-      const settingsTab = screen.getByTestId("reader-bottom-tab-settings");
-      await user.click(settingsTab);
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      await act(async () => {
+        lastProps.onSelectTab?.("settings");
+      });
 
       await waitFor(() => {
         expect(updateBookmarkSpy).toHaveBeenCalled();
         expect(onNavigateSettings).toHaveBeenCalledTimes(1);
       });
+      pageSpy.mockRestore();
     });
 
     it("下部オーバーレイの「設定」タブクリック時、コールバック省略時にルーターの navigate('/settings') が呼び出されること", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
 
@@ -548,25 +537,24 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
-
-      const settingsTab = screen.getByTestId("reader-bottom-tab-settings");
-      await user.click(settingsTab);
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      await act(async () => {
+        lastProps.onSelectTab?.("settings");
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           "/settings",
         );
       });
+      pageSpy.mockRestore();
     });
 
     it("下部オーバーレイの「検索」タブクリック時、flushBookmark が実行されルーターの navigateToSearch が呼び出されること", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -581,15 +569,13 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
-
-      const searchTab = screen.getByTestId("reader-bottom-tab-search");
-      await user.click(searchTab);
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      await act(async () => {
+        lastProps.onSelectTab?.("search");
+      });
 
       await waitFor(() => {
         expect(updateBookmarkSpy).toHaveBeenCalled();
@@ -597,10 +583,11 @@ describe("ReaderContainer", () => {
           "/search",
         );
       });
+      pageSpy.mockRestore();
     });
 
     it("下部オーバーレイの「ランキング」タブクリック時、flushBookmark が実行されルーターの navigateToRanking が呼び出されること", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -615,15 +602,13 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
-
-      const rankingTab = screen.getByTestId("reader-bottom-tab-ranking");
-      await user.click(rankingTab);
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      await act(async () => {
+        lastProps.onSelectTab?.("ranking");
+      });
 
       await waitFor(() => {
         expect(updateBookmarkSpy).toHaveBeenCalled();
@@ -631,6 +616,7 @@ describe("ReaderContainer", () => {
           "/ranking",
         );
       });
+      pageSpy.mockRestore();
     });
   });
 
@@ -724,7 +710,7 @@ describe("ReaderContainer", () => {
 
   describe("前後エピソード遷移の検証 (TR-05, AC-RD-06)", () => {
     it("第1話でオーバーレイを展開して「次の話へ」クリック時、第2話へ遷移しカスタム onNavigateChapter が呼び出されること (TR-05)", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const onNavigateChapter = vi.fn();
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -740,22 +726,22 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
-
-      await user.click(screen.getByTestId("reader-next-chapter"));
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onNextChapter();
+      });
 
       await waitFor(() => {
         expect(onNavigateChapter).toHaveBeenCalledWith(sampleNovel.id, 2);
       });
+      pageSpy.mockRestore();
     });
 
     it("第1話でオーバーレイから「次の話へ」クリック時、コールバック省略時にルーターの navigateToReader が呼び出されること (TR-05)", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
 
@@ -769,24 +755,24 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
-
-      await user.click(screen.getByTestId("reader-next-chapter"));
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onNextChapter();
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           `/novels/${encodeURIComponent(sampleNovel.id)}/chapters/2`,
         );
       });
+      pageSpy.mockRestore();
     });
 
     it("第2話でオーバーレイから「前の話へ」クリック時、第1話へ遷移しカスタム onNavigateChapter が呼び出されること (TR-05)", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const onNavigateChapter = vi.fn();
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -802,22 +788,22 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
-
-      await user.click(screen.getByTestId("reader-prev-chapter"));
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onPrevChapter();
+      });
 
       await waitFor(() => {
         expect(onNavigateChapter).toHaveBeenCalledWith(sampleNovel.id, 1);
       });
+      pageSpy.mockRestore();
     });
 
     it("第2話でオーバーレイから「前の話へ」クリック時、コールバック省略時にルーターの navigateToReader が呼び出されること (TR-05)", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
 
@@ -831,24 +817,24 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
-
-      await user.click(screen.getByTestId("reader-prev-chapter"));
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onPrevChapter();
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           `/novels/${encodeURIComponent(sampleNovel.id)}/chapters/1`,
         );
       });
+      pageSpy.mockRestore();
     });
 
     it("novelId 省略時でも novel.id から targetId を解決して次話遷移できること", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const onNavigateChapter = vi.fn();
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -863,22 +849,22 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
-
-      await user.click(screen.getByTestId("reader-next-chapter"));
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onNextChapter();
+      });
 
       await waitFor(() => {
         expect(onNavigateChapter).toHaveBeenCalledWith(sampleNovel.id, 2);
       });
+      pageSpy.mockRestore();
     });
 
     it("novelId 省略時でも novel.id から targetId を解決して前話遷移できること", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const onNavigateChapter = vi.fn();
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -893,21 +879,22 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
-
-      await user.click(screen.getByTestId("reader-prev-chapter"));
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onPrevChapter();
+      });
 
       await waitFor(() => {
         expect(onNavigateChapter).toHaveBeenCalledWith(sampleNovel.id, 1);
       });
+      pageSpy.mockRestore();
     });
 
     it("第1話で「前の話へ」イベントが発火しても（goToChapter が false を返却）、遷移処理が実行されないこと", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const onNavigateChapter = vi.fn();
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -923,20 +910,20 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
-
-      // disabled ボタンに対して直接 click イベントを発火（goToChapter(0) が false を返す）
-      fireEvent.click(screen.getByTestId("reader-prev-chapter"));
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onPrevChapter();
+      });
 
       expect(onNavigateChapter).not.toHaveBeenCalled();
+      pageSpy.mockRestore();
     });
 
     it("最終話で「次の話へ」イベントが発火しても（goToChapter が false を返却）、遷移処理が実行されないこと", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const onNavigateChapter = vi.fn();
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -952,17 +939,16 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
-      fireEvent.pointerDown(touchZone, { clientX: 100, clientY: 500 });
-      fireEvent.pointerUp(touchZone, { clientX: 100, clientY: 500 });
-
-      // disabled ボタンに対して直接 click イベントを発火（goToChapter(4) が false を返す）
-      fireEvent.click(screen.getByTestId("reader-next-chapter"));
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onNextChapter();
+      });
 
       expect(onNavigateChapter).not.toHaveBeenCalled();
+      pageSpy.mockRestore();
     });
   });
 

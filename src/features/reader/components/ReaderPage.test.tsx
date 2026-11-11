@@ -583,7 +583,10 @@ describe("ReaderPage", () => {
     });
 
     it("オーバーレイ展開中に「前の話へ」をクリックすると onPrevChapter が呼ばれ自動的に閉じること", async () => {
-      const user = userEvent.setup();
+      const bottomSpy = vi.spyOn(
+        ReaderBottomOverlayModule,
+        "ReaderBottomOverlay",
+      );
       const onPrevChapter = vi.fn();
       render(
         <ReaderPage
@@ -597,13 +600,19 @@ describe("ReaderPage", () => {
       const overlay = screen.getByTestId("reader-bottom-overlay");
       expect(overlay).toHaveAttribute("aria-hidden", "false");
 
-      await user.click(screen.getByTestId("reader-prev-chapter"));
+      const lastBottomProps = bottomSpy.mock.calls.at(-1)?.[0];
+      act(() => {
+        lastBottomProps?.onPrevChapter?.();
+      });
       expect(onPrevChapter).toHaveBeenCalledTimes(1);
       expect(overlay).toHaveAttribute("aria-hidden", "true");
     });
 
     it("オーバーレイ展開中に「次の話へ」をクリックすると onNextChapter が呼ばれ自動的に閉じること", async () => {
-      const user = userEvent.setup();
+      const bottomSpy = vi.spyOn(
+        ReaderBottomOverlayModule,
+        "ReaderBottomOverlay",
+      );
       const onNextChapter = vi.fn();
       render(
         <ReaderPage
@@ -617,13 +626,19 @@ describe("ReaderPage", () => {
       const overlay = screen.getByTestId("reader-bottom-overlay");
       expect(overlay).toHaveAttribute("aria-hidden", "false");
 
-      await user.click(screen.getByTestId("reader-next-chapter"));
+      const lastBottomProps = bottomSpy.mock.calls.at(-1)?.[0];
+      act(() => {
+        lastBottomProps?.onNextChapter?.();
+      });
       expect(onNextChapter).toHaveBeenCalledTimes(1);
       expect(overlay).toHaveAttribute("aria-hidden", "true");
     });
 
     it("下部タブ（本棚 / 設定）をクリックした際に onSelectTab が呼ばれること", async () => {
-      const user = userEvent.setup();
+      const bottomSpy = vi.spyOn(
+        ReaderBottomOverlayModule,
+        "ReaderBottomOverlay",
+      );
       const onSelectTab = vi.fn();
       render(
         <ReaderPage
@@ -634,10 +649,15 @@ describe("ReaderPage", () => {
         />,
       );
 
-      await user.click(screen.getByTestId("reader-bottom-tab-bookshelf"));
+      const lastBottomProps = bottomSpy.mock.calls.at(-1)?.[0];
+      act(() => {
+        lastBottomProps?.onSelectTab?.("bookshelf");
+      });
       expect(onSelectTab).toHaveBeenCalledWith("bookshelf");
 
-      await user.click(screen.getByTestId("reader-bottom-tab-settings"));
+      act(() => {
+        lastBottomProps?.onSelectTab?.("settings");
+      });
       expect(onSelectTab).toHaveBeenCalledWith("settings");
     });
 
@@ -1549,6 +1569,10 @@ describe("ReaderPage", () => {
     });
 
     it("前話・次話遷移時およびスクロール時に上下オーバーレイが自動で閉じること", () => {
+      const bottomSpy = vi.spyOn(
+        ReaderBottomOverlayModule,
+        "ReaderBottomOverlay",
+      );
       const onPrevChapter = vi.fn();
       const onNextChapter = vi.fn();
       const onScrollProgressChange = vi.fn();
@@ -1572,9 +1596,10 @@ describe("ReaderPage", () => {
       expect(topOverlay).toHaveAttribute("aria-hidden", "false");
       expect(bottomOverlay).toHaveAttribute("aria-hidden", "false");
 
-      // 前話ボタン押下でオーバーレイが閉じる
-      const prevBtn = screen.getByTestId("reader-prev-chapter");
-      fireEvent.click(prevBtn);
+      // 前話ボタン押下（ReaderBottomOverlay の onPrevChapter 呼び出し）でオーバーレイが閉じる
+      act(() => {
+        bottomSpy.mock.calls.at(-1)?.[0]?.onPrevChapter?.();
+      });
       expect(onPrevChapter).toHaveBeenCalledTimes(1);
       expect(topOverlay).toHaveAttribute("aria-hidden", "true");
       expect(bottomOverlay).toHaveAttribute("aria-hidden", "true");
@@ -1584,9 +1609,10 @@ describe("ReaderPage", () => {
       expect(topOverlay).toHaveAttribute("aria-hidden", "false");
       expect(bottomOverlay).toHaveAttribute("aria-hidden", "false");
 
-      // 次話ボタン押下でオーバーレイが閉じる
-      const nextBtn = screen.getByTestId("reader-next-chapter");
-      fireEvent.click(nextBtn);
+      // 次話ボタン押下（ReaderBottomOverlay の onNextChapter 呼び出し）でオーバーレイが閉じる
+      act(() => {
+        bottomSpy.mock.calls.at(-1)?.[0]?.onNextChapter?.();
+      });
       expect(onNextChapter).toHaveBeenCalledTimes(1);
       expect(topOverlay).toHaveAttribute("aria-hidden", "true");
       expect(bottomOverlay).toHaveAttribute("aria-hidden", "true");

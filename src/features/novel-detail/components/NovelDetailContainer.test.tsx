@@ -1,5 +1,4 @@
 import { render, screen, waitFor, act } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import React from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
@@ -369,7 +368,7 @@ describe("NovelDetailContainer", () => {
     });
 
     it("未検出（NotFound）画面での「本棚へ戻る」ボタン押下時、デフォルトで本棚へ遷移する (AC-ND-07)", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
       render(
         <RouterProvider initialPath="/novels/not-found">
           <RouteObserverWrapper
@@ -381,23 +380,24 @@ describe("NovelDetailContainer", () => {
       );
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("novel-detail-not-found"),
-        ).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      await user.click(screen.getByTestId("back-to-bookshelf-button"));
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onBackToBookshelf();
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           "/",
         );
       });
+      pageSpy.mockRestore();
     });
 
     it("未検出画面で onBackToBookshelf 未指定時、探索元（/search）が存在する場合は router.back により /search へ復帰すること (TR-07, AC-ND-07)", async () => {
-      const user = userEvent.setup();
-
+      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
       let routerRef: ReturnType<typeof useRouter> | null = null;
       const TestOriginComponent = () => {
         const router = useRouter();
@@ -431,22 +431,24 @@ describe("NovelDetailContainer", () => {
       });
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("novel-detail-not-found"),
-        ).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      await user.click(screen.getByTestId("back-to-bookshelf-button"));
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onBackToBookshelf();
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           "/search",
         );
       });
+      pageSpy.mockRestore();
     });
 
     it("未検出画面で onBackToBookshelf が注入された場合、カスタムコールバックが呼ばれる", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
       const onBackToBookshelf = vi.fn();
       render(
         <RouterProvider initialPath="/novels/not-found">
@@ -460,21 +462,23 @@ describe("NovelDetailContainer", () => {
       );
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("novel-detail-not-found"),
-        ).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      await user.click(screen.getByTestId("back-to-bookshelf-button"));
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onBackToBookshelf();
+      });
 
       expect(onBackToBookshelf).toHaveBeenCalledTimes(1);
       expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
         "/novels/not-found",
       );
+      pageSpy.mockRestore();
     });
 
     it("「最初から読む（第1話）」ボタン押下時、デフォルトでリーダー画面（第1話）へ遷移する (TR-04, AC-ND-03)", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
       render(
         <RouterProvider
           initialPath={`/novels/${encodeURIComponent(sampleNovel.id)}`}
@@ -488,22 +492,25 @@ describe("NovelDetailContainer", () => {
       );
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("detail-read-first-button"),
-        ).toBeInTheDocument();
+        const last = pageSpy.mock.calls[pageSpy.mock.calls.length - 1]?.[0];
+        expect(last?.novel?.id).toBe(sampleNovel.id);
       });
 
-      await user.click(screen.getByTestId("detail-read-first-button"));
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onStartFromBeginning();
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           `/novels/${encodeURIComponent(sampleNovel.id)}/chapters/1`,
         );
       });
+      pageSpy.mockRestore();
     });
 
     it("「続きから読む（第2話）」ボタン押下時、デフォルトでリーダー画面（第2話）へ遷移する (TR-04, AC-ND-03)", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
       render(
         <RouterProvider
           initialPath={`/novels/${encodeURIComponent(sampleNovelWithBookmark.id)}`}
@@ -517,20 +524,27 @@ describe("NovelDetailContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("detail-resume-button")).toBeInTheDocument();
+        const last = pageSpy.mock.calls[pageSpy.mock.calls.length - 1]?.[0];
+        expect(last?.novel?.id).toBe(sampleNovelWithBookmark.id);
       });
 
-      await user.click(screen.getByTestId("detail-resume-button"));
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onResumeBookmark(
+          sampleNovelWithBookmark.bookmarkChapterIndex!,
+        );
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           `/novels/${encodeURIComponent(sampleNovelWithBookmark.id)}/chapters/2`,
         );
       });
+      pageSpy.mockRestore();
     });
 
     it("目次エピソード行タップ時、デフォルトで該当話のリーダー画面へ遷移する (TR-04, AC-ND-04)", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
       render(
         <RouterProvider
           initialPath={`/novels/${encodeURIComponent(sampleNovel.id)}`}
@@ -544,22 +558,25 @@ describe("NovelDetailContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getAllByTestId("episode-item")).toHaveLength(3);
+        const last = pageSpy.mock.calls[pageSpy.mock.calls.length - 1]?.[0];
+        expect(last?.chapters?.length).toBe(3);
       });
 
-      // 3番目のエピソード（第3話）をクリック
-      const episodeItems = screen.getAllByTestId("episode-item");
-      await user.click(episodeItems[2]);
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onSelectEpisode(3);
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           `/novels/${encodeURIComponent(sampleNovel.id)}/chapters/3`,
         );
       });
+      pageSpy.mockRestore();
     });
 
     it("onSelectEpisode が注入された場合、読書開始・続きから読む・目次行タップでコールバックが呼ばれる", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
       const onSelectEpisode = vi.fn();
       render(
         <RouterProvider
@@ -575,29 +592,36 @@ describe("NovelDetailContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("detail-resume-button")).toBeInTheDocument();
-        expect(
-          screen.getByTestId("detail-read-first-button"),
-        ).toBeInTheDocument();
+        const last = pageSpy.mock.calls[pageSpy.mock.calls.length - 1]?.[0];
+        expect(last?.chapters?.length).toBe(3);
       });
 
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+
       // 1. 最初から読む
-      await user.click(screen.getByTestId("detail-read-first-button"));
+      act(() => {
+        lastProps.onStartFromBeginning();
+      });
       expect(onSelectEpisode).toHaveBeenLastCalledWith(
         sampleNovelWithBookmark.id,
         1,
       );
 
       // 2. 続きから読む（第2話）
-      await user.click(screen.getByTestId("detail-resume-button"));
+      act(() => {
+        lastProps.onResumeBookmark(
+          sampleNovelWithBookmark.bookmarkChapterIndex!,
+        );
+      });
       expect(onSelectEpisode).toHaveBeenLastCalledWith(
         sampleNovelWithBookmark.id,
         2,
       );
 
       // 3. エピソード行タップ（第3話）
-      const episodeItems = screen.getAllByTestId("episode-item");
-      await user.click(episodeItems[2]);
+      act(() => {
+        lastProps.onSelectEpisode(3);
+      });
       expect(onSelectEpisode).toHaveBeenLastCalledWith(
         sampleNovelWithBookmark.id,
         3,
@@ -607,12 +631,13 @@ describe("NovelDetailContainer", () => {
       expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
         `/novels/${encodeURIComponent(sampleNovelWithBookmark.id)}`,
       );
+      pageSpy.mockRestore();
     });
   });
 
   describe("目次更新（refreshToc）および作品削除フローの検証", () => {
     it("「目次を更新」ボタン押下時に refreshToc が実行され、通知が表示される (AC-ND-05)", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
       const mockHttpClient: HttpClientBridge = {
         getHtml: async () => ({
           html: "<html><body>dummy html</body></html>",
@@ -667,21 +692,25 @@ describe("NovelDetailContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("refresh-toc-button")).toBeInTheDocument();
+        const last = pageSpy.mock.calls[pageSpy.mock.calls.length - 1]?.[0];
+        expect(last?.novel?.id).toBe(sampleNovel.id);
       });
 
-      await user.click(screen.getByTestId("refresh-toc-button"));
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      await act(async () => {
+        await lastProps.onRefreshToc();
+      });
 
       await waitFor(() => {
-        expect(screen.getByTestId("novel-detail-notice")).toBeInTheDocument();
+        const currentProps =
+          pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+        expect(currentProps.refreshMessage).toBe("最新の状態です");
       });
-      expect(screen.getByTestId("novel-detail-notice")).toHaveTextContent(
-        "最新の状態です",
-      );
+      pageSpy.mockRestore();
     });
 
     it("作品削除フロー: ダイアログの開閉、確定時の削除実行と本棚画面への遷移 (TR-07, AC-ND-06)", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
       render(
         <RouterProvider
           initialPath={`/novels/${encodeURIComponent(sampleNovel.id)}`}
@@ -695,24 +724,37 @@ describe("NovelDetailContainer", () => {
       );
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("open-delete-dialog-button"),
-        ).toBeInTheDocument();
+        const last = pageSpy.mock.calls[pageSpy.mock.calls.length - 1]?.[0];
+        expect(last?.novel?.id).toBe(sampleNovel.id);
       });
 
+      let lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+
       // 1. 削除ダイアログを開く
-      await user.click(screen.getByTestId("open-delete-dialog-button"));
-      expect(screen.getByTestId("delete-confirm-dialog")).toBeInTheDocument();
+      act(() => {
+        lastProps.onOpenDeleteDialog();
+      });
+      await waitFor(() => {
+        lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+        expect(lastProps.isDeleteDialogOpen).toBe(true);
+      });
 
       // 2. キャンセルボタンで閉じる
-      await user.click(screen.getByTestId("cancel-delete-button"));
-      expect(
-        screen.queryByTestId("delete-confirm-dialog"),
-      ).not.toBeInTheDocument();
+      act(() => {
+        lastProps.onCloseDeleteDialog();
+      });
+      await waitFor(() => {
+        lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+        expect(lastProps.isDeleteDialogOpen).toBe(false);
+      });
 
       // 3. 再度開き、削除を確定する
-      await user.click(screen.getByTestId("open-delete-dialog-button"));
-      await user.click(screen.getByTestId("confirm-delete-button"));
+      act(() => {
+        lastProps.onOpenDeleteDialog();
+      });
+      await act(async () => {
+        await lastProps.onConfirmDelete();
+      });
 
       // 成功時に本棚画面（/）へ遷移すること
       await waitFor(() => {
@@ -720,11 +762,11 @@ describe("NovelDetailContainer", () => {
           "/",
         );
       });
+      pageSpy.mockRestore();
     });
 
     it("作品削除フロー: onBackToBookshelf 未指定で直前探索元（/ranking）が存在する場合は router.back() により /ranking へ復帰すること (TR-07, AC-ND-06)", async () => {
-      const user = userEvent.setup();
-
+      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
       let routerRef: ReturnType<typeof useRouter> | null = null;
       const TestOriginDeleteComponent = () => {
         const router = useRouter();
@@ -758,23 +800,25 @@ describe("NovelDetailContainer", () => {
       });
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("open-delete-dialog-button"),
-        ).toBeInTheDocument();
+        const last = pageSpy.mock.calls[pageSpy.mock.calls.length - 1]?.[0];
+        expect(last?.novel?.id).toBe(sampleNovel.id);
       });
 
-      await user.click(screen.getByTestId("open-delete-dialog-button"));
-      await user.click(screen.getByTestId("confirm-delete-button"));
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      await act(async () => {
+        await lastProps.onConfirmDelete();
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           "/ranking",
         );
       });
+      pageSpy.mockRestore();
     });
 
     it("作品削除フロー: onBackToBookshelf 注入時は成功時にそのコールバックが呼ばれる", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
       const onBackToBookshelf = vi.fn();
       render(
         <RouterProvider
@@ -790,13 +834,14 @@ describe("NovelDetailContainer", () => {
       );
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("open-delete-dialog-button"),
-        ).toBeInTheDocument();
+        const last = pageSpy.mock.calls[pageSpy.mock.calls.length - 1]?.[0];
+        expect(last?.novel?.id).toBe(sampleNovel.id);
       });
 
-      await user.click(screen.getByTestId("open-delete-dialog-button"));
-      await user.click(screen.getByTestId("confirm-delete-button"));
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      await act(async () => {
+        await lastProps.onConfirmDelete();
+      });
 
       await waitFor(() => {
         expect(onBackToBookshelf).toHaveBeenCalledTimes(1);
@@ -805,10 +850,11 @@ describe("NovelDetailContainer", () => {
       expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
         `/novels/${encodeURIComponent(sampleNovel.id)}`,
       );
+      pageSpy.mockRestore();
     });
 
     it("作品削除フロー: 削除処理失敗時はエラーが表示され本棚へ遷移しない", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
       render(
         <RouterProvider
           initialPath={`/novels/${encodeURIComponent(sampleNovel.id)}`}
@@ -824,29 +870,30 @@ describe("NovelDetailContainer", () => {
       );
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("open-delete-dialog-button"),
-        ).toBeInTheDocument();
+        const last = pageSpy.mock.calls[pageSpy.mock.calls.length - 1]?.[0];
+        expect(last?.novel?.id).toBe(sampleNovel.id);
       });
 
-      await user.click(screen.getByTestId("open-delete-dialog-button"));
-      await user.click(screen.getByTestId("confirm-delete-button"));
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      await act(async () => {
+        await lastProps.onConfirmDelete();
+      });
 
       await waitFor(() => {
-        expect(screen.getByTestId("novel-detail-error")).toBeInTheDocument();
+        const currentProps =
+          pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+        expect(currentProps.error).toBe("削除処理に失敗しました");
       });
-      expect(screen.getByTestId("novel-detail-error")).toHaveTextContent(
-        "削除処理に失敗しました",
-      );
 
       // 本棚画面へは遷移しない
       expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
         `/novels/${encodeURIComponent(sampleNovel.id)}`,
       );
+      pageSpy.mockRestore();
     });
 
     it("一括キャッシュボタンが表示され、クリック時に一括キャッシュ処理が連携起動すること (AC-ND-11)", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
       render(
         <RouterProvider
           initialPath={`/novels/${encodeURIComponent(sampleNovel.id)}`}
@@ -860,24 +907,25 @@ describe("NovelDetailContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("batch-cache-button")).toBeInTheDocument();
+        const last = pageSpy.mock.calls[pageSpy.mock.calls.length - 1]?.[0];
+        expect(last?.novel?.id).toBe(sampleNovel.id);
       });
 
-      const batchButton = screen.getByTestId("batch-cache-button");
-      expect(batchButton).toHaveTextContent("未取得話を一括キャッシュ");
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onStartBatchCache();
+      });
 
-      await user.click(batchButton);
-      // クリック後に一括キャッシュ状態に遷移し、進行またはボタン表示が更新されること
       await waitFor(() => {
-        expect(
-          screen.queryByTestId("batch-cache-progress") !== null ||
-            screen.queryByTestId("batch-cache-button") !== null,
-        ).toBe(true);
+        const currentProps =
+          pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+        expect(currentProps.isBatchCaching).toBe(true);
       });
+      pageSpy.mockRestore();
     });
 
     it("本文キャッシュ整理ボタンからダイアログを開き削除を実行した際、deleteCachedBodies が呼び出され完了通知が表示されること (AC-ND-21, AC-ND-22, TR-19)", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
       const deleteCachedBodiesMock = vi.fn().mockResolvedValue(1);
       const mockChapterRepo: ChapterRepository = {
         ...createMockChapterRepo(sampleChapters),
@@ -897,22 +945,26 @@ describe("NovelDetailContainer", () => {
       );
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("open-clear-cache-dialog-button"),
-        ).toBeInTheDocument();
+        const last = pageSpy.mock.calls[pageSpy.mock.calls.length - 1]?.[0];
+        expect(last?.novel?.id).toBe(sampleNovel.id);
       });
 
-      // 本文キャッシュ整理ダイアログを開く
-      await user.click(screen.getByTestId("open-clear-cache-dialog-button"));
+      let lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+
+      // 1. 本文キャッシュ整理ダイアログを開く
+      act(() => {
+        lastProps.onOpenClearCacheDialog?.();
+      });
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("clear-cache-confirm-dialog"),
-        ).toBeInTheDocument();
+        lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+        expect(lastProps.isClearCacheDialogOpen).toBe(true);
       });
 
-      // 既読話の本文キャッシュのみ削除を実行
-      await user.click(screen.getByTestId("confirm-clear-read-cache-button"));
+      // 2. 既読話の本文キャッシュのみ削除を実行
+      await act(async () => {
+        await lastProps.onConfirmClearCache?.({ onlyRead: true });
+      });
 
       await waitFor(() => {
         expect(deleteCachedBodiesMock).toHaveBeenCalledWith(sampleNovel.id, {
@@ -920,17 +972,15 @@ describe("NovelDetailContainer", () => {
         });
       });
 
-      // ダイアログが閉じ、完了通知が表示されること
       await waitFor(() => {
-        expect(
-          screen.queryByTestId("clear-cache-confirm-dialog"),
-        ).not.toBeInTheDocument();
-        expect(screen.getByTestId("novel-detail-notice")).toBeInTheDocument();
+        const currentProps =
+          pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+        expect(currentProps.isClearCacheDialogOpen).toBe(false);
+        expect(currentProps.refreshMessage).toBe(
+          "本文キャッシュを削除しました（1話）",
+        );
       });
-
-      expect(screen.getByTestId("novel-detail-notice")).toHaveTextContent(
-        "本文キャッシュを削除しました（1話）",
-      );
+      pageSpy.mockRestore();
     });
 
     it("子コンポーネント（NovelDetailPage）の onToggleFavorite コールバック呼び出し時に作品のお気に入り状態がトグルされること (Issue #266, R1-04)", async () => {

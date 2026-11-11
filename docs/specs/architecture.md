@@ -145,6 +145,8 @@ related_tests:
   - src/shared/constants/typography.test.ts
   - scripts/generate-icons.test.ts
   - scripts/android-build-config.test.ts
+  - scripts/serve-storybook.test.ts
+  - scripts/sync-env.test.ts
 ---
 
 # 3層アーキテクチャと共通インターフェース契約（App 全体正本）
@@ -214,7 +216,7 @@ Yommy/
 ├── android/                           # 【Android プロジェクト】Capacitor ネイティブコード＆リソース
 │   ├── debug.keystore                 # 【固定署名鍵】開発・検証用一貫デバッグキーストア（Issue #78）
 │   └── app/src/main/res/              # mipmap-* (ic_launcher*), values/ic_launcher_background.xml
-├── scripts/                           # 【ビルド・補助スクリプト】generate-icons.mjs 等
+├── scripts/                            # 【ビルド・検証・環境同期スクリプト】generate-icons.mjs, serve-storybook.mjs, sync-env.mjs 等
 └── src/                               # 【アプリケーションソースコード】
     ├── App.tsx                        # ルートコンポーネント（テーマ適用・ルーター配置・OS戻るボタン連携）
     ├── App.stories.tsx

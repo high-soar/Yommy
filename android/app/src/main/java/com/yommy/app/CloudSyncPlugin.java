@@ -557,7 +557,8 @@ public class CloudSyncPlugin extends Plugin {
         URL patchUrl = new URL(DRIVE_UPLOAD_ENDPOINT + fileId + "?uploadType=media");
         HttpURLConnection conn = (HttpURLConnection) patchUrl.openConnection();
         try {
-            conn.setRequestMethod("PATCH");
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
             conn.setRequestProperty("Authorization", "Bearer " + token);
             conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
             conn.setDoOutput(true);

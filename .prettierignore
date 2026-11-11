@@ -10,4 +10,6 @@ package-lock.json
 reference
 *.tsbuildinfo
 android
+test/vrt/snapshots
+*.png
 

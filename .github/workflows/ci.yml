@@ -59,17 +59,16 @@ jobs:
 
       - name: Configure APT mirrors and timeouts
         run: |
-          grep -rl "azure.archive.ubuntu.com" /etc/apt 2>/dev/null | xargs -r sudo sed -i "s/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g" || true
-          echo 'Acquire::Retries "3";' | sudo tee /etc/apt/apt.conf.d/99-retries
-          echo 'Acquire::http::Timeout "15";' | sudo tee -a /etc/apt/apt.conf.d/99-retries
-          echo 'Acquire::https::Timeout "15";' | sudo tee -a /etc/apt/apt.conf.d/99-retries
+          echo 'Acquire::Retries "5";' | sudo tee /etc/apt/apt.conf.d/99-retries
+          echo 'Acquire::http::Timeout "60";' | sudo tee -a /etc/apt/apt.conf.d/99-retries
+          echo 'Acquire::https::Timeout "60";' | sudo tee -a /etc/apt/apt.conf.d/99-retries
 
       - name: Install Japanese Fonts & System Dependencies
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          sudo apt-get update --fix-missing || sudo apt-get update
+          sudo apt-get install -y --no-install-recommends --fix-missing \
             fonts-dejavu-core \
             fonts-noto-cjk \
             fonts-ipaexfont \
