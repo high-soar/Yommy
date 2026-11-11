@@ -8,12 +8,24 @@ import { DDL_STATEMENTS } from "../schema";
  */
 export class InMemoryDatabaseAdapter implements DatabaseAdapter {
   private inTransaction = false;
-  private transactionMutex: Promise<void> = Promise.resolve();
+  private mutex: Promise<void> = Promise.resolve();
 
   constructor(
     private db: Database,
     private onUpdate?: () => void,
   ) {}
+
+  private lock<T>(operation: () => Promise<T>): Promise<T> {
+    const next = this.mutex.then(
+      () => operation(),
+      () => operation(),
+    );
+    this.mutex = next.then(
+      () => {},
+      () => {},
+    );
+    return next;
+  }
 
   private normalizeParams(params: unknown[]): SqlValue[] {
     return params.map((p) => {
@@ -27,18 +39,15 @@ export class InMemoryDatabaseAdapter implements DatabaseAdapter {
     });
   }
 
-  async execute(sql: string, params: unknown[] = []): Promise<void> {
+  private rawExecute(sql: string, params: unknown[] = []): void {
     if (params.length > 0) {
       this.db.run(sql, this.normalizeParams(params));
     } else {
       this.db.run(sql);
     }
-    if (!this.inTransaction) {
-      this.onUpdate?.();
-    }
   }
 
-  async query<T = unknown>(sql: string, params: unknown[] = []): Promise<T[]> {
+  private rawQuery<T = unknown>(sql: string, params: unknown[] = []): T[] {
     const stmt = this.db.prepare(sql);
     try {
       if (params.length > 0) {
@@ -54,35 +63,57 @@ export class InMemoryDatabaseAdapter implements DatabaseAdapter {
     }
   }
 
+  async execute(sql: string, params: unknown[] = []): Promise<void> {
+    return this.lock(async () => {
+      this.rawExecute(sql, params);
+      if (!this.inTransaction) {
+        this.onUpdate?.();
+      }
+    });
+  }
+
+  async query<T = unknown>(sql: string, params: unknown[] = []): Promise<T[]> {
+    return this.lock(async () => {
+      return this.rawQuery<T>(sql, params);
+    });
+  }
+
   async runTransaction<T>(
     action: (tx: DatabaseAdapter) => Promise<T>,
   ): Promise<T> {
-    const next = this.transactionMutex.then(async () => {
+    return this.lock(async () => {
       this.inTransaction = true;
-      this.db.run("BEGIN TRANSACTION;");
+      this.rawExecute("BEGIN TRANSACTION;");
       try {
-        const result = await action(this);
-        this.db.run("COMMIT;");
+        const txAdapter: DatabaseAdapter = {
+          execute: async (sql, params = []) => {
+            this.rawExecute(sql, params);
+          },
+          query: async <R = unknown>(sql: string, params: unknown[] = []) => {
+            return this.rawQuery<R>(sql, params);
+          },
+          runTransaction: async () => {
+            throw new Error("Nested transactions are not supported");
+          },
+          close: () => Promise.resolve(),
+        };
+        const result = await action(txAdapter);
+        this.rawExecute("COMMIT;");
         this.inTransaction = false;
         this.onUpdate?.();
         return result;
       } catch (err) {
         this.inTransaction = false;
-        this.db.run("ROLLBACK;");
+        this.rawExecute("ROLLBACK;");
         throw err;
       }
     });
-
-    this.transactionMutex = next.then(
-      () => {},
-      () => {},
-    );
-
-    return next;
   }
 
   async close(): Promise<void> {
-    this.db.close();
+    return this.lock(async () => {
+      this.db.close();
+    });
   }
 
   /**

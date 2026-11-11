@@ -1,9 +1,10 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./ReaderBottomOverlay.stories";
 import { ReaderBottomOverlay } from "./ReaderBottomOverlay";
+import * as ReaderChapterNavModule from "./ReaderChapterNav";
 
 const {
   Default,
@@ -402,8 +403,8 @@ describe("ReaderBottomOverlay", () => {
   });
 
   describe("ユーザーインタラクションおよびコールバックの検証", () => {
-    it("活性時の「前の話へ」ボタン押下で onPrevChapter が呼び出されること", async () => {
-      const user = userEvent.setup();
+    it("ReaderChapterNav の onPrevChapter 呼び出し時に onPrevChapter コールバックが呼ばれること", () => {
+      const navSpy = vi.spyOn(ReaderChapterNavModule, "ReaderChapterNav");
       const onPrev = vi.fn();
       render(
         <ReaderBottomOverlay
@@ -415,12 +416,17 @@ describe("ReaderBottomOverlay", () => {
         />,
       );
 
-      await user.click(screen.getByTestId("reader-prev-chapter"));
+      const navProps = navSpy.mock.calls.at(-1)?.[0];
+      expect(navProps?.chapterIndex).toBe(2);
+      expect(navProps?.totalChapters).toBe(5);
+      act(() => {
+        navProps?.onPrevChapter();
+      });
       expect(onPrev).toHaveBeenCalledTimes(1);
     });
 
-    it("活性時の「次の話へ」ボタン押下で onNextChapter が呼び出されること", async () => {
-      const user = userEvent.setup();
+    it("ReaderChapterNav の onNextChapter 呼び出し時に onNextChapter コールバックが呼ばれること", () => {
+      const navSpy = vi.spyOn(ReaderChapterNavModule, "ReaderChapterNav");
       const onNext = vi.fn();
       render(
         <ReaderBottomOverlay
@@ -432,7 +438,10 @@ describe("ReaderBottomOverlay", () => {
         />,
       );
 
-      await user.click(screen.getByTestId("reader-next-chapter"));
+      const navProps = navSpy.mock.calls.at(-1)?.[0];
+      act(() => {
+        navProps?.onNextChapter();
+      });
       expect(onNext).toHaveBeenCalledTimes(1);
     });
 

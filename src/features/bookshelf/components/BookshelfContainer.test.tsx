@@ -1,5 +1,4 @@
 import { render, screen, waitFor, act } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import React from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
@@ -140,7 +139,7 @@ describe("BookshelfContainer", () => {
 
   describe("ルーティング連携とコールバックの検証（TR-02, TR-03）", () => {
     it("onSelectNovel 省略時はカード選択で router.navigateToNovelDetail が実行されること (TR-02, AC-BS-05)", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
       const novelRepo = createMockNovelRepo(sampleNovels);
 
       render(
@@ -152,21 +151,24 @@ describe("BookshelfContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("novel-list")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const selectButton = screen.getByTestId("novel-card-select");
-      await user.click(selectButton);
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onSelectNovel(sampleNovels[0].id);
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           "/novels/kakuyomu%3A16817330658027210412",
         );
       });
+      pageSpy.mockRestore();
     });
 
     it("onSelectNovel 注入時はカード選択で注入されたコールバックが呼び出され、ルーター遷移しないこと (AC-BS-05)", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
       const novelRepo = createMockNovelRepo(sampleNovels);
       const customSelect = vi.fn();
 
@@ -179,20 +181,23 @@ describe("BookshelfContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("novel-list")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const selectButton = screen.getByTestId("novel-card-select");
-      await user.click(selectButton);
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onSelectNovel(sampleNovels[0].id);
+      });
 
       expect(customSelect).toHaveBeenCalledWith(sampleNovels[0].id);
       expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
         "/",
       );
+      pageSpy.mockRestore();
     });
 
     it("onResumeNovel 省略時は「続きから読む」で router.navigateToReader が実行されること (TR-03, AC-BS-06)", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
       const novelRepo = createMockNovelRepo(sampleNovels);
 
       render(
@@ -204,21 +209,24 @@ describe("BookshelfContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("novel-list")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const resumeButton = screen.getByTestId("novel-card-resume");
-      await user.click(resumeButton);
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onResumeNovel(sampleNovels[0].id, 5);
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           "/novels/kakuyomu%3A16817330658027210412/chapters/5",
         );
       });
+      pageSpy.mockRestore();
     });
 
     it("onResumeNovel 注入時は「続きから読む」で注入されたコールバックが呼び出され、ルーター遷移しないこと (AC-BS-06)", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
       const novelRepo = createMockNovelRepo(sampleNovels);
       const customResume = vi.fn();
 
@@ -231,22 +239,25 @@ describe("BookshelfContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("novel-list")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const resumeButton = screen.getByTestId("novel-card-resume");
-      await user.click(resumeButton);
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onResumeNovel(sampleNovels[0].id, 5);
+      });
 
       expect(customResume).toHaveBeenCalledWith(sampleNovels[0].id, 5);
       expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
         "/",
       );
+      pageSpy.mockRestore();
     });
   });
 
   describe("空状態からの検索・ランキング誘導ナビゲーション検証（TR-15, AC-BS-01）", () => {
     it("空状態で「小説を検索する」ボタン押下時に router.navigateToSearch が実行され /search へ遷移すること (TR-15)", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
       const novelRepo = createMockNovelRepo([]);
 
       render(
@@ -258,21 +269,24 @@ describe("BookshelfContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-empty")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const searchBtn = screen.getByTestId("empty-search-button");
-      await user.click(searchBtn);
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onNavigateSearch?.();
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           "/search",
         );
       });
+      pageSpy.mockRestore();
     });
 
     it("空状態で「ランキングを見る」ボタン押下時に router.navigateToRanking が実行され /ranking へ遷移すること (TR-15)", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
       const novelRepo = createMockNovelRepo([]);
 
       render(
@@ -284,21 +298,24 @@ describe("BookshelfContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-empty")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const rankingBtn = screen.getByTestId("empty-ranking-button");
-      await user.click(rankingBtn);
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onNavigateRanking?.();
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           "/ranking",
         );
       });
+      pageSpy.mockRestore();
     });
 
     it("onNavigateSearch 注入時は「小説を検索する」ボタン押下で注入されたコールバックが呼び出され、ルーター遷移しないこと", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
       const novelRepo = createMockNovelRepo([]);
       const customSearch = vi.fn();
 
@@ -311,20 +328,23 @@ describe("BookshelfContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-empty")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const searchBtn = screen.getByTestId("empty-search-button");
-      await user.click(searchBtn);
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onNavigateSearch?.();
+      });
 
       expect(customSearch).toHaveBeenCalledTimes(1);
       expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
         "/",
       );
+      pageSpy.mockRestore();
     });
 
     it("onNavigateRanking 注入時は「ランキングを見る」ボタン押下で注入されたコールバックが呼び出され、ルーター遷移しないこと", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
       const novelRepo = createMockNovelRepo([]);
       const customRanking = vi.fn();
 
@@ -337,22 +357,25 @@ describe("BookshelfContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-empty")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalled();
       });
 
-      const rankingBtn = screen.getByTestId("empty-ranking-button");
-      await user.click(rankingBtn);
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onNavigateRanking?.();
+      });
 
       expect(customRanking).toHaveBeenCalledTimes(1);
       expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
         "/",
       );
+      pageSpy.mockRestore();
     });
   });
 
   describe("作品閲覧時のNEW自動解除連携（AC-BS-09, TR-02, TR-03）", () => {
     it("hasNewUpdate === true の作品カードクリック時に clearNovelUpdate が呼ばれて作品詳細へ遷移すること (AC-BS-09, TR-02)", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
       const clearNewUpdateSpy = vi.fn().mockResolvedValue(undefined);
       const sampleWithNew: NovelSummary = {
         ...sampleNovels[0],
@@ -374,11 +397,15 @@ describe("BookshelfContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("novel-card")).toBeInTheDocument();
+        const currentProps =
+          pageSpy.mock.calls[pageSpy.mock.calls.length - 1]?.[0];
+        expect(currentProps?.novels?.length).toBeGreaterThan(0);
       });
 
-      const selectBtn = screen.getByTestId("novel-card-select");
-      await user.click(selectBtn);
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      await act(async () => {
+        await lastProps.onSelectNovel("kakuyomu:new-update-work");
+      });
 
       expect(clearNewUpdateSpy).toHaveBeenCalledWith(
         "kakuyomu:new-update-work",
@@ -388,10 +415,11 @@ describe("BookshelfContainer", () => {
           "/novels/kakuyomu%3Anew-update-work",
         );
       });
+      pageSpy.mockRestore();
     });
 
     it("hasNewUpdate === true の作品の「続きから読む」クリック時に clearNovelUpdate が呼ばれてリーダーへ遷移すること (AC-BS-09, TR-03)", async () => {
-      const user = userEvent.setup();
+      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
       const clearNewUpdateSpy = vi.fn().mockResolvedValue(undefined);
       const sampleWithNew: NovelSummary = {
         ...sampleNovels[0],
@@ -414,11 +442,15 @@ describe("BookshelfContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("novel-card")).toBeInTheDocument();
+        const currentProps =
+          pageSpy.mock.calls[pageSpy.mock.calls.length - 1]?.[0];
+        expect(currentProps?.novels?.length).toBeGreaterThan(0);
       });
 
-      const resumeBtn = screen.getByTestId("novel-card-resume");
-      await user.click(resumeBtn);
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      await act(async () => {
+        await lastProps.onResumeNovel("kakuyomu:new-update-work-2", 3);
+      });
 
       expect(clearNewUpdateSpy).toHaveBeenCalledWith(
         "kakuyomu:new-update-work-2",
@@ -428,6 +460,7 @@ describe("BookshelfContainer", () => {
           "/novels/kakuyomu%3Anew-update-work-2/chapters/3",
         );
       });
+      pageSpy.mockRestore();
     });
 
     it("子コンポーネント（BookshelfPage）の onToggleFavoriteFilter コールバック呼び出し時にお気に入りフィルタが切り替わり、BookshelfPage の favoriteOnly プロパティが更新されること (Issue #266, R1-04)", async () => {

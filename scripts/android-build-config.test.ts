@@ -245,6 +245,14 @@ describe("Android ビルド設定および署名・バージョン管理検証 (
         /public\s+void\s+signOut\s*\(\s*PluginCall\s+call\s*\)[\s\S]*?executor\.execute\s*\(\s*\(\)\s*->\s*\{[\s\S]*?clearCachedToken\s*\(\s*token\s*\)/,
       );
     });
+
+    it("uploadPatch() において HttpURLConnection の PATCH 制約を回避するため POST + X-HTTP-Method-Override: PATCH を使用していること (R3-01)", () => {
+      const content = fs.readFileSync(pluginPath, "utf-8");
+
+      expect(content).toMatch(
+        /uploadPatch[\s\S]*?conn\.setRequestMethod\(["']POST["']\)[\s\S]*?conn\.setRequestProperty\(["']X-HTTP-Method-Override["'],\s*["']PATCH["']\)/,
+      );
+    });
   });
 
   describe("VolumeKeyPlugin.java および MainActivity.java 音量キー連携検証 (AC-RD-26, Issue #203)", () => {

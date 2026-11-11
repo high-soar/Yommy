@@ -189,8 +189,8 @@ describe("InMemoryDatabaseAdapter", () => {
     it("トランザクション内で正常完了した処理がコミットされること", async () => {
       const adapter = await resetTestDb();
 
-      const result = await adapter.runTransaction(async () => {
-        await adapter.execute(
+      const result = await adapter.runTransaction(async (tx) => {
+        await tx.execute(
           `INSERT INTO novels (id, site_type, remote_work_id, canonical_url, title, created_at, updated_at)
            VALUES ('t:1', 'kakuyomu', '1', 'https://kakuyomu.jp/works/1', 'タイトル1', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
         );
@@ -208,8 +208,8 @@ describe("InMemoryDatabaseAdapter", () => {
       const adapter = await resetTestDb();
 
       await expect(
-        adapter.runTransaction(async () => {
-          await adapter.execute(
+        adapter.runTransaction(async (tx) => {
+          await tx.execute(
             `INSERT INTO novels (id, site_type, remote_work_id, canonical_url, title, created_at, updated_at)
              VALUES ('t:rollback', 'kakuyomu', 'rb', 'https://kakuyomu.jp/works/rb', 'タイトルRB', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
           );
@@ -223,14 +223,79 @@ describe("InMemoryDatabaseAdapter", () => {
       expect(rows).toHaveLength(0);
     });
 
+    it("txAdapter 経由での execute / query および close / runTransaction 禁止が機能すること (R3-02)", async () => {
+      const adapter = await resetTestDb();
+
+      await adapter.runTransaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO novels (id, site_type, remote_work_id, canonical_url, title, created_at, updated_at)
+           VALUES ('t:tx_adapter', 'kakuyomu', 'tx', 'https://kakuyomu.jp/works/tx', 'タイトルTX', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
+        );
+        const inTxRows = await tx.query<{ id: string }>(
+          "SELECT id FROM novels WHERE id = 't:tx_adapter';",
+        );
+        expect(inTxRows).toHaveLength(1);
+        await expect(tx.close()).resolves.toBeUndefined();
+        await expect(tx.runTransaction(async () => {})).rejects.toThrow(
+          "Nested transactions are not supported",
+        );
+      });
+
+      const rows = await adapter.query(
+        "SELECT id FROM novels WHERE id = 't:tx_adapter';",
+      );
+      expect(rows).toHaveLength(1);
+    });
+
+    it("runTransaction 実行中の外部 execute / query が統一 mutex により直列化されること (R3-02)", async () => {
+      const adapter = await resetTestDb();
+      const events: string[] = [];
+      let txStarted = false;
+
+      const txPromise = adapter.runTransaction(async (tx) => {
+        events.push("tx:start");
+        txStarted = true;
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        await tx.execute(
+          `INSERT INTO novels (id, site_type, remote_work_id, canonical_url, title, created_at, updated_at)
+           VALUES ('t:outer_sync', 'kakuyomu', 'os', 'https://kakuyomu.jp/works/os', 'タイトルOS', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
+        );
+        events.push("tx:end");
+        return "tx_done";
+      });
+
+      while (!txStarted) {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      }
+
+      const extQueryPromise = (async () => {
+        events.push("extQuery:wait");
+        const rows = await adapter.query<{ id: string }>(
+          "SELECT id FROM novels WHERE id = 't:outer_sync';",
+        );
+        events.push("extQuery:done");
+        return rows;
+      })();
+
+      const [txRes, extRows] = await Promise.all([txPromise, extQueryPromise]);
+      expect(txRes).toBe("tx_done");
+      expect(extRows).toEqual([{ id: "t:outer_sync" }]);
+      expect(events).toEqual([
+        "tx:start",
+        "extQuery:wait",
+        "tx:end",
+        "extQuery:done",
+      ]);
+    });
+
     it("並行する runTransaction が直列化され順序正しく実行されること (R2-07)", async () => {
       const adapter = await resetTestDb();
       const events: string[] = [];
 
-      const tx1 = adapter.runTransaction(async () => {
+      const tx1 = adapter.runTransaction(async (tx) => {
         events.push("tx1:start");
         await new Promise((resolve) => setTimeout(resolve, 20));
-        await adapter.execute(
+        await tx.execute(
           `INSERT INTO novels (id, site_type, remote_work_id, canonical_url, title, created_at, updated_at)
            VALUES ('t:parallel1', 'kakuyomu', 'p1', 'https://kakuyomu.jp/works/p1', '並行1', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
         );
@@ -238,9 +303,9 @@ describe("InMemoryDatabaseAdapter", () => {
         return "res1";
       });
 
-      const tx2 = adapter.runTransaction(async () => {
+      const tx2 = adapter.runTransaction(async (tx) => {
         events.push("tx2:start");
-        await adapter.execute(
+        await tx.execute(
           `INSERT INTO novels (id, site_type, remote_work_id, canonical_url, title, created_at, updated_at)
            VALUES ('t:parallel2', 'kakuyomu', 'p2', 'https://kakuyomu.jp/works/p2', '並行2', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
         );
@@ -262,10 +327,10 @@ describe("InMemoryDatabaseAdapter", () => {
       const adapter = await resetTestDb();
       const events: string[] = [];
 
-      const txFail = adapter.runTransaction(async () => {
+      const txFail = adapter.runTransaction(async (tx) => {
         events.push("fail:start");
         await new Promise((resolve) => setTimeout(resolve, 20));
-        await adapter.execute(
+        await tx.execute(
           `INSERT INTO novels (id, site_type, remote_work_id, canonical_url, title, created_at, updated_at)
            VALUES ('t:fail', 'kakuyomu', 'fail', 'https://kakuyomu.jp/works/fail', '失敗', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
         );
@@ -273,9 +338,9 @@ describe("InMemoryDatabaseAdapter", () => {
         throw new Error("意図的エラー");
       });
 
-      const txSuccess = adapter.runTransaction(async () => {
+      const txSuccess = adapter.runTransaction(async (tx) => {
         events.push("success:start");
-        await adapter.execute(
+        await tx.execute(
           `INSERT INTO novels (id, site_type, remote_work_id, canonical_url, title, created_at, updated_at)
            VALUES ('t:success', 'kakuyomu', 'ok', 'https://kakuyomu.jp/works/ok', '成功', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`,
         );
@@ -340,8 +405,8 @@ describe("InMemoryDatabaseAdapter", () => {
       );
       expect(callCount).toBe(1);
 
-      await adapter.runTransaction(async () => {
-        await adapter.execute("INSERT INTO update_test VALUES (1);");
+      await adapter.runTransaction(async (tx) => {
+        await tx.execute("INSERT INTO update_test VALUES (1);");
       });
       // runTransaction 完了時に発火
       expect(callCount).toBeGreaterThanOrEqual(2);

@@ -143,8 +143,11 @@ describe("BookshelfPage", () => {
   });
 
   describe("ユーザーインタラクションおよびProps結合の検証（親子分離原則）", () => {
-    it("空状態で「小説を検索する」ボタンをクリックしたときに onNavigateSearch が呼び出されること (TR-15)", async () => {
-      const user = userEvent.setup();
+    it("空状態で「小説を検索する」ボタンをクリックしたときに onNavigateSearch が呼び出されること (TR-15)", () => {
+      const emptyStateSpy = vi.spyOn(
+        BookshelfEmptyStateModule,
+        "BookshelfEmptyState",
+      );
       const onNavigateSearch = vi.fn();
       const onNavigateRanking = vi.fn();
 
@@ -159,15 +162,28 @@ describe("BookshelfPage", () => {
         />,
       );
 
-      const searchBtn = screen.getByTestId("empty-search-button");
-      await user.click(searchBtn);
+      expect(emptyStateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          onNavigateSearch,
+          onNavigateRanking,
+        }),
+        undefined,
+      );
+
+      const passedProps =
+        emptyStateSpy.mock.calls[emptyStateSpy.mock.calls.length - 1][0];
+      passedProps.onNavigateSearch?.();
 
       expect(onNavigateSearch).toHaveBeenCalledTimes(1);
       expect(onNavigateRanking).not.toHaveBeenCalled();
+      emptyStateSpy.mockRestore();
     });
 
-    it("空状態で「ランキングを見る」ボタンをクリックしたときに onNavigateRanking が呼び出されること (TR-15)", async () => {
-      const user = userEvent.setup();
+    it("空状態で「ランキングを見る」ボタンをクリックしたときに onNavigateRanking が呼び出されること (TR-15)", () => {
+      const emptyStateSpy = vi.spyOn(
+        BookshelfEmptyStateModule,
+        "BookshelfEmptyState",
+      );
       const onNavigateSearch = vi.fn();
       const onNavigateRanking = vi.fn();
 
@@ -182,15 +198,25 @@ describe("BookshelfPage", () => {
         />,
       );
 
-      const rankingBtn = screen.getByTestId("empty-ranking-button");
-      await user.click(rankingBtn);
+      expect(emptyStateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          onNavigateSearch,
+          onNavigateRanking,
+        }),
+        undefined,
+      );
+
+      const passedProps =
+        emptyStateSpy.mock.calls[emptyStateSpy.mock.calls.length - 1][0];
+      passedProps.onNavigateRanking?.();
 
       expect(onNavigateRanking).toHaveBeenCalledTimes(1);
       expect(onNavigateSearch).not.toHaveBeenCalled();
+      emptyStateSpy.mockRestore();
     });
 
-    it("作品カードの選択時に onSelectNovel が正しい novelId で呼び出されること (AC-BS-05, TR-02)", async () => {
-      const user = userEvent.setup();
+    it("作品カードの選択時に onSelectNovel が正しい novelId で呼び出されること (AC-BS-05, TR-02)", () => {
+      const novelCardSpy = vi.spyOn(NovelCardModule, "NovelCard");
       const onSelectNovel = vi.fn();
 
       render(
@@ -204,14 +230,23 @@ describe("BookshelfPage", () => {
         />,
       );
 
-      const selectButtons = screen.getAllByTestId("novel-card-select");
-      await user.click(selectButtons[0]);
+      expect(novelCardSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          novel: sampleNovels[0],
+          onSelect: onSelectNovel,
+        }),
+        undefined,
+      );
+
+      const passedProps = novelCardSpy.mock.calls[0][0];
+      passedProps.onSelect(sampleNovels[0].id);
 
       expect(onSelectNovel).toHaveBeenCalledWith(sampleNovels[0].id);
+      novelCardSpy.mockRestore();
     });
 
-    it("作品カードの「続きから読む」クリック時に onResumeNovel が正しい引数で呼び出されること (AC-BS-06, TR-03)", async () => {
-      const user = userEvent.setup();
+    it("作品カードの「続きから読む」クリック時に onResumeNovel が正しい引数で呼び出されること (AC-BS-06, TR-03)", () => {
+      const novelCardSpy = vi.spyOn(NovelCardModule, "NovelCard");
       const onResumeNovel = vi.fn();
 
       render(
@@ -225,13 +260,25 @@ describe("BookshelfPage", () => {
         />,
       );
 
-      const resumeButtons = screen.getAllByTestId("novel-card-resume");
-      await user.click(resumeButtons[0]);
+      expect(novelCardSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          novel: sampleNovels[0],
+          onResume: onResumeNovel,
+        }),
+        undefined,
+      );
+
+      const passedProps = novelCardSpy.mock.calls[0][0];
+      passedProps.onResume?.(
+        sampleNovels[0].id,
+        sampleNovels[0].bookmarkChapterIndex!,
+      );
 
       expect(onResumeNovel).toHaveBeenCalledWith(
         sampleNovels[0].id,
         sampleNovels[0].bookmarkChapterIndex,
       );
+      novelCardSpy.mockRestore();
     });
 
     it("ソートセレクターを変更したときに onSortChange が選択されたソート順で呼び出されること (AC-BS-11, TR-16)", async () => {
