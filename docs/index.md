@@ -76,7 +76,8 @@ docs/
     │   ├── v0.6-reader-animation-overlay-and-volume-key-log.md # Milestone v0.6 リーダー水平スライド/上下オーバーレイ＆シークバー/音量キー バグ記録（No. 181〜201）＆ 申し送りアーカイブ
     │   ├── v0.7-narou-site-support-and-loading-ux-log.md # Milestone v0.7 なろう対応/WebアクセスローディングUX バグ記録（No. 202〜233）＆ 申し送りアーカイブ
     │   ├── v0.8-discovery-filter-and-bookshelf-favorite-ux-log.md # Milestone v0.8 探索フィルタ高度化/本棚お気に入り管理 バグ記録（No. 234〜279）＆ 申し送りアーカイブ
-    │   └── v0.9-persistent-queue-and-webview-fallback-log.md # Milestone v0.9 永続DLキュー/内蔵WebView バグ記録（No. 280〜306）＆ 申し送りアーカイブ
+    │   ├── v0.9-persistent-queue-and-webview-fallback-log.md # Milestone v0.9 永続DLキュー/内蔵WebView バグ記録（No. 280〜306）＆ 申し送りアーカイブ
+    │   └── v1.0-release-audit-log.md          # Milestone v1.0 リリース準備/システム全体横断品質監査 バグ記録（No. 307〜388）＆ 申し送りアーカイブ
     └── reports/                       # ミニリリース Milestone ごとの品質分析・改善（Kaizen）レポート格納先
         ├── phase3-poc.md              # Phase 3 PoC 品質分析・改善レポート
         ├── v0.1-mvp.md                # Milestone v0.1（カクヨム MVP）品質分析・改善レポート
@@ -87,7 +88,8 @@ docs/
         ├── v0.6-reader-animation-overlay-and-volume-key.md # Milestone v0.6（リーダーページ送りアニメーション・上下連動オーバーレイ＆シークバー・音量キー送り）品質分析・改善レポート
         ├── v0.7-narou-site-support-and-loading-ux.md # Milestone v0.7（小説家になろう対応 ＆ WebアクセスローディングUX改善）品質分析・改善レポート
         ├── v0.8-discovery-filter-and-bookshelf-favorite-ux.md # Milestone v0.8（探索フィルタ高度化 ＆ 本棚お気に入り管理）品質分析・改善レポート
-        └── v0.9-persistent-queue-and-webview-fallback.md # Milestone v0.9（永続ダウンロードキュー ＆ 内蔵WebViewインポート）品質分析・改善レポート
+        ├── v0.9-persistent-queue-and-webview-fallback.md # Milestone v0.9（永続ダウンロードキュー ＆ 内蔵WebViewインポート）品質分析・改善レポート
+        └── v1.0-full-system-quality-audit.md # Milestone v1.0（リリース準備 ＆ システム全体横断品質監査）品質分析・改善レポート
 ```
 
 ---

@@ -98,6 +98,12 @@ MK 作業はファイル編集数やテスト・VRT 実行ログが多く、メ�
     - 一括キャッシュ進行中のヘッダー表示（`NovelDetailHeader`）には `[失敗 N話]` を警告色（アンバー）でリアルタイム表示し、`startBatchCache` 開始時に前回の失敗状態（`setFailedCacheCount(0)`, `setFailedChapterIndexes([])`）を確実にリセットすること。
     - 非同期永続化（一括キャッシュ、再試行、キュー更新）の結合テスト（IT）では固定待機 `waitForTimeout` を排除し、`expect.poll` による状態駆動アサーションに一本化すること。
     - 共通子コンポーネント（`BottomTabBar` 等）を持つ親コンポーネントのテストでは、隠し要素による検証を排除し、直下の子への Props 配線検証のみを行う親子分離を徹底すること。
+  - **Android ネイティブ REST メソッド・インメモリ DB 直列化・親子分離徹底・CI 環境耐性（原因 `L`/`D`/`S` 再発防止: `v1.0 Kaizen`）**:
+    - Android ネイティブの HTTP 呼び出し（`CloudSyncPlugin.java`）で `PATCH` メソッドを用いる際は、`POST` ＋ `X-HTTP-Method-Override: PATCH` ヘッダー方式を徹底し、`scripts/android-build-config.test.ts` で契約検証を行うこと。
+    - `inMemoryDb.ts` においても Promise チェーン排他 mutex（`opMutex`）およびトランザクション専用 `txAdapter` を導入し、並行クエリ割り込みおよびネストトランザクションを確実に遮断すること。
+    - Container / Page レベルの単体テストにおいて、直下の子コンポーネントおよび孫コンポーネントの内部 DOM を直接探索・操作せず、直下の子に対する `vi.spyOn` 経由での Props / コールバック配線検証に統一して親子分離を徹底すること。
+    - CI ランナー環境における APT パッケージ取得では、Azure ネイティブミラー維持、タイムアウト緩和（60秒）、再試行回数増加（5回）、`--fix-missing` オプションを追加してビルドの堅牢性を確保すること。
+    - 新規テスト追加時は正本仕様書のフロントマター `related_tests` および構成図に即時登録し、バグ台帳の原因 `D` には設計書同期コミット SHA を 1 対 1 で明記すること。
   - `*.test.tsx` で `composeStories` による全 Story 実行＋内部ロジック補完テストを記述する。
 - **失敗確認とコミット**: `npx vitest run <対象テスト>` を実行し、未実装により期待通り失敗することを確認して `test(<scope>): ...（Red）` をコミットする。
 
