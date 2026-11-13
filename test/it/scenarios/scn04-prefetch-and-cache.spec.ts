@@ -1,4 +1,12 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+
+async function openNovelDetailMenu(page: Page): Promise<void> {
+  const menuButton = page.getByTestId("novel-detail-menu-button");
+  await expect(menuButton).toBeVisible();
+  await expect(menuButton).toBeEnabled();
+  await menuButton.click();
+  await expect(page.getByTestId("novel-detail-menu")).toBeVisible();
+}
 
 test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャッシュ・永続キュー中断再開・再試行・キャッシュ鮮度フォールバック・キャッシュ容量管理シナリオ (HO-20, HO-21, HO-24, Issue #268)", () => {
   test.beforeEach(async ({ page }) => {
@@ -54,23 +62,31 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     const uncachedBadges = page.getByTestId("episode-uncached-badge");
     await expect(uncachedBadges).toHaveCount(4);
 
-    // 3. 「未取得話を一括キャッシュ」ボタンをクリックして一括キャッシュを開始
+    // 3. 3点メニューを開き、「未取得話を一括キャッシュ」をクリックして一括キャッシュを開始
+    await openNovelDetailMenu(page);
     const batchButton = page.getByTestId("batch-cache-button");
     await expect(batchButton).toBeVisible();
     await expect(batchButton).toHaveText("未取得話を一括キャッシュ");
     await batchButton.click();
+    await expect(page.getByTestId("novel-detail-menu")).not.toBeVisible();
 
-    // 4. 進捗表示への切り替えおよび他操作の排他ロック確認 (AC-ND-12)
+    // 4. インライン進捗表示・中断ボタン表示への切り替えおよび他操作の排他ロック確認 (AC-ND-12, AC-ND-27)
     const progressEl = page.getByTestId("batch-cache-progress");
     await expect(progressEl).toBeVisible();
+    await expect(page.getByTestId("batch-cache-cancel-button")).toBeVisible();
 
     const startFromBeginningBtn = page.getByTestId("detail-read-first-button");
     const refreshTocBtn = page.getByTestId("refresh-toc-button");
+    const menuBtn = page.getByTestId("novel-detail-menu-button");
     await expect(startFromBeginningBtn).toBeDisabled();
     await expect(refreshTocBtn).toBeDisabled();
+    await expect(menuBtn).toBeDisabled();
 
     // 5. 直列順次取得が進み、全話キャッシュ完了（4 / 4 話取得済み）となるまで待機 (AC-ND-11, AC-ND-13)
-    await expect(batchButton).toBeVisible({ timeout: 20000 });
+    await expect(progressEl).not.toBeVisible({ timeout: 20000 });
+    await expect(menuBtn).toBeEnabled();
+    await openNovelDetailMenu(page);
+    await expect(batchButton).toBeVisible();
     await expect(batchButton).toHaveText("全話キャッシュ済み");
     await expect(batchButton).toBeDisabled();
 
@@ -107,26 +123,27 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
       /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
     );
 
+    await openNovelDetailMenu(page);
     const batchButton = page.getByTestId("batch-cache-button");
     await expect(batchButton).toBeVisible();
     await batchButton.click();
+    await expect(page.getByTestId("novel-detail-menu")).not.toBeVisible();
 
-    // 3. 中断ボタンが表示されたらクリックして即座に中断
+    // 3. ヘッダーに中断ボタンが表示されたらクリックして即座に中断
     const cancelBtn = page.getByTestId("batch-cache-cancel-button");
     await expect(cancelBtn).toBeVisible();
     await cancelBtn.click();
 
-    // 4. 進捗表示が消え、ボタンが「キャッシュを再開（残りN話）」に切り替わること (AC-ND-24)
+    // 4. 進捗表示が消え、排他ロックが解除され、3点メニュー内が「キャッシュを再開（残りN話）」に切り替わること (AC-ND-24, AC-ND-27)
     await expect(page.getByTestId("batch-cache-progress")).not.toBeVisible();
-    await expect(batchButton).toBeVisible();
-    await expect(batchButton).toBeEnabled();
-    await expect(batchButton).toHaveText(/キャッシュを再開（残り[1-4]話）/);
-
-    // 排他ロックが解除されていること
     await expect(
       page.getByTestId("detail-read-first-button"),
     ).not.toBeDisabled();
     await expect(page.getByTestId("refresh-toc-button")).not.toBeDisabled();
+    await openNovelDetailMenu(page);
+    await expect(batchButton).toBeVisible();
+    await expect(batchButton).toBeEnabled();
+    await expect(batchButton).toHaveText(/キャッシュを再開（残り[1-4]話）/);
 
     // 5. 画面リロード後も download_queue の永続状態から「キャッシュを再開（残りN話）」が復元されること
     await page.reload();
@@ -135,15 +152,19 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
         typeof window.__yommyServices !== "undefined" &&
         window.__yommyServices.isReady,
     );
+    await openNovelDetailMenu(page);
     await expect(batchButton).toBeVisible();
     await expect(batchButton).toBeEnabled();
     await expect(batchButton).toHaveText(/キャッシュを再開（残り[1-4]話）/);
 
     // 6. 「キャッシュを再開」をクリックして全件取得完了すること
     await batchButton.click();
-    await expect(batchButton).toHaveText("全話キャッシュ済み", {
+    await expect(page.getByTestId("novel-detail-menu")).not.toBeVisible();
+    await expect(page.getByTestId("batch-cache-progress")).not.toBeVisible({
       timeout: 20000,
     });
+    await openNovelDetailMenu(page);
+    await expect(batchButton).toHaveText("全話キャッシュ済み");
     await expect(batchButton).toBeDisabled();
 
     // 7. download_queue が空にクリーンアップされていること
@@ -200,6 +221,7 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
       }
     });
 
+    await openNovelDetailMenu(page);
     const batchButton = page.getByTestId("batch-cache-button");
     await expect(batchButton).toBeVisible();
     await expect(batchButton).toHaveText("未取得話を一括キャッシュ");
@@ -212,7 +234,8 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
       "1話の取得に失敗しました（再試行可能）",
     );
 
-    // 4. ボタンが「失敗した話を再試行（1話）」に切り替わっていること
+    // 4. 3点メニュー内が「失敗した話を再試行（1話）」に切り替わっていること
+    await openNovelDetailMenu(page);
     await expect(batchButton).toBeVisible();
     await expect(batchButton).toBeEnabled();
     await expect(batchButton).toHaveText("失敗した話を再試行（1話）");
@@ -248,13 +271,16 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
       }
     });
 
-    // 7. 「失敗した話を再試行（1話）」をクリック
+    // 7. 3点メニュー内の「失敗した話を再試行（1話）」をクリック
     await batchButton.click();
+    await expect(page.getByTestId("novel-detail-menu")).not.toBeVisible();
 
-    // 8. 再試行が成功し、「全話キャッシュ済み」になること
-    await expect(batchButton).toHaveText("全話キャッシュ済み", {
+    // 8. 再試行が成功し、3点メニュー内で「全話キャッシュ済み」になること
+    await expect(page.getByTestId("batch-cache-progress")).not.toBeVisible({
       timeout: 20000,
     });
+    await openNovelDetailMenu(page);
+    await expect(batchButton).toHaveText("全話キャッシュ済み");
     await expect(batchButton).toBeDisabled();
 
     // 9. 全話（4話）が取得済みになり、失敗バッジが 0 件になること
@@ -504,6 +530,7 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     const detailStats = page.getByTestId("novel-detail-stats");
     await expect(detailStats).toContainText("全 4 話（取得済み 0 話 / 0 B）");
 
+    await openNovelDetailMenu(page);
     const clearCacheBtn = page.getByTestId("open-clear-cache-dialog-button");
     await expect(clearCacheBtn).toBeVisible();
     await expect(clearCacheBtn).toBeDisabled();
@@ -514,13 +541,16 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     // 3. 一括キャッシュを実行し、全話取得後に容量が表示されボタンが活性化すること (AC-ND-20)
     const batchButton = page.getByTestId("batch-cache-button");
     await batchButton.click();
-    await expect(batchButton).toHaveText("全話キャッシュ済み", {
+    await expect(page.getByTestId("batch-cache-progress")).not.toBeVisible({
       timeout: 20000,
     });
 
     await expect(detailStats).toContainText("全 4 話（取得済み 4 話 / ");
     await expect(detailStats).not.toContainText("0 B）");
+    await openNovelDetailMenu(page);
+    await expect(batchButton).toHaveText("全話キャッシュ済み");
     await expect(clearCacheBtn).toBeEnabled();
+    await page.keyboard.press("Escape");
     await expect(uncachedBadges).toHaveCount(0);
 
     // 4. 第1話・第2話を既読に設定し、画面をリロードして反映確認
@@ -558,7 +588,8 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     await expect(resumeButton).toBeVisible();
     await expect(bookmarkBadges).toHaveCount(1);
 
-    // 5. 「本文キャッシュ整理」ダイアログのキャンセル動作確認
+    // 5. 3点メニュー内の「本文キャッシュ整理」ダイアログのキャンセル動作確認
+    await openNovelDetailMenu(page);
     await clearCacheBtn.click();
     const clearDialog = page.getByTestId("clear-cache-confirm-dialog");
     await expect(clearDialog).toBeVisible();
@@ -567,7 +598,8 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     await cancelClearBtn.click();
     await expect(clearDialog).not.toBeVisible();
 
-    // 6. 「既読話の本文キャッシュのみ削除」を実行 (AC-ND-21, AC-ND-22, TR-19)
+    // 6. 3点メニューから「既読話の本文キャッシュのみ削除」を実行 (AC-ND-21, AC-ND-22, TR-19)
+    await openNovelDetailMenu(page);
     await clearCacheBtn.click();
     await expect(clearDialog).toBeVisible();
 
@@ -596,7 +628,8 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     const cachedBadges = page.getByTestId("episode-cached-badge");
     await expect(cachedBadges).toHaveCount(2);
 
-    // 7. 「すべての本文キャッシュを削除」を実行 (AC-ND-21, AC-ND-22, TR-19)
+    // 7. 3点メニューから「すべての本文キャッシュを削除」を実行 (AC-ND-21, AC-ND-22, TR-19)
+    await openNovelDetailMenu(page);
     await clearCacheBtn.click();
     await expect(clearDialog).toBeVisible();
 
@@ -609,12 +642,13 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     await expect(noticeEl).toContainText("本文キャッシュを削除しました（2話）");
     await expect(detailStats).toContainText("全 4 話（取得済み 0 話 / 0 B）");
 
-    // 全話未取得に戻り、既読状態は保持され、削除ボタンが非活性となること
+    // 全話未取得に戻り、既読状態は保持され、3点メニュー内の削除ボタンが非活性となること
     await expect(readBadges).toHaveCount(2);
     await expect(uncachedBadges).toHaveCount(4);
     // 全話キャッシュ削除後もしおり位置および「続きから読む」ボタンが保持されること (AC-ND-22)
     await expect(resumeButton).toBeVisible();
     await expect(bookmarkBadges).toHaveCount(1);
+    await openNovelDetailMenu(page);
     await expect(clearCacheBtn).toBeDisabled();
     await expect(batchButton).toBeEnabled();
     await expect(batchButton).toHaveText("未取得話を一括キャッシュ");
@@ -631,9 +665,12 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
 
     // 8. 再度全話キャッシュを取得し、設定画面（SCR-05）の動作検証へ進む
     await batchButton.click();
-    await expect(batchButton).toHaveText("全話キャッシュ済み", {
+    await expect(page.getByTestId("batch-cache-progress")).not.toBeVisible({
       timeout: 20000,
     });
+    await openNovelDetailMenu(page);
+    await expect(batchButton).toHaveText("全話キャッシュ済み");
+    await page.keyboard.press("Escape");
     await expect(detailStats).toContainText("全 4 話（取得済み 4 話 / ");
 
     // 9. 下部タブから設定画面（SCR-05）へ遷移 (TR-12, AC-ST-14)
@@ -720,6 +757,7 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     await expect(detailStats).toContainText("全 4 話（取得済み 0 話 / 0 B）");
     await expect(readBadges).toHaveCount(2);
     await expect(uncachedBadges).toHaveCount(4);
+    await openNovelDetailMenu(page);
     await expect(clearCacheBtn).toBeDisabled();
     await expect(page.getByTestId("detail-resume-button")).toBeVisible();
     await expect(page.getByTestId("episode-bookmark-badge")).toHaveCount(1);

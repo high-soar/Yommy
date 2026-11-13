@@ -2,8 +2,8 @@
 type: spec-requirements
 title: 全体要件定義・機能一覧・ロードマップ（App 全体正本）
 description: "Yommyのターゲット環境、小説サイト対応優先順位、全機能要件（SYS-REQ-01〜20）、およびミニMilestoneロードマップの正本。"
-status: "Review (#343)"
-updated: "2026-11-13"
+status: "Approved"
+updated: "2026-11-14"
 tags:
   - requirements
   - roadmap
@@ -68,7 +68,7 @@ tags:
   - ho-38
 related_specs:
   - docs/specs/changes/archive/issue-342-cloud-sync-bookmark-protection.md
-  - docs/specs/changes/issue-343-novel-detail-header-menu.md
+  - docs/specs/changes/archive/issue-343-novel-detail-header-menu.md
   - docs/specs/changes/archive/issue-304-v1-release-readiness.md
   - docs/quality/reports/v0.9-persistent-queue-and-webview-fallback.md
   - docs/quality/archive/v0.9-persistent-queue-and-webview-fallback-log.md

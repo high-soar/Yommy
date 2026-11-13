@@ -158,13 +158,15 @@ describe("NovelDetailPage", () => {
       expect(screen.getByTestId("delete-confirm-dialog")).toBeInTheDocument();
     });
 
-    it("Refreshing ストーリーで更新中フラグがヘッダーに反映されること", () => {
+    it("Refreshing ストーリーで更新中フラグが NovelDetailHeader へ伝達されること", () => {
+      const headerSpy = vi.spyOn(NovelDetailHeaderModule, "NovelDetailHeader");
       render(<Refreshing />);
 
-      expect(screen.getByTestId("refresh-toc-button")).toBeDisabled();
-      expect(screen.getByTestId("refresh-toc-button")).toHaveTextContent(
-        "更新中...",
+      expect(headerSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ isRefreshing: true }),
+        undefined,
       );
+      headerSpy.mockRestore();
     });
 
     it("WithError ストーリーでエラーメッセージがヘッダーに反映されること", () => {
@@ -481,20 +483,35 @@ describe("NovelDetailPage", () => {
         expect(progressEl.className).toContain("text-amber-600");
       });
 
-      it("ResumePending ストーリーで「キャッシュを再開（残り2話）」ボタンが表示されること (AC-ND-24)", () => {
+      it("ResumePending ストーリーで pendingCacheCount=2 が NovelDetailHeader へ伝達されること (AC-ND-24)", () => {
+        const headerSpy = vi.spyOn(
+          NovelDetailHeaderModule,
+          "NovelDetailHeader",
+        );
         render(<ResumePending />);
 
-        const batchButton = screen.getByTestId("batch-cache-button");
-        expect(batchButton).toBeInTheDocument();
-        expect(batchButton).toHaveTextContent("キャッシュを再開（残り2話）");
+        expect(headerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ pendingCacheCount: 2 }),
+          undefined,
+        );
+        headerSpy.mockRestore();
       });
 
-      it("RetryFailed ストーリーで「失敗した話を再試行（1話）」ボタンおよび取得失敗バッジが表示されること (AC-ND-25)", () => {
+      it("RetryFailed ストーリーで failedCacheCount=1 が NovelDetailHeader へ伝達され、取得失敗バッジが表示されること (AC-ND-25)", () => {
+        const headerSpy = vi.spyOn(
+          NovelDetailHeaderModule,
+          "NovelDetailHeader",
+        );
         render(<RetryFailed />);
 
-        const batchButton = screen.getByTestId("batch-cache-button");
-        expect(batchButton).toBeInTheDocument();
-        expect(batchButton).toHaveTextContent("失敗した話を再試行（1話）");
+        expect(headerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            pendingCacheCount: 0,
+            failedCacheCount: 1,
+          }),
+          undefined,
+        );
+        headerSpy.mockRestore();
 
         const failedBadge = screen.getByTestId("episode-failed-badge");
         expect(failedBadge).toBeInTheDocument();
@@ -502,13 +519,18 @@ describe("NovelDetailPage", () => {
         expect(failedBadge.closest("[data-chapter-index='2']")).not.toBeNull();
       });
 
-      it("AllCached ストーリーでヘッダーに全話キャッシュ済みが表示されること (AC-ND-13)", () => {
+      it("AllCached ストーリーで isAllCached=true が NovelDetailHeader へ伝達されること (AC-ND-13)", () => {
+        const headerSpy = vi.spyOn(
+          NovelDetailHeaderModule,
+          "NovelDetailHeader",
+        );
         render(<AllCached />);
 
-        const batchButton = screen.getByTestId("batch-cache-button");
-        expect(batchButton).toBeInTheDocument();
-        expect(batchButton).toHaveTextContent("全話キャッシュ済み");
-        expect(batchButton).toBeDisabled();
+        expect(headerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ isAllCached: true }),
+          undefined,
+        );
+        headerSpy.mockRestore();
       });
 
       it("親子分離: isBatchCaching === true のとき、EpisodeList の onSelectEpisode が呼び出されても親コールバックは実行されないこと（no-op制御）(AC-ND-12)", () => {

@@ -136,11 +136,12 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
       /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
     );
 
-    // 作品詳細ヘッダーでお気に入り状態が「★ お気に入り」に反映されていることを確認 (AC-ND-23, R2-19)
+    // 作品詳細ヘッダーでお気に入り状態が「★」に反映されていることを確認 (AC-ND-23, AC-ND-27, R2-19)
     const detailFavBtn = page.getByTestId("detail-favorite-toggle-button");
     await expect(detailFavBtn).toBeVisible();
+    await expect(detailFavBtn).toHaveAttribute("aria-label", "お気に入り");
     await expect(detailFavBtn).toHaveAttribute("aria-pressed", "true");
-    await expect(detailFavBtn).toHaveText("★ お気に入り");
+    await expect(detailFavBtn).toHaveText("★");
 
     // 6. 目次一覧から第2話エピソード行を選択して第2話へ進む（SCR-03）
     const episodeItems = page.getByTestId("episode-item");
@@ -481,12 +482,13 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
       "しおり: 第3話",
     );
 
-    // 5. なろう作品の詳細画面でもヘッダーのお気に入り状態が ★ に更新されていることを確認 (R2-19)
+    // 5. なろう作品の詳細画面でもヘッダーのお気に入り状態が ★ に更新されていることを確認 (AC-ND-27, R2-19)
     await cardNarouLww.getByTestId("novel-card-select").click();
     await expect(page).toHaveURL(/\/novels\/narou(%3A|:)n9669bk$/);
     const detailFavBtnNarou = page.getByTestId("detail-favorite-toggle-button");
+    await expect(detailFavBtnNarou).toHaveAttribute("aria-label", "お気に入り");
     await expect(detailFavBtnNarou).toHaveAttribute("aria-pressed", "true");
-    await expect(detailFavBtnNarou).toHaveText("★ お気に入り");
+    await expect(detailFavBtnNarou).toHaveText("★");
 
     // 本棚へ戻る
     await page.goBack();
@@ -504,7 +506,8 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
       /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
     );
 
-    // 2. 端末 B でカクヨム作品を削除（作品詳細画面の「作品を削除」ダイアログ経由）
+    // 2. 端末 B でカクヨム作品を削除（3点メニュー内の「作品を削除」ダイアログ経由）
+    await page.getByTestId("novel-detail-menu-button").click();
     const deleteButton = page.getByTestId("open-delete-dialog-button");
     await expect(deleteButton).toBeVisible();
     await deleteButton.click();
