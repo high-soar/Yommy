@@ -134,4 +134,133 @@ describe("BookmarkConflictDialog", () => {
       expect(onKeepCurrent).not.toHaveBeenCalled();
     });
   });
+
+  describe("アクセシビリティ・フォーカストラップ制御 (R1-21)", () => {
+    it("isOpen が true になって開いた際、ダイアログコンテナに tabIndex={-1} が付与され最初の有効ボタンへ初期フォーカスが移動すること (R1-21)", () => {
+      const { rerender } = render(
+        <>
+          <button type="button" data-testid="outside-focus-target">
+            背景ボタン
+          </button>
+          <BookmarkConflictDialog
+            isOpen={false}
+            currentChapterIndex={3}
+            remoteChapterIndex={8}
+            onMoveToRemote={vi.fn()}
+            onKeepCurrent={vi.fn()}
+          />
+        </>,
+      );
+
+      const outsideBtn = screen.getByTestId("outside-focus-target");
+      outsideBtn.focus();
+      expect(outsideBtn).toHaveFocus();
+
+      rerender(
+        <>
+          <button type="button" data-testid="outside-focus-target">
+            背景ボタン
+          </button>
+          <BookmarkConflictDialog
+            isOpen={true}
+            currentChapterIndex={3}
+            remoteChapterIndex={8}
+            onMoveToRemote={vi.fn()}
+            onKeepCurrent={vi.fn()}
+          />
+        </>,
+      );
+
+      const dialog = screen.getByTestId("bookmark-conflict-dialog");
+      expect(dialog).toHaveAttribute("tabindex", "-1");
+      expect(screen.getByTestId("bookmark-conflict-keep-button")).toHaveFocus();
+    });
+
+    it("isResolving={true} で開いた場合、ダイアログコンテナへ初期フォーカスが移動し Tab / Shift+Tab で外部へフォーカスが逃げないこと (R1-21)", async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <button type="button" data-testid="outside-focus-target">
+            背景ボタン
+          </button>
+          <BookmarkConflictDialog
+            isOpen={true}
+            isResolving={true}
+            currentChapterIndex={3}
+            remoteChapterIndex={8}
+            onMoveToRemote={vi.fn()}
+            onKeepCurrent={vi.fn()}
+          />
+        </>,
+      );
+
+      const outsideBtn = screen.getByTestId("outside-focus-target");
+      const dialog = screen.getByTestId("bookmark-conflict-dialog");
+      expect(dialog).toHaveFocus();
+
+      await user.tab();
+      expect(dialog).toHaveFocus();
+      expect(outsideBtn).not.toHaveFocus();
+
+      await user.tab({ shift: true });
+      expect(dialog).toHaveFocus();
+      expect(outsideBtn).not.toHaveFocus();
+    });
+
+    it("Tab / Shift+Tab でダイアログ内の有効ボタン間を循環フォーカストラップし、外部フォーカスからの復帰も行われること (R1-21)", async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <button type="button" data-testid="outside-focus-target">
+            背景ボタン
+          </button>
+          <BookmarkConflictDialog
+            isOpen={true}
+            currentChapterIndex={3}
+            remoteChapterIndex={8}
+            onMoveToRemote={vi.fn()}
+            onKeepCurrent={vi.fn()}
+          />
+        </>,
+      );
+
+      const outsideBtn = screen.getByTestId("outside-focus-target");
+      const keepBtn = screen.getByTestId("bookmark-conflict-keep-button");
+      const moveBtn = screen.getByTestId("bookmark-conflict-move-button");
+
+      expect(keepBtn).toHaveFocus();
+
+      // Tab で 2つ目のボタンへ移動し、再度の Tab で先頭へ循環
+      await user.tab();
+      expect(moveBtn).toHaveFocus();
+
+      await user.tab();
+      expect(keepBtn).toHaveFocus();
+
+      // Shift+Tab で末尾へ逆循環し、再度の Shift+Tab で先頭へ戻る
+      await user.tab({ shift: true });
+      expect(moveBtn).toHaveFocus();
+
+      await user.tab({ shift: true });
+      expect(keepBtn).toHaveFocus();
+
+      // 万一外部にフォーカスがあっても Tab / Shift+Tab で内側へ引き戻す
+      outsideBtn.focus();
+      await user.tab();
+      expect(keepBtn).toHaveFocus();
+
+      outsideBtn.focus();
+      await user.tab({ shift: true });
+      expect(moveBtn).toHaveFocus();
+
+      // Tab / Escape 以外のキーはブロックしないこと
+      const otherKeyEvent = new KeyboardEvent("keydown", {
+        key: "ArrowDown",
+        cancelable: true,
+        bubbles: true,
+      });
+      window.dispatchEvent(otherKeyEvent);
+      expect(otherKeyEvent.defaultPrevented).toBe(false);
+    });
+  });
 });

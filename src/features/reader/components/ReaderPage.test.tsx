@@ -2160,5 +2160,57 @@ describe("ReaderPage", () => {
 
       expect(onPageChange).not.toHaveBeenCalled();
     });
+
+    it("bookmarkConflict 表示中は背面の main・上下オーバーレイラッパー・最下部タッチゾーンに inert と tabIndex=-1 が付与され、解消時に復帰すること (R1-21)", () => {
+      const { container, rerender } = render(
+        <ReaderPage
+          {...createDefaultProps({
+            bookmarkConflict: null,
+          })}
+        />,
+      );
+
+      const main = container.querySelector("main");
+      const topWrapper = screen.getByTestId("reader-top-overlay-wrapper");
+      const bottomWrapper = screen.getByTestId("reader-bottom-overlay-wrapper");
+      const touchZone = screen.getByTestId("reader-bottom-touch-zone");
+
+      expect(main).not.toHaveAttribute("inert");
+      expect(topWrapper).not.toHaveAttribute("inert");
+      expect(bottomWrapper).not.toHaveAttribute("inert");
+      expect(touchZone).not.toHaveAttribute("inert");
+      expect(touchZone).toHaveAttribute("tabindex", "0");
+
+      rerender(
+        <ReaderPage
+          {...createDefaultProps({
+            bookmarkConflict: {
+              currentChapterIndex: 1,
+              remoteChapterIndex: 3,
+            },
+          })}
+        />,
+      );
+
+      expect(main).toHaveAttribute("inert");
+      expect(topWrapper).toHaveAttribute("inert");
+      expect(bottomWrapper).toHaveAttribute("inert");
+      expect(touchZone).toHaveAttribute("inert");
+      expect(touchZone).toHaveAttribute("tabindex", "-1");
+
+      rerender(
+        <ReaderPage
+          {...createDefaultProps({
+            bookmarkConflict: null,
+          })}
+        />,
+      );
+
+      expect(main).not.toHaveAttribute("inert");
+      expect(topWrapper).not.toHaveAttribute("inert");
+      expect(bottomWrapper).not.toHaveAttribute("inert");
+      expect(touchZone).not.toHaveAttribute("inert");
+      expect(touchZone).toHaveAttribute("tabindex", "0");
+    });
   });
 });
