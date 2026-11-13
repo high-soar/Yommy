@@ -189,6 +189,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const contentRef = React.useRef<HTMLDivElement>(null);
+  const isRestoringScrollRef = React.useRef<boolean>(false);
   const isVertical = writingMode === "vertical-rl";
   const effectivePagingMode = resolveEffectivePagingMode(
     pagingMode,
@@ -291,9 +292,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     onTotalPagesChange,
   ]);
 
-  // スクロール操作時の進捗率（0.0 〜 1.0）算出（実効 paged 時はスクロール進捗を通知せず先頭巻き戻しを防止: R1-22）
+  // スクロール操作時の進捗率（0.0 〜 1.0）算出（実効 paged 時・プログラム的復元中は通知を抑制: R1-22, Issue #342）
   const handleScroll = useCallback(() => {
-    if (isPaged) return;
+    if (isPaged || isRestoringScrollRef.current) return;
     const el = containerRef.current;
     if (!el) return;
     if (!onScrollProgressChange) return;
@@ -311,8 +312,25 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       // 実効 paged モード時は translateY/translateX で位置管理するためスクロールオフセットを 0 にリセット（二重変位防止: R1-27）
       el.scrollLeft = 0;
       el.scrollTop = 0;
-    } else {
-      restoreScrollPosition(el, writingMode, initialScrollProgress);
+      return;
+    }
+
+    const prevTop = el.scrollTop;
+    const prevLeft = el.scrollLeft;
+    restoreScrollPosition(el, writingMode, initialScrollProgress);
+    if (
+      initialScrollProgress > 0 ||
+      el.scrollTop !== prevTop ||
+      el.scrollLeft !== prevLeft
+    ) {
+      isRestoringScrollRef.current = true;
+      const rafId = requestAnimationFrame(() => {
+        isRestoringScrollRef.current = false;
+      });
+      return () => {
+        cancelAnimationFrame(rafId);
+        isRestoringScrollRef.current = false;
+      };
     }
   }, [initialScrollProgress, bodyHtml, writingMode, pagingMode, isPaged]);
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "../../../app/router";
 import { useReader, type GoToChapterOptions } from "../hooks/useReader";
 import { ReaderPage } from "./ReaderPage";
@@ -76,11 +76,31 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
     updateScrollProgress,
     flushBookmark,
     goToChapter,
+    bookmarkConflict,
+    resolveBookmarkConflict,
   } = useReader({ novelId, chapterIndex, initialWorkUrl });
+
+  const [isResolvingBookmarkConflict, setIsResolvingBookmarkConflict] =
+    useState(false);
+  const isConflictOpenRef = useRef(Boolean(bookmarkConflict));
+  useEffect(() => {
+    isConflictOpenRef.current = Boolean(bookmarkConflict);
+  }, [bookmarkConflict]);
+
+  // 競合ダイアログ表示中は OS バックキー・popstate による画面離脱を抑止 (Issue #342)
+  useEffect(() => {
+    if (!bookmarkConflict) {
+      return;
+    }
+    return router.blockBackNavigation?.();
+  }, [bookmarkConflict, router]);
 
   // OS バックキー（popstate イベント）およびアンマウント離脱時のしおり保存（AC-RD-08, TR-06）
   useEffect(() => {
     const handlePopState = () => {
+      if (isConflictOpenRef.current || router.isBackNavigationBlocked?.()) {
+        return;
+      }
       void flushBookmark();
     };
     window.addEventListener("popstate", handlePopState);
@@ -88,7 +108,7 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
       window.removeEventListener("popstate", handlePopState);
       void flushBookmark();
     };
-  }, [flushBookmark]);
+  }, [flushBookmark, router]);
 
   // 下部タブ選択（本棚 / 検索 / ランキング / 設定）および画面遷移前のしおり保存（AC-RD-08, TR-01）
   const handleSelectTab = useCallback(
@@ -188,6 +208,51 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
     router,
   ]);
 
+  // しおり競合解決: 他端末の最新話へ移動（成功時のみ URL を同期）
+  const handleResolveBookmarkConflictMove = useCallback(async () => {
+    if (!bookmarkConflict || isResolvingBookmarkConflict) {
+      return;
+    }
+    const targetChapter = bookmarkConflict.remoteChapterIndex;
+    setIsResolvingBookmarkConflict(true);
+    try {
+      const ok = await resolveBookmarkConflict("move");
+      if (ok) {
+        const targetId = novelId ?? novel?.id;
+        if (targetId) {
+          if (onNavigateChapter) {
+            onNavigateChapter(targetId, targetChapter);
+          } else {
+            router.navigateToReader(targetId, targetChapter, { replace: true });
+          }
+        }
+      }
+    } finally {
+      setIsResolvingBookmarkConflict(false);
+    }
+  }, [
+    bookmarkConflict,
+    isResolvingBookmarkConflict,
+    novel?.id,
+    novelId,
+    onNavigateChapter,
+    resolveBookmarkConflict,
+    router,
+  ]);
+
+  // しおり競合解決: 現在話を維持して明示保存（URL 維持）
+  const handleResolveBookmarkConflictKeep = useCallback(async () => {
+    if (!bookmarkConflict || isResolvingBookmarkConflict) {
+      return;
+    }
+    setIsResolvingBookmarkConflict(true);
+    try {
+      await resolveBookmarkConflict("keep");
+    } finally {
+      setIsResolvingBookmarkConflict(false);
+    }
+  }, [bookmarkConflict, isResolvingBookmarkConflict, resolveBookmarkConflict]);
+
   return (
     <ReaderPage
       novel={novel}
@@ -216,6 +281,10 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
       onSelectTab={handleSelectTab}
       onBackToToc={handleBackToToc}
       onOpenWebView={handleOpenWebView}
+      bookmarkConflict={bookmarkConflict}
+      isResolvingBookmarkConflict={isResolvingBookmarkConflict}
+      onResolveBookmarkConflictMove={handleResolveBookmarkConflictMove}
+      onResolveBookmarkConflictKeep={handleResolveBookmarkConflictKeep}
     />
   );
 };

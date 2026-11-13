@@ -90,6 +90,14 @@ export interface GoToChapterOptions {
   startAt?: "start" | "end";
 }
 
+/**
+ * クラウド同期によるしおり競合検知状態
+ */
+export interface BookmarkConflictState {
+  currentChapterIndex: number;
+  remoteChapterIndex: number;
+}
+
 export interface UseReaderResult {
   novel: NovelRecord | null;
   chapter: ChapterRecord | null;
@@ -131,6 +139,10 @@ export interface UseReaderResult {
     options?: GoToChapterOptions,
   ) => Promise<boolean>;
   fetchNovelFromUrl: () => Promise<void>;
+  /** クラウド同期によるしおり競合状態（競合なし時は null） */
+  bookmarkConflict: BookmarkConflictState | null;
+  /** しおり競合を解決する（"move": 他端末話へ移動、"keep": 現在話を維持して同期） */
+  resolveBookmarkConflict: (action: "move" | "keep") => Promise<boolean>;
 }
 
 /**
@@ -188,6 +200,8 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   const [scrollProgress, setScrollProgress] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [bookmarkConflict, setBookmarkConflict] =
+    useState<BookmarkConflictState | null>(null);
 
   const novelRef = useRef<NovelRecord | null>(novel);
   const currentChapterIndexRef = useRef<number>(currentChapterIndex);
@@ -196,6 +210,10 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   const totalPagesRef = useRef<number>(totalPages);
   const initialScrollProgressRef = useRef<number>(initialScrollProgress);
   const hasUserChangedPageRef = useRef<boolean>(false);
+  const hasPendingBookmarkRef = useRef<boolean>(false);
+  const bookmarkConflictRef = useRef<BookmarkConflictState | null>(
+    bookmarkConflict,
+  );
   const prefetchAbortControllerRef = useRef<AbortController | null>(null);
   const activePrefetchPromiseRef = useRef<Promise<void> | null>(null);
   const lastGoToChapterIndexRef = useRef<number | null>(null);
@@ -252,6 +270,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       setTotalPagesState(1);
       totalPagesRef.current = 1;
       hasUserChangedPageRef.current = false;
+      hasPendingBookmarkRef.current = false;
     },
     [],
   );
@@ -747,6 +766,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         0,
         Math.min(1, Number.isFinite(progress) ? progress : 0),
       );
+      hasPendingBookmarkRef.current = true;
       setScrollProgress(clamped);
       scrollProgressRef.current = clamped;
 
@@ -765,6 +785,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
               currentChapterIndexRef.current,
               clamped,
             );
+            hasPendingBookmarkRef.current = false;
             const updatedNovel: NovelRecord = {
               ...currentNovel,
               bookmarkChapterIndex: currentChapterIndexRef.current,
@@ -772,13 +793,16 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             };
             setNovel(updatedNovel);
             novelRef.current = updatedNovel;
+            if (syncEngine) {
+              syncEngine.notifyChanged().catch(() => {});
+            }
           } catch (err: unknown) {
             setError(toErrorMessage(err));
           }
         }
       }, 300);
     },
-    [novelRepository],
+    [novelRepository, syncEngine],
   );
 
   // 指定ページへの遷移およびしおり自動保存
@@ -810,11 +834,14 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     goToPage(currentPageRef.current - 1);
   }, [goToPage]);
 
-  // しおり最新値即時保存（ref 安定化: R1-12）
+  // しおり最新値即時保存（未変更時は書き込まず保護: Issue #342、ref 安定化: R1-12）
   const flushBookmark = useCallback(async (): Promise<void> => {
     if (bookmarkDebounceTimerRef.current) {
       clearTimeout(bookmarkDebounceTimerRef.current);
       bookmarkDebounceTimerRef.current = null;
+    }
+    if (!hasPendingBookmarkRef.current) {
+      return;
     }
     const currentNovel = novelRef.current;
     if (currentNovel) {
@@ -824,6 +851,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           currentChapterIndexRef.current,
           scrollProgressRef.current,
         );
+        hasPendingBookmarkRef.current = false;
         const updatedNovel: NovelRecord = {
           ...currentNovel,
           bookmarkChapterIndex: currentChapterIndexRef.current,
@@ -838,6 +866,66 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         setError(toErrorMessage(err));
       }
     }
+  }, [novelRepository, syncEngine]);
+
+  // 画面ロック・バックグラウンド移行時に未保存進捗を即時フラッシュ (Issue #342)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (
+        document.visibilityState === "hidden" &&
+        hasPendingBookmarkRef.current
+      ) {
+        void flushBookmark();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [flushBookmark]);
+
+  // クラウド同期 Pull 完了時のしおり競合検知 (Issue #342)
+  useEffect(() => {
+    if (!syncEngine?.subscribePullCompleted) {
+      return;
+    }
+    return syncEngine.subscribePullCompleted((result) => {
+      if (!result.pulled || !novelRef.current) {
+        return;
+      }
+      const targetNovelId = novelRef.current.id;
+      void (async () => {
+        try {
+          const latestNovel = await novelRepository.getNovelById(targetNovelId);
+          if (!isMountedRef.current || !latestNovel) {
+            return;
+          }
+          if (
+            latestNovel.bookmarkChapterIndex !== null &&
+            latestNovel.bookmarkChapterIndex >= 1 &&
+            latestNovel.bookmarkChapterIndex <= latestNovel.totalChapters
+          ) {
+            if (
+              latestNovel.bookmarkChapterIndex !==
+              currentChapterIndexRef.current
+            ) {
+              const nextConflict: BookmarkConflictState = {
+                currentChapterIndex: currentChapterIndexRef.current,
+                remoteChapterIndex: latestNovel.bookmarkChapterIndex,
+              };
+              bookmarkConflictRef.current = nextConflict;
+              setBookmarkConflict(nextConflict);
+            } else {
+              bookmarkConflictRef.current = null;
+              setBookmarkConflict(null);
+            }
+          }
+        } catch {
+          // 競合検知用 DB 読み取り失敗時は既存表示を維持
+        }
+      })();
+    });
   }, [novelRepository, syncEngine]);
 
   // 前後エピソード遷移
@@ -1109,6 +1197,54 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     writingMode,
   );
 
+  // しおり競合解決（"move": リモート話へ移動、"keep": 現在話を明示保存して同期通知）
+  const resolveBookmarkConflict = useCallback(
+    async (action: "move" | "keep"): Promise<boolean> => {
+      const conflict = bookmarkConflictRef.current;
+      if (!conflict) {
+        return false;
+      }
+      bookmarkConflictRef.current = null;
+      setBookmarkConflict(null);
+
+      if (action === "move") {
+        return goToChapter(conflict.remoteChapterIndex);
+      }
+
+      if (bookmarkDebounceTimerRef.current) {
+        clearTimeout(bookmarkDebounceTimerRef.current);
+        bookmarkDebounceTimerRef.current = null;
+      }
+      const currentNovel = novelRef.current;
+      if (!currentNovel) {
+        return false;
+      }
+      try {
+        await novelRepository.updateBookmark(
+          currentNovel.id,
+          currentChapterIndexRef.current,
+          scrollProgressRef.current,
+        );
+        hasPendingBookmarkRef.current = false;
+        const updatedNovel: NovelRecord = {
+          ...currentNovel,
+          bookmarkChapterIndex: currentChapterIndexRef.current,
+          bookmarkScrollProgress: scrollProgressRef.current,
+        };
+        setNovel(updatedNovel);
+        novelRef.current = updatedNovel;
+        if (syncEngine) {
+          syncEngine.notifyChanged().catch(() => {});
+        }
+        return true;
+      } catch (err: unknown) {
+        setError(toErrorMessage(err));
+        return false;
+      }
+    },
+    [goToChapter, novelRepository, syncEngine],
+  );
+
   return {
     novel,
     chapter,
@@ -1144,5 +1280,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     flushBookmark,
     goToChapter,
     fetchNovelFromUrl,
+    bookmarkConflict,
+    resolveBookmarkConflict,
   };
 }

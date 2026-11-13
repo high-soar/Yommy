@@ -93,6 +93,7 @@ related_tests:
   - src/features/reader/components/ReaderChapterNav.test.tsx
   - src/features/reader/components/ReaderBottomOverlay.test.tsx
   - src/features/reader/components/ReaderView.test.tsx
+  - src/features/reader/components/BookmarkConflictDialog.test.tsx
   - src/features/reader/components/ReaderPage.test.tsx
   - src/features/reader/components/ReaderContainer.test.tsx
   - test/vrt/vrt.spec.ts
