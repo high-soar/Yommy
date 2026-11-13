@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
@@ -22,61 +22,116 @@ const {
 } = composeStories(stories);
 
 describe("RankingPage コンポーネント", () => {
-  it("WeeklyOverall ストーリー: ランキングヘッダー、フィルタ、作品一覧が描画されること (AC-RK-01)", () => {
-    render(<WeeklyOverall />);
+  it("WeeklyOverall ストーリー: ランキングヘッダー、フィルタ、作品一覧の props が子コンポーネントへ伝播されること (AC-RK-01)", () => {
+    const siteSelectorSpy = vi
+      .spyOn(siteSelectorModule, "SiteSelector")
+      .mockImplementation(() => null);
+    const filterBarSpy = vi
+      .spyOn(rankingFilterBarModule, "RankingFilterBar")
+      .mockImplementation(() => null);
+    const cardSpy = vi
+      .spyOn(rankingNovelCardModule, "RankingNovelCard")
+      .mockImplementation(() => null);
 
-    expect(screen.getByTestId("ranking-page")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "ランキング",
-    );
-    expect(screen.getByTestId("site-selector-kakuyomu")).toBeInTheDocument();
-    expect(screen.getByTestId("ranking-filter-bar")).toBeInTheDocument();
-    expect(screen.getByTestId("ranking-results-list")).toBeInTheDocument();
+    try {
+      render(<WeeklyOverall />);
 
-    expect(
-      screen.getByTestId("ranking-novel-card-16817330658027210412"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByTestId("ranking-novel-card-1177354054881162325"),
-    ).toBeInTheDocument();
+      expect(screen.getByTestId("ranking-page")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+        "ランキング",
+      );
+      expect(siteSelectorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selectedSite: "kakuyomu",
+          disabled: false,
+        }),
+        undefined,
+      );
+      expect(filterBarSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selectedSite: "kakuyomu",
+          selectedPeriod: "weekly",
+          selectedWorkVariation: "long",
+          selectedGenre: undefined,
+          disabled: false,
+        }),
+        undefined,
+      );
+      expect(screen.getByTestId("ranking-results-list")).toBeInTheDocument();
+      expect(cardSpy).toHaveBeenCalledTimes(4);
+      const renderedWorkIds = cardSpy.mock.calls.map(
+        (call) => call[0].item.remoteWorkId,
+      );
+      expect(renderedWorkIds).toContain("16817330658027210412");
+      expect(renderedWorkIds).toContain("1177354054881162325");
+    } finally {
+      siteSelectorSpy.mockRestore();
+      filterBarSpy.mockRestore();
+      cardSpy.mockRestore();
+    }
   });
 
-  it("GenreFantasy ストーリー: 指定ジャンル選択時の画面が描画されること (AC-RK-03)", () => {
-    render(<GenreFantasy />);
+  it("GenreFantasy ストーリー: 指定ジャンルの選択状態がフィルタバーへ伝播されること (AC-RK-03)", () => {
+    const filterBarSpy = vi
+      .spyOn(rankingFilterBarModule, "RankingFilterBar")
+      .mockImplementation(() => null);
 
-    expect(screen.getByTestId("ranking-period-monthly")).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(screen.getByTestId("ranking-genre-fantasy")).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    try {
+      render(<GenreFantasy />);
+
+      expect(filterBarSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selectedPeriod: "monthly",
+          selectedGenre: "fantasy",
+        }),
+        undefined,
+      );
+    } finally {
+      filterBarSpy.mockRestore();
+    }
   });
 
-  it("ShortStoryRanking ストーリー: 短編作品種別が選択されていること (AC-RK-10, Issue #265)", () => {
-    render(<ShortStoryRanking />);
+  it("ShortStoryRanking ストーリー: 短編作品種別がフィルタバーへ伝播されること (AC-RK-10, Issue #265)", () => {
+    const filterBarSpy = vi
+      .spyOn(rankingFilterBarModule, "RankingFilterBar")
+      .mockImplementation(() => null);
 
-    expect(screen.getByTestId("ranking-variation-short")).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    try {
+      render(<ShortStoryRanking />);
+
+      expect(filterBarSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selectedWorkVariation: "short",
+        }),
+        undefined,
+      );
+    } finally {
+      filterBarSpy.mockRestore();
+    }
   });
 
-  it("MixedRegistration ストーリー: 登録済み・追加中が正しく渡されていること (AC-RK-06)", () => {
-    render(<MixedRegistration />);
+  it("MixedRegistration ストーリー: 登録済み・追加中の状態が各カードへ正しく渡されていること (AC-RK-06)", () => {
+    const cardSpy = vi
+      .spyOn(rankingNovelCardModule, "RankingNovelCard")
+      .mockImplementation(() => null);
 
-    // 1位: 追加中
-    const card1 = screen.getByTestId("ranking-novel-card-16817330658027210412");
-    const addButton1 = within(card1).getByTestId("ranking-card-add-button");
-    expect(addButton1).toHaveTextContent("追加中...");
-    expect(addButton1).toBeDisabled();
+    try {
+      render(<MixedRegistration />);
 
-    // 2位: 登録済み
-    const card2 = screen.getByTestId("ranking-novel-card-1177354054881162325");
-    expect(
-      within(card2).getByTestId("ranking-card-registered-button"),
-    ).toBeInTheDocument();
+      const addingCardProps = cardSpy.mock.calls.find(
+        (call) => call[0].item.remoteWorkId === "16817330658027210412",
+      )?.[0];
+      expect(addingCardProps?.isAdding).toBe(true);
+      expect(addingCardProps?.isRegistered).toBe(false);
+
+      const registeredCardProps = cardSpy.mock.calls.find(
+        (call) => call[0].item.remoteWorkId === "1177354054881162325",
+      )?.[0];
+      expect(registeredCardProps?.isRegistered).toBe(true);
+      expect(registeredCardProps?.isAdding).toBe(false);
+    } finally {
+      cardSpy.mockRestore();
+    }
   });
 
   it("Loading ストーリー: ローディングインジケーターが表示されること", () => {
@@ -88,18 +143,40 @@ describe("RankingPage コンポーネント", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("LoadingWithItems ストーリー: 既存データが存在してもローディングが最優先で置換表示され、旧一覧が非表示となること (AC-RK-08)", () => {
-    render(<LoadingWithItems />);
+  it("LoadingWithItems ストーリー: 既存データが存在してもローディングが最優先で置換表示され、旧一覧が非表示かつフィルタ・サイト選択が無効化されること (AC-RK-08)", () => {
+    const siteSelectorSpy = vi
+      .spyOn(siteSelectorModule, "SiteSelector")
+      .mockImplementation(() => null);
+    const filterBarSpy = vi
+      .spyOn(rankingFilterBarModule, "RankingFilterBar")
+      .mockImplementation(() => null);
+    const cardSpy = vi
+      .spyOn(rankingNovelCardModule, "RankingNovelCard")
+      .mockImplementation(() => null);
 
-    expect(screen.getByTestId("ranking-loading")).toBeInTheDocument();
-    expect(
-      screen.queryByTestId("ranking-results-list"),
-    ).not.toBeInTheDocument();
+    try {
+      render(<LoadingWithItems />);
 
-    // フィルタバー・サイトセレクタが操作不能（disabled）になっていること
-    expect(screen.getByTestId("site-selector-kakuyomu")).toBeDisabled();
-    expect(screen.getByTestId("ranking-period-monthly")).toBeDisabled();
-    expect(screen.getByTestId("ranking-genre-all")).toBeDisabled();
+      expect(screen.getByTestId("ranking-loading")).toBeInTheDocument();
+      expect(
+        screen.queryByTestId("ranking-results-list"),
+      ).not.toBeInTheDocument();
+      expect(cardSpy).not.toHaveBeenCalled();
+
+      // フィルタバー・サイトセレクタへ disabled=true が伝播していること
+      expect(siteSelectorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ disabled: true }),
+        undefined,
+      );
+      expect(filterBarSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ disabled: true }),
+        undefined,
+      );
+    } finally {
+      siteSelectorSpy.mockRestore();
+      filterBarSpy.mockRestore();
+      cardSpy.mockRestore();
+    }
   });
 
   it("Empty ストーリー: ランキング0件時の空状態が表示されること", () => {
@@ -124,14 +201,29 @@ describe("RankingPage コンポーネント", () => {
     expect(handleRetry).toHaveBeenCalledTimes(1);
   });
 
-  it("NarouSelected ストーリー: なろう選択時に小ジャンルピルが表示されること (AC-RK-09)", () => {
-    render(<NarouSelected />);
+  it("NarouSelected ストーリー: なろう選択状態が SiteSelector と RankingFilterBar へ伝播されること (AC-RK-09)", () => {
+    const siteSelectorSpy = vi
+      .spyOn(siteSelectorModule, "SiteSelector")
+      .mockImplementation(() => null);
+    const filterBarSpy = vi
+      .spyOn(rankingFilterBarModule, "RankingFilterBar")
+      .mockImplementation(() => null);
 
-    expect(screen.getByTestId("site-selector-narou")).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(screen.getByTestId("ranking-genre-201")).toBeInTheDocument();
+    try {
+      render(<NarouSelected />);
+
+      expect(siteSelectorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ selectedSite: "narou" }),
+        undefined,
+      );
+      expect(filterBarSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ selectedSite: "narou" }),
+        undefined,
+      );
+    } finally {
+      siteSelectorSpy.mockRestore();
+      filterBarSpy.mockRestore();
+    }
   });
 
   it("エラー発生時は items が存在していてもエラーカードのみが表示され、作品一覧が非表示となること (AC-RK-08)", () => {

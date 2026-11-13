@@ -58,6 +58,7 @@ export const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
           作品の削除
         </h2>
         <p
+          id="delete-confirm-message"
           data-testid="delete-confirm-message"
           className="text-sm text-slate-600 dark:text-slate-300 mb-6 leading-relaxed"
         >

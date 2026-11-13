@@ -23,17 +23,51 @@ const {
 } = composeStories(stories);
 
 describe("SearchPage コンポーネント", () => {
-  it("Initial ストーリー: 未検索の初期案内UIが表示されること", () => {
-    render(<Initial />);
+  it("Initial ストーリー: 未検索の初期案内UIが表示され、各子コンポーネントへ初期propsが伝播されること", () => {
+    const siteSelectorSpy = vi
+      .spyOn(siteSelectorModule, "SiteSelector")
+      .mockImplementation(() => null);
+    const inputBarSpy = vi
+      .spyOn(searchInputBarModule, "SearchInputBar")
+      .mockImplementation(() => null);
+    const filterBarSpy = vi
+      .spyOn(searchFilterBarModule, "SearchFilterBar")
+      .mockImplementation(() => null);
 
-    expect(screen.getByTestId("search-page")).toBeInTheDocument();
-    expect(screen.getByTestId("site-selector-kakuyomu")).toBeInTheDocument();
-    expect(screen.getByTestId("search-input")).toBeInTheDocument();
-    expect(screen.getByTestId("search-filter-bar")).toBeInTheDocument();
-    expect(screen.getByTestId("search-initial-state")).toBeInTheDocument();
-    expect(screen.getByTestId("search-initial-state")).toHaveTextContent(
-      "キーワードを入力して小説を検索",
-    );
+    try {
+      render(<Initial />);
+
+      expect(screen.getByTestId("search-page")).toBeInTheDocument();
+      expect(siteSelectorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selectedSite: "kakuyomu",
+          disabled: false,
+        }),
+        undefined,
+      );
+      expect(inputBarSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          keyword: "",
+          isLoading: false,
+        }),
+        undefined,
+      );
+      expect(filterBarSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selectedSite: "kakuyomu",
+          disabled: false,
+        }),
+        undefined,
+      );
+      expect(screen.getByTestId("search-initial-state")).toBeInTheDocument();
+      expect(screen.getByTestId("search-initial-state")).toHaveTextContent(
+        "キーワードを入力して小説を検索",
+      );
+    } finally {
+      siteSelectorSpy.mockRestore();
+      inputBarSpy.mockRestore();
+      filterBarSpy.mockRestore();
+    }
   });
 
   it("Loading ストーリー: 検索中のローディングUIが表示されること", () => {
@@ -45,21 +79,49 @@ describe("SearchPage コンポーネント", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("LoadingWithItems ストーリー: 既存データが存在してもローディングが最優先で置換表示され、旧一覧が非表示となること (AC-SE-09)", () => {
-    render(<LoadingWithItems />);
+  it("LoadingWithItems ストーリー: 既存データが存在してもローディングが最優先で置換表示され、旧一覧が非表示かつ子コンポーネントへローディング中状態が伝播されること (AC-SE-09)", () => {
+    const siteSelectorSpy = vi
+      .spyOn(siteSelectorModule, "SiteSelector")
+      .mockImplementation(() => null);
+    const inputBarSpy = vi
+      .spyOn(searchInputBarModule, "SearchInputBar")
+      .mockImplementation(() => null);
+    const filterBarSpy = vi
+      .spyOn(searchFilterBarModule, "SearchFilterBar")
+      .mockImplementation(() => null);
+    const cardSpy = vi
+      .spyOn(searchNovelCardModule, "SearchNovelCard")
+      .mockImplementation(() => null);
 
-    expect(screen.getByTestId("search-loading")).toBeInTheDocument();
-    expect(screen.queryByTestId("search-results-list")).not.toBeInTheDocument();
+    try {
+      render(<LoadingWithItems />);
 
-    // 検索ボタン・フィルタバー・サイトセレクタが無効化されていること
-    expect(screen.getByTestId("search-submit-button")).toBeDisabled();
-    expect(screen.getByTestId("search-order-select")).toBeDisabled();
-    expect(screen.getByTestId("search-serial-all")).toBeDisabled();
-    expect(screen.getByTestId("search-genre-all")).toBeDisabled();
-    expect(screen.getByTestId("site-selector-kakuyomu")).toBeDisabled();
+      expect(screen.getByTestId("search-loading")).toBeInTheDocument();
+      expect(
+        screen.queryByTestId("search-results-list"),
+      ).not.toBeInTheDocument();
+      expect(cardSpy).not.toHaveBeenCalled();
 
-    // テキスト入力欄は入力可能（enabled）を維持していること
-    expect(screen.getByTestId("search-input")).toBeEnabled();
+      // SearchInputBar には isLoading=true（入力欄は有効・送信ボタン無効化は SearchInputBar 側の責務）、
+      // フィルタバー・サイトセレクタへは disabled=true が伝播していること
+      expect(inputBarSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ isLoading: true }),
+        undefined,
+      );
+      expect(filterBarSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ disabled: true }),
+        undefined,
+      );
+      expect(siteSelectorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ disabled: true }),
+        undefined,
+      );
+    } finally {
+      siteSelectorSpy.mockRestore();
+      inputBarSpy.mockRestore();
+      filterBarSpy.mockRestore();
+      cardSpy.mockRestore();
+    }
   });
 
   it("Empty ストーリー: 検索結果0件の空状態UIが表示されること", () => {
@@ -71,23 +133,35 @@ describe("SearchPage コンポーネント", () => {
     );
   });
 
-  it("WithResults ストーリー: 検索結果カード一覧と「さらに読み込む」ボタンが表示されること", () => {
-    render(<WithResults />);
+  it("WithResults ストーリー: 検索結果カード一覧の props が SearchNovelCard へ渡され「さらに読み込む」ボタンが表示されること", () => {
+    const cardSpy = vi
+      .spyOn(searchNovelCardModule, "SearchNovelCard")
+      .mockImplementation(() => null);
 
-    const list = screen.getByTestId("search-results-list");
-    expect(list).toBeInTheDocument();
+    try {
+      render(<WithResults />);
 
-    expect(
-      screen.getByTestId("search-novel-card-16817330658027210412"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByTestId("search-novel-card-1177354054881162325"),
-    ).toBeInTheDocument();
+      const list = screen.getByTestId("search-results-list");
+      expect(list).toBeInTheDocument();
 
-    const loadMoreBtn = screen.getByTestId("search-load-more-button");
-    expect(loadMoreBtn).toBeInTheDocument();
-    expect(loadMoreBtn).toBeEnabled();
-    expect(loadMoreBtn).toHaveTextContent("さらに読み込む");
+      expect(cardSpy).toHaveBeenCalledTimes(2);
+      const firstCardProps = cardSpy.mock.calls.find(
+        (call) => call[0].item.remoteWorkId === "16817330658027210412",
+      )?.[0];
+      expect(firstCardProps?.isRegistered).toBe(false);
+
+      const secondCardProps = cardSpy.mock.calls.find(
+        (call) => call[0].item.remoteWorkId === "1177354054881162325",
+      )?.[0];
+      expect(secondCardProps?.isRegistered).toBe(true);
+
+      const loadMoreBtn = screen.getByTestId("search-load-more-button");
+      expect(loadMoreBtn).toBeInTheDocument();
+      expect(loadMoreBtn).toBeEnabled();
+      expect(loadMoreBtn).toHaveTextContent("さらに読み込む");
+    } finally {
+      cardSpy.mockRestore();
+    }
   });
 
   it("LoadingMore ストーリー: 「さらに読み込む」ボタンがローディング表示かつ非活性であること", () => {
@@ -110,14 +184,29 @@ describe("SearchPage コンポーネント", () => {
     expect(retryButton).toBeInTheDocument();
   });
 
-  it("NarouSelected ストーリー: なろう選択時に小ジャンルピルが表示されること (AC-SE-10)", () => {
-    render(<NarouSelected />);
+  it("NarouSelected ストーリー: なろう選択状態が SiteSelector と SearchFilterBar へ伝播されること (AC-SE-10)", () => {
+    const siteSelectorSpy = vi
+      .spyOn(siteSelectorModule, "SiteSelector")
+      .mockImplementation(() => null);
+    const filterBarSpy = vi
+      .spyOn(searchFilterBarModule, "SearchFilterBar")
+      .mockImplementation(() => null);
 
-    expect(screen.getByTestId("site-selector-narou")).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(screen.getByTestId("search-genre-201")).toBeInTheDocument();
+    try {
+      render(<NarouSelected />);
+
+      expect(siteSelectorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ selectedSite: "narou" }),
+        undefined,
+      );
+      expect(filterBarSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ selectedSite: "narou" }),
+        undefined,
+      );
+    } finally {
+      siteSelectorSpy.mockRestore();
+      filterBarSpy.mockRestore();
+    }
   });
 
   it("再試行ボタン押下時に onRetry が呼び出されること", async () => {
@@ -408,21 +497,34 @@ describe("SearchPage コンポーネント", () => {
     cardSpy.mockRestore();
   });
 
-  it("WithAdvancedFilters ストーリー: 除外キーワード展開および複数ジャンル指定が反映されていること (v0.8 Issue #264 / AC-SE-11)", () => {
-    render(<WithAdvancedFilters />);
+  it("WithAdvancedFilters ストーリー: 除外キーワードおよび複数ジャンル指定が子コンポーネントへ伝播されていること (v0.8 Issue #264 / AC-SE-11)", () => {
+    const inputBarSpy = vi
+      .spyOn(searchInputBarModule, "SearchInputBar")
+      .mockImplementation(() => null);
+    const filterBarSpy = vi
+      .spyOn(searchFilterBarModule, "SearchFilterBar")
+      .mockImplementation(() => null);
 
-    expect(screen.getByTestId("search-exclude-input")).toBeInTheDocument();
-    expect(screen.getByTestId("search-exclude-input")).toHaveValue(
-      "ハーレム チート",
-    );
-    expect(screen.getByTestId("search-genre-fantasy")).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(screen.getByTestId("search-genre-action")).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    try {
+      render(<WithAdvancedFilters />);
+
+      expect(inputBarSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          keyword: "異世界",
+          excludeKeyword: "ハーレム チート",
+        }),
+        undefined,
+      );
+      expect(filterBarSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selectedGenres: ["fantasy", "action"],
+        }),
+        undefined,
+      );
+    } finally {
+      inputBarSpy.mockRestore();
+      filterBarSpy.mockRestore();
+    }
   });
 
   it("親子分離: excludeKeyword, onChangeExcludeKeyword, selectedGenres が子コンポーネントへ正しく伝播すること (v0.8 Issue #264)", () => {

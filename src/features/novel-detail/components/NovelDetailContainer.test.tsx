@@ -239,61 +239,93 @@ describe("NovelDetailContainer", () => {
     beforeEach(async () => {
       await resetTestDb();
     });
-    it("Default ストーリーで作品ヘッダーと目次一覧が描画されること (AC-ND-01, AC-ND-02)", async () => {
-      render(<Default />);
+    it("Default ストーリーで作品ヘッダーと目次一覧用 props が NovelDetailPage へ渡されること (AC-ND-01, AC-ND-02)", async () => {
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
+      try {
+        render(<Default />);
 
-      await waitFor(() => {
-        expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
-        expect(screen.getByTestId("novel-detail-title")).toHaveTextContent(
-          "境界迷宮と異界の魔術師",
-        );
-      });
-
-      expect(screen.getByTestId("episode-list")).toBeInTheDocument();
-      expect(screen.getAllByTestId("episode-item")).toHaveLength(3);
+        await waitFor(() => {
+          const lastCall = pageSpy.mock.calls.at(-1)?.[0];
+          expect(lastCall?.isLoading).toBe(false);
+          expect(lastCall?.novel?.title).toBe("境界迷宮と異界の魔術師");
+          expect(lastCall?.chapters).toHaveLength(3);
+        });
+      } finally {
+        pageSpy.mockRestore();
+      }
     });
 
-    it("WithBookmark ストーリーで「続きから読む（第2話）」ボタンが表示されること (AC-ND-03)", async () => {
-      render(<WithBookmark />);
+    it("WithBookmark ストーリーでしおり情報付きの作品 props が NovelDetailPage へ渡されること (AC-ND-03)", async () => {
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
+      try {
+        render(<WithBookmark />);
 
-      await waitFor(() => {
-        expect(screen.getByTestId("detail-resume-button")).toBeInTheDocument();
-      });
-      expect(screen.getByTestId("detail-resume-button")).toHaveTextContent(
-        "続きから読む（第2話）",
-      );
+        await waitFor(() => {
+          const lastCall = pageSpy.mock.calls.at(-1)?.[0];
+          expect(lastCall?.isLoading).toBe(false);
+          expect(lastCall?.novel?.bookmarkChapterIndex).toBe(2);
+        });
+      } finally {
+        pageSpy.mockRestore();
+      }
     });
 
-    it("Loading ストーリーでローディング表示になること", async () => {
-      render(<Loading />);
+    it("Loading ストーリーで isLoading=true・novel=null が NovelDetailPage へ渡されること", async () => {
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
+      try {
+        render(<Loading />);
 
-      await waitFor(() => {
-        expect(screen.getByTestId("novel-detail-loading")).toBeInTheDocument();
-      });
-      expect(
-        screen.queryByTestId("novel-detail-header"),
-      ).not.toBeInTheDocument();
+        await waitFor(() => {
+          const lastCall = pageSpy.mock.calls.at(-1)?.[0];
+          expect(lastCall?.isLoading).toBe(true);
+          expect(lastCall?.novel).toBeNull();
+        });
+      } finally {
+        pageSpy.mockRestore();
+      }
     });
 
-    it("NotFound ストーリーで未検出表示および本棚へ戻る導線が表示されること (AC-ND-07)", async () => {
-      render(<NotFound />);
+    it("NotFound ストーリーで isLoading=false・novel=null と戻るハンドラが NovelDetailPage へ渡されること (AC-ND-07)", async () => {
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
+      try {
+        render(<NotFound />);
 
-      await waitFor(() => {
-        expect(
-          screen.getByTestId("novel-detail-not-found"),
-        ).toBeInTheDocument();
-      });
-      expect(
-        screen.getByTestId("back-to-bookshelf-button"),
-      ).toBeInTheDocument();
+        await waitFor(() => {
+          const lastCall = pageSpy.mock.calls.at(-1)?.[0];
+          expect(lastCall?.isLoading).toBe(false);
+          expect(lastCall?.novel).toBeNull();
+          expect(typeof lastCall?.onBackToBookshelf).toBe("function");
+        });
+      } finally {
+        pageSpy.mockRestore();
+      }
     });
 
-    it("WithCustomCallbacks ストーリーで正常に画面がレンダリングされること", async () => {
-      render(<WithCustomCallbacks />);
+    it("WithCustomCallbacks ストーリーで NovelDetailPage へ作品データと各種コールバックが渡されること", async () => {
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
+      try {
+        render(<WithCustomCallbacks />);
 
-      await waitFor(() => {
-        expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
-      });
+        await waitFor(() => {
+          const lastCall = pageSpy.mock.calls.at(-1)?.[0];
+          expect(lastCall?.isLoading).toBe(false);
+          expect(lastCall?.novel).not.toBeNull();
+          expect(typeof lastCall?.onSelectEpisode).toBe("function");
+          expect(typeof lastCall?.onOpenWebView).toBe("function");
+        });
+      } finally {
+        pageSpy.mockRestore();
+      }
     });
 
     it("ResumePending ストーリーで pendingCacheCount=2 が NovelDetailPage へ伝達されること (AC-ND-24)", async () => {
@@ -331,51 +363,63 @@ describe("NovelDetailContainer", () => {
   });
 
   describe("ルーター遷移とカスタムコールバック注入の検証", () => {
-    it("通常表示時、NovelDetailHeader 内に「本棚へ戻る」ボタンが描画されないこと (AC-ND-07)", async () => {
-      render(
-        <RouterProvider
-          initialPath={`/novels/${encodeURIComponent(sampleNovel.id)}`}
-        >
-          <RouteObserverWrapper
-            novelId={sampleNovel.id}
-            novelRepository={createMockNovelRepo(sampleNovel)}
-            chapterRepository={createMockChapterRepo(sampleChapters)}
-          />
-        </RouterProvider>,
-      );
+    it("通常表示時、NovelDetailPage へ作品データと戻るハンドラが渡されること (AC-ND-07)", async () => {
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
+      try {
+        render(
+          <RouterProvider
+            initialPath={`/novels/${encodeURIComponent(sampleNovel.id)}`}
+          >
+            <RouteObserverWrapper
+              novelId={sampleNovel.id}
+              novelRepository={createMockNovelRepo(sampleNovel)}
+              chapterRepository={createMockChapterRepo(sampleChapters)}
+            />
+          </RouterProvider>,
+        );
 
-      await waitFor(() => {
-        expect(screen.getByTestId("novel-detail-header")).toBeInTheDocument();
-      });
-
-      expect(
-        screen.queryByTestId("back-to-bookshelf-button"),
-      ).not.toBeInTheDocument();
+        await waitFor(() => {
+          const lastCall = pageSpy.mock.calls.at(-1)?.[0];
+          expect(lastCall?.isLoading).toBe(false);
+          expect(lastCall?.novel?.id).toBe(sampleNovel.id);
+          expect(typeof lastCall?.onBackToBookshelf).toBe("function");
+        });
+      } finally {
+        pageSpy.mockRestore();
+      }
     });
 
-    it("通常表示時に onBackToBookshelf が渡されていても、ヘッダーに「本棚へ戻る」ボタンが描画されないこと (AC-ND-07)", async () => {
+    it("通常表示時に onBackToBookshelf が渡されていても自動呼び出しされず NovelDetailPage へ委譲されること (AC-ND-07)", async () => {
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
       const onBackToBookshelf = vi.fn();
-      render(
-        <RouterProvider
-          initialPath={`/novels/${encodeURIComponent(sampleNovel.id)}`}
-        >
-          <RouteObserverWrapper
-            novelId={sampleNovel.id}
-            onBackToBookshelf={onBackToBookshelf}
-            novelRepository={createMockNovelRepo(sampleNovel)}
-            chapterRepository={createMockChapterRepo(sampleChapters)}
-          />
-        </RouterProvider>,
-      );
+      try {
+        render(
+          <RouterProvider
+            initialPath={`/novels/${encodeURIComponent(sampleNovel.id)}`}
+          >
+            <RouteObserverWrapper
+              novelId={sampleNovel.id}
+              onBackToBookshelf={onBackToBookshelf}
+              novelRepository={createMockNovelRepo(sampleNovel)}
+              chapterRepository={createMockChapterRepo(sampleChapters)}
+            />
+          </RouterProvider>,
+        );
 
-      await waitFor(() => {
-        expect(screen.getByTestId("novel-detail-header")).toBeInTheDocument();
-      });
+        await waitFor(() => {
+          const lastCall = pageSpy.mock.calls.at(-1)?.[0];
+          expect(lastCall?.isLoading).toBe(false);
+          expect(lastCall?.novel?.id).toBe(sampleNovel.id);
+        });
 
-      expect(
-        screen.queryByTestId("back-to-bookshelf-button"),
-      ).not.toBeInTheDocument();
-      expect(onBackToBookshelf).not.toHaveBeenCalled();
+        expect(onBackToBookshelf).not.toHaveBeenCalled();
+      } finally {
+        pageSpy.mockRestore();
+      }
     });
 
     it("未検出（NotFound）画面での「本棚へ戻る」ボタン押下時、デフォルトで本棚へ遷移する (AC-ND-07)", async () => {

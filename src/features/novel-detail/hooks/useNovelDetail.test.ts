@@ -3018,4 +3018,603 @@ describe("useNovelDetail", () => {
       await result.current.reloadDetail({ silent: true });
     });
   });
+
+  describe("Round 1 修正検証 (R1-02, R1-22, R1-31)", () => {
+    it("R1-02: startBatchCache で通信結果が Abort 後に正常解決しても saveChapterBody を呼ばずキューを pending に戻して中断すること (AC-ND-12)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const queueRepo = new SqlQueueRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 2);
+
+      let resolveHttp: ((res: HttpResponse) => void) | null = null;
+      const httpClient = {
+        getHtml: vi.fn(
+          async () =>
+            new Promise<HttpResponse>((resolve) => {
+              resolveHttp = resolve;
+            }),
+        ),
+      };
+
+      const saveSpy = vi.spyOn(chapterRepo, "saveChapterBody");
+
+      const { result } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          queueRepository: queueRepo,
+          httpClient,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      let batchPromise: Promise<void> | undefined;
+      act(() => {
+        batchPromise = result.current.startBatchCache();
+      });
+
+      await waitFor(() => {
+        expect(resolveHttp).not.toBeNull();
+      });
+
+      // 中断を実行したうえで、MockHttpClient は reject せず 200 OK で遅れて解決する競合を再現
+      act(() => {
+        result.current.cancelBatchCache();
+      });
+
+      resolveHttp!({
+        status: 200,
+        html: episodeContentHtml,
+        url: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[0]}`,
+        headers: {},
+      });
+
+      await act(async () => {
+        await batchPromise;
+      });
+
+      expect(saveSpy).not.toHaveBeenCalled();
+      expect(result.current.isBatchCaching).toBe(false);
+      expect(result.current.pendingCacheCount).toBe(2);
+      expect(result.current.novel?.cachedChapters).toBe(0);
+      const queueItems = await queueRepo.listByNovelId(seeded.id);
+      expect(queueItems.every((item) => item.status === "pending")).toBe(true);
+    });
+
+    it("R1-02: React.StrictMode 下でも一括キャッシュ失敗時に failedCacheCount が failedChapterIndexes.length と常に一致すること (AC-ND-25)", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const queueRepo = new SqlQueueRepository(db);
+        const seeded = await seedSampleNovel(novelRepo, 2);
+
+        const httpClient = new MockHttpClient();
+        httpClient.setResponse(
+          new RegExp(KAKUYOMU_EPISODE_IDS[0]),
+          async () => {
+            throw new Error("Network failure");
+          },
+        );
+        httpClient.setResponse(new RegExp(KAKUYOMU_EPISODE_IDS[1]), {
+          status: 200,
+          html: episodeContentHtml,
+          url: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[1]}`,
+        });
+
+        const StrictWrapper = ({ children }: { children: React.ReactNode }) =>
+          React.createElement(
+            React.StrictMode,
+            null,
+            React.createElement(
+              ServiceProvider,
+              {
+                services: {
+                  novelRepository: novelRepo,
+                  chapterRepository: chapterRepo,
+                  queueRepository: queueRepo,
+                  httpClient,
+                },
+              },
+              children,
+            ),
+          );
+
+        const { result } = renderHook(() => useNovelDetail(seeded.id), {
+          wrapper: StrictWrapper,
+        });
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        await act(async () => {
+          await result.current.startBatchCache();
+        });
+
+        expect(result.current.failedChapterIndexes).toEqual([1]);
+        expect(result.current.failedCacheCount).toBe(
+          result.current.failedChapterIndexes.length,
+        );
+        expect(result.current.failedCacheCount).toBe(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("R1-02: startBatchCache 実行中にアンマウントされた場合、0件早期リターンや完了後の setState リークを起こさないこと", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const queueRepo = new SqlQueueRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 1);
+
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        // ケースA: 0件早期リターン（全話フレッシュキャッシュ済み）で clearNovelQueue 待機中にアンマウント
+        await chapterRepo.saveChapterBody(
+          seeded.id,
+          1,
+          {
+            remoteChapterId: KAKUYOMU_EPISODE_IDS[0],
+            title: "第1話",
+            bodyHtml: "<p>本文</p>",
+            byteSize: 6,
+            prevChapterUrl: null,
+            nextChapterUrl: null,
+          },
+          new Date().toISOString(),
+        );
+
+        let resolveClear: (() => void) | null = null;
+        vi.spyOn(queueRepo, "clearNovelQueue").mockImplementationOnce(
+          () =>
+            new Promise<void>((resolve) => {
+              resolveClear = resolve;
+            }),
+        );
+
+        const hookA = renderHook(() => useNovelDetail(seeded.id), {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+            queueRepository: queueRepo,
+          }),
+        });
+
+        await waitFor(() => {
+          expect(hookA.result.current.isLoading).toBe(false);
+        });
+
+        let earlyPromise: Promise<void> | undefined;
+        act(() => {
+          earlyPromise = hookA.result.current.startBatchCache();
+        });
+
+        await waitFor(() => {
+          expect(resolveClear).not.toBeNull();
+        });
+
+        hookA.unmount();
+        resolveClear!();
+        await earlyPromise;
+
+        // ケースB: 本文保存後に getNovelById 待機中でアンマウント
+        const dbB = await resetTestDb();
+        const novelRepoB = new SqlNovelRepository(dbB);
+        const chapterRepoB = new SqlChapterRepository(dbB);
+        const queueRepoB = new SqlQueueRepository(dbB);
+        const seededB = await seedSampleNovel(novelRepoB, 1);
+
+        const httpClientB = new MockHttpClient();
+        httpClientB.setResponse(/kakuyomu\.jp\/works\/.*\/episodes\/.*/, {
+          status: 200,
+          html: episodeContentHtml,
+          url: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[0]}`,
+        });
+
+        let resolveLatestNovel: ((v: typeof seededB | null) => void) | null =
+          null;
+        const origGetById = novelRepoB.getNovelById.bind(novelRepoB);
+        let callCount = 0;
+        vi.spyOn(novelRepoB, "getNovelById").mockImplementation(async (id) => {
+          callCount++;
+          if (callCount === 1) {
+            return origGetById(id);
+          }
+          return new Promise((resolve) => {
+            resolveLatestNovel = resolve;
+          });
+        });
+
+        const hookB = renderHook(() => useNovelDetail(seededB.id), {
+          wrapper: createWrapper({
+            novelRepository: novelRepoB,
+            chapterRepository: chapterRepoB,
+            queueRepository: queueRepoB,
+            httpClient: httpClientB,
+          }),
+        });
+
+        await waitFor(() => {
+          expect(hookB.result.current.isLoading).toBe(false);
+        });
+
+        let batchPromiseB: Promise<void> | undefined;
+        act(() => {
+          batchPromiseB = hookB.result.current.startBatchCache();
+        });
+
+        await waitFor(() => {
+          expect(resolveLatestNovel).not.toBeNull();
+        });
+
+        hookB.unmount();
+        resolveLatestNovel!(seededB);
+        await batchPromiseB;
+
+        expect(errorSpy).not.toHaveBeenCalled();
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    it("R1-22: startBatchCache / refreshToc / confirmClearCache 実行中に subscribePullCompleted が発火した場合、処理中は待機し完了後に遅延サイレント更新すること (AC-ND-28)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const queueRepo = new SqlQueueRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 1);
+
+      let capturedListener:
+        ((result: { pulled: boolean; mergedNovels: number }) => void) | null =
+        null;
+      const mockSyncEngine = {
+        subscribePullCompleted: vi.fn((listener) => {
+          capturedListener = listener;
+          return vi.fn();
+        }),
+        pullAndMerge: vi.fn(),
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+      };
+
+      // 1. startBatchCache 中の遅延
+      let resolveBatchHttp: ((res: HttpResponse) => void) | null = null;
+      let resolveTocHttp: ((res: HttpResponse) => void) | null = null;
+      const httpClient = new MockHttpClient();
+      httpClient.setResponse(
+        /kakuyomu\.jp\/works\/.*\/episodes\/.*/,
+        async () =>
+          new Promise<HttpResponse>((resolve) => {
+            resolveBatchHttp = resolve;
+          }),
+      );
+      httpClient.setResponse(
+        new RegExp(`kakuyomu\\.jp/works/${KAKUYOMU_WORK_ID}$`),
+        async () =>
+          new Promise<HttpResponse>((resolve) => {
+            resolveTocHttp = resolve;
+          }),
+      );
+
+      const { result, unmount } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          queueRepository: queueRepo,
+          httpClient,
+          syncEngine: mockSyncEngine as unknown as SyncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      const listChaptersSpy = vi.spyOn(chapterRepo, "listChaptersByNovelId");
+      const getByIdSpy = vi.spyOn(novelRepo, "getNovelById");
+
+      // 1-a. startBatchCache 開始中に Pull 通知 -> 即時 reloadDetail されないこと
+      let batchPromise: Promise<void> | undefined;
+      act(() => {
+        batchPromise = result.current.startBatchCache();
+      });
+      await waitFor(() => expect(resolveBatchHttp).not.toBeNull());
+
+      const listCallsDuringBatch = listChaptersSpy.mock.calls.length;
+      await novelRepo.updateBookmark(seeded.id, 1, 0.25);
+      act(() => {
+        capturedListener?.({ pulled: true, mergedNovels: 1 });
+      });
+      expect(listChaptersSpy).toHaveBeenCalledTimes(listCallsDuringBatch);
+
+      // 一括キャッシュ完了後に遅延 reloadDetail({ silent: true }) が走り新しおりが反映されること
+      resolveBatchHttp!({
+        status: 200,
+        html: episodeContentHtml,
+        url: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[0]}`,
+        headers: {},
+      });
+      await act(async () => {
+        await batchPromise;
+      });
+      await waitFor(() => {
+        expect(result.current.novel?.bookmarkChapterIndex).toBe(1);
+      });
+      expect(result.current.isLoading).toBe(false);
+
+      // 2. refreshToc 中の遅延
+      let refreshPromise: Promise<boolean> | undefined;
+      act(() => {
+        refreshPromise = result.current.refreshToc();
+      });
+      await waitFor(() => expect(resolveTocHttp).not.toBeNull());
+
+      const getByIdDuringRefresh = getByIdSpy.mock.calls.length;
+      await novelRepo.updateBookmark(seeded.id, 1, 0.5);
+      act(() => {
+        capturedListener?.({ pulled: true, mergedNovels: 1 });
+      });
+      expect(getByIdSpy).toHaveBeenCalledTimes(getByIdDuringRefresh);
+
+      resolveTocHttp!({
+        status: 200,
+        html: workIndexHtml,
+        url: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}`,
+        headers: {},
+      });
+      await act(async () => {
+        await refreshPromise;
+      });
+      await waitFor(() => {
+        expect(result.current.novel?.bookmarkScrollProgress).toBe(0.5);
+      });
+
+      // 3. confirmClearCache 中の遅延
+      let resolveClearBodies: ((deleted: number) => void) | null = null;
+      vi.spyOn(chapterRepo, "deleteCachedBodies").mockImplementationOnce(
+        () =>
+          new Promise<number>((resolve) => {
+            resolveClearBodies = resolve;
+          }),
+      );
+
+      let clearPromise: Promise<number> | undefined;
+      act(() => {
+        clearPromise = result.current.confirmClearCache({ onlyRead: true });
+      });
+      await waitFor(() => expect(resolveClearBodies).not.toBeNull());
+
+      const getByIdDuringClear = getByIdSpy.mock.calls.length;
+      await novelRepo.updateBookmark(seeded.id, 1, 0.75);
+      act(() => {
+        capturedListener?.({ pulled: true, mergedNovels: 1 });
+      });
+      expect(getByIdSpy).toHaveBeenCalledTimes(getByIdDuringClear);
+
+      resolveClearBodies!(0);
+      await act(async () => {
+        await clearPromise;
+      });
+      await waitFor(() => {
+        expect(result.current.novel?.bookmarkScrollProgress).toBe(0.75);
+      });
+
+      // 4. pendingSilentReload 保持中にアンマウントされた場合は flush しないこと
+      resolveTocHttp = null;
+      let pendingRefresh: Promise<boolean> | undefined;
+      act(() => {
+        pendingRefresh = result.current.refreshToc();
+      });
+      await waitFor(() => expect(resolveTocHttp).not.toBeNull());
+
+      const listCallsBeforeUnmount = listChaptersSpy.mock.calls.length;
+      act(() => {
+        capturedListener?.({ pulled: true, mergedNovels: 1 });
+      });
+      unmount();
+      resolveTocHttp!({
+        status: 200,
+        html: workIndexHtml,
+        url: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}`,
+        headers: {},
+      });
+      await pendingRefresh;
+      // refreshToc 自体は 1 回 listChaptersByNovelId を呼ぶが、unmount 後の遅延 reloadDetail は走らない
+      expect(listChaptersSpy).toHaveBeenCalledTimes(listCallsBeforeUnmount + 1);
+    });
+
+    it("R1-22: confirmDeleteNovel 失敗時は遅延サイレント更新を完了後に実行し、成功（削除完了）時は破棄して reloadDetail を呼ばないこと (AC-ND-28)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 1);
+
+      let capturedListener:
+        ((result: { pulled: boolean; mergedNovels: number }) => void) | null =
+        null;
+      const mockSyncEngine = {
+        subscribePullCompleted: vi.fn((listener) => {
+          capturedListener = listener;
+          return vi.fn();
+        }),
+        pullAndMerge: vi.fn(),
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const { result } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          syncEngine: mockSyncEngine as unknown as SyncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      const getByIdSpy = vi.spyOn(novelRepo, "getNovelById");
+
+      // ケース1: deleteNovel が失敗したときは finally で遅延 reloadDetail が走り状態同期すること
+      let rejectDelete: ((err: Error) => void) | null = null;
+      vi.spyOn(novelRepo, "deleteNovel").mockImplementationOnce(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            rejectDelete = reject;
+          }),
+      );
+
+      let deleteFailPromise: Promise<boolean> | undefined;
+      act(() => {
+        deleteFailPromise = result.current.confirmDeleteNovel();
+      });
+      await waitFor(() => expect(rejectDelete).not.toBeNull());
+
+      await novelRepo.updateBookmark(seeded.id, 1, 0.9);
+      const getCallsBeforePullFail = getByIdSpy.mock.calls.length;
+      act(() => {
+        capturedListener?.({ pulled: true, mergedNovels: 1 });
+      });
+      expect(getByIdSpy).toHaveBeenCalledTimes(getCallsBeforePullFail);
+
+      rejectDelete!(new Error("Delete failed"));
+      await act(async () => {
+        await deleteFailPromise;
+      });
+      await waitFor(() => {
+        expect(result.current.novel?.bookmarkScrollProgress).toBe(0.9);
+      });
+
+      // ケース2: deleteNovel が成功したときは削除済み作品への reloadDetail を実行しないこと
+      let resolveDelete: (() => void) | null = null;
+      vi.spyOn(novelRepo, "deleteNovel").mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveDelete = resolve;
+          }),
+      );
+
+      let deleteOkPromise: Promise<boolean> | undefined;
+      act(() => {
+        deleteOkPromise = result.current.confirmDeleteNovel();
+      });
+      await waitFor(() => expect(resolveDelete).not.toBeNull());
+
+      const getCallsBeforePullSuccess = getByIdSpy.mock.calls.length;
+      act(() => {
+        capturedListener?.({ pulled: true, mergedNovels: 1 });
+      });
+
+      resolveDelete!();
+      let deleted = false;
+      await act(async () => {
+        deleted = (await deleteOkPromise) ?? false;
+      });
+      expect(deleted).toBe(true);
+      expect(getByIdSpy).toHaveBeenCalledTimes(getCallsBeforePullSuccess);
+    });
+
+    it("R1-22: reloadDetail 実行時に hasNewUpdate === true の作品を取得した場合、clearNewUpdate を呼び出して State 上も hasNewUpdate: false を保持すること", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 1);
+
+      const { result, unmount } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await db.execute("UPDATE novels SET has_new_update = 1 WHERE id = ?", [
+        seeded.id,
+      ]);
+      const clearSpy = vi.spyOn(novelRepo, "clearNewUpdate");
+
+      await act(async () => {
+        await result.current.reloadDetail({ silent: true });
+      });
+
+      expect(clearSpy).toHaveBeenCalledWith(seeded.id);
+      expect(result.current.novel?.hasNewUpdate).toBe(false);
+      const stored = await novelRepo.getNovelById(seeded.id);
+      expect(stored?.hasNewUpdate).toBe(false);
+
+      // clearNewUpdate 完了待機中にアンマウントされても安全に中断すること
+      await db.execute("UPDATE novels SET has_new_update = 1 WHERE id = ?", [
+        seeded.id,
+      ]);
+      let resolveClearNewUpdate: (() => void) | null = null;
+      clearSpy.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveClearNewUpdate = resolve;
+          }),
+      );
+      let reloadPending: Promise<void> | undefined;
+      act(() => {
+        reloadPending = result.current.reloadDetail({ silent: true });
+      });
+      await waitFor(() => expect(resolveClearNewUpdate).not.toBeNull());
+      unmount();
+      resolveClearNewUpdate!();
+      await reloadPending;
+    });
+
+    it("R1-31: reloadDetail({ silent: true }) 失敗時は error を設定せず既存表示を保持し、非サイレント reloadDetail() 失敗時のみ error を設定すること（アンマウント時除く）(AC-ND-28)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 1);
+
+      const { result, unmount } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // サイレント失敗: error は null のまま既存 novel を保持する
+      const getByIdSpy = vi
+        .spyOn(novelRepo, "getNovelById")
+        .mockRejectedValueOnce(new Error("Silent pull failure"));
+
+      await act(async () => {
+        await result.current.reloadDetail({ silent: true });
+      });
+
+      expect(result.current.error).toBeNull();
+      expect(result.current.novel?.id).toBe(seeded.id);
+      expect(result.current.isLoading).toBe(false);
+
+      // 非サイレント失敗（マウント中）: error が設定される
+      getByIdSpy.mockRejectedValueOnce(new Error("Explicit reload failure"));
+      await act(async () => {
+        await result.current.reloadDetail();
+      });
+
+      expect(result.current.error).toBe("Explicit reload failure");
+      expect(result.current.isLoading).toBe(false);
+
+      // 非サイレント失敗（アンマウント後）: setError リークを起こさない
+      unmount();
+      getByIdSpy.mockRejectedValueOnce(new Error("Unmounted explicit failure"));
+      await result.current.reloadDetail();
+    });
+  });
 });
