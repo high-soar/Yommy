@@ -8,7 +8,10 @@ import type {
   CloudSyncBridge,
 } from "../../../bridges/cloud-sync/types";
 import type { AppSettingsRepository } from "../../../storage/types";
-import type { SyncEngine } from "../../cloud-sync/services/syncEngine";
+import type {
+  PullMergeResult,
+  SyncEngine,
+} from "../../cloud-sync/services/syncEngine";
 
 describe("useCloudSync", () => {
   beforeEach(() => {
@@ -1239,6 +1242,149 @@ describe("useCloudSync", () => {
       await act(async () => {
         rejectSync(new Error("Unmounted sync error"));
         await promise;
+      });
+    });
+  });
+
+  describe("バックグラウンドPull完了通知の購読 (R1-23)", () => {
+    it("subscribePullCompleted で pulled: true を受信したとき最終同期日時が再読込され、アンマウント時に購読解除されること", async () => {
+      const initialTs = Date.now() - 120_000;
+      const updatedTs = Date.now();
+      let currentLastSynced = initialTs;
+
+      const bridge = createMockBridge({
+        status: "connected",
+        email: "user@example.com",
+      });
+      const appSettings = createMockAppSettings({
+        lastSyncedAt: initialTs,
+        email: "user@example.com",
+      });
+      appSettings.getCloudSyncLastSyncedAt = vi.fn(
+        async () => currentLastSynced,
+      );
+
+      let listener: ((result: PullMergeResult) => void) | null = null;
+      const unsubscribeMock = vi.fn();
+      const subscribePullCompletedMock = vi.fn(
+        (cb: (result: PullMergeResult) => void) => {
+          listener = cb;
+          return unsubscribeMock;
+        },
+      );
+
+      const syncEngine = {
+        ...createMockSyncEngine(),
+        subscribePullCompleted: subscribePullCompletedMock,
+      } as unknown as SyncEngine;
+
+      const { result, unmount } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+          syncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.lastSyncedAt).toBe(
+          new Date(initialTs).toISOString(),
+        );
+      });
+      expect(subscribePullCompletedMock).toHaveBeenCalledTimes(1);
+
+      // pulled: false の場合は再読込しない
+      currentLastSynced = updatedTs;
+      await act(async () => {
+        listener?.({ pulled: false, mergedNovels: 0 });
+      });
+      expect(appSettings.getCloudSyncLastSyncedAt).toHaveBeenCalledTimes(1);
+      expect(result.current.lastSyncedAt).toBe(
+        new Date(initialTs).toISOString(),
+      );
+
+      // pulled: true を受信したら最終同期日時を再読込して反映する
+      await act(async () => {
+        listener?.({ pulled: true, mergedNovels: 1 });
+      });
+      await waitFor(() => {
+        expect(result.current.lastSyncedAt).toBe(
+          new Date(updatedTs).toISOString(),
+        );
+      });
+      expect(appSettings.getCloudSyncLastSyncedAt).toHaveBeenCalledTimes(2);
+
+      unmount();
+      expect(unsubscribeMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("subscribePullCompleted 後の再読込でエラーが発生してもクラッシュせず、アンマウント後の完了は state 更新しないこと", async () => {
+      const initialTs = Date.now() - 60_000;
+      const nextTs = Date.now();
+      const bridge = createMockBridge({
+        status: "connected",
+        email: "user@example.com",
+      });
+
+      let resolveReload!: (val: number | null) => void;
+      let callCount = 0;
+      const appSettings = createMockAppSettings({
+        lastSyncedAt: initialTs,
+        email: "user@example.com",
+      });
+      appSettings.getCloudSyncLastSyncedAt = vi.fn().mockImplementation(() => {
+        callCount += 1;
+        if (callCount === 1) {
+          return Promise.resolve(initialTs);
+        }
+        if (callCount === 2) {
+          return Promise.reject(new Error("Read error"));
+        }
+        return new Promise<number | null>((resolve) => {
+          resolveReload = resolve;
+        });
+      });
+
+      let listener: ((result: PullMergeResult) => void) | null = null;
+      const syncEngine = {
+        ...createMockSyncEngine(),
+        subscribePullCompleted: vi.fn(
+          (cb: (result: PullMergeResult) => void) => {
+            listener = cb;
+            return vi.fn();
+          },
+        ),
+      } as unknown as SyncEngine;
+
+      const { result, unmount } = renderHook(() => useCloudSync(), {
+        wrapper: createWrapper({
+          cloudSyncBridge: bridge,
+          appSettingsRepository: appSettings,
+          syncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.lastSyncedAt).toBe(
+          new Date(initialTs).toISOString(),
+        );
+      });
+
+      // エラー発生時もクラッシュせず既存日時を維持
+      await act(async () => {
+        listener?.({ pulled: true, mergedNovels: 1 });
+      });
+      expect(result.current.lastSyncedAt).toBe(
+        new Date(initialTs).toISOString(),
+      );
+
+      // 読込完了前にアンマウントされても state 更新しない
+      await act(async () => {
+        listener?.({ pulled: true, mergedNovels: 1 });
+      });
+      unmount();
+      await act(async () => {
+        resolveReload(nextTs);
       });
     });
   });

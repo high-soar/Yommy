@@ -213,6 +213,21 @@ describe("App コンポーネント", () => {
       expect(toast).toHaveAttribute("role", "status");
     });
 
+    it("ExitToastRoute ストーリー: ServiceProvider 初期化完了（isReady: true）後も終了確認トーストが消えず表示され続ける (R1-24)", async () => {
+      delete window.__yommyServices;
+      render(<ExitToastRoute />);
+
+      await waitFor(() => {
+        expect(window.__yommyServices?.isReady).toBe(true);
+        expect(screen.getByTestId("bookshelf-empty")).toBeInTheDocument();
+      });
+
+      const toast = screen.getByTestId("exit-app-toast");
+      expect(toast).toBeInTheDocument();
+      expect(toast).toHaveTextContent("もう一度バックボタンを押すと終了します");
+      expect(toast).toHaveAttribute("role", "status");
+    });
+
     it("BrowserRoute ストーリー: 内蔵ブラウザ画面と内包タブバーを描画する (SCR-04)", async () => {
       render(<BrowserRoute />);
       expect(screen.getByTestId("app-root")).toBeInTheDocument();

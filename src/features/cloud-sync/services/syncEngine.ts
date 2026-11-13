@@ -1,6 +1,7 @@
 import type { CloudSyncBridge } from "../../../bridges/cloud-sync/types";
 import type { HttpClientBridge } from "../../../bridges/http/types";
 import type { ParserRegistry } from "../../../parsers/parserRegistry";
+import type { ParsedNovelIndex } from "../../../parsers/types";
 import { fetchFullNovelIndex } from "../../../parsers/fetchFullNovelIndex";
 import type {
   AppSettingsRepository,
@@ -56,6 +57,15 @@ function assertNoPrototypePollution(obj: unknown, path = "root"): void {
       `${path}.${key}`,
     );
   }
+}
+
+function selectNewerIsoTimestamp(
+  a: string | null,
+  b: string | null,
+): string | null {
+  if (!a) return b;
+  if (!b) return a;
+  return Date.parse(b) > Date.parse(a) ? b : a;
 }
 
 /**
@@ -332,6 +342,7 @@ export function isUnauthorizedError(err: unknown): boolean {
  */
 export class SyncEngine {
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private hasUnsyncedChanges = false;
   private pendingPromise: Promise<void> | null = null;
   private pendingResolve: (() => void) | null = null;
   private pendingReject: ((err: unknown) => void) | null = null;
@@ -389,6 +400,7 @@ export class SyncEngine {
 
   private async handleUnauthorized(err: unknown): Promise<void> {
     if (isUnauthorizedError(err)) {
+      this.hasUnsyncedChanges = false;
       await this.deps.bridge.signOut();
       await this.deps.appSettingsRepository.setCloudSyncAccountEmail?.(null);
     }
@@ -434,33 +446,46 @@ export class SyncEngine {
     }
   }
 
+  private async fetchVerifiedNovelIndex(
+    canonicalUrl: string,
+    expectedSiteType: string,
+    expectedWorkId: string,
+  ): Promise<ParsedNovelIndex | null> {
+    const parsedUrl = parseNovelUrl(canonicalUrl);
+    if (
+      !parsedUrl ||
+      parsedUrl.workId !== expectedWorkId ||
+      parsedUrl.siteType !== expectedSiteType
+    ) {
+      return null;
+    }
+
+    const parser = this.deps.parserRegistry.getParser(parsedUrl.canonicalUrl);
+    if (!parser) {
+      return null;
+    }
+
+    return fetchFullNovelIndex(
+      this.deps.httpClient,
+      parser,
+      parsedUrl.canonicalUrl,
+    );
+  }
+
   private async mergeNewNovel(
     novelId: string,
     remoteNovel: SyncNovelData,
   ): Promise<void> {
     // 新規作品の自動目次補完
-    const parsedUrl = parseNovelUrl(remoteNovel.canonicalUrl);
-    if (!parsedUrl) {
-      return; // SSRF ガードによりスキップ
-    }
-
-    if (
-      parsedUrl.workId !== remoteNovel.remoteWorkId ||
-      parsedUrl.siteType !== remoteNovel.siteType
-    ) {
-      return; // canonicalUrl と remoteWorkId / siteType の不整合を遮断
-    }
-
-    const parser = this.deps.parserRegistry.getParser(parsedUrl.canonicalUrl);
-    if (!parser) {
-      return;
-    }
-
-    const parsedIndex = await fetchFullNovelIndex(
-      this.deps.httpClient,
-      parser,
-      parsedUrl.canonicalUrl,
+    const parsedIndex = await this.fetchVerifiedNovelIndex(
+      remoteNovel.canonicalUrl,
+      remoteNovel.siteType,
+      remoteNovel.remoteWorkId,
     );
+    if (!parsedIndex) {
+      return; // SSRF ガード / 不整合 / 未対応パーサー時はスキップ
+    }
+
     await this.deps.novelRepository.upsertNovelWithToc(
       parsedIndex,
       new Date().toISOString(),
@@ -504,22 +529,69 @@ export class SyncEngine {
     remoteNovel: SyncNovelData,
     localNovel: NovelRecord,
   ): Promise<void> {
+    let currentLocalNovel = localNovel;
+    let chapters =
+      await this.deps.chapterRepository.listChaptersByNovelId(novelId);
+    const localChapterIdSet = new Set(chapters.map((ch) => ch.remoteChapterId));
+
+    // リモート側にローカル未保持の話・範囲外しおり・未知既読話がある場合、既存作品の目次を自動補完する (R1-19)
+    const needsTocRefresh =
+      remoteNovel.totalChapters > currentLocalNovel.totalChapters ||
+      (remoteNovel.bookmarkChapterIndex !== null &&
+        remoteNovel.bookmarkChapterIndex > currentLocalNovel.totalChapters) ||
+      remoteNovel.readChapterIds.some((id) => !localChapterIdSet.has(id));
+
+    if (needsTocRefresh) {
+      try {
+        const parsedIndex = await this.fetchVerifiedNovelIndex(
+          remoteNovel.canonicalUrl,
+          currentLocalNovel.siteType,
+          currentLocalNovel.remoteWorkId,
+        );
+        if (parsedIndex) {
+          await this.deps.novelRepository.upsertNovelWithToc(
+            parsedIndex,
+            new Date().toISOString(),
+            { updateOnly: true },
+          );
+          const reloaded =
+            await this.deps.novelRepository.getNovelById(novelId);
+          if (reloaded) {
+            currentLocalNovel = reloaded;
+          }
+          chapters =
+            await this.deps.chapterRepository.listChaptersByNovelId(novelId);
+        }
+      } catch (err) {
+        // オフライン等で目次取得に失敗してもクラッシュさせず、ローカル既存話でマージを継続する
+        console.warn(
+          `[SyncEngine] Failed to refresh TOC for existing novel ${novelId}, continuing with local chapters:`,
+          err,
+        );
+      }
+    }
+
     // 1. お気に入りおよび更新日時の LWW 判定（ローカルの既存の novels.updated_at とリモートの updatedAt を比較し、リモートが新しい場合は後続の updateSyncMetadata で同期・復元する）
     const isRemoteUpdatedNewer =
-      Date.parse(remoteNovel.updatedAt) > Date.parse(localNovel.updatedAt);
+      Date.parse(remoteNovel.updatedAt) >
+      Date.parse(currentLocalNovel.updatedAt);
 
-    // 2. 既存作品のしおりマージ
+    // 2. 既存作品のしおりマージ（目次未補完で範囲外のままになる場合はしおり適用と lastReadAt 更新をスキップし次回オンライン同期で追いつく）
     const remoteLastRead = remoteNovel.lastReadAt
       ? Date.parse(remoteNovel.lastReadAt)
       : 0;
-    const localLastRead = localNovel.lastReadAt
-      ? Date.parse(localNovel.lastReadAt)
+    const localLastRead = currentLocalNovel.lastReadAt
+      ? Date.parse(currentLocalNovel.lastReadAt)
       : 0;
+    const isBookmarkOutOfRange =
+      remoteNovel.bookmarkChapterIndex !== null &&
+      remoteNovel.bookmarkChapterIndex > currentLocalNovel.totalChapters;
 
-    if (remoteLastRead > localLastRead) {
+    if (remoteLastRead > localLastRead && !isBookmarkOutOfRange) {
       if (
         remoteNovel.bookmarkChapterIndex !== null &&
-        remoteNovel.bookmarkChapterIndex !== localNovel.bookmarkChapterIndex
+        remoteNovel.bookmarkChapterIndex !==
+          currentLocalNovel.bookmarkChapterIndex
       ) {
         await this.deps.novelRepository.updateBookmark(
           novelId,
@@ -542,8 +614,6 @@ export class SyncEngine {
     }
 
     // 4. 既読エピソードの和集合マージ
-    const chapters =
-      await this.deps.chapterRepository.listChaptersByNovelId(novelId);
     const remoteReadSet = new Set(remoteNovel.readChapterIds);
     for (const ch of chapters) {
       if (!ch.isRead && remoteReadSet.has(ch.remoteChapterId)) {
@@ -596,6 +666,7 @@ export class SyncEngine {
   private async doPullAndMerge(): Promise<PullMergeResult> {
     const authState = await this.deps.bridge.getAuthState();
     if (authState.status !== "connected") {
+      this.hasUnsyncedChanges = false;
       const result: PullMergeResult = { pulled: false, mergedNovels: 0 };
       this.notifyPullCompleted(result);
       return result;
@@ -646,7 +717,23 @@ export class SyncEngine {
   }
 
   async pullAndMerge(): Promise<PullMergeResult> {
-    return this.runExclusive(() => this.doPullAndMerge());
+    const result = await this.runExclusive(() => this.doPullAndMerge());
+    // 未同期のローカル変更が残っている場合（タイマー保留中や前回オフライン失敗後）、Pull マージ後に追撃 Push を実行する (R1-23)
+    if (this.hasUnsyncedChanges) {
+      const { resolve } = this.extractPendingHandlers();
+      try {
+        await this.pushCurrentState();
+      } catch (err) {
+        // オフライン等の Push 失敗時は hasUnsyncedChanges を保持し pullAndMerge 自体は失敗させない
+        console.warn(
+          "[SyncEngine] pullAndMerge 後の保留 Push に失敗しました:",
+          err,
+        );
+      } finally {
+        if (resolve) resolve();
+      }
+    }
+    return result;
   }
 
   private async buildSyncNovels(): Promise<Record<string, SyncNovelData>> {
@@ -730,6 +817,14 @@ export class SyncEngine {
 
           merged[id] = {
             ...local,
+            totalChapters: Math.max(
+              local.totalChapters,
+              remoteNovel.totalChapters,
+            ),
+            latestEpisodePublishedAt: selectNewerIsoTimestamp(
+              local.latestEpisodePublishedAt,
+              remoteNovel.latestEpisodePublishedAt,
+            ),
             readChapterIds: Array.from(
               new Set([...local.readChapterIds, ...remoteNovel.readChapterIds]),
             ),
@@ -798,6 +893,7 @@ export class SyncEngine {
   private async doPushCurrentState(): Promise<void> {
     const authState = await this.deps.bridge.getAuthState();
     if (authState.status !== "connected") {
+      this.hasUnsyncedChanges = false;
       return;
     }
 
@@ -842,6 +938,7 @@ export class SyncEngine {
       };
 
       await this.deps.bridge.pushFile(JSON.stringify(state));
+      this.hasUnsyncedChanges = false;
 
       const now = Date.now();
       await this.deps.appSettingsRepository.setCloudSyncLastSyncedAt?.(now);
@@ -874,6 +971,7 @@ export class SyncEngine {
   }
 
   scheduleDebouncedPush(delayMs = 2500): Promise<void> {
+    this.hasUnsyncedChanges = true;
     if (this.debounceTimer !== null) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
@@ -903,6 +1001,7 @@ export class SyncEngine {
   }
 
   cancelDebouncedPush(): void {
+    this.hasUnsyncedChanges = false;
     const { resolve } = this.extractPendingHandlers();
     if (resolve) {
       resolve();

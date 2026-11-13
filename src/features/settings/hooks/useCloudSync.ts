@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServices } from "../../../app/ServiceProvider";
 import type { CloudSyncAuthState } from "../../../bridges/cloud-sync/types";
+import type { AppSettingsRepository } from "../../../storage/types";
 
 export interface UseCloudSyncResult {
   authState: CloudSyncAuthState;
@@ -28,6 +29,19 @@ function parseLastSyncedAt(raw: unknown): string | null {
     }
   }
   return null;
+}
+
+async function readLastSyncedAt(
+  appSettingsRepository: AppSettingsRepository,
+): Promise<string | null> {
+  if (appSettingsRepository.getCloudSyncLastSyncedAt) {
+    const ts = await appSettingsRepository.getCloudSyncLastSyncedAt();
+    return parseLastSyncedAt(ts);
+  }
+  const raw = await appSettingsRepository.getSetting(
+    "cloud_sync_last_synced_at",
+  );
+  return parseLastSyncedAt(raw);
 }
 
 function isUnauthorizedError(err: unknown): boolean {
@@ -80,16 +94,9 @@ export function useCloudSync(): UseCloudSyncResult {
     async function initialize() {
       try {
         // 1. 保存済みの最終同期日時を復元
-        let restoredLastSynced: string | null = null;
-        if (appSettingsRepository.getCloudSyncLastSyncedAt) {
-          const ts = await appSettingsRepository.getCloudSyncLastSyncedAt();
-          restoredLastSynced = parseLastSyncedAt(ts);
-        } else {
-          const raw = await appSettingsRepository.getSetting(
-            "cloud_sync_last_synced_at",
-          );
-          restoredLastSynced = parseLastSyncedAt(raw);
-        }
+        const restoredLastSynced = await readLastSyncedAt(
+          appSettingsRepository,
+        );
 
         // 2. 認証状態を取得
         let bridgeState: CloudSyncAuthState = { status: "unlinked" };
@@ -139,6 +146,30 @@ export function useCloudSync(): UseCloudSyncResult {
       isMountedRef.current = false;
     };
   }, [appSettingsRepository, cloudSyncBridge, isReady]);
+
+  // バックグラウンド自動 Pull 完了時に最終同期日時を再読込して最新化 (R1-23)
+  useEffect(() => {
+    if (!isReady || !syncEngine?.subscribePullCompleted) {
+      return;
+    }
+    let cancelled = false;
+    const unsubscribe = syncEngine.subscribePullCompleted((result) => {
+      if (!result.pulled) return;
+      void readLastSyncedAt(appSettingsRepository)
+        .then((syncedAt) => {
+          if (!cancelled) {
+            setLastSyncedAt(syncedAt);
+          }
+        })
+        .catch(() => {
+          // バックグラウンドPull後の日時再読込失敗時は既存表示を維持
+        });
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [appSettingsRepository, isReady, syncEngine]);
 
   // Google アカウント連携（認可フロー実行）
   const signIn = useCallback(async (): Promise<void> => {
