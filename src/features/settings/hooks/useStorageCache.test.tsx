@@ -19,6 +19,10 @@ import { MockAppBridge } from "../../../bridges/app";
 import { MockCloudSyncBridge } from "../../../bridges/cloud-sync/mockCloudSyncBridge";
 import { MockVolumeKeyBridge } from "../../../bridges/volume-key/mockVolumeKeyBridge";
 import { MockWebViewDomBridge } from "../../../bridges/webview/mockWebViewDomBridge";
+import type {
+  PullMergeResult,
+  SyncEngine,
+} from "../../cloud-sync/services/syncEngine";
 import { useStorageCache } from "./useStorageCache";
 
 function createMockServices(
@@ -620,5 +624,165 @@ describe("useStorageCache", () => {
       await promise1!;
     });
     expect(deleteAllCachedBodiesMock).toHaveBeenCalledTimes(1);
+  });
+
+  describe("サイレント再取得とバックグラウンドPull購読 (R1-23)", () => {
+    it("refreshSummary({ silent: true }) は isLoading を true にせず、エラー時も error を上書きしないこと", async () => {
+      let resolveSecondCall!: (val: {
+        totalCachedChapters: number;
+        totalByteSize: number;
+      }) => void;
+      let callCount = 0;
+
+      const services = createMockServices({
+        chapterRepoOverrides: {
+          getStorageCacheSummary: vi.fn(() => {
+            callCount += 1;
+            if (callCount === 1) {
+              return Promise.resolve({
+                totalCachedChapters: 3,
+                totalByteSize: 3000,
+              });
+            }
+            if (callCount === 2) {
+              return new Promise<{
+                totalCachedChapters: number;
+                totalByteSize: number;
+              }>((resolve) => {
+                resolveSecondCall = resolve;
+              });
+            }
+            return Promise.reject(new Error("サイレント取得失敗"));
+          }),
+        },
+      });
+
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <ServiceContext.Provider value={services}>
+          {children}
+        </ServiceContext.Provider>
+      );
+
+      const observedLoadingAfterReady: boolean[] = [];
+      const { result } = renderHook(
+        () => {
+          const hookResult = useStorageCache();
+          if (callCount >= 2) {
+            observedLoadingAfterReady.push(hookResult.isLoading);
+          }
+          return hookResult;
+        },
+        { wrapper },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+        expect(result.current.summary.totalCachedChapters).toBe(3);
+      });
+
+      const silentRefresh = result.current.refreshSummary as (options?: {
+        silent?: boolean;
+      }) => Promise<void>;
+      let silentPromise!: Promise<void>;
+      act(() => {
+        silentPromise = silentRefresh({ silent: true });
+      });
+
+      expect(result.current.isLoading).toBe(false);
+
+      await act(async () => {
+        resolveSecondCall({ totalCachedChapters: 9, totalByteSize: 9000 });
+        await silentPromise;
+      });
+
+      expect(observedLoadingAfterReady).not.toContain(true);
+      expect(result.current.summary).toEqual({
+        totalCachedChapters: 9,
+        totalByteSize: 9000,
+      });
+
+      // silent: true でエラーが発生しても hook の error は設定されず既存サマリーが維持されること
+      await act(async () => {
+        await expect(silentRefresh({ silent: true })).rejects.toThrow(
+          "サイレント取得失敗",
+        );
+      });
+      expect(result.current.error).toBeNull();
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.summary).toEqual({
+        totalCachedChapters: 9,
+        totalByteSize: 9000,
+      });
+    });
+
+    it("subscribePullCompleted で pulled: true を受信したときサイレントに再集計し、アンマウント時に購読解除されること", async () => {
+      let summaryCount = 2;
+      let listener: ((result: PullMergeResult) => void) | null = null;
+      const unsubscribeMock = vi.fn();
+      const subscribePullCompletedMock = vi.fn(
+        (cb: (result: PullMergeResult) => void) => {
+          listener = cb;
+          return unsubscribeMock;
+        },
+      );
+
+      const getSummaryMock = vi.fn(async () => ({
+        totalCachedChapters: summaryCount,
+        totalByteSize: summaryCount * 1024,
+      }));
+
+      const services = createMockServices({
+        chapterRepoOverrides: {
+          getStorageCacheSummary: getSummaryMock,
+        },
+        syncEngine: {
+          subscribePullCompleted: subscribePullCompletedMock,
+        } as unknown as SyncEngine,
+      });
+
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <ServiceContext.Provider value={services}>
+          {children}
+        </ServiceContext.Provider>
+      );
+
+      const { result, unmount } = renderHook(() => useStorageCache(), {
+        wrapper,
+      });
+
+      await waitFor(() => {
+        expect(result.current.summary.totalCachedChapters).toBe(2);
+      });
+      expect(subscribePullCompletedMock).toHaveBeenCalledTimes(1);
+
+      // pulled: false では再集計しない
+      summaryCount = 10;
+      await act(async () => {
+        listener?.({ pulled: false, mergedNovels: 0 });
+      });
+      expect(getSummaryMock).toHaveBeenCalledTimes(1);
+      expect(result.current.summary.totalCachedChapters).toBe(2);
+
+      // pulled: true でサイレント再集計する
+      await act(async () => {
+        listener?.({ pulled: true, mergedNovels: 1 });
+      });
+      await waitFor(() => {
+        expect(result.current.summary.totalCachedChapters).toBe(10);
+      });
+      expect(result.current.isLoading).toBe(false);
+
+      // サイレント再集計が失敗しても error をセットせず unhandled rejection を起こさない
+      getSummaryMock.mockRejectedValueOnce(
+        new Error("バックグラウンド取得失敗"),
+      );
+      await act(async () => {
+        listener?.({ pulled: true, mergedNovels: 1 });
+      });
+      expect(result.current.error).toBeNull();
+
+      unmount();
+      expect(unsubscribeMock).toHaveBeenCalledTimes(1);
+    });
   });
 });
