@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 
 export interface BookmarkConflictDialogProps {
   /** ダイアログの表示状態 */
@@ -29,13 +29,49 @@ export const BookmarkConflictDialog: React.FC<BookmarkConflictDialogProps> = ({
   onMoveToRemote,
   onKeepCurrent,
 }) => {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!isOpen) return;
+
+    const dialog = dialogRef.current!;
+    const firstEnabled = dialog.querySelector<HTMLButtonElement>(
+      "button:not(:disabled)",
+    );
+    (firstEnabled ?? dialog).focus();
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
+        return;
+      }
+
+      if (e.key !== "Tab") {
+        return;
+      }
+
+      const focusables = dialog.querySelectorAll<HTMLButtonElement>(
+        "button:not(:disabled)",
+      );
+      if (focusables.length === 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+
+      if (e.shiftKey) {
+        if (active === first || !dialog.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !dialog.contains(active)) {
+        e.preventDefault();
+        first.focus();
       }
     };
 
@@ -55,13 +91,15 @@ export const BookmarkConflictDialog: React.FC<BookmarkConflictDialogProps> = ({
       className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50"
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="bookmark-conflict-title"
         aria-describedby="bookmark-conflict-message"
         data-testid="bookmark-conflict-dialog"
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 shadow-xl w-full max-w-md mx-auto"
+        className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 shadow-xl w-full max-w-md mx-auto focus:outline-hidden"
       >
         <h2
           id="bookmark-conflict-title"
