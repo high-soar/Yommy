@@ -485,7 +485,7 @@ export interface UseNovelDetailResult {
    - `ServiceProvider` の `isReady === true` 後、`novelRepository.getNovelById(novelId)` および `chapterRepository.listChaptersByNovelId(novelId)` を並行取得する。
    - `queueRepository` が利用可能な場合、以下の手順で `download_queue` を同期する（`v0.9` Issue #268 / `v1.2` Issue #344 拡張）：
      - `cacheScheduler?.isNovelBatchCaching(novelId) !== true` の場合のみ `queueRepository.resetInterruptedToPending(novelId)` を呼び出し、アプリ再起動等で `'downloading'` のまま残ったレコードを `'pending'` に戻す（バックグラウンド一括キャッシュ継続中に再訪問した場合は実行中の `'downloading'` レコードを誤って巻き戻さない）。
-     - `cacheScheduler` が注入されている場合は、マウント時に `cacheScheduler.getNovelProgress(novelId)` から進行中状態（`isBatchCaching`, `batchCacheProgress`）を復元し、`cacheScheduler.subscribeProgress(novelId, ...)` を購読して各話取得ごとの進捗・キャッシュ完了済み話数・完了/失敗/中断通知をリアルタイムに反映する。
+     - `cacheScheduler` が注入されている場合は、マウント時に `cacheScheduler.getNovelProgress(novelId)` から進行中状態（`isBatchCaching`, `status`, `current`, `total`, `failedChapterIndexes`）を復元し、`cacheScheduler.subscribeProgress(novelId, ...)` を購読して各話取得ごとの進捗・キャッシュ完了済み話数・完了（`status === "completed"`）／手動中断（`status === "paused"`）／破壊的操作前キャンセル（`status === "cancelled"`）の通知を正確に識別して反映する。
      - リーダー画面（`SCR-03`）での閲覧や 5話自動先読みにより既に有効キャッシュ済み（`isChapterFresh === true`）となった話数、または `'completed'` 状態のレコードがキューに残っている場合は `queueRepository.deleteByNovelAndChapters(novelId, freshOrCompletedIndexes)` で自動除去し、全話キャッシュ済み（`isAllCached === true`）であれば `queueRepository.clearNovelQueue(novelId)` でキューを空にする。
      - 残存する `download_queue` レコードから `pendingCacheCount`（`status === 'pending'` 件数）、`failedCacheCount`（`status === 'failed'` 件数）、および `failedChapterIndexes`（未キャッシュかつ `status === 'failed'` の話数連番昇順配列）を算出して State に反映する。
    - 読み込み完了時、対象作品の `novel.hasNewUpdate === true` の場合は `novelRepository.clearNewUpdate(novelId)` を呼び出して `has_new_update = 0` に解除し、本棚画面（`SCR-01`）復帰時にも「NEW」バッジが消去された状態を維持する。
@@ -502,7 +502,7 @@ export interface UseNovelDetailResult {
    - **状態再取得と完了フィードバック**:
      - DB から最新の `novel` と `chapters` を再取得して State を更新する。
      - 追加話数 `addedCount = Math.max(0, updatedChapters.length - prevCount)` を算出し、`addedCount > 0` の場合は `目次を更新しました（+${addedCount}話）`、`addedCount === 0` の場合は `最新の状態です` を `refreshMessage` にセットする。
-     - `wasBatchCaching === true` かつ更新後目次にも未取得対象話が残存する場合は、新着話を含む残未キャッシュ話を自動的に `cacheScheduler` へ再エンキュー・再開した上で、`true` を返す。
+     - `wasBatchCaching === true` かつ更新後目次にも未取得対象話（未キャッシュまたは 7 日経過話）が残存する場合は、新着話を含む残対象話インデックスを `await cacheScheduler.enqueueBatchCache(novelId, remainingTargetIndexes)` へ再投入して即時 resolve（キュー登録＋`low` バックグラウンド再開）した上で、`true` を返す（全話完了までは待機しないため `isRefreshing` をブロックしない）。
    - **通信・パース失敗時**:
      - 例外発生時は既存の `novel` / `chapters` 表示を維持したまま、`error` に日本語エラーメッセージをセットして `false` を返す。
 3. **作品削除とカスケード削除（`confirmDeleteNovel`）**:
@@ -517,12 +517,12 @@ export interface UseNovelDetailResult {
    - リーダー画面からの上部オーバーレイ「← 目次」ボタン押下または OS バックキー操作（`TR-06`）で `SCR-02` へ戻ると、`useNovelDetail` のマウント時ロードおよび `CacheScheduler` 進捗購読により該当エピソードのバッジが `取得済み`（`episode-cached-badge`）・`既読`（`episode-read-badge`）・`しおり`（`episode-bookmark-badge`）に、ヘッダーの取得済み話数・読書再開ボタン・継続中の一括キャッシュ進捗が最新値に反映される。
 5. **未取得話の一括キャッシュ・中断再開・再試行パイプライン（`TR-18`、`v0.3` Issue #81 / `v0.9` Issue #268 / `v1.2` Issue #344 非ブロッキング・優先度キュー統合）**:
    - `isBatchCaching === true` の間は同一作品の一括キャッシュ多重起動のみ防止する（読書開始ボタン、各話行タップ、お気に入り、目次更新、内蔵ブラウザ遷移、作品削除、他画面遷移は一切ブロックしない）。
-   - `ServiceProvider` より `cacheScheduler` が提供されている場合は、`startBatchCache` は `priority: 'low'` として `cacheScheduler.enqueueBatchCache(novelId, ...)` へ委譲する（テスト等で未注入時は既存のフック内直列実行フォールバックを維持）。
+   - `ServiceProvider` より `cacheScheduler` が提供されている場合は、`startBatchCache` は対象作品の未取得話・7日経過話インデックス一覧（`targetIndexes`）を抽出し、`await cacheScheduler.enqueueBatchCache(novelId, targetIndexes)` へ委譲する（`resetInterruptedToPending`・有効キャッシュ除外・`queueRepository.enqueueChapters` 登録・`'downloading'`/`'completed'`/`'failed'` 遷移・完走/失敗時キュー整理は `CacheScheduler` 側で一元管理し、`enqueueBatchCache` はキュー投入完了時に即時 resolve する）。
+   - ※`cacheScheduler` 未注入時（既存単体テスト互換フォールバック）のみ、フック内で直列取得ループを実行する（開始時に `queueRepository.resetInterruptedToPending`・有効キャッシュ除外・`enqueueChapters` をフック側で実行）。
    - 全話キャッシュ済み判定（`isAllCached`）は、エピソードが存在し（`chapters.length > 0`）かつ全話が 7日以内の有効なキャッシュを持つ場合（`chapters.every(c => c.downloadedAt !== null && (now - new Date(c.downloadedAt).getTime() < CACHE_TTL_MS))`）に `true` となる。総話数が 0 話（`chapters.length === 0`）の場合は `isAllCached = false` となり、ボタンは disabled 化される。
-   - 開始時に `queueRepository.resetInterruptedToPending(novelId)`（新規エンキュー開始時のみ）および有効キャッシュ済み話のキュー除外を実行する。
    - 対象作品の全エピソード（`chapters`）から、未取得話（`downloadedAt === null`）または 7日経過した古いキャッシュ（`now - new Date(downloadedAt).getTime() >= CACHE_TTL_MS`）を抽出する。
    - 対象が 0 件の場合は `queueRepository.clearNovelQueue(novelId)` を実行し、即座に通知メッセージ（`全話キャッシュ済みです`）を表示して終了する。
-   - 抽出した対象エピソード群を `queueRepository.enqueueChapters(novelId, targetInputs)` で `download_queue` へ `'pending'` として登録する（既存の `'failed'` 行も `status = 'pending'`, `last_error = NULL` にリセットされ、`retry_count` は保持される）。
+   - `download_queue` へ `'pending'` 登録する際（`enqueueChapters`）、既存の `'failed'` 行も `status = 'pending'`, `last_error = NULL` にリセットされ、`retry_count` は保持される。
    - 今回の実行対象話数 $N = \text{targets.length}$（初回は未取得全話数、中断再開・再試行時は残り話数）に対し、`isBatchCaching = true`, `batchCacheProgress = { current: 0, total: N }`, `error = null`, `refreshMessage = null` を設定する。
    - `CacheScheduler` が `low` 優先度として、上位優先度（リーダー即時取得 `high` / 5話先読み `medium`）が存在しない間のみ 1話ごとに `PREFETCH_INTERVAL_MS`（1.5秒）のウェイト間隔を空けながら直列に取得を実行する（上位タスク到達時は自動退避・一時停止し、上位タスク完了後に残 `'pending'` 話から自動再開）。
      - 各話取得開始時に `queueRepository.updateStatus(novelId, chapter.chapterIndex, 'downloading')` に更新する。
@@ -537,9 +537,11 @@ export interface UseNovelDetailResult {
    - **明示的手動中断（`cancelBatchCache`）とアンマウント時継続（`v1.2` Issue #344）**:
      - `SCR-02` のアンマウント（`SCR-03` リーダー画面や `SCR-01` 本棚画面への遷移）では **`cancelBatchCache` や `abort()` を実行しない**（進捗購読の解除のみ行い、アプリが起動している限りバックグラウンド一括キャッシュは継続する）。
      - ユーザーがヘッダーの「中断」ボタン（`cancelBatchCache`）を押下した場合のみ `cacheScheduler.pauseNovelTasks(novelId)` により即座に停止し、実行中だった `'downloading'` 話を `'pending'` に戻して既存 `'pending'`/`'failed'` キューを保持する（取得済み話数は SQLite 内に保持され、再開ボタンに `キャッシュを再開（残りN話）` が表示される）。
-   - ループ完走時（中断なし）：
-     - **失敗 0 件（全対象話成功）の場合**: `queueRepository.clearNovelQueue(novelId)` で当該作品のキューレコードを全件削除（クリーンアップ）し、`novelRepository.getNovelById(novelId)` で作品最新情報を同期した上で、`pendingCacheCount = 0`, `failedCacheCount = 0`, `failedChapterIndexes = []`, `refreshMessage = "全話のキャッシュを取得しました"`, `isBatchCaching = false`, `batchCacheProgress = null` とする。
-     - **1話以上が取得失敗（失敗数 $F \ge 1$）の場合**: 成功した `'completed'` レコードのみを `deleteByNovelAndChapters` で削除して `'failed'` レコードを `download_queue` に残し、`pendingCacheCount = 0`, `failedCacheCount = F`, `failedChapterIndexes` を更新した上で、`error = "${F}話の取得に失敗しました（再試行可能）"` を設定し、`isBatchCaching = false`, `batchCacheProgress = null` とする（ボタンラベルは `失敗した話を再試行（${F}話）` に切り替わる）。
+   - **終了・中断・キャンセル時の `subscribeProgress` 識別ルール（`CacheNovelProgress.status`）**:
+     - **`status === "completed"` かつ `failedCount === 0`（失敗 0 件で完走）の場合**: `queueRepository.clearNovelQueue(novelId)` によりクリーンアップされた状態で `novelRepository.getNovelById(novelId)` で作品最新情報を同期した上で、`pendingCacheCount = 0`, `failedCacheCount = 0`, `failedChapterIndexes = []`, `refreshMessage = "全話のキャッシュを取得しました"`, `isBatchCaching = false`, `batchCacheProgress = null` とする。
+     - **`status === "completed"` かつ `failedCount >= 1`（1話以上が取得失敗）の場合**: 成功した `'completed'` レコードのみが削除され `'failed'` レコードが `download_queue` に残存した状態で、`pendingCacheCount = 0`, `failedCacheCount = failedCount`, `failedChapterIndexes = progress.failedChapterIndexes` を更新し、`error = "${failedCount}話の取得に失敗しました（再試行可能）"` を設定して、`isBatchCaching = false`, `batchCacheProgress = null` とする（ボタンラベルは `失敗した話を再試行（${failedCount}話）` に切り替わる）。
+     - **`status === "paused"`（手動「中断」または `refreshToc` 一時停止）の場合**: 完了メッセージ（`refreshMessage = "全話のキャッシュを取得しました"`）は設定せず、`queueRepository` から最新の `pendingCacheCount`・`failedCacheCount`・`failedChapterIndexes` を再同期し、`isBatchCaching = false`, `batchCacheProgress = null` とする（取得済み話数は SQLite に保持され、`キャッシュを再開（残りN話）` が表示される）。
+     - **`status === "cancelled"`（`confirmClearCache` / `confirmDeleteNovel` / 設定画面キャッシュ削除等による `cancelNovelTasks` / `cancelAllTasks`）の場合**: 完了メッセージを誤設定せず、`isBatchCaching = false`, `batchCacheProgress = null` にリセットし、削除パイプライン側の後続メッセージ制御に委ねる。
 6. **本文キャッシュ削除パイプライン（`TR-19`、`v0.5` Issue #170 / `v0.9` Issue #268 / `v1.2` Issue #344 協調制御）**:
    - `isClearingCache = true`, `error = null` にセットし、進行中の対象作品一括キャッシュ・先読みタスクによる削除直後の書き戻し競合を防ぐため、`await cacheScheduler?.cancelNovelTasks(novelId, { clearQueue: !options.onlyRead })` を先行実行する（`onlyRead: true` 時は未読 `'pending'`/`'failed'` キュー行を保持する `R1-18`）。
    - `deletedCount = await chapterRepository.deleteCachedBodies(novelId, options)` を実行する。

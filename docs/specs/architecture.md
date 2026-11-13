@@ -877,7 +877,7 @@ export const PREFETCH_COUNT = 5;
    - 対象サーバーの過負荷防止（第 $N$ 話取得直後の連続リクエスト抑止）のため、最初の先読み（第 $N+1$ 話）リクエスト開始前に `PREFETCH_INTERVAL_MS`（1.5秒）の初期インターバルを空け、以降も 1話の取得完了ごとに 1.5秒のウェイトを空けて直列実行する。
    - `CacheScheduler` 注入時はリーダーの先読み（`'medium'`）のみを `AbortController` / キャンセル ID で制御し、ユーザーが `goToChapter` で別エピソードへ移動した際やリーダー画面を離脱した際は、直前の `'medium'` タスク（進行中の HTTP 通信含む）のみを直ちにキャンセルしてリソースを解放する（`'low'` 一括キャッシュタスクは中断せず完了後に自動再開させる）。また先行先読みタスク（進行中の HTTP 通信含む）の完了・中断待機による直列化、初期ロード通信完了後のマウント状態ガード（`isMounted`）、および `AbortSignal` 連動により、画面離脱後の DB 書き込みを防止する（R1-29）。
 3. **作品詳細での未取得話一括キャッシュと優先度スケジューラ・永続ダウンロードキュー統合（`useNovelDetail` → `CacheScheduler` 優先度 `'low'` / `QueueRepository`、`v0.3` Issue #81 / `v0.9` Issue #268 / `v1.2` Issue #344）**:
-   - 作品詳細ヘッダーの3点メニュー内「未取得話を一括キャッシュ」（または中断後の「キャッシュを再開（残りN話）」、失敗後の「失敗した話を再試行（N話）」）操作（`TR-18`、`v1.1` Issue #343）により、未キャッシュエピソード（および TTL 7日経過した古いキャッシュ）を `QueueRepository`（`download_queue` テーブル）へ `'pending'` として登録し、`CacheScheduler` に優先度 `'low'` として委譲して `PREFETCH_INTERVAL_MS`（1.5秒）間隔で順次直列取得する。
+   - 作品詳細ヘッダーの3点メニュー内「未取得話を一括キャッシュ」（または中断後の「キャッシュを再開（残りN話）」、失敗後の「失敗した話を再試行（N話）」）操作（`TR-18`、`v1.1` Issue #343）により、未キャッシュエピソード（および TTL 7日経過した古いキャッシュ）を `CacheScheduler.enqueueBatchCache`（優先度 `'low'`）へ委譲し、`CacheScheduler` 内で `QueueRepository`（`download_queue` テーブル）へ `'pending'` 登録（キュー投入完了時に即時 resolve）した上で `PREFETCH_INTERVAL_MS`（1.5秒）間隔で順次直列取得する。
    - **`SCR-02` 非ブロッキング ＆ 画面離脱継続**: 一括キャッシュ実行中も `SCR-02` の閲覧操作・リーダー遷移（`TR-04`）をブロックせず、`SCR-02` を離脱（アンマウント）しても `CacheScheduler` 上の `'low'` タスクは中断せずアプリ起動中バックグラウンド継続する。リーダー遷移で `'high'`（即時取得）や `'medium'`（5話先読み）が投入された場合は `'low'` を自動退避（実行中の `'downloading'` 行は `retryCount` を増加させず `'pending'` へ巻き戻し）し、上位優先度キューが空になった時点で残 `'pending'` 話から自動再開する。
    - 1話取得開始時にステータスを `'downloading'`、保存成功時に `'completed'` へ更新し、進捗購読（`subscribeProgress`）経由で `SCR-02` 表示中または再訪問時にヘッダーの取得済み話数（`cachedChapters`）・容量および各話リストのキャッシュバッジをリアルタイムに更新する（`novels.updated_at` は更新せず保持する、R2-16）。`SCR-02` 再訪問時に `cacheScheduler.isNovelBatchCaching(novelId) === true` の場合は `resetInterruptedToPending` を呼び出さない。
    - 特定話の取得に失敗（通信エラー・タイムアウトかつ既存キャッシュなし）した場合は、ループ全体を中断せず `download_queue` に `status = 'failed'`（`retry_count = retry_count + 1`、`last_error` 記録）として保存し、1.5秒ウェイト後に後続の `'pending'` 話の取得を継続する。ループ完了後に失敗話が存在する場合は該当エピソード行に `取得失敗` バッジ（`episode-failed-badge`）、ヘッダーにエラー通知と `失敗した話を再試行（N話）` ボタンを表示する。
@@ -890,12 +890,17 @@ export const PREFETCH_COUNT = 5;
 ```ts
 export type CachePriority = "high" | "medium" | "low";
 
+export type CacheBatchStatus =
+  "idle" | "running" | "preempted" | "paused" | "completed" | "cancelled";
+
 export interface CacheNovelProgress {
   novelId: string;
   isBatchCaching: boolean;
+  status: CacheBatchStatus;
   current: number;
   total: number;
   failedCount: number;
+  failedChapterIndexes: number[];
   pausedReason: "none" | "preempted";
 }
 
@@ -907,7 +912,7 @@ export interface CacheScheduler {
     priority: "high" | "medium";
     signal?: AbortSignal;
   }): Promise<void>;
-  /** 作品の未取得話を low 優先度バッチとしてバックグラウンド取得する */
+  /** 作品の未取得話を low 優先度バッチとして download_queue 登録・スケジュールし、キュー投入完了時に即時 resolve する（全話完了までは待機しない） */
   enqueueBatchCache(novelId: string, chapterIndexes: number[]): Promise<void>;
   /** 一時停止（実行中の 'downloading' は retryCount 非増加で 'pending' に戻し、既存キュー行を保持） */
   pauseNovelTasks(novelId: string): Promise<void>;
