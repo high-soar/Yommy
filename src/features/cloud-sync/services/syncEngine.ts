@@ -332,6 +332,7 @@ export function isUnauthorizedError(err: unknown): boolean {
  */
 export class SyncEngine {
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private hasUnsyncedChanges = false;
   private pendingPromise: Promise<void> | null = null;
   private pendingResolve: (() => void) | null = null;
   private pendingReject: ((err: unknown) => void) | null = null;
@@ -389,6 +390,7 @@ export class SyncEngine {
 
   private async handleUnauthorized(err: unknown): Promise<void> {
     if (isUnauthorizedError(err)) {
+      this.hasUnsyncedChanges = false;
       await this.deps.bridge.signOut();
       await this.deps.appSettingsRepository.setCloudSyncAccountEmail?.(null);
     }
@@ -596,6 +598,7 @@ export class SyncEngine {
   private async doPullAndMerge(): Promise<PullMergeResult> {
     const authState = await this.deps.bridge.getAuthState();
     if (authState.status !== "connected") {
+      this.hasUnsyncedChanges = false;
       const result: PullMergeResult = { pulled: false, mergedNovels: 0 };
       this.notifyPullCompleted(result);
       return result;
@@ -646,7 +649,23 @@ export class SyncEngine {
   }
 
   async pullAndMerge(): Promise<PullMergeResult> {
-    return this.runExclusive(() => this.doPullAndMerge());
+    const result = await this.runExclusive(() => this.doPullAndMerge());
+    // 未同期のローカル変更が残っている場合（タイマー保留中や前回オフライン失敗後）、Pull マージ後に追撃 Push を実行する (R1-23)
+    if (this.hasUnsyncedChanges) {
+      const { resolve } = this.extractPendingHandlers();
+      try {
+        await this.pushCurrentState();
+      } catch (err) {
+        // オフライン等の Push 失敗時は hasUnsyncedChanges を保持し pullAndMerge 自体は失敗させない
+        console.warn(
+          "[SyncEngine] pullAndMerge 後の保留 Push に失敗しました:",
+          err,
+        );
+      } finally {
+        if (resolve) resolve();
+      }
+    }
+    return result;
   }
 
   private async buildSyncNovels(): Promise<Record<string, SyncNovelData>> {
@@ -798,6 +817,7 @@ export class SyncEngine {
   private async doPushCurrentState(): Promise<void> {
     const authState = await this.deps.bridge.getAuthState();
     if (authState.status !== "connected") {
+      this.hasUnsyncedChanges = false;
       return;
     }
 
@@ -842,6 +862,7 @@ export class SyncEngine {
       };
 
       await this.deps.bridge.pushFile(JSON.stringify(state));
+      this.hasUnsyncedChanges = false;
 
       const now = Date.now();
       await this.deps.appSettingsRepository.setCloudSyncLastSyncedAt?.(now);
@@ -874,6 +895,7 @@ export class SyncEngine {
   }
 
   scheduleDebouncedPush(delayMs = 2500): Promise<void> {
+    this.hasUnsyncedChanges = true;
     if (this.debounceTimer !== null) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
@@ -903,6 +925,7 @@ export class SyncEngine {
   }
 
   cancelDebouncedPush(): void {
+    this.hasUnsyncedChanges = false;
     const { resolve } = this.extractPendingHandlers();
     if (resolve) {
       resolve();
