@@ -2,8 +2,8 @@
 type: spec-feature
 title: "小説リーダー画面仕様書（SCR-03: Novel Reader）"
 description: "小説本文の全画面（100dvh）縦書き・横書き組版表示、ページめくり（タップ/Kindle様式スワイプ送り）と連続スクロール切替、ハードウェア音量キー操作連携、エピソード端シームレス遷移、上下連動オーバーレイ（ReaderTopOverlay: 作品名・サブタイトル1行固定省略・目次導線 / ReaderBottomOverlay: RTLページシークバー・前後話ナビ・下部タブ）、ルビ・傍点描画、4カラーテーマ・文字サイズ・行間設定の永続化、前後エピソード遷移、未キャッシュ話のオンデマンド取得、既読・しおり・進捗率の自動保存/復元、およびSCN-01統合シナリオの正本仕様。"
-status: "Approved"
-updated: "2026-11-12"
+status: "Review (#342)"
+updated: "2026-11-13"
 tags:
   - reader
   - scr-03
@@ -49,7 +49,10 @@ tags:
   - ho-28
   - ho-30
   - ho-35
+  - conflict-dialog
+  - ho-38
 related_specs:
+  - docs/specs/changes/issue-342-cloud-sync-bookmark-protection.md
   - docs/specs/changes/archive/issue-269-webview-fallback-and-dom-import.md
   - docs/specs/features/webview-import.md
   - docs/specs/parsers/narou.md
@@ -116,14 +119,14 @@ related_tests:
   - `SYS-REQ-02`（本文取得・オフライン閲覧・未キャッシュ話オンデマンド取得、キャッシュTTL 7日間・短タイムアウトフォールバック）
   - `SYS-REQ-03`（レートリミット・バックグラウンド取得：読書中の5話自動先読み、1.5秒間隔ウェイト、話数移動/離脱時の AbortController 中断）
   - `SYS-REQ-04`（作品詳細・リーダー閲覧による本棚「NEW」バッジ自動解除）
-  - `SYS-REQ-06`（クラウド同期連携：話数遷移・既読更新時の自動 Push、2〜3秒デバウンス制御）
+  - `SYS-REQ-06`（クラウド同期連携：話数遷移・既読更新・しおり保存時の自動 Push、2〜3秒デバウンス制御、画面ロック復帰時の自動 Pull によるしおり話数競合検知と確認モーダルダイアログ、および未操作離脱時 `notifyChanged` スキップによる他端末しおり保護、`v1.1` Issue #342）
   - `SYS-REQ-07`（ルビ `<ruby>`・傍点 `<em class="bouten">` のサニタイズ済み組版描画）
   - `SYS-REQ-08`（全画面 `100dvh` での縦書き `vertical-rl` / 横書き `horizontal-tb` 表示）
   - `SYS-REQ-09`（文字サイズ `fontSizePx`・行間 `lineHeight`、フォント種別 `fontFamily`、画面余白 `pageMarginPx` の動的組版反映、v0.5 Issue #169）
   - `SYS-REQ-10`（4カラーテーマ `light` / `sepia` / `dark` / `black` 切り替え ※設定画面 `SCR-05` で変更）
   - `SYS-REQ-11`（全画面表示での縦書きページめくり［CSSマルチカラム1ページ組版・文字途切れ防止・なめらかな2段階水平スライドアニメーション（タップ＆スワイプ離上共通、高速連打即時確定）・ページインジケーター表示・touch-action制御・Kindle様式リアルタイム指追従スワイプ・30%規定値判定スナップバック・画面左右約20%タップ送り・画面中央タップまたは最下部タッチ連動の上下オーバーレイ（ReaderTopOverlay / ReaderBottomOverlay）開閉・縦書き時 RTL ページシークバー・端ラバーバンド離上遷移および端2段階タップ遷移］、横書き連続スクロール固定、連続スクロール時の本文先頭「前の話へ」・末尾「次の話へ」ボタンおよび端2段階スワイプ遷移、さらにハードウェア音量キー［音量［ー］次へ／音量［＋］前へ］によるページめくり・連続スクロール送り・エピソード端2段階遷移・オーバーレイ自動非表示、v0.6 Issue #203）
-  - `SYS-REQ-12`（しおり話数 `bookmark_chapter_index`・本文進捗率 `bookmark_scroll_progress` の自動保存・復元、ページめくりモードとスクロールモードの進捗連動、OSバックキー・上部オーバーレイ「← 目次」ボタン・下部タブ遷移時の `flushBookmark` 実行、および既読フラグ `is_read` の自動更新）
-  - `SYS-REQ-16`（100dvh 全画面シェル・下部タブバー連携・OSバックキー論理階層復帰）
+  - `SYS-REQ-12`（しおり話数 `bookmark_chapter_index`・本文進捗率 `bookmark_scroll_progress` の自動保存・復元、ページめくりモードとスクロールモードの進捗連動、画面ロック移行時［`hidden`］の未保存進捗即時フラッシュ、未保存変更なし離脱時の `flushBookmark` 不要上書き抑止、変更あり時の即時保存、および既読フラグ `is_read` の自動更新、`v1.1` Issue #342）
+  - `SYS-REQ-16`（100dvh 全画面シェル・下部タブバー連携・OSバックキー論理階層復帰、およびしおり競合確認モーダル表示中の OS バックキー・背景タップ抑止、`v1.1` Issue #342）
   - `SYS-REQ-20`（下部4タブバー・リーダーオーバーレイ4タブ化）
 - **関連画面遷移**:
   - `TR-01`（下部オーバーレイの4タブ「本棚 `/`」「検索 `/search`」「ランキング `/ranking`」「設定 `/settings`」タップによる各画面への遷移）
@@ -166,9 +169,12 @@ src/features/reader/
     ├── ReaderPage.tsx                     # 【改修】全画面レイアウト、最下部タッチ検知、上下オーバーレイ連動・自動非表示制御（Presentational、v0.6 Issue #202）
     ├── ReaderPage.stories.tsx
     ├── ReaderPage.test.tsx
-    ├── ReaderContainer.tsx                # 【改修】ServiceProvider / Router / useReader を接続し、目次遷移・タブ遷移・OSバックキー時のしおり保存を連携（Container、v0.6 Issue #202）
+    ├── ReaderContainer.tsx                # 【改修】ServiceProvider / Router / useReader を接続し、目次遷移・タブ遷移・OSバックキー時のしおり保存および競合モーダル表示中の戻る抑止を連携（Container、v1.1 Issue #342）
     ├── ReaderContainer.stories.tsx
-    └── ReaderContainer.test.tsx
+    ├── ReaderContainer.test.tsx
+    ├── BookmarkConflictDialog.tsx         # 【新設】他端末クラウド同期しおり競合確認モーダルダイアログ（Presentational、v1.1 Issue #342）
+    ├── BookmarkConflictDialog.stories.tsx # 【新設】Storybookストーリー（表示/解決中/非表示［skip-vrt］）
+    └── BookmarkConflictDialog.test.tsx    # 【新設】単体テスト（Portable Stories）
 ```
 
 ---
@@ -371,38 +377,42 @@ src/features/reader/
 
 #### プロパティ契約（`ReaderPageProps`）
 
-| プロパティ名             | 型                             | 必須 | 説明                                                                                                              |
-| :----------------------- | :----------------------------- | :--- | :---------------------------------------------------------------------------------------------------------------- |
-| `novel`                  | `NovelRecord \| null`          | 必須 | 現在の作品レコード                                                                                                |
-| `chapter`                | `ChapterRecord \| null`        | 必須 | 現在のエピソードレコード                                                                                          |
-| `chapterIndex`           | `number`                       | 必須 | 現在のエピソード連番（1始まり）                                                                                   |
-| `totalChapters`          | `number`                       | 必須 | 作品の全エピソード数                                                                                              |
-| `writingMode`            | `WritingMode`                  | 必須 | 現在の組み方向                                                                                                    |
-| `theme`                  | `ReaderTheme`                  | 必須 | 現在のカラーテーマ                                                                                                |
-| `fontSizePx`             | `number`                       | 必須 | 現在の文字サイズ (px)                                                                                             |
-| `lineHeight`             | `number`                       | 必須 | 現在の行間倍率                                                                                                    |
-| `fontFamily`             | `ReaderFontFamily`             | 任意 | 現在のフォント種別（省略時: `'biz-ud-mincho'`、v0.5 Issue #169）                                                  |
-| `pageMarginPx`           | `number`                       | 任意 | 現在の画面余白 px（省略時: `20`、v0.5 Issue #169）                                                                |
-| `initialScrollProgress`  | `number`                       | 必須 | 初期復元する進捗率（`0.0 〜 1.0`）                                                                                |
-| `pagingMode`             | `ReaderPagingMode`             | 任意 | ページ送りモード（省略時: `'auto'`、v0.4 Issue #122）                                                             |
-| `enableVolumeKeyPaging`  | `boolean`                      | 任意 | ハードウェア音量キー送り有効フラグ（省略時: `false`、v0.6 Issue #203）                                            |
-| `volumeKeyBridge`        | `VolumeKeyBridge`              | 任意 | ハードウェア音量キーブリッジ（省略時は `ServiceContext` または `defaultVolumeKeyBridge` を使用、v0.6 Issue #203） |
-| `currentPage`            | `number`                       | 任意 | ページめくり表示時の現在ページ番号（省略時: `1`）                                                                 |
-| `totalPages`             | `number`                       | 任意 | ページめくり表示時の総ページ数（省略時: `1`）                                                                     |
-| `isLoading`              | `boolean`                      | 必須 | 読み込み・通信中フラグ                                                                                            |
-| `error`                  | `string \| null`               | 任意 | エラーメッセージ文字列                                                                                            |
-| `activeTab`              | `BottomTab`                    | 任意 | リーダー画面の論理所属タブ（既定値: `"bookshelf"`）                                                               |
-| `onPrevChapter`          | `() => void`                   | 必須 | 「前の話へ」押下時（`TR-05`）                                                                                     |
-| `onNextChapter`          | `() => void`                   | 必須 | 「次の話へ」押下時（`TR-05`）                                                                                     |
-| `onPageChange`           | `(targetPage: number) => void` | 任意 | タップ・スワイプ・シークバーによるページ送り確定時のコールバック                                                  |
-| `onTotalPagesChange`     | `(totalPages: number) => void` | 任意 | 総ページ数確定・変化時のコールバック                                                                              |
-| `onScrollProgressChange` | `(progress: number) => void`   | 必須 | 本文スクロール／ページ進捗変化時                                                                                  |
-| `onSelectTab`            | `(tab: BottomTab) => void`     | 任意 | 下部タブ押下時                                                                                                    |
-| `onBackToToc`            | `() => void`                   | 任意 | 上部オーバーレイ「← 目次」ボタン押下時コールバック（`TR-06`、v0.6 Issue #202）                                    |
-| `onOpenWebView`          | `() => void`                   | 任意 | エラー画面内「内蔵ブラウザで開いて取り込む」押下時コールバック（`TR-10`、`v0.9` Issue #269）                      |
-| `initialOverlayOpen`     | `boolean`                      | 任意 | `false`（エラー/空状態時は `true`）                                                                               |
-| `initialSlideOffsetPx`   | `number`                       | 任意 | 初期スライド変位量（px、Storybook/VRT/テスト用）                                                                  |
-| `initialBoundaryHint`    | `string \| null`               | 任意 | 初期境界案内ヒントメッセージ（Storybook/VRT/テスト用）                                                            |
+| プロパティ名                    | 型                                  | 必須 | 説明                                                                                                              |
+| :------------------------------ | :---------------------------------- | :--- | :---------------------------------------------------------------------------------------------------------------- |
+| `novel`                         | `NovelRecord \| null`               | 必須 | 現在の作品レコード                                                                                                |
+| `chapter`                       | `ChapterRecord \| null`             | 必須 | 現在のエピソードレコード                                                                                          |
+| `chapterIndex`                  | `number`                            | 必須 | 現在のエピソード連番（1始まり）                                                                                   |
+| `totalChapters`                 | `number`                            | 必須 | 作品の全エピソード数                                                                                              |
+| `writingMode`                   | `WritingMode`                       | 必須 | 現在の組み方向                                                                                                    |
+| `theme`                         | `ReaderTheme`                       | 必須 | 現在のカラーテーマ                                                                                                |
+| `fontSizePx`                    | `number`                            | 必須 | 現在の文字サイズ (px)                                                                                             |
+| `lineHeight`                    | `number`                            | 必須 | 現在の行間倍率                                                                                                    |
+| `fontFamily`                    | `ReaderFontFamily`                  | 任意 | 現在のフォント種別（省略時: `'biz-ud-mincho'`、v0.5 Issue #169）                                                  |
+| `pageMarginPx`                  | `number`                            | 任意 | 現在の画面余白 px（省略時: `20`、v0.5 Issue #169）                                                                |
+| `initialScrollProgress`         | `number`                            | 必須 | 初期復元する進捗率（`0.0 〜 1.0`）                                                                                |
+| `pagingMode`                    | `ReaderPagingMode`                  | 任意 | ページ送りモード（省略時: `'auto'`、v0.4 Issue #122）                                                             |
+| `enableVolumeKeyPaging`         | `boolean`                           | 任意 | ハードウェア音量キー送り有効フラグ（省略時: `false`、v0.6 Issue #203）                                            |
+| `volumeKeyBridge`               | `VolumeKeyBridge`                   | 任意 | ハードウェア音量キーブリッジ（省略時は `ServiceContext` または `defaultVolumeKeyBridge` を使用、v0.6 Issue #203） |
+| `currentPage`                   | `number`                            | 任意 | ページめくり表示時の現在ページ番号（省略時: `1`）                                                                 |
+| `totalPages`                    | `number`                            | 任意 | ページめくり表示時の総ページ数（省略時: `1`）                                                                     |
+| `isLoading`                     | `boolean`                           | 必須 | 読み込み・通信中フラグ                                                                                            |
+| `error`                         | `string \| null`                    | 任意 | エラーメッセージ文字列                                                                                            |
+| `activeTab`                     | `BottomTab`                         | 任意 | リーダー画面の論理所属タブ（既定値: `"bookshelf"`）                                                               |
+| `onPrevChapter`                 | `() => void`                        | 必須 | 「前の話へ」押下時（`TR-05`）                                                                                     |
+| `onNextChapter`                 | `() => void`                        | 必須 | 「次の話へ」押下時（`TR-05`）                                                                                     |
+| `onPageChange`                  | `(targetPage: number) => void`      | 任意 | タップ・スワイプ・シークバーによるページ送り確定時のコールバック                                                  |
+| `onTotalPagesChange`            | `(totalPages: number) => void`      | 任意 | 総ページ数確定・変化時のコールバック                                                                              |
+| `onScrollProgressChange`        | `(progress: number) => void`        | 必須 | 本文スクロール／ページ進捗変化時                                                                                  |
+| `onSelectTab`                   | `(tab: BottomTab) => void`          | 任意 | 下部タブ押下時                                                                                                    |
+| `onBackToToc`                   | `() => void`                        | 任意 | 上部オーバーレイ「← 目次」ボタン押下時コールバック（`TR-06`、v0.6 Issue #202）                                    |
+| `onOpenWebView`                 | `() => void`                        | 任意 | エラー画面内「内蔵ブラウザで開いて取り込む」押下時コールバック（`TR-10`、`v0.9` Issue #269）                      |
+| `bookmarkConflict`              | `BookmarkConflictState または null` | 任意 | 他端末クラウド同期しおり競合状態（非 null 時に `BookmarkConflictDialog` を表示、`v1.1` Issue #342）               |
+| `isResolvingBookmarkConflict`   | `boolean`                           | 任意 | 競合選択（移動/維持）処理中フラグ（ボタン連打防止、既定値 `false`、`v1.1` Issue #342）                            |
+| `onResolveBookmarkConflictMove` | `() => void`                        | 任意 | 「第N話へ移動する」押下時コールバック（`v1.1` Issue #342）                                                        |
+| `onResolveBookmarkConflictKeep` | `() => void`                        | 任意 | 「第M話のまま読む」押下時コールバック（`v1.1` Issue #342）                                                        |
+| `initialOverlayOpen`            | `boolean`                           | 任意 | `false`（エラー/空状態時は `true`）                                                                               |
+| `initialSlideOffsetPx`          | `number`                            | 任意 | 初期スライド変位量（px、Storybook/VRT/テスト用）                                                                  |
+| `initialBoundaryHint`           | `string \| null`                    | 任意 | 初期境界案内ヒントメッセージ（Storybook/VRT/テスト用）                                                            |
 
 #### セマンティック属性とレイアウト・ジェスチャー仕様
 
@@ -492,6 +502,33 @@ src/features/reader/
 
 ---
 
+### 3.8 `BookmarkConflictDialog`（クラウド同期しおり競合確認モーダル：`v1.1` Issue #342）
+
+別端末での読書進行が画面ロック復帰時の自動 Pull によりローカル DB へ取り込まれ、現在リーダーで開いている話数（`currentChapterIndex`）と同期後のしおり話数（`remoteChapterIndex`）が異なる場合に画面中央へ表示する確認モーダルダイアログです。
+
+#### プロパティ契約（`BookmarkConflictDialogProps`）
+
+| プロパティ名          | 型           | 必須 | 説明                                                      |
+| :-------------------- | :----------- | :--- | :-------------------------------------------------------- |
+| `isOpen`              | `boolean`    | 必須 | モーダル表示状態（`false` の場合は `null` を返却）        |
+| `currentChapterIndex` | `number`     | 必須 | 現在リーダーで表示中の話数                                |
+| `remoteChapterIndex`  | `number`     | 必須 | 自動 Pull により DB へ反映された他端末のしおり話数        |
+| `isResolving`         | `boolean`    | 任意 | 解決処理実行中フラグ（ボタン `disabled` 制御）            |
+| `onMoveToRemote`      | `() => void` | 必須 | 「第{remoteChapterIndex}話へ移動する」選択時コールバック  |
+| `onKeepCurrent`       | `() => void` | 必須 | 「第{currentChapterIndex}話のまま読む」選択時コールバック |
+
+#### 表示ルール・誤操作防止ガード
+
+- **セマンティック属性**: `role="dialog"`, `aria-modal="true"`, `aria-labelledby="bookmark-conflict-title"`, `data-testid="bookmark-conflict-dialog"`。
+- **背景クリック・Escape キー無効化**: 背景オーバーレイ（`fixed inset-0 z-50`）のタップおよびキーボード `Escape` キーでダイアログを閉じない（`onMoveToRemote` / `onKeepCurrent` の明示 2 択のみで解決）。
+- **アクションボタン**:
+  - 移動ボタン: `data-testid="bookmark-conflict-move-button"`（文言: `第${remoteChapterIndex}話へ移動する`）。
+  - 維持ボタン: `data-testid="bookmark-conflict-keep-button"`（文言: `第${currentChapterIndex}話のまま読む`）。
+- **Storybook / VRT ルール**: `isOpen: false` の非表示ストーリーには `tags: ["skip-vrt"]` を付与し、`isOpen: true`（1280px / 375px）で中央モーダル表示を VRT 検証する。
+- **`ReaderContainer` 連携**: `bookmarkConflict !== null` の間、`ReaderContainer` は `router.blockBackNavigation?.()` を有効化し、Android OS バックキー（`AppBridge`）およびブラウザ `popstate` による離脱と自動 `flushBookmark()` を抑止する。
+
+---
+
 ## 4. 状態管理・オンデマンド取得・しおり保存パイプライン（`useReader`）
 
 ### 4.1 `useReader` フック契約（`UseReaderResult`）
@@ -505,6 +542,11 @@ export interface UseReaderOptions {
 
 export interface GoToChapterOptions {
   startAt?: "start" | "end";
+}
+
+export interface BookmarkConflictState {
+  currentChapterIndex: number;
+  remoteChapterIndex: number;
 }
 
 export interface UseReaderResult {
@@ -527,6 +569,7 @@ export interface UseReaderResult {
   totalPages: number; // 【新設: v0.4 Issue #122】
   isLoading: boolean;
   error: string | null;
+  bookmarkConflict: BookmarkConflictState | null; // 【新設: v1.1 Issue #342】
   hasPrevChapter: boolean;
   hasNextChapter: boolean;
   toggleWritingMode: () => Promise<void>;
@@ -544,6 +587,7 @@ export interface UseReaderResult {
     targetChapterIndex: number,
     options?: GoToChapterOptions,
   ) => Promise<boolean>;
+  resolveBookmarkConflict: (action: "move" | "keep") => Promise<void>; // 【新設: v1.1 Issue #342】
   fetchNovelFromUrl: () => Promise<void>;
 }
 ```
@@ -569,9 +613,12 @@ export interface UseReaderResult {
    - **エピソード表示開始時**:
      - `targetNovel.bookmarkChapterIndex === targetChapterIndex`（保存済みしおり話と一致する場合）: 保存済みの `targetNovel.bookmarkScrollProgress`（`0.0 〜 1.0`）を `initialScrollProgress` および `scrollProgress` にセットして位置を復元する。実効 `"paged"` モード時は、**ユーザーがページ移動操作（`goToPage` / `nextPage` / `prevPage`）を行うまでの初期レイアウト・フォント計測期間中（`!hasUserChangedPageRef.current`）に呼び出されるすべての `setTotalPages(validTotal)` において**、`targetPage = validTotal > 1 ? Math.round(initialScrollProgress * (validTotal - 1)) + 1 : 1` で現在ページを再算出し復元する（これにより初回仮計測後の `requestAnimationFrame` や `document.fonts.ready` 等による確定総ページ数通知時にも、中間ページが最終ページや先頭ページへ化けることなく正確に復元される：`R1-26`, `AC-RD-20`）。ユーザーが一度でもページ移動操作を行った後（`hasUserChangedPageRef.current === true`）の総ページ数変更時（ウィンドウリサイズ等）は、初期進捗率への巻き戻しを行わず現在ページ位置を維持し範囲外クランプのみ行う。
      - `targetNovel.bookmarkChapterIndex !== targetChapterIndex`（別話を開いた場合、または前後話遷移 `TR-05` 時）: `initialScrollProgress = 0`, `scrollProgress = 0`, `currentPage = 1` にセットし、直ちに `novelRepository.updateBookmark(targetNovel.id, targetChapterIndex, 0)` を実行してしおりを現在話の先頭へ更新する。
-   - **スクロール／ページめくり操作時および画面離脱時**:
-     - ユーザースクロール時またはページ遷移時（`goToPage(targetPage)` / `nextPage()` / `prevPage()`）、算出された進捗率 `progress = totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0`（`0.0 〜 1.0`）で `scrollProgress` を更新し、連続スクロール時の SQLite 負荷を抑制するため 300ms デバウンスを介して `novelRepository.updateBookmark(novel.id, chapterIndex, clampedProgress)` で DB へ自動保存する（`R1-12`）。
-     - OS バックキー（`TR-06`）による目次復帰、または下部オーバーレイの4タブ（本棚 `TR-01b`、検索/ランキング/設定 `TR-01`）遷移時には、`flushBookmark()` により未発火のデバウンスタイマーをキャンセルし最新の `(chapterIndex, scrollProgress)` を確実に DB 即時保存してから画面遷移コールバックを呼び出す（`R1-12`）。
+   - **スクロール／ページめくり操作時・画面ロック時・画面離脱時（`v1.1` Issue #342 拡張）**:
+     - `ReaderView` では `restoreScrollPosition` 実行中に発生するプログラム的な `scroll` イベントを `isRestoringScrollRef` で抑止し、ユーザー操作以外の初期復元で `onScrollProgressChange` が誤発火しないようにする。
+     - `useReader` は未 DB 保存の進捗変更フラグ `hasPendingBookmarkRef` を保持し、初期ロード完了時および `goToChapter` 完了時は `false` に初期化する。
+     - ユーザースクロール時またはページ遷移時（`goToPage(targetPage)` / `nextPage()` / `prevPage()`）、`hasPendingBookmarkRef.current = true` にセットし、連続スクロール時の SQLite 負荷を抑制するため 300ms デバウンスを介して `novelRepository.updateBookmark(novel.id, chapterIndex, clampedProgress)` で DB へ自動保存し、完了時に `hasPendingBookmarkRef.current = false` へ戻した上で `syncEngine?.notifyChanged()` を呼び出す（`R1-12`）。
+     - 画面ロック・バックグラウンド移行時（`document.visibilityState === "hidden"`）に `hasPendingBookmarkRef.current === true`（300ms デバウンス待機中を含む未保存進捗あり）の場合は即座に `flushBookmark()` を呼び出して DB 保存を完了させる（`false` の場合は何もしない）。
+     - OS バックキー（`TR-06`）、「← 目次」ボタン、下部オーバーレイ 4 タブ（`TR-01` / `TR-01b`）遷移、およびアンマウント時の `flushBookmark()` では、保留中のデバウンスタイマーをキャンセルした上で、**`hasPendingBookmarkRef.current === true` の場合のみ** `novelRepository.updateBookmark()` および `syncEngine.notifyChanged()` を実行する。未保存の進捗変更がない状態（`false`）での離脱時は書き込み・同期通知を一切行わず、別端末が更新した新しい `last_read_at` / しおり話数を保護する。
 5. **前後エピソード遷移（`goToChapter(targetChapterIndex, options?: GoToChapterOptions)`、`TR-05`）**:
    - `novel === null`、または `targetChapterIndex < 1` もしくは `targetChapterIndex > totalChapters`（範囲外）が指定された場合は何もせず `false` を返す。
    - 有効範囲内の場合は、遷移前の現在話（次話遷移時を含む）に対して `chapterRepository.markChapterRead(novel.id, chapterIndex, true)` を実行した上で、`targetChapterIndex` のエピソード読み込み（未キャッシュ時はオンデマンド本文取得・`saveChapterBody` 保存）、表示完了時の `markChapterRead(novel.id, targetChapterIndex, true)`、および新エピソードへのしおり更新を実行し、`true` を返す。本文取得に失敗した場合（HTTP エラー等）は、エラー画面表示および内蔵ブラウザ遷移（`TR-10`）へ渡すパラメータのために `chapterIndex` を `targetChapterIndex` に更新保持した上で `false` を返す（`R1-27`）。
@@ -592,9 +639,14 @@ export interface UseReaderResult {
      - ユーザーが `goToChapter` で別エピソードへ移動した際は、直前の先読み処理を直ちに中断（`abort()`）し、新エピソードを起点とする 5話先読みを再開始する。
      - リーダー画面離脱時（アンマウント、OS バックキー、タブ遷移）は直ちに処理を停止し、不要な通信を防止する。
    - 先読み処理中の通信失敗・例外はコンソール警告等に留め、現在閲覧中の読書画面にはエラーを表示しない。
-8. **クラウド同期連携（読書進行時の自動 Push デバウンス: v0.4 Issue #120）**:
-   - `goToChapter` による話数移動時、`markChapterRead` による既読状態更新時、およびしおり保存（`flushBookmark`）時に、`SyncEngine.notifyChanged()` を呼び出す。
+8. **クラウド同期連携（自動 Push デバウンス ＆ 復帰時自動 Pull 競合検知: v0.4 Issue #120 / v1.1 Issue #342 拡張）**:
+   - `goToChapter` による話数移動時、`markChapterRead` による既読状態更新時、進捗保存（300ms デバウンス完了時および未保存あり時の `flushBookmark`）時、および競合確認で「現在の話のまま読む」を選択した時に、`SyncEngine.notifyChanged()` を呼び出す（未保存変更なし離脱時の `flushBookmark()` スキップ時は呼び出さない）。
    - 読書中の連続操作による過剰な API 通信を避けるため、`SyncEngine` 側で 2〜3秒（2500ms）デバウンスした上で Google Drive（`yommy-sync-state.json`）へ非同期 Push する。
+   - **復帰時自動 Pull によるしおり競合検知と解決（`subscribePullCompleted` / `resolveBookmarkConflict`、`v1.1` Issue #342）**:
+     - `useReader` はマウント中に `syncEngine?.subscribePullCompleted` を購読し、`result.pulled === true` 完了時に `novelRepository.getNovelById(novelId)` を再取得する。
+     - 再取得した `latestNovel.bookmarkChapterIndex` が非 null（有効範囲 `1..totalChapters`）かつ現在表示中話数 `currentChapterIndexRef.current` と異なる場合、`bookmarkConflict = { currentChapterIndex, remoteChapterIndex }` をセットして `BookmarkConflictDialog` を表示する（この時点で未保存フラグは立てない）。
+     - `resolveBookmarkConflict("move")`: ダイアログを閉じ、`goToChapter(remoteChapterIndex)` により他端末の最新話数へ移動する。
+     - `resolveBookmarkConflict("keep")`: ダイアログを閉じ、現在表示中の話数・進捗率で `novelRepository.updateBookmark(..., currentChapterIndex, scrollProgress)`（`last_read_at = now`）および `syncEngine?.notifyChanged()` を明示実行して他端末へ現在話維持を同期する。
 
 ---
 
@@ -648,10 +700,15 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
 | **`AC-RD-27`** | 音量キー操作におけるエピソード端2段階遷移およびオーバーレイ自動非表示（v0.6 Issue #203） | 最終ページ（またはスクロール末尾）で音量［ー］を押した際、1回目で案内ヒント（`reader-episode-boundary-hint`）が表示され、2.5秒以内の2回目押下で次エピソードへ遷移すること（第1ページでの音量［＋］も同様）。また上下オーバーレイ展開中に音量キー操作を行った際、自動的にオーバーレイが閉じること。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `SYS-REQ-11` / `SCR-03`, `TR-05`                                   |
 | **`AC-RD-28`** | 未キャッシュ話遷移時のローディング明示（新規）                                           | 前後エピソード遷移において、対象エピソードがローカル未キャッシュ（`bodyHtml === null`）で Web アクセスが発生する際、直前のエピソード本文を画面上に残留させず `data-testid="reader-loading"` を明示的に表示すること。通信完了時に新エピソード本文へ切り替わり、通信失敗時は `reader-error` が表示されること。すでに本文がキャッシュ済みのエピソードへの遷移ではローディングスピナーを描画せず即座に表示を切り替えること（v0.7 Issue #238）。                                                                                                                                                                                                                                                                                                                                                             | `SYS-REQ-02, 11` / `TR-05`                                         |
 | **`AC-RD-29`** | 未キャッシュ話本文取得失敗時の内蔵ブラウザフォールバック導線（v0.9 Issue #269）          | 未キャッシュ話への遷移やリーダー読み込み時に本文取得エラーが発生した際、エラー表示要素（`data-testid="reader-error"`）内に「内蔵ブラウザで開いて取り込む」ボタン（`data-testid="reader-open-webview-button"`）が表示され、タップ時に該当話 URL と `novelId`, `chapterIndex` をパラメータとして内蔵ブラウザ画面（`SCR-04`: `/browser?url=...&novelId=...&chapterIndex=...`）へフォールバック遷移（`TR-10`）できること。                                                                                                                                                                                                                                                                                                                                                                                  | `SYS-REQ-13` / `TR-10`                                             |
+| **`AC-RD-30`** | リーダー表示のまま画面ロック・5分後復帰時の自動 Pull（v1.1 Issue #342）                  | リーダー画面（`SCR-03`）を開いたまま画面ロック（`visibilityState === "hidden"`）し、5 分（300,000ms）以上経過して復帰（`"visible"`）した際、未連携時を除き `syncEngine.pullAndMerge()` が自動実行され、最新のリモート同期状態がローカル DB へ取り込まれること（5 分未満の復帰では自動 Pull されないこと）。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `SYS-REQ-06` / `SCN-05`                                            |
+| **`AC-RD-31`** | クラウド同期しおり競合確認ダイアログ表示と 2 択解決（v1.1 Issue #342）                   | リーダー表示中（第 M 話）の自動 Pull 完了時に DB の `bookmarkChapterIndex`（第 N 話）が現在表示中話数と異なる場合、画面中央に `BookmarkConflictDialog`（`bookmark-conflict-dialog`）が表示され、「第N話へ移動する」（`bookmark-conflict-move-button`）で第 N 話へ遷移（`goToChapter(N)`）し、「第M話のまま読む」（`bookmark-conflict-keep-button`）でダイアログを閉じて第 M 話（現在時刻）へ明示的にしおり更新・自動 Push 通知すること。                                                                                                                                                                                                                                                                                                                                                                | `SYS-REQ-06, 12` / `SCN-05`                                        |
+| **`AC-RD-32`** | しおり競合モーダル表示中の誤操作防止ガード（v1.1 Issue #342）                            | `BookmarkConflictDialog` 表示中は、ダイアログ外の背景タップ、キーボード `Escape` キー、および OS バックキー（Android `AppBridge` バックボタン / ブラウザ `popstate`）のいずれを行ってもダイアログが閉じず、目次画面等へ遷移しないこと。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `SYS-REQ-16` / `TR-06`, `SCN-05`                                   |
+| **`AC-RD-33`** | 画面ロック移行時の未保存進捗即時フラッシュ（v1.1 Issue #342）                            | ページめくりまたはスクロール操作後 300ms デバウンス完了前に `visibilityState === "hidden"`（画面ロック・バックグラウンド移行）となった場合、保留中の進捗が即座に `novelRepository.updateBookmark()` へ書き込まれること。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `SYS-REQ-12` / `SCN-05`                                            |
+| **`AC-RD-34`** | 未操作離脱時の `flushBookmark` 不要書き込み防止（v1.1 Issue #342）                       | ページめくり・スクロール変更が存在しない状態（ロック前保存済みまたは復帰後未操作）で「← 目次」、OS バックキー、下部タブ遷移、またはアンマウントにより離脱した際、`flushBookmark()` は `novelRepository.updateBookmark()`（`last_read_at` 現在時刻上書き）および `syncEngine.notifyChanged()` を一切呼び出さず、他端末が同期した最新しおりを保持すること。                                                                                                                                                                                                                                                                                                                                                                                                                                               | `SYS-REQ-06, 12` / `TR-01`, `TR-06`, `SCN-05`                      |
 
 ---
 
-## 7. Playwright システム結合テストシナリオ仕様（`SCN-01` / `SCN-06` / `SCN-07`）
+## 7. Playwright システム結合テストシナリオ仕様（`SCN-01` / `SCN-05` / `SCN-06` / `SCN-07`）
 
 ### 7.1 `SCN-01` 結合シナリオ仕様（`test/it/scenarios/scn01-poc-vertical-reader.spec.ts`）
 
@@ -692,3 +749,7 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
   2. ボタンを押下して `SCR-04: /browser?url=...&novelId=...&chapterIndex=...` へ遷移（`TR-10`）することを確認。
   3. 内蔵ブラウザ画面で DOM インポートを実行し、本文保存完了後に自動で `SCR-03: /novels/:novelId/chapters/:chapterIndex` へ遷移（`TR-11`）することを確認。
   4. ローディングスピナーを経て保存された本文が縦書きで描画され、読書が再開できることを確認。
+
+### 7.4 `SCN-05` 関連検証観点（`test/it/scenarios/scn05-cloud-sync.spec.ts`、`v1.1` Issue #342）
+
+- リーダー画面（`SCR-03`）表示中の画面ロック（5分経過モック→復帰）による自動 Pull 発動、他端末しおり競合確認ダイアログ（`bookmark-conflict-dialog`）の 2 択操作（「第N話へ移動する」/「第M話のまま読む」）および背景タップ・`Escape`・戻る操作抑止、画面ロック移行時の未保存進捗即時フラッシュ、ならびに未操作離脱時の他端末しおり保護を一気通貫で回帰検証する（`AC-RD-30`〜`34`）。

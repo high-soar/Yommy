@@ -3,9 +3,10 @@ type: quality-log
 title: 品質記録・バグ記録票 ＆ 申し送り管理シート（Bug & Handover Log）
 description: 製品コードと支援成果物を分離したバグ記録（原因5分類 L/S/D/B/A）および後続タスクへの申し送り事項（HO-xx）を追跡する正本シート。
 status: "Approved"
-updated: "2026-11-12"
-tags: [quality, bug-log, handover, dre, kaizen]
+updated: "2026-11-13"
+tags: [quality, bug-log, handover, dre, kaizen, ho-38]
 related_specs:
+  - docs/specs/changes/issue-342-cloud-sync-bookmark-protection.md
   - docs/quality/archive/v1.0-release-audit-log.md
   - docs/quality/reports/v1.0-full-system-quality-audit.md
   - docs/specs/changes/archive/issue-304-v1-release-readiness.md
@@ -119,11 +120,12 @@ related_tests: []
 > - Milestone `v0.8` で解決済みの申し送り（`HO-31`〜`HO-33`）: [docs/quality/archive/v0.8-discovery-filter-and-bookshelf-favorite-ux-log.md](archive/v0.8-discovery-filter-and-bookshelf-favorite-ux-log.md)
 > - Milestone `v0.9` で解決済みの申し送り（`HO-34`, `HO-35`）: [docs/quality/archive/v0.9-persistent-queue-and-webview-fallback-log.md](archive/v0.9-persistent-queue-and-webview-fallback-log.md)
 
-現在、未解決（`Open`）の申し送り事項は **0 件** です。
+現在、未解決（`Open`）の申し送り事項は **1 件**（`HO-38`）です。
 
-|     ID      | 起票元 Issue / PR | 申し送り事項の内容                                                                                   | 解決先（対象 Issue / 成果物）                                                                                                                                         |       完了ゲート        | 状態 (`Open` / `Resolved`) |
-| :---------: | :---------------: | :--------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------: | :------------------------: |
-| **`HO-36`** |    Issue #304     | Android 実機における設定画面フッターのアプリバージョン表示（`Yommy v1.0.0`）および全画面スモーク確認 | 【Resolved】2026-11-10 実機検証完了（Issue #305 / PR #320）。Android 実機にて設定画面フッターのアプリバージョン表示（`Yommy v1.0.0`）および全画面スモーク確認を完了。 | Milestone `v1.0` 完了前 |         `Resolved`         |
+|     ID      | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                                                                                                        | 解決先（対象 Issue / 成果物）                                                                                                                                         |       完了ゲート        | 状態 (`Open` / `Resolved`) |
+| :---------: | :---------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------: | :------------------------: |
+| **`HO-36`** |    Issue #304     | Android 実機における設定画面フッターのアプリバージョン表示（`Yommy v1.0.0`）および全画面スモーク確認                                                                                                                      | 【Resolved】2026-11-10 実機検証完了（Issue #305 / PR #320）。Android 実機にて設定画面フッターのアプリバージョン表示（`Yommy v1.0.0`）および全画面スモーク確認を完了。 | Milestone `v1.0` 完了前 |         `Resolved`         |
+| **`HO-38`** |    Issue #342     | Android 実機（WebView）におけるリーダー・作品詳細表示のまま画面ロック（5分以上経過後復帰）時のクラウド同期自動 Pull、しおり競合確認モーダル表示中のハードウェア戻るボタン抑止、および未操作離脱時しおり保持のスモーク確認 | 親 Issue #342 の Step 2 判定（カテゴリ B）に基づき Milestone `v1.1` 最終レビュー（Issue #345）で実機検証予定                                                          | Milestone `v1.1` 完了前 |           `Open`           |
 
 ---
 
