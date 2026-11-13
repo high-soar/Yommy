@@ -20,7 +20,11 @@ import { ReaderView } from "./ReaderView";
 import { ReaderTopOverlay } from "./ReaderTopOverlay";
 import { ReaderBottomOverlay } from "./ReaderBottomOverlay";
 import { useReaderGestures } from "../hooks/useReaderGestures";
-import { resolveEffectivePagingMode } from "../hooks/useReader";
+import {
+  resolveEffectivePagingMode,
+  type BookmarkConflictState,
+} from "../hooks/useReader";
+import { BookmarkConflictDialog } from "./BookmarkConflictDialog";
 
 export interface ReaderPageProps {
   /** 対象作品レコード（未登録時は null） */
@@ -83,6 +87,14 @@ export interface ReaderPageProps {
   initialSlideOffsetPx?: number;
   /** 初期境界案内ヒントメッセージ（Storybook/VRT/テスト用） */
   initialBoundaryHint?: string | null;
+  /** しおり競合確認ダイアログの表示状態（競合なし時は null） */
+  bookmarkConflict?: BookmarkConflictState | null;
+  /** しおり競合解決処理中フラグ */
+  isResolvingBookmarkConflict?: boolean;
+  /** しおり競合時に他端末の話へ移動するコールバック */
+  onResolveBookmarkConflictMove?: () => void;
+  /** しおり競合時に現在話を維持して読むコールバック */
+  onResolveBookmarkConflictKeep?: () => void;
 }
 
 const pageBgStyles: Record<ReaderTheme, string> = {
@@ -129,6 +141,10 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
   initialOverlayOpen,
   initialSlideOffsetPx,
   initialBoundaryHint,
+  bookmarkConflict = null,
+  isResolvingBookmarkConflict = false,
+  onResolveBookmarkConflictMove,
+  onResolveBookmarkConflictKeep,
 }) => {
   const hasNovel = novel !== null;
   const hasBodyHtml = Boolean(chapter && chapter.bodyHtml !== null);
@@ -239,6 +255,11 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
     handleVolumeKeyRef.current = handleVolumeKey;
   }, [handleVolumeKey]);
 
+  const isConflictModalOpenRef = useRef(Boolean(bookmarkConflict));
+  useEffect(() => {
+    isConflictModalOpenRef.current = Boolean(bookmarkConflict);
+  }, [bookmarkConflict]);
+
   // ハードウェア音量キーイベント購読およびライフサイクル管理（AC-RD-26, AC-RD-27, Issue #203）
   useEffect(() => {
     if (!volumeKeyBridge || !enableVolumeKeyPaging) {
@@ -246,6 +267,9 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
     }
 
     const removeListener = volumeKeyBridge.addVolumeKeyListener((event) => {
+      if (isConflictModalOpenRef.current) {
+        return;
+      }
       handleVolumeKeyRef.current(event.direction);
     });
     void volumeKeyBridge.setVolumeKeyPagingEnabled(true).catch(() => {});
@@ -444,6 +468,20 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
         onNextChapter={handleNextChapter}
         onPageChange={handleSeekbarPageChange}
         onSelectTab={onSelectTab}
+      />
+
+      {/* クラウド同期しおり競合確認モーダルダイアログ (Issue #342) */}
+      <BookmarkConflictDialog
+        isOpen={Boolean(bookmarkConflict)}
+        currentChapterIndex={
+          bookmarkConflict?.currentChapterIndex ?? chapterIndex
+        }
+        remoteChapterIndex={
+          bookmarkConflict?.remoteChapterIndex ?? chapterIndex
+        }
+        isResolving={isResolvingBookmarkConflict}
+        onMoveToRemote={onResolveBookmarkConflictMove}
+        onKeepCurrent={onResolveBookmarkConflictKeep}
       />
     </div>
   );

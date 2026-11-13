@@ -7,6 +7,7 @@ import { ReaderPage, type ReaderPageProps } from "./ReaderPage";
 import * as ReaderViewModule from "./ReaderView";
 import * as ReaderTopOverlayModule from "./ReaderTopOverlay";
 import * as ReaderBottomOverlayModule from "./ReaderBottomOverlay";
+import * as BookmarkConflictDialogModule from "./BookmarkConflictDialog";
 import type { NovelRecord, ChapterRecord } from "../../../storage/types";
 import { ServiceProvider } from "../../../app/ServiceProvider";
 import { MockVolumeKeyBridge } from "../../../bridges/volume-key/mockVolumeKeyBridge";
@@ -30,6 +31,7 @@ const {
   ScrollBoundaryHintNext,
   ScrollBoundaryHintPrev,
   CustomFontAndMargin,
+  BookmarkConflict,
 } = composeStories(stories);
 
 const sampleNovel: NovelRecord = {
@@ -309,6 +311,24 @@ describe("ReaderPage", () => {
       const view = screen.getByTestId("reader-view");
       expect(view).toHaveAttribute("data-font-family", "klee");
       expect(view).toHaveAttribute("data-page-margin", "32");
+    });
+
+    it("BookmarkConflict ストーリーで BookmarkConflictDialog に競合状態 Props が渡されること (v1.1 Issue #342)", () => {
+      const conflictDialogSpy = vi.spyOn(
+        BookmarkConflictDialogModule,
+        "BookmarkConflictDialog",
+      );
+      render(<BookmarkConflict />);
+      expect(conflictDialogSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          isOpen: true,
+          currentChapterIndex: 1,
+          remoteChapterIndex: 3,
+          isResolving: false,
+        }),
+        undefined,
+      );
+      conflictDialogSpy.mockRestore();
     });
   });
 
@@ -1924,6 +1944,100 @@ describe("ReaderPage", () => {
 
       const openButton = screen.getByTestId("reader-open-webview-button");
       await expect(user.click(openButton)).resolves.not.toThrow();
+    });
+  });
+
+  describe("しおり競合確認ダイアログ連携 (Issue #342)", () => {
+    it("bookmarkConflict が設定されているとき BookmarkConflictDialog へ Props と選択コールバックが伝播し、null 時は isOpen: false が渡されること", () => {
+      const conflictDialogSpy = vi.spyOn(
+        BookmarkConflictDialogModule,
+        "BookmarkConflictDialog",
+      );
+      const onResolveMove = vi.fn();
+      const onResolveKeep = vi.fn();
+
+      const { rerender } = render(
+        <ReaderPage
+          {...createDefaultProps({
+            bookmarkConflict: null,
+            isResolvingBookmarkConflict: false,
+          })}
+        />,
+      );
+
+      expect(conflictDialogSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          isOpen: false,
+          currentChapterIndex: 1,
+          remoteChapterIndex: 1,
+          isResolving: false,
+        }),
+        undefined,
+      );
+
+      rerender(
+        <ReaderPage
+          {...createDefaultProps({
+            bookmarkConflict: {
+              currentChapterIndex: 1,
+              remoteChapterIndex: 3,
+            },
+            isResolvingBookmarkConflict: true,
+            onResolveBookmarkConflictMove: onResolveMove,
+            onResolveBookmarkConflictKeep: onResolveKeep,
+          })}
+        />,
+      );
+
+      expect(conflictDialogSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          isOpen: true,
+          currentChapterIndex: 1,
+          remoteChapterIndex: 3,
+          isResolving: true,
+          onMoveToRemote: onResolveMove,
+          onKeepCurrent: onResolveKeep,
+        }),
+        undefined,
+      );
+
+      const lastDialogProps = conflictDialogSpy.mock.calls.at(-1)?.[0];
+      act(() => {
+        lastDialogProps?.onMoveToRemote?.();
+        lastDialogProps?.onKeepCurrent?.();
+      });
+      expect(onResolveMove).toHaveBeenCalledTimes(1);
+      expect(onResolveKeep).toHaveBeenCalledTimes(1);
+      conflictDialogSpy.mockRestore();
+    });
+
+    it("bookmarkConflict 表示中はハードウェア音量キーによるページめくりが抑止されること", () => {
+      const onPageChange = vi.fn();
+      const mockBridge = new MockVolumeKeyBridge();
+
+      render(
+        <ServiceProvider services={{ volumeKeyBridge: mockBridge }}>
+          <ReaderPage
+            {...createDefaultProps({
+              enableVolumeKeyPaging: true,
+              pagingMode: "paged",
+              currentPage: 1,
+              totalPages: 5,
+              onPageChange,
+              bookmarkConflict: {
+                currentChapterIndex: 1,
+                remoteChapterIndex: 3,
+              },
+            })}
+          />
+        </ServiceProvider>,
+      );
+
+      act(() => {
+        mockBridge.triggerVolumeKey("down");
+      });
+
+      expect(onPageChange).not.toHaveBeenCalled();
     });
   });
 });

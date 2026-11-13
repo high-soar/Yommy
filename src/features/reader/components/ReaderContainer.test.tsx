@@ -19,6 +19,7 @@ import type {
 } from "../../../storage/types";
 import type { HttpClientBridge } from "../../../bridges/http/types";
 import type { ParserRegistry } from "../../../parsers/parserRegistry";
+import type { SyncEngine } from "../../cloud-sync/services/syncEngine";
 
 const {
   Default,
@@ -214,6 +215,7 @@ interface TestWrapperProps extends ReaderContainerProps {
   databaseAdapter?: DatabaseAdapter;
   httpClient?: HttpClientBridge;
   parserRegistry?: ParserRegistry;
+  syncEngine?: SyncEngine;
 }
 
 const TestWrapper: React.FC<TestWrapperProps> = ({
@@ -224,6 +226,7 @@ const TestWrapper: React.FC<TestWrapperProps> = ({
   databaseAdapter,
   httpClient,
   parserRegistry,
+  syncEngine,
   ...containerProps
 }) => {
   const resolvedPath =
@@ -244,6 +247,7 @@ const TestWrapper: React.FC<TestWrapperProps> = ({
       ...(chapterRepository ? { chapterRepository } : {}),
       ...(httpClient ? { httpClient } : {}),
       ...(parserRegistry ? { parserRegistry } : {}),
+      ...(syncEngine ? { syncEngine } : {}),
     }),
     [
       resolvedDbAdapter,
@@ -252,6 +256,7 @@ const TestWrapper: React.FC<TestWrapperProps> = ({
       chapterRepository,
       httpClient,
       parserRegistry,
+      syncEngine,
     ],
   );
 
@@ -443,16 +448,27 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(pageSpy).toHaveBeenCalled();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
+        expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
       });
 
+      updateBookmarkSpy.mockClear();
       const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onScrollProgressChange(0.3);
+      });
       await act(async () => {
         lastProps.onSelectTab?.("bookshelf");
       });
 
       await waitFor(() => {
-        expect(updateBookmarkSpy).toHaveBeenCalled();
+        expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0.3);
         expect(onBackToBookshelf).toHaveBeenCalledTimes(1);
       });
       pageSpy.mockRestore();
@@ -507,16 +523,27 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(pageSpy).toHaveBeenCalled();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
+        expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
       });
 
+      updateBookmarkSpy.mockClear();
       const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onScrollProgressChange(0.3);
+      });
       await act(async () => {
         lastProps.onSelectTab?.("settings");
       });
 
       await waitFor(() => {
-        expect(updateBookmarkSpy).toHaveBeenCalled();
+        expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0.3);
         expect(onNavigateSettings).toHaveBeenCalledTimes(1);
       });
       pageSpy.mockRestore();
@@ -569,16 +596,27 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(pageSpy).toHaveBeenCalled();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
+        expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
       });
 
+      updateBookmarkSpy.mockClear();
       const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onScrollProgressChange(0.3);
+      });
       await act(async () => {
         lastProps.onSelectTab?.("search");
       });
 
       await waitFor(() => {
-        expect(updateBookmarkSpy).toHaveBeenCalled();
+        expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0.3);
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           "/search",
         );
@@ -602,16 +640,27 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(pageSpy).toHaveBeenCalled();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
+        expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
       });
 
+      updateBookmarkSpy.mockClear();
       const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onScrollProgressChange(0.3);
+      });
       await act(async () => {
         lastProps.onSelectTab?.("ranking");
       });
 
       await waitFor(() => {
-        expect(updateBookmarkSpy).toHaveBeenCalled();
+        expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0.3);
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           "/ranking",
         );
@@ -637,7 +686,6 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
             isLoading: false,
@@ -653,19 +701,28 @@ describe("ReaderContainer", () => {
       });
       updateBookmarkSpy.mockClear();
 
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onScrollProgressChange(0.4);
+      });
+
       await act(async () => {
         window.dispatchEvent(new PopStateEvent("popstate"));
       });
 
       await waitFor(
         () => {
-          expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
+          expect(updateBookmarkSpy).toHaveBeenCalledWith(
+            sampleNovel.id,
+            1,
+            0.4,
+          );
         },
         { timeout: 10000 },
       );
     }, 15000);
 
-    it("コンポーネントのアンマウント時に flushBookmark が実行されること (R1-11)", async () => {
+    it("コンポーネントのアンマウント時に未保存進捗があれば flushBookmark が実行されること (R1-11)", async () => {
       const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
@@ -681,7 +738,6 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
             isLoading: false,
@@ -697,15 +753,65 @@ describe("ReaderContainer", () => {
       });
       updateBookmarkSpy.mockClear();
 
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      act(() => {
+        lastProps.onScrollProgressChange(0.4);
+      });
+
       unmount();
 
       await waitFor(
         () => {
-          expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
+          expect(updateBookmarkSpy).toHaveBeenCalledWith(
+            sampleNovel.id,
+            1,
+            0.4,
+          );
         },
         { timeout: 10000 },
       );
     }, 15000);
+
+    it("未操作のまま popstate やアンマウントが発生したとき updateBookmark が再呼び出しされないこと (Issue #342)", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const novelAtChapter1 = {
+        ...sampleNovel,
+        bookmarkChapterIndex: 1,
+        bookmarkScrollProgress: 0.2,
+      };
+      const { repo: novelRepository, updateBookmarkSpy } =
+        createMockNovelRepo(novelAtChapter1);
+      const { repo: chapterRepository } = createMockChapterRepo();
+
+      const { unmount } = render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
+      });
+
+      updateBookmarkSpy.mockClear();
+      await act(async () => {
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      });
+      unmount();
+      await new Promise((r) => setTimeout(r, 30));
+
+      expect(updateBookmarkSpy).not.toHaveBeenCalled();
+      pageSpy.mockRestore();
+    });
   });
 
   describe("前後エピソード遷移の検証 (TR-05, AC-RD-06)", () => {
@@ -1312,16 +1418,27 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
+        expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
       });
 
+      updateBookmarkSpy.mockClear();
       const lastProps = pageSpy.mock.lastCall?.[0];
+      act(() => {
+        lastProps?.onScrollProgressChange(0.35);
+      });
       await act(async () => {
         await lastProps?.onBackToToc?.();
       });
 
       await waitFor(() => {
-        expect(updateBookmarkSpy).toHaveBeenCalled();
+        expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0.35);
         expect(onBackToToc).toHaveBeenCalledTimes(1);
       });
     });
@@ -1342,16 +1459,27 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
+        expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
       });
 
+      updateBookmarkSpy.mockClear();
       const lastProps = pageSpy.mock.lastCall?.[0];
+      act(() => {
+        lastProps?.onScrollProgressChange(0.35);
+      });
       await act(async () => {
         await lastProps?.onBackToToc?.();
       });
 
       await waitFor(() => {
-        expect(updateBookmarkSpy).toHaveBeenCalled();
+        expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0.35);
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           `/novels/${encodeURIComponent(sampleNovel.id)}`,
         );
@@ -1657,6 +1785,263 @@ describe("ReaderContainer", () => {
           `/browser?url=${encodeURIComponent(sampleNovel.canonicalUrl)}&novelId=${encodeURIComponent(sampleNovel.id)}&chapterIndex=1`,
         );
       });
+    });
+  });
+
+  describe("しおり競合確認ダイアログ統合と戻る操作抑止 (Issue #342)", () => {
+    it("競合発生時は router.blockBackNavigation が有効化され popstate 離脱・flushBookmark が抑止され、「移動する」成功時にのみ URL が同期されること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const { repo: novelRepository, updateBookmarkSpy } = createMockNovelRepo({
+        ...sampleNovel,
+        bookmarkChapterIndex: 1,
+        bookmarkScrollProgress: 0,
+      });
+      const { repo: chapterRepository } = createMockChapterRepo();
+
+      let pullListener:
+        ((res: { pulled: boolean; mergedNovels: number }) => void) | null =
+        null;
+      const mockSyncEngine = {
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+        subscribePullCompleted: vi.fn((listener) => {
+          pullListener = listener;
+          return () => {};
+        }),
+      } as unknown as SyncEngine;
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+          syncEngine={mockSyncEngine}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
+      });
+
+      // 他端末が第3話へ進めた状態を模擬して Pull 完了通知
+      await novelRepository.updateBookmark(sampleNovel.id, 3, 0.5);
+      updateBookmarkSpy.mockClear();
+
+      await act(async () => {
+        pullListener?.({ pulled: true, mergedNovels: 1 });
+      });
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            bookmarkConflict: {
+              currentChapterIndex: 1,
+              remoteChapterIndex: 3,
+            },
+          }),
+          undefined,
+        );
+      });
+
+      // 競合ダイアログ表示中の popstate はルート遷移も flushBookmark も実行しないこと
+      await act(async () => {
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      });
+      expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+        `/novels/${sampleNovel.id}/chapters/1`,
+      );
+      expect(updateBookmarkSpy).not.toHaveBeenCalled();
+
+      // 「第3話へ移動する」選択で第3話へ遷移し URL が同期されること
+      const lastProps = pageSpy.mock.lastCall?.[0];
+      await act(async () => {
+        await lastProps?.onResolveBookmarkConflictMove?.();
+      });
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            bookmarkConflict: null,
+          }),
+          undefined,
+        );
+        expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+          `/novels/${encodeURIComponent(sampleNovel.id)}/chapters/3`,
+        );
+      });
+      pageSpy.mockRestore();
+    });
+
+    it("「第N話のまま読む」選択時は現在話と進捗が明示保存され URL が現在話のまま維持されること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const { repo: novelRepository, updateBookmarkSpy } = createMockNovelRepo({
+        ...sampleNovel,
+        bookmarkChapterIndex: 1,
+        bookmarkScrollProgress: 0,
+      });
+      const { repo: chapterRepository } = createMockChapterRepo();
+
+      let pullListener:
+        ((res: { pulled: boolean; mergedNovels: number }) => void) | null =
+        null;
+      const mockSyncEngine = {
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+        subscribePullCompleted: vi.fn((listener) => {
+          pullListener = listener;
+          return () => {};
+        }),
+      } as unknown as SyncEngine;
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+          syncEngine={mockSyncEngine}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
+      });
+
+      await novelRepository.updateBookmark(sampleNovel.id, 3, 0.5);
+      updateBookmarkSpy.mockClear();
+
+      await act(async () => {
+        pullListener?.({ pulled: true, mergedNovels: 1 });
+      });
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            bookmarkConflict: {
+              currentChapterIndex: 1,
+              remoteChapterIndex: 3,
+            },
+          }),
+          undefined,
+        );
+      });
+
+      const lastProps = pageSpy.mock.lastCall?.[0];
+      await act(async () => {
+        await lastProps?.onResolveBookmarkConflictKeep?.();
+      });
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            bookmarkConflict: null,
+          }),
+          undefined,
+        );
+      });
+      expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
+      expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+        `/novels/${sampleNovel.id}/chapters/1`,
+      );
+      pageSpy.mockRestore();
+    });
+
+    it("「移動する」選択時に遷移先エピソード取得が失敗した場合は URL 遷移を行わず現在パスを維持すること", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const onNavigateChapter = vi.fn();
+      const { repo: novelRepository } = createMockNovelRepo({
+        ...sampleNovel,
+        bookmarkChapterIndex: 1,
+        bookmarkScrollProgress: 0,
+      });
+      const { repo: chapterRepository } = createMockChapterRepo([
+        sampleChapter1,
+        sampleChapter2,
+        { ...sampleChapter3, bodyHtml: null, downloadedAt: null },
+      ]);
+      const failingHttpClient: HttpClientBridge = {
+        getHtml: vi.fn().mockRejectedValue(new Error("Network error")),
+      };
+
+      let pullListener:
+        ((res: { pulled: boolean; mergedNovels: number }) => void) | null =
+        null;
+      const mockSyncEngine = {
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+        subscribePullCompleted: vi.fn((listener) => {
+          pullListener = listener;
+          return () => {};
+        }),
+      } as unknown as SyncEngine;
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          onNavigateChapter={onNavigateChapter}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+          httpClient={failingHttpClient}
+          syncEngine={mockSyncEngine}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
+      });
+
+      await novelRepository.updateBookmark(sampleNovel.id, 3, 0.5);
+      await act(async () => {
+        pullListener?.({ pulled: true, mergedNovels: 1 });
+      });
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            bookmarkConflict: {
+              currentChapterIndex: 1,
+              remoteChapterIndex: 3,
+            },
+          }),
+          undefined,
+        );
+      });
+
+      const lastProps = pageSpy.mock.lastCall?.[0];
+      await act(async () => {
+        await lastProps?.onResolveBookmarkConflictMove?.();
+      });
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            bookmarkConflict: null,
+          }),
+          undefined,
+        );
+      });
+      expect(onNavigateChapter).not.toHaveBeenCalled();
+      expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+        `/novels/${sampleNovel.id}/chapters/1`,
+      );
+      pageSpy.mockRestore();
     });
   });
 });

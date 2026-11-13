@@ -336,3 +336,17 @@ export const CustomFontAndMargin: Story = {
     pageMarginPx: 32,
   },
 };
+
+/**
+ * クラウド同期しおり競合確認モーダル表示（v1.1 Issue #342）
+ */
+export const BookmarkConflict: Story = {
+  name: "しおり競合確認ダイアログ表示",
+  args: {
+    bookmarkConflict: {
+      currentChapterIndex: 1,
+      remoteChapterIndex: 3,
+    },
+    isResolvingBookmarkConflict: false,
+  },
+};

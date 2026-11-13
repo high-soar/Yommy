@@ -1690,6 +1690,56 @@ describe("ReaderView", () => {
     });
   });
 
+  describe("プログラム的スクロール復元ガードの検証 (Issue #342)", () => {
+    it("initialScrollProgress による位置復元直後の scroll イベントでは onScrollProgressChange が発火せず、requestAnimationFrame 後のユーザー操作では発火すること", async () => {
+      const onProgress = vi.fn();
+      const { rerender } = render(
+        <ReaderView
+          bodyHtml="<p>本文</p>"
+          writingMode="horizontal-tb"
+          pagingMode="scroll"
+          initialScrollProgress={0.5}
+          onScrollProgressChange={onProgress}
+        />,
+      );
+
+      const container = screen.getByTestId("reader-view");
+      mockElementDimensions(container, {
+        scrollHeight: 1000,
+        clientHeight: 400,
+      });
+
+      // rAF 完了前の scroll イベント（復元による非同期 scroll 模擬）は無視されること
+      container.scrollTop = 300;
+      fireEvent.scroll(container);
+      expect(onProgress).not.toHaveBeenCalled();
+
+      // rAF 完了後のユーザー手動スクロールは通知されること
+      await act(async () => {
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => resolve()),
+        );
+      });
+      container.scrollTop = 450;
+      fireEvent.scroll(container);
+      expect(onProgress).toHaveBeenCalledWith(0.75);
+
+      // initialScrollProgress が 0 へ戻る章切替時、scrollTop が変化すると同様に保護されること
+      onProgress.mockClear();
+      rerender(
+        <ReaderView
+          bodyHtml="<p>次話本文</p>"
+          writingMode="horizontal-tb"
+          pagingMode="scroll"
+          initialScrollProgress={0}
+          onScrollProgressChange={onProgress}
+        />,
+      );
+      fireEvent.scroll(container);
+      expect(onProgress).not.toHaveBeenCalled();
+    });
+  });
+
   describe("calculateSwipeTrackStyle (純粋関数)", () => {
     it("isAnimating=true のとき transition が 'left 200ms ease-out' となること", () => {
       const style = calculateSwipeTrackStyle(400, 100, true);
