@@ -819,6 +819,13 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     );
 
     // 連続スクロールモードでの末尾到達後2段階操作（スワイプ/ホイール）による前後話遷移（AC-RD-19, TR-05）
+    // ReaderView の初期位置復元ガード（1フレーム rAF）完了後に手動スクロールを発火
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
     // 末尾（progress = 1.0）へスクロール
     await readerView.evaluate((el) => {
       const maxScroll = el.scrollWidth - el.clientWidth;
@@ -843,6 +850,12 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     );
 
     // 第2話先頭（progress = 0.0）で前話への2段階操作を検証
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
     await readerView.evaluate((el) => {
       el.scrollLeft = 0;
       el.dispatchEvent(new Event("scroll"));
@@ -932,6 +945,13 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     );
 
     // スクロール操作により進捗率を更新（縦書き時の負の scrollLeft または横書き時の scrollTop）
+    // ReaderView の章切替直後スクロール復元ガード（rAF）完了後に手動スクロールを発火する
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
     await page.evaluate(() => {
       const el = document.querySelector('[data-testid="reader-view"]');
       if (el) {
