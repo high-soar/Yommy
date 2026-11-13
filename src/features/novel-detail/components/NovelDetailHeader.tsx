@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import type { NovelDetailHeaderProps } from "../types";
 import { formatByteSize } from "../../../shared/utils/formatByteSize";
 
@@ -8,7 +8,7 @@ export type { NovelDetailHeaderProps } from "../types";
  * 作品詳細ヘッダーコンポーネント（Presentational）
  *
  * メタ情報（タイトル、著者、あらすじ、話数・キャッシュ統計）、
- * 読書開始ボタン（しおり有無に応じた制御）、目次更新および作品削除アクションを提供する。
+ * 読書開始ボタン（しおり有無に応じた制御）、1行管理アイコンバー（お気に入り・目次更新・3点メニュー）を提供する。
  * 画面上部に固定配置（shrink-0）され、あらすじの折りたたみトグルおよび省スペース化を提供する。
  */
 export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
@@ -32,6 +32,44 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
   onOpenWebView,
 }) => {
   const [isSynopsisExpanded, setIsSynopsisExpanded] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuContainerRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
+
+  const isActionDisabled = isRefreshing || isBatchCaching;
+  const showMenu = isMenuOpen && !isActionDisabled;
+
+  // 更新中・一括キャッシュ中に遷移した場合はメニューを自動的に閉じ、復帰後も開かないよう同期する
+  useEffect(() => {
+    if (isActionDisabled) {
+      setIsMenuOpen(false);
+    }
+  }, [isActionDisabled]);
+
+  // メニュー展開中の外クリック（タップ）および Escape キーによる自動クローズとフォーカス復帰
+  useEffect(() => {
+    if (!showMenu) {
+      return;
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!menuContainerRef.current!.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsMenuOpen(false);
+        menuButtonRef.current!.focus();
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showMenu]);
 
   // メタ情報のフォールバックおよび空文字判定
   const isStartDisabled = novel.totalChapters === 0 || isBatchCaching;
@@ -41,7 +79,7 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
   );
   const synopsisText = hasSynopsis ? novel.synopsis : "あらすじはありません。";
 
-  // 一括キャッシュ・再開・再試行ボタンの動的ラベルと活性制御 (AC-ND-11, AC-ND-13, AC-ND-24, AC-ND-25)
+  // 一括キャッシュ・再開・再試行メニュー項目の動的ラベルと活性制御 (AC-ND-11, AC-ND-13, AC-ND-24, AC-ND-25)
   const getBatchCacheButtonInfo = (): { label: string; disabled: boolean } => {
     if (novel.totalChapters === 0) {
       return { label: "未取得話を一括キャッシュ", disabled: true };
@@ -53,48 +91,37 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
       const remainingTotal = pendingCacheCount + failedCacheCount;
       return {
         label: `キャッシュを再開（残り${remainingTotal}話）`,
-        disabled: isRefreshing,
+        disabled: false,
       };
     }
-    if (pendingCacheCount === 0 && failedCacheCount > 0) {
+    if (failedCacheCount > 0) {
       return {
         label: `失敗した話を再試行（${failedCacheCount}話）`,
-        disabled: isRefreshing,
+        disabled: false,
       };
     }
-    return { label: "未取得話を一括キャッシュ", disabled: isRefreshing };
+    return { label: "未取得話を一括キャッシュ", disabled: false };
   };
 
   const batchButtonInfo = getBatchCacheButtonInfo();
+
+  const handleMenuAction = (action?: () => void) => {
+    setIsMenuOpen(false);
+    action?.();
+  };
 
   return (
     <header
       data-testid="novel-detail-header"
       className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 p-4 md:p-5 shadow-xs mb-4 md:mb-6 flex flex-col gap-3 md:gap-4 shrink-0"
     >
-      {/* 管理アクションバー（右寄せ） */}
-      <div className="flex items-center justify-end gap-2 flex-wrap">
-        {/* R2-01/R2-19: ON/OFF切替時の2px高さちらつきと横幅伸縮を防ぐため常時1px borderと固定文言を維持 */}
-        <button
-          type="button"
-          data-testid="detail-favorite-toggle-button"
-          aria-pressed={Boolean(novel.isFavorite)}
-          aria-label="お気に入り"
-          onClick={onToggleFavorite}
-          disabled={isRefreshing || isBatchCaching}
-          className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors focus:outline-hidden focus:ring-2 focus:ring-amber-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed ${
-            novel.isFavorite
-              ? "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700/60 hover:bg-amber-100 dark:hover:bg-amber-900/50"
-              : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-600"
-          }`}
-        >
-          {novel.isFavorite ? "★ お気に入り" : "☆ お気に入り"}
-        </button>
-        {isBatchCaching ? (
-          <div className="flex items-center gap-2">
+      {/* 管理アクションバー（常時1行・右寄せアイコンバー） */}
+      <div className="flex items-center justify-end gap-1.5 sm:gap-2 flex-nowrap">
+        {isBatchCaching && (
+          <div className="flex items-center gap-1.5 min-w-0">
             <span
               data-testid="batch-cache-progress"
-              className={`text-xs font-medium animate-pulse ${
+              className={`text-xs font-medium animate-pulse min-w-0 truncate ${
                 failedCacheCount > 0
                   ? "text-amber-600 dark:text-amber-400"
                   : "text-blue-600 dark:text-blue-400"
@@ -110,60 +137,116 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
               type="button"
               data-testid="batch-cache-cancel-button"
               onClick={onCancelBatchCache}
-              className="px-3 py-1.5 text-xs font-medium bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-amber-500 cursor-pointer"
+              className="shrink-0 px-2.5 py-1.5 text-xs font-medium bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-amber-500 cursor-pointer"
             >
               中断
             </button>
           </div>
-        ) : (
-          <button
-            type="button"
-            data-testid="batch-cache-button"
-            onClick={onStartBatchCache}
-            disabled={batchButtonInfo.disabled}
-            className="px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-          >
-            {batchButtonInfo.label}
-          </button>
         )}
+        {/* R2-01/R2-19: ON/OFF切替時のちらつきと横幅伸縮を防ぐため常時1px borderと固定アイコンサイズを維持 */}
+        <button
+          type="button"
+          data-testid="detail-favorite-toggle-button"
+          aria-pressed={Boolean(novel.isFavorite)}
+          aria-label="お気に入り"
+          onClick={onToggleFavorite}
+          disabled={isActionDisabled}
+          className={`inline-flex items-center justify-center shrink-0 w-8 h-8 text-sm leading-none rounded-lg border transition-colors focus:outline-hidden focus:ring-2 focus:ring-amber-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed ${
+            novel.isFavorite
+              ? "bg-amber-50 dark:bg-amber-950/40 text-amber-500 dark:text-amber-400 border-amber-300 dark:border-amber-700/60 hover:bg-amber-100 dark:hover:bg-amber-900/50"
+              : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-300 border-slate-200 dark:border-slate-600"
+          }`}
+        >
+          <span aria-hidden="true">{novel.isFavorite ? "★" : "☆"}</span>
+        </button>
         <button
           type="button"
           data-testid="refresh-toc-button"
+          aria-label="目次を更新"
           onClick={onRefreshToc}
-          disabled={isRefreshing || isBatchCaching}
-          className="px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+          disabled={isActionDisabled}
+          className="inline-flex items-center justify-center shrink-0 w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
         >
-          {isRefreshing ? "更新中..." : "目次を更新"}
+          <span
+            aria-hidden="true"
+            className={`text-sm leading-none select-none ${isRefreshing ? "animate-spin" : ""}`}
+          >
+            🔄
+          </span>
         </button>
-        <button
-          type="button"
-          data-testid="open-clear-cache-dialog-button"
-          onClick={onOpenClearCacheDialog}
-          disabled={
-            novel.cachedChapters === 0 || isRefreshing || isBatchCaching
-          }
-          className="px-3 py-1.5 text-xs font-medium text-amber-700 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-amber-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-        >
-          本文キャッシュ整理
-        </button>
-        <button
-          type="button"
-          data-testid="open-webview-button"
-          onClick={onOpenWebView}
-          disabled={isRefreshing || isBatchCaching}
-          className="px-3 py-1.5 text-xs font-medium bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-emerald-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-        >
-          内蔵ブラウザで開く
-        </button>
-        <button
-          type="button"
-          data-testid="open-delete-dialog-button"
-          onClick={onOpenDeleteDialog}
-          disabled={isRefreshing || isBatchCaching}
-          className="px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-red-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-        >
-          作品を削除
-        </button>
+        <div ref={menuContainerRef} className="relative shrink-0">
+          <button
+            ref={menuButtonRef}
+            type="button"
+            data-testid="novel-detail-menu-button"
+            aria-label="作品メニュー"
+            aria-haspopup="menu"
+            aria-expanded={showMenu}
+            aria-controls={showMenu ? menuId : undefined}
+            onClick={() => setIsMenuOpen((prev) => !prev)}
+            disabled={isActionDisabled}
+            className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+          >
+            <span
+              aria-hidden="true"
+              className="text-base leading-none font-bold select-none"
+            >
+              ⋮
+            </span>
+          </button>
+          {showMenu && (
+            <div
+              id={menuId}
+              role="menu"
+              aria-label="作品操作メニュー"
+              data-testid="novel-detail-menu"
+              className="absolute right-0 top-full mt-1.5 z-20 w-56 py-1 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-lg"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                data-testid="batch-cache-button"
+                onClick={() => handleMenuAction(onStartBatchCache)}
+                disabled={batchButtonInfo.disabled}
+                className="w-full text-left px-3.5 py-2 text-xs font-medium text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors focus:outline-hidden focus:bg-slate-100 dark:focus:bg-slate-700 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+              >
+                {batchButtonInfo.label}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                data-testid="open-clear-cache-dialog-button"
+                onClick={() => handleMenuAction(onOpenClearCacheDialog)}
+                disabled={novel.cachedChapters === 0}
+                className="w-full text-left px-3.5 py-2 text-xs font-medium text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors focus:outline-hidden focus:bg-amber-50 dark:focus:bg-amber-950/30 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+              >
+                本文キャッシュ整理
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                data-testid="open-webview-button"
+                onClick={() => handleMenuAction(onOpenWebView)}
+                className="w-full text-left px-3.5 py-2 text-xs font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors focus:outline-hidden focus:bg-emerald-50 dark:focus:bg-emerald-950/30 cursor-pointer"
+              >
+                内蔵ブラウザで開く
+              </button>
+              <div
+                role="separator"
+                className="my-1 border-t border-slate-200 dark:border-slate-700"
+              />
+              <button
+                type="button"
+                role="menuitem"
+                data-testid="open-delete-dialog-button"
+                onClick={() => handleMenuAction(onOpenDeleteDialog)}
+                className="w-full text-left px-3.5 py-2 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors focus:outline-hidden focus:bg-red-50 dark:focus:bg-red-950/30 cursor-pointer"
+              >
+                作品を削除
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* インライン通知メッセージ（目次更新完了フィードバック） */}
