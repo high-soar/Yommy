@@ -1121,5 +1121,123 @@ describe("App コンポーネント", () => {
         expect(screen.getAllByTestId("bottom-tab-bar")).toHaveLength(1);
       });
     });
+
+    describe("戻るブロック連携と全画面バックグラウンド自動 Pull (Issue #342)", () => {
+      it("router.blockBackNavigation 登録中は AppBridge のシステム戻るボタン押下でも遷移・終了トーストが発火しないこと", async () => {
+        const mockAppBridge = new MockAppBridge();
+        let routerRef: RouterContextValue | null = null;
+        const RouterCapture: React.FC = () => {
+          routerRef = useRouter();
+          return null;
+        };
+
+        render(
+          <ServiceProvider services={{ appBridge: mockAppBridge }}>
+            <RouterProvider initialPath="/novels/kakuyomu:16817330658027210412/chapters/1">
+              <AppContent />
+              <RouterCapture />
+            </RouterProvider>
+          </ServiceProvider>,
+        );
+
+        let release: (() => void) | undefined;
+        act(() => {
+          release = routerRef?.blockBackNavigation?.();
+        });
+
+        await act(async () => {
+          await mockAppBridge.triggerBackButton();
+        });
+        expect(routerRef?.route.name).toBe("reader");
+
+        // 解除後は通常通り目次画面へ戻る
+        act(() => {
+          release?.();
+        });
+        await act(async () => {
+          await mockAppBridge.triggerBackButton();
+        });
+        await waitFor(() => {
+          expect(routerRef?.route.name).toBe("novel-detail");
+        });
+      });
+
+      it("リーダー画面 (SCR-03) や作品詳細画面 (SCR-02) 表示中に5分経過で画面復帰したとき自動 Pull が発火すること", async () => {
+        const mockSyncEngine = {
+          pullAndMerge: vi
+            .fn()
+            .mockResolvedValue({ pulled: true, mergedNovels: 1 }),
+          subscribePullCompleted: vi.fn(() => () => {}),
+          notifyChanged: vi.fn().mockResolvedValue(undefined),
+        };
+        const connectedBridge = {
+          getAuthState: vi.fn().mockResolvedValue({
+            status: "connected" as const,
+            email: "reader@example.com",
+          }),
+          signIn: vi.fn(),
+          signOut: vi.fn(),
+          pullFile: vi.fn(),
+          pushFile: vi.fn(),
+        };
+
+        const originalVisibility = Object.getOwnPropertyDescriptor(
+          document,
+          "visibilityState",
+        );
+        const nowSpy = vi.spyOn(Date, "now");
+
+        try {
+          render(
+            <ServiceProvider
+              services={{
+                syncEngine: mockSyncEngine as unknown as NonNullable<
+                  React.ComponentProps<typeof ServiceProvider>["services"]
+                >["syncEngine"],
+                cloudSyncBridge: connectedBridge,
+              }}
+            >
+              <RouterProvider initialPath="/novels/kakuyomu:16817330658027210412/chapters/1">
+                <AppContent />
+              </RouterProvider>
+            </ServiceProvider>,
+          );
+
+          const baseNow = 1_700_000_000_000;
+          nowSpy.mockReturnValue(baseNow);
+          act(() => {
+            Object.defineProperty(document, "visibilityState", {
+              value: "hidden",
+              writable: true,
+              configurable: true,
+            });
+            document.dispatchEvent(new Event("visibilitychange"));
+          });
+
+          nowSpy.mockReturnValue(baseNow + 301_000);
+          act(() => {
+            Object.defineProperty(document, "visibilityState", {
+              value: "visible",
+              writable: true,
+              configurable: true,
+            });
+            document.dispatchEvent(new Event("visibilitychange"));
+          });
+
+          await waitFor(() => {
+            expect(mockSyncEngine.pullAndMerge).toHaveBeenCalledTimes(1);
+          });
+        } finally {
+          nowSpy.mockRestore();
+          if (originalVisibility) {
+            Object.defineProperty(
+              document,
+              "visibilityState",
+              originalVisibility,
+            );
+          }
+        }
+      });
+    });
   });
 });

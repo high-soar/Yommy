@@ -2855,4 +2855,165 @@ describe("useNovelDetail", () => {
       expect(items.every((it) => it.status === "pending")).toBe(true);
     });
   });
+
+  describe("クラウド同期 Pull 完了時のサイレント自動更新 (AC-ND-28)", () => {
+    it("reloadDetail({ silent: true }) を呼び出すと isLoading を true にせず最新しおり・既読状態が反映されること", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 3);
+
+      const loadingTransitions: boolean[] = [];
+      const { result } = renderHook(
+        () => {
+          const hookResult = useNovelDetail(seeded.id);
+          loadingTransitions.push(hookResult.isLoading);
+          return hookResult;
+        },
+        {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+      loadingTransitions.length = 0;
+
+      // 外部（他端末Pull）によるしおり・既読更新をシミュレート（インフライト中の isLoading も false 維持を検証）
+      await novelRepo.updateBookmark(seeded.id, 3, 0);
+      await chapterRepo.markChapterRead(seeded.id, 1, true);
+      await chapterRepo.markChapterRead(seeded.id, 2, true);
+      const updatedNovel = await novelRepo.getNovelById(seeded.id);
+
+      let resolveDeferredNovel: ((val: typeof updatedNovel) => void) | null =
+        null;
+      vi.spyOn(novelRepo, "getNovelById").mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveDeferredNovel = resolve;
+          }),
+      );
+
+      let reloadPromise: Promise<void> | undefined;
+      act(() => {
+        reloadPromise = result.current.reloadDetail({ silent: true });
+      });
+      expect(result.current.isLoading).toBe(false);
+
+      await act(async () => {
+        resolveDeferredNovel?.(updatedNovel);
+        await reloadPromise;
+      });
+
+      expect(loadingTransitions.every((v) => v === false)).toBe(true);
+      expect(result.current.novel?.bookmarkChapterIndex).toBe(3);
+      expect(
+        result.current.chapters.find((c) => c.chapterIndex === 1)?.isRead,
+      ).toBe(true);
+      expect(
+        result.current.chapters.find((c) => c.chapterIndex === 2)?.isRead,
+      ).toBe(true);
+    });
+
+    it("syncEngine.subscribePullCompleted で pulled: true が通知されたときサイレント更新され、pulled: false やエラー時は一覧を破壊しないこと", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 2);
+
+      let capturedListener:
+        ((result: { pulled: boolean; mergedNovels: number }) => void) | null =
+        null;
+      const unsubscribeMock = vi.fn();
+      const mockSyncEngine = {
+        subscribePullCompleted: vi.fn((listener) => {
+          capturedListener = listener;
+          return unsubscribeMock;
+        }),
+        pullAndMerge: vi.fn(),
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const { result, unmount } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          syncEngine: mockSyncEngine as unknown as SyncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+      expect(mockSyncEngine.subscribePullCompleted).toHaveBeenCalledTimes(1);
+
+      const getByIdSpy = vi.spyOn(novelRepo, "getNovelById");
+      const callsBeforeFalse = getByIdSpy.mock.calls.length;
+
+      // pulled: false では再取得されないこと
+      await act(async () => {
+        capturedListener?.({ pulled: false, mergedNovels: 0 });
+      });
+      expect(getByIdSpy.mock.calls.length).toBe(callsBeforeFalse);
+
+      // pulled: true でサイレント更新されること
+      await novelRepo.updateBookmark(seeded.id, 2, 0);
+      await act(async () => {
+        capturedListener?.({ pulled: true, mergedNovels: 1 });
+      });
+      await waitFor(() => {
+        expect(result.current.novel?.bookmarkChapterIndex).toBe(2);
+      });
+      expect(result.current.isLoading).toBe(false);
+
+      // アンマウント後のサイレント reloadDetail 解決時や失敗時でも安全で、unsubscribe が呼ばれること
+      unmount();
+      expect(unsubscribeMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("アンマウント中の reloadDetail 解決・エラー時も状態更新リークを起こさないこと", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 1);
+
+      const { result, unmount } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      let resolveFetch: ((v: null) => void) | null = null;
+      vi.spyOn(novelRepo, "getNovelById").mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFetch = resolve;
+          }),
+      );
+
+      let pendingPromise: Promise<void> | undefined;
+      act(() => {
+        pendingPromise = result.current.reloadDetail({ silent: true });
+      });
+
+      unmount();
+      resolveFetch?.(null);
+      await pendingPromise;
+
+      // アンマウント後のエラーケース
+      vi.spyOn(novelRepo, "getNovelById").mockRejectedValueOnce(
+        new Error("unmounted error"),
+      );
+      await result.current.reloadDetail({ silent: true });
+    });
+  });
 });

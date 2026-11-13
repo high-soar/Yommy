@@ -1498,6 +1498,82 @@ describe("router", () => {
           expect(replaceStateSpy).toHaveBeenCalled();
         });
       });
+
+      describe("戻る遷移ブロック制御 (blockBackNavigation / isBackNavigationBlocked)", () => {
+        it("blockBackNavigation 登録中は popstate によるルート遷移と back() が抑止され、全解除後に復帰すること", () => {
+          const routerRef: { current: RouterContextValue | null } = {
+            current: null,
+          };
+          const RouterCapture: React.FC = () => {
+            routerRef.current = useRouter();
+            return null;
+          };
+
+          render(
+            <RouterProvider initialPath="/novels/sample/chapters/10">
+              <RouterCapture />
+            </RouterProvider>,
+          );
+
+          expect(routerRef.current?.isBackNavigationBlocked?.()).toBe(false);
+
+          let release1: (() => void) | undefined;
+          let release2: (() => void) | undefined;
+          act(() => {
+            release1 = routerRef.current?.blockBackNavigation?.();
+            release2 = routerRef.current?.blockBackNavigation?.();
+          });
+          expect(routerRef.current?.isBackNavigationBlocked?.()).toBe(true);
+
+          // popstate で URL が変わっても現在パスへ戻されルート変更されない
+          const pushStateSpy = vi.spyOn(window.history, "pushState");
+          act(() => {
+            window.history.pushState(null, "", "/novels/sample");
+            window.dispatchEvent(new PopStateEvent("popstate"));
+          });
+          expect(routerRef.current?.currentPath).toBe(
+            "/novels/sample/chapters/10",
+          );
+          expect(pushStateSpy).toHaveBeenCalledWith(
+            null,
+            "",
+            "/novels/sample/chapters/10",
+          );
+
+          // popstate 発火時点で pathname が現在パスと一致している場合は pushState を再実行しない
+          const callsBeforeSamePath = pushStateSpy.mock.calls.length;
+          act(() => {
+            window.dispatchEvent(new PopStateEvent("popstate"));
+          });
+          expect(pushStateSpy.mock.calls.length).toBe(callsBeforeSamePath);
+
+          // back() も抑止される
+          act(() => {
+            routerRef.current?.back();
+          });
+          expect(routerRef.current?.currentPath).toBe(
+            "/novels/sample/chapters/10",
+          );
+
+          // 1つだけ解除（二重呼び出し含む）しても 2つ目が残るためブロック継続
+          act(() => {
+            release1?.();
+            release1?.();
+          });
+          expect(routerRef.current?.isBackNavigationBlocked?.()).toBe(true);
+
+          // 全解除後は back() で目次へ戻れる
+          act(() => {
+            release2?.();
+          });
+          expect(routerRef.current?.isBackNavigationBlocked?.()).toBe(false);
+
+          act(() => {
+            routerRef.current?.back();
+          });
+          expect(routerRef.current?.currentPath).toBe("/novels/sample");
+        });
+      });
     });
   });
 });
