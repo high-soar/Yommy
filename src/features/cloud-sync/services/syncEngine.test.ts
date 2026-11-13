@@ -2090,7 +2090,8 @@ describe("syncEngine", () => {
       expect(pushed.hasNewUpdate).toBe(1);
       expect(pushed.latestEpisodePublishedAt).toBe("2026-10-31T00:00:00.000Z");
 
-      // latest_episode_published_at が null のケースも検証
+      // latest_episode_published_at が null のケースも検証（前回 Push 分のマージ影響を避けるためリモートをリセット）
+      bridge.setFileContent(null);
       await db.execute(
         "UPDATE novels SET latest_episode_published_at = NULL WHERE id = ?;",
         ["kakuyomu:16817330658027210412"],

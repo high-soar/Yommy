@@ -1,6 +1,7 @@
 import type { CloudSyncBridge } from "../../../bridges/cloud-sync/types";
 import type { HttpClientBridge } from "../../../bridges/http/types";
 import type { ParserRegistry } from "../../../parsers/parserRegistry";
+import type { ParsedNovelIndex } from "../../../parsers/types";
 import { fetchFullNovelIndex } from "../../../parsers/fetchFullNovelIndex";
 import type {
   AppSettingsRepository,
@@ -56,6 +57,15 @@ function assertNoPrototypePollution(obj: unknown, path = "root"): void {
       `${path}.${key}`,
     );
   }
+}
+
+function selectNewerIsoTimestamp(
+  a: string | null,
+  b: string | null,
+): string | null {
+  if (!a) return b;
+  if (!b) return a;
+  return Date.parse(b) > Date.parse(a) ? b : a;
 }
 
 /**
@@ -436,33 +446,46 @@ export class SyncEngine {
     }
   }
 
+  private async fetchVerifiedNovelIndex(
+    canonicalUrl: string,
+    expectedSiteType: string,
+    expectedWorkId: string,
+  ): Promise<ParsedNovelIndex | null> {
+    const parsedUrl = parseNovelUrl(canonicalUrl);
+    if (
+      !parsedUrl ||
+      parsedUrl.workId !== expectedWorkId ||
+      parsedUrl.siteType !== expectedSiteType
+    ) {
+      return null;
+    }
+
+    const parser = this.deps.parserRegistry.getParser(parsedUrl.canonicalUrl);
+    if (!parser) {
+      return null;
+    }
+
+    return fetchFullNovelIndex(
+      this.deps.httpClient,
+      parser,
+      parsedUrl.canonicalUrl,
+    );
+  }
+
   private async mergeNewNovel(
     novelId: string,
     remoteNovel: SyncNovelData,
   ): Promise<void> {
     // 新規作品の自動目次補完
-    const parsedUrl = parseNovelUrl(remoteNovel.canonicalUrl);
-    if (!parsedUrl) {
-      return; // SSRF ガードによりスキップ
-    }
-
-    if (
-      parsedUrl.workId !== remoteNovel.remoteWorkId ||
-      parsedUrl.siteType !== remoteNovel.siteType
-    ) {
-      return; // canonicalUrl と remoteWorkId / siteType の不整合を遮断
-    }
-
-    const parser = this.deps.parserRegistry.getParser(parsedUrl.canonicalUrl);
-    if (!parser) {
-      return;
-    }
-
-    const parsedIndex = await fetchFullNovelIndex(
-      this.deps.httpClient,
-      parser,
-      parsedUrl.canonicalUrl,
+    const parsedIndex = await this.fetchVerifiedNovelIndex(
+      remoteNovel.canonicalUrl,
+      remoteNovel.siteType,
+      remoteNovel.remoteWorkId,
     );
+    if (!parsedIndex) {
+      return; // SSRF ガード / 不整合 / 未対応パーサー時はスキップ
+    }
+
     await this.deps.novelRepository.upsertNovelWithToc(
       parsedIndex,
       new Date().toISOString(),
@@ -506,22 +529,69 @@ export class SyncEngine {
     remoteNovel: SyncNovelData,
     localNovel: NovelRecord,
   ): Promise<void> {
+    let currentLocalNovel = localNovel;
+    let chapters =
+      await this.deps.chapterRepository.listChaptersByNovelId(novelId);
+    const localChapterIdSet = new Set(chapters.map((ch) => ch.remoteChapterId));
+
+    // リモート側にローカル未保持の話・範囲外しおり・未知既読話がある場合、既存作品の目次を自動補完する (R1-19)
+    const needsTocRefresh =
+      remoteNovel.totalChapters > currentLocalNovel.totalChapters ||
+      (remoteNovel.bookmarkChapterIndex !== null &&
+        remoteNovel.bookmarkChapterIndex > currentLocalNovel.totalChapters) ||
+      remoteNovel.readChapterIds.some((id) => !localChapterIdSet.has(id));
+
+    if (needsTocRefresh) {
+      try {
+        const parsedIndex = await this.fetchVerifiedNovelIndex(
+          remoteNovel.canonicalUrl,
+          currentLocalNovel.siteType,
+          currentLocalNovel.remoteWorkId,
+        );
+        if (parsedIndex) {
+          await this.deps.novelRepository.upsertNovelWithToc(
+            parsedIndex,
+            new Date().toISOString(),
+            { updateOnly: true },
+          );
+          const reloaded =
+            await this.deps.novelRepository.getNovelById(novelId);
+          if (reloaded) {
+            currentLocalNovel = reloaded;
+          }
+          chapters =
+            await this.deps.chapterRepository.listChaptersByNovelId(novelId);
+        }
+      } catch (err) {
+        // オフライン等で目次取得に失敗してもクラッシュさせず、ローカル既存話でマージを継続する
+        console.warn(
+          `[SyncEngine] Failed to refresh TOC for existing novel ${novelId}, continuing with local chapters:`,
+          err,
+        );
+      }
+    }
+
     // 1. お気に入りおよび更新日時の LWW 判定（ローカルの既存の novels.updated_at とリモートの updatedAt を比較し、リモートが新しい場合は後続の updateSyncMetadata で同期・復元する）
     const isRemoteUpdatedNewer =
-      Date.parse(remoteNovel.updatedAt) > Date.parse(localNovel.updatedAt);
+      Date.parse(remoteNovel.updatedAt) >
+      Date.parse(currentLocalNovel.updatedAt);
 
-    // 2. 既存作品のしおりマージ
+    // 2. 既存作品のしおりマージ（目次未補完で範囲外のままになる場合はしおり適用と lastReadAt 更新をスキップし次回オンライン同期で追いつく）
     const remoteLastRead = remoteNovel.lastReadAt
       ? Date.parse(remoteNovel.lastReadAt)
       : 0;
-    const localLastRead = localNovel.lastReadAt
-      ? Date.parse(localNovel.lastReadAt)
+    const localLastRead = currentLocalNovel.lastReadAt
+      ? Date.parse(currentLocalNovel.lastReadAt)
       : 0;
+    const isBookmarkOutOfRange =
+      remoteNovel.bookmarkChapterIndex !== null &&
+      remoteNovel.bookmarkChapterIndex > currentLocalNovel.totalChapters;
 
-    if (remoteLastRead > localLastRead) {
+    if (remoteLastRead > localLastRead && !isBookmarkOutOfRange) {
       if (
         remoteNovel.bookmarkChapterIndex !== null &&
-        remoteNovel.bookmarkChapterIndex !== localNovel.bookmarkChapterIndex
+        remoteNovel.bookmarkChapterIndex !==
+          currentLocalNovel.bookmarkChapterIndex
       ) {
         await this.deps.novelRepository.updateBookmark(
           novelId,
@@ -544,8 +614,6 @@ export class SyncEngine {
     }
 
     // 4. 既読エピソードの和集合マージ
-    const chapters =
-      await this.deps.chapterRepository.listChaptersByNovelId(novelId);
     const remoteReadSet = new Set(remoteNovel.readChapterIds);
     for (const ch of chapters) {
       if (!ch.isRead && remoteReadSet.has(ch.remoteChapterId)) {
@@ -749,6 +817,14 @@ export class SyncEngine {
 
           merged[id] = {
             ...local,
+            totalChapters: Math.max(
+              local.totalChapters,
+              remoteNovel.totalChapters,
+            ),
+            latestEpisodePublishedAt: selectNewerIsoTimestamp(
+              local.latestEpisodePublishedAt,
+              remoteNovel.latestEpisodePublishedAt,
+            ),
             readChapterIds: Array.from(
               new Set([...local.readChapterIds, ...remoteNovel.readChapterIds]),
             ),
