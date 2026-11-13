@@ -680,12 +680,9 @@ describe("useStorageCache", () => {
         expect(result.current.summary.totalCachedChapters).toBe(3);
       });
 
-      const silentRefresh = result.current.refreshSummary as (options?: {
-        silent?: boolean;
-      }) => Promise<void>;
       let silentPromise!: Promise<void>;
       act(() => {
-        silentPromise = silentRefresh({ silent: true });
+        silentPromise = result.current.refreshSummary({ silent: true });
       });
 
       expect(result.current.isLoading).toBe(false);
@@ -703,9 +700,9 @@ describe("useStorageCache", () => {
 
       // silent: true でエラーが発生しても hook の error は設定されず既存サマリーが維持されること
       await act(async () => {
-        await expect(silentRefresh({ silent: true })).rejects.toThrow(
-          "サイレント取得失敗",
-        );
+        await expect(
+          result.current.refreshSummary({ silent: true }),
+        ).rejects.toThrow("サイレント取得失敗");
       });
       expect(result.current.error).toBeNull();
       expect(result.current.isLoading).toBe(false);
