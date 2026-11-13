@@ -111,12 +111,14 @@ Step 1 で確定した要件・合意事項に基づき、以下のアーキテ�
 
 ### 2.3 作品詳細・目次画面（`SCR-02`）の自動更新
 
-[docs/specs/features/novel-detail.md](../features/novel-detail.md) §4.2 を以下の通り拡張します。
+[docs/specs/features/novel-detail.md](../features/novel-detail.md) §4.1・§4.2 を以下の通り拡張します。
 
-- **`useNovelDetail` における Pull 完了時自動リロード**:
-  - `useNovelDetail` マウント中に `syncEngine?.subscribePullCompleted` を購読し、`result.pulled === true` かつ `novelId` が設定されている場合に `void reloadDetail()` を呼び出す。
-  - これにより、`SCR-02` を開いたまま画面ロック（5分以上）→ロック解除した際、他端末で更新された「しおり（`しおり` バッジおよび `続きから読む（第N話）` ボタン）」と「既読バッジ（`既読`）」が自動 Pull 完了直後に最新状態へ自動更新される。
-  - なお、自動 Pull に伴うリロードでは初回の `hasScrolledToBookmarkRef` スクロールジャンプを誤って再発火させない（`reloadDetail()` の既存仕様に準拠、または既存読込完了時はスクロール位置保持、しおり表示・バッジのみ更新）。
+- **`useNovelDetail` における Pull 完了時サイレント自動更新（`reloadDetail({ silent: true })`）**:
+  - `UseNovelDetailResult.reloadDetail` を `reloadDetail: (options?: { silent?: boolean }) => Promise<void>` へ拡張する。
+  - `useNovelDetail` マウント中に `syncEngine?.subscribePullCompleted` を購読し、`result.pulled === true` かつ `novelId` が設定されている場合に `void reloadDetail({ silent: true })` を呼び出す。
+  - `options?.silent === true` の場合は `setIsLoading(true)` / `setIsLoading(false)` を実行せず（`NovelDetailPage` の一覧 DOM をアンマウントして先頭へ巻き戻さないため）、`isMountedRef` ガードのもとで `novelRepository.getNovelById`・`chapterRepository.listChaptersByNovelId`・`syncQueueState` のみを静かに再取得・State 反映する（エラー時も一覧を破棄せず `error` 更新のみ、または既存表示を維持する）。
+  - これにより、`SCR-02` を開いたまま画面ロック（5分以上）→ロック解除した際、他端末で更新された「しおり（`しおり` バッジおよび `続きから読む（第N話）` ボタン）」と「既読バッジ（`既読`）」がユーザーの目次スクロール位置を保持したまま最新状態へ自動更新される。
+  - なお、`NovelDetailPage` 側のしおり位置自動スクロール制御 `scrolledNovelIdRef` は `novel.id` 単位で初回スクロール済みかを管理しているため、同一 `novel.id` でのサイレント更新時にスクロールジャンプが誤って再発火することはない。
 
 ### 2.4 小説リーダー画面（`SCR-03`）のしおり保護・即時フラッシュ・競合ダイアログ
 
@@ -152,7 +154,7 @@ Step 1 で確定した要件・合意事項に基づき、以下のアーキテ�
    ```
    `UseReaderResult` に以下を追加する：
    - `bookmarkConflict: BookmarkConflictState | null`（競合なし時は `null`）
-   - `resolveBookmarkConflict: (action: "move" | "keep") => Promise<void>`
+   - `resolveBookmarkConflict: (action: "move" | "keep") => Promise<boolean>`（成功時 `true`、`goToChapter` 失敗・中断時 `false`）
 2. **Pull 完了時の競合検知ルール**:
    - `useReader` は `syncEngine?.subscribePullCompleted` を購読する。
    - `result.pulled === true` かつ `novelRef.current` が存在する場合、`const latestNovel = await novelRepository.getNovelById(novelRef.current.id)` で最新 DB レコードを取得する（アンマウント済みの場合は中断）。
@@ -161,15 +163,16 @@ Step 1 で確定した要件・合意事項に基づき、以下のアーキテ�
      - ※この時点ではローカルの `hasPendingBookmarkRef` は変更せず（`false` 維持）、`bookmarkChapterIndex` の自動巻き戻し書き込みも行わない。
    - `latestNovel.bookmarkChapterIndex === currentChapterIndexRef.current` の場合：
      - 競合なし（同一話数）。もし `bookmarkConflict` が開いていた場合は `null` にクリアしてもよい。
-3. **競合解決アクション（`resolveBookmarkConflict(action)`）**:
+3. **競合解決アクション（`resolveBookmarkConflict(action)`）と `ReaderContainer` URL 同期契約**:
    - **`action === "move"`（「第{remoteChapterIndex}話へ移動する」選択時）**:
-     - 対象話数 `target = bookmarkConflict.remoteChapterIndex` を取得し、`setBookmarkConflict(null)` でダイアログを閉じる。
-     - `const moved = await goToChapter(target)` を実行して表示話を第 `target` 話へ切り替え、URL 同期（`onNavigateChapter` 連携）も既存 `ReaderContainer` の前後話遷移と同一導線で行われるようにする。
-     - ※`goToChapter` 内で対象話の本文取得に失敗した場合は `error` 表示となるため、ユーザーはリトライまたは内蔵ブラウザフォールバックを利用できる。
+     - `bookmarkConflict` が `null` の場合は `false` を返す。対象話数 `target = bookmarkConflict.remoteChapterIndex` を取得し、`setBookmarkConflict(null)` でダイアログを閉じる。
+     - `const moved = await goToChapter(target)` を実行し、その成否 `moved`（`boolean`）を返却する。
+     - `ReaderContainer` 側では `onResolveBookmarkConflictMove` で `isResolvingBookmarkConflict` を `true`（`finally` で `false`）に制御しつつ `const ok = await resolveBookmarkConflict("move")` を呼び出し、`ok === true` の場合のみ既存 `navigateToTargetChapter` と同一導線（`onNavigateChapter(targetId, target)` または `router.navigateToReader(targetId, target, { replace: true })`）で URL を第 `target` 話へ同期する（`ok === false` の場合は URL 遷移を行わずエラー画面・WebView フォールバック導線を維持する）。
    - **`action === "keep"`（「第{currentChapterIndex}話のまま読む」選択時）**:
      - `setBookmarkConflict(null)` でダイアログを閉じる。
      - 現在の表示話（`currentChapterIndexRef.current`）および現在進捗率（`scrollProgressRef.current`）で **`novelRepository.updateBookmark(currentNovel.id, currentChapterIndexRef.current, scrollProgressRef.current)` を明示実行** し、`last_read_at = now` へ更新する。
-     - `novel` State / `novelRef` を最新化し、`hasPendingBookmarkRef.current = false` を維持した上で、`syncEngine?.notifyChanged().catch(() => {})` を呼び出してクラウドへ現在話維持を同期通知する。
+     - `novel` State / `novelRef` を最新化し、`hasPendingBookmarkRef.current = false` を維持した上で、`syncEngine?.notifyChanged().catch(() => {})` を呼び出してクラウドへ現在話維持を同期通知し、`true`（例外時 `false`）を返す。
+     - `ReaderContainer` 側では `onResolveBookmarkConflictKeep` で `isResolvingBookmarkConflict` を `true`（`finally` で `false`）に制御しつつ `await resolveBookmarkConflict("keep")` を呼び出す（URL は現在話のまま維持）。
 
 #### 2.4.3 `BookmarkConflictDialog`（新規 Presentational コンポーネント）と誤操作防止ガード
 
@@ -225,7 +228,7 @@ Step 1 で確定した要件・合意事項に基づき、以下のアーキテ�
 - `src/features/bookshelf/hooks/useBookshelf.test.ts`:
   - 従来の `useBookshelf` 内 `visibilitychange` テストを `subscribePullCompleted` 連携テスト（`pulled: true` 通知で `reloadNovels()` が実行されること、`pulled: false` では不要リロードしないこと）へ整理・更新（アプリ全体の `visibilitychange` 5分検証は `useBackgroundAutoPull.test.ts` / `App.test.tsx` へ移管）。
 - `src/features/novel-detail/hooks/useNovelDetail.test.ts`:
-  - `syncEngine.subscribePullCompleted` で `{ pulled: true, mergedNovels: 1 }` が通知された際、`reloadDetail()` が自動実行され、`novel.bookmarkChapterIndex` や既読状態が最新化されること。
+  - `syncEngine.subscribePullCompleted` で `{ pulled: true, mergedNovels: 1 }` が通知された際、`reloadDetail({ silent: true })` が `isLoading` を `true` に変えずに自動実行され、`novel.bookmarkChapterIndex` や既読状態が最新化されること。
 - `src/features/reader/components/BookmarkConflictDialog.stories.tsx` / `BookmarkConflictDialog.test.tsx`:
   - `isOpen: true` 時のタイトル・メッセージ（「第15話」「第10話」）・2 ボタン表示、クリック時の `onMoveToRemote` / `onKeepCurrent` 発火、背景（backdrop）クリックおよび `Escape` キーで閉じないこと、`isResolving: true` 時のボタン `disabled`、および `isOpen: false`（`tags: ["skip-vrt"]`）時の非描画（C0/C1/Functions 100%、VRT 1280px / 375px）。
 - `src/features/reader/components/ReaderView.test.tsx`:
@@ -234,8 +237,8 @@ Step 1 で確定した要件・合意事項に基づき、以下のアーキテ�
   - **未操作離脱時 `flushBookmark` スキップ**: ロード完了後・ページ移動/スクロール変更なしで `flushBookmark()` を呼んだ場合、`novelRepository.updateBookmark` および `syncEngine.notifyChanged` が呼び出されないこと（※従来の無条件 `flushBookmark` テストを本新仕様に更新）。
   - **変更あり時 300ms デバウンス ＋ `hidden` 即時フラッシュ**: `updateScrollProgress` 呼び出し後 300ms 未満で `visibilityState === "hidden"` になった場合、直ちに `updateBookmark` が完了すること。300ms デバウンス完了後に `syncEngine.notifyChanged` が呼ばれ、その後に未操作で `flushBookmark()` を呼んでも重複書き込みされないこと。
   - **競合検知と解決**: Pull 完了通知（`subscribePullCompleted`）で DB の `bookmarkChapterIndex` が現在話と異なる（例: 10 → 15）場合に `bookmarkConflict = { currentChapterIndex: 10, remoteChapterIndex: 15 }` がセットされること。同一話の場合は `null` のまま。
-  - `resolveBookmarkConflict("move")` で `bookmarkConflict` がクリアされ `goToChapter(15)` が実行されること。
-  - `resolveBookmarkConflict("keep")` で `bookmarkConflict` がクリアされ、`novelRepository.updateBookmark(..., 10, scrollProgress)` と `syncEngine.notifyChanged()` が実行されること。
+  - `resolveBookmarkConflict("move")` で `bookmarkConflict` がクリアされ `goToChapter(15)` が実行され、`true`（本文取得失敗時は `false`）を返すこと。
+  - `resolveBookmarkConflict("keep")` で `bookmarkConflict` がクリアされ、`novelRepository.updateBookmark(..., 10, scrollProgress)` と `syncEngine.notifyChanged()` が実行され `true` を返すこと。
 - `src/features/reader/components/ReaderPage.stories.tsx` / `ReaderPage.test.tsx`:
   - `bookmarkConflict` 非 null 時に `BookmarkConflictDialog` が描画され、移動・維持ボタンからコールバックが伝播すること（VRT スナップショット含む）。
 - `src/features/reader/components/ReaderContainer.test.tsx`:

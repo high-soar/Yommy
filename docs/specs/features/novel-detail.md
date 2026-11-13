@@ -457,7 +457,7 @@ export interface UseNovelDetailResult {
   closeClearCacheDialog: () => void;
   confirmClearCache: (options: { onlyRead: boolean }) => Promise<number>;
   toggleFavorite: () => Promise<boolean>;
-  reloadDetail: () => Promise<void>;
+  reloadDetail: (options?: { silent?: boolean }) => Promise<void>;
 }
 ```
 
@@ -470,8 +470,8 @@ export interface UseNovelDetailResult {
      - リーダー画面（`SCR-03`）での閲覧や 5話自動先読みにより既に有効キャッシュ済み（`isChapterFresh === true`）となった話数、または `'completed'` 状態のレコードがキューに残っている場合は `queueRepository.deleteByNovelAndChapters(novelId, freshOrCompletedIndexes)` で自動除去し、全話キャッシュ済み（`isAllCached === true`）であれば `queueRepository.clearNovelQueue(novelId)` でキューを空にする。
      - 残存する `download_queue` レコードから `pendingCacheCount`（`status === 'pending'` 件数）、`failedCacheCount`（`status === 'failed'` 件数）、および `failedChapterIndexes`（未キャッシュかつ `status === 'failed'` の話数連番昇順配列）を算出して State に反映する。
    - 読み込み完了時、対象作品の `novel.hasNewUpdate === true` の場合は `novelRepository.clearNewUpdate(novelId)` を呼び出して `has_new_update = 0` に解除し、本棚画面（`SCR-01`）復帰時にも「NEW」バッジが消去された状態を維持する。
-   - 読み込み中は `isLoading = true` とし、完了後に `isLoading = false` とする。
-   - **クラウド同期 Pull 完了時の自動最新化（`v1.1` Issue #342）**: マウント中に `syncEngine?.subscribePullCompleted` を購読し、`result.pulled === true` が通知された場合は `void reloadDetail()` を呼び出し、他端末から同期されたしおり話数（`しおり` バッジ・`続きから読む（第N話）` ボタン）や既読バッジ（`既読`）を画面リロードなしで自動反映する（既存の目次スクロール位置は維持し、しおり自動スクロールは初回ロード時のみ適用）。
+   - 読み込み中は `isLoading = true` とし、完了後に `isLoading = false` とする（ただし `reloadDetail({ silent: true })` 時は `isLoading` を変更せず、一覧 DOM をアンマウントしない）。
+   - **クラウド同期 Pull 完了時の自動最新化（`v1.1` Issue #342）**: マウント中に `syncEngine?.subscribePullCompleted` を購読し、`result.pulled === true` が通知された場合は `void reloadDetail({ silent: true })` を呼び出し、`isMountedRef` ガードのもとで他端末から同期されたしおり話数（`しおり` バッジ・`続きから読む（第N話）` ボタン）や既読バッジ（`既読`）を画面リロードおよび一覧 DOM アンマウントなしで自動反映する（既存の目次スクロール位置を維持し、`NovelDetailPage` の `scrolledNovelIdRef` により同一 `novel.id` でのしおり自動スクロール再発火を防止する）。
 2. **目次再取得・差分更新（`refreshToc`）**:
    - `novel === null` の場合は何もせず `false` を返す。
    - `isRefreshing = true`, `error = null`, `refreshMessage = null` にセットする。
@@ -557,7 +557,7 @@ export interface UseNovelDetailResult {
 | **`AC-ND-24`** | 永続キューによる一括キャッシュ中断再開と進捗・自動整理                            | 一括キャッシュ実行中に対象話を `download_queue`（`pending` → `downloading` → `completed`）で永続管理し、「中断」押下または画面離脱（アンマウント）時に未完了話が `pending` として保持され、ボタンラベルが `キャッシュを再開（残りN話）` に切り替わること。また再開時は残り $N$ 話を分母（`0/N` 〜 `N/N`）として進捗表示し、リーダー閲覧等で既に有効キャッシュ済みとなった話は自動的にキューから除外され、全話取得完了時にキューが自動削除されること。                                                                                                       | `SYS-REQ-02, 03, 05` / `TR-18`                |
 | **`AC-ND-25`** | 取得失敗話のスキップ継続・取得失敗バッジ・再試行                                  | 一括キャッシュ中に特定話の取得が失敗（通信エラー・タイムアウトかつ既存キャッシュなし）した場合、該当話を `download_queue` に `status = 'failed'`（`retry_count` 加算、`last_error` 記録）として保存して残りの `pending` 話の取得を継続し、進行表示（`batch-cache-progress`）に失敗件数（`[失敗 N話]`）をリアルタイムに反映すること。ループ完了後に失敗話行に `取得失敗` バッジ（`episode-failed-badge`）、ヘッダーにエラー通知と `失敗した話を再試行（N話）` ボタンが表示され、再試行で取得成功すると `取得済み` へ遷移しキューがクリーンアップされること。 | `SYS-REQ-02, 03, 05` / `TR-18`                |
 | **`AC-ND-26`** | 作品詳細ヘッダーからの内蔵ブラウザ導線（v0.9 Issue #269）                         | 作品詳細ヘッダーの管理アクション領域に「内蔵ブラウザで開く」ボタン（`data-testid="open-webview-button"`）が表示され、タップ時に該当作品の URL（`canonicalUrl`）と `novelId` をパラメータとして内蔵ブラウザ画面（`SCR-04`: `/browser?url=...&novelId=...`）へ遷移（`TR-09`）できること。                                                                                                                                                                                                                                                                     | `SYS-REQ-13` / `TR-09`                        |
-| **`AC-ND-27`** | バックグラウンド復帰時自動 Pull によるしおり・既読表示自動更新（v1.1 Issue #342） | 作品詳細画面（`SCR-02`）を表示したまま画面ロック・バックグラウンドへ移行し 5 分（300,000ms）以上経過して復帰した際、自動 Pull（`syncEngine.pullAndMerge()`）完了後に `reloadDetail()` が自動実行され、他端末で更新されたしおり位置（`しおり` バッジ・「続きから読む」ボタン文言）および既読バッジ（`既読`）がリロードなしで最新化されること。                                                                                                                                                                                                               | `SYS-REQ-06, 12` / `SCN-05`                   |
+| **`AC-ND-28`** | バックグラウンド復帰時自動 Pull によるしおり・既読表示自動更新（v1.1 Issue #342） | 作品詳細画面（`SCR-02`）を表示したまま画面ロック・バックグラウンドへ移行し 5 分（300,000ms）以上経過して復帰した際、自動 Pull（`syncEngine.pullAndMerge()`）完了後に `reloadDetail({ silent: true })` が `isLoading` を切り替えず自動実行され、ユーザーのスクロール位置を維持したまま他端末で更新されたしおり位置（`しおり` バッジ・「続きから読む」ボタン文言）および既読バッジ（`既読`）がリロードなしで最新化されること。                                                                                                                                | `SYS-REQ-06, 12` / `SCN-05`                   |
 
 ---
 
@@ -569,5 +569,5 @@ export interface UseNovelDetailResult {
 - **`SCN-02`（`test/it/scenarios/scn02-search-ranking-discovery.spec.ts`）**: 検索・ランキングからの作品カード選択による目次遷移と、OS バックキーによる直前の探索元画面への論理復帰（`TR-07`, `TR-14`, `AC-ND-07`, `09`）。
 - **`SCN-03`（`test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts`）**: 作品詳細画面表示による本棚「NEW」バッジの自動解除、および作品詳細ヘッダーからのお気に入り登録・解除と本棚への反映（`TR-02`, `AC-ND-10`, `23`）。
 - **`SCN-04`（`test/it/scenarios/scn04-prefetch-and-cache.spec.ts`）**: 永続ダウンロードキュー（`download_queue`）を用いた未取得話一括キャッシュ（1.5秒ウェイト順次取得・進捗表示・中断と `キャッシュを再開（残りN話）`・途中話エラー時のスキップ継続と `取得失敗` バッジおよび `失敗した話を再試行（N話）`）、作品ヘッダーでのキャッシュ容量表示、および本文キャッシュ整理ダイアログ（既読話のみ／全話削除）による容量即時再計算・キュークリーンアップと目次・既読・しおり保持（`TR-18`, `TR-19`, `AC-ND-11`〜`13`, `20`〜`22`, `24`, `25`）。
-- **`SCN-05`（`test/it/scenarios/scn05-cloud-sync.spec.ts`）**: 作品削除時のクラウド同期 Tombstone 自動 Push 連携、お気に入り状態変更のクラウド同期反映、および画面ロック・5分復帰時自動 Pull による作品詳細表示の自動更新（`TR-07`, `AC-ND-06`, `23`, `27`）。
+- **`SCN-05`（`test/it/scenarios/scn05-cloud-sync.spec.ts`）**: 作品削除時のクラウド同期 Tombstone 自動 Push 連携、お気に入り状態変更のクラウド同期反映、および画面ロック・5分復帰時自動 Pull による作品詳細表示の自動更新（`TR-07`, `AC-ND-06`, `23`, `28`）。
 - **`SCN-07`（`test/it/scenarios/scn07-webview-import-fallback.spec.ts`）**: 作品詳細ヘッダーの「内蔵ブラウザで開く」ボタン（`TR-09`）押下による `SCR-04` 遷移と目次 DOM インポート後の `SCR-02` 復帰・エピソード一覧更新検証（`TR-11`, `AC-ND-26`）。
