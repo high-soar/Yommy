@@ -38,7 +38,7 @@ tags:
     ho-38,
   ]
 related_specs:
-  - docs/specs/changes/issue-342-cloud-sync-bookmark-protection.md
+  - docs/specs/changes/archive/issue-342-cloud-sync-bookmark-protection.md
   - docs/specs/changes/issue-343-novel-detail-header-menu.md
   - docs/specs/changes/archive/issue-269-webview-fallback-and-dom-import.md
   - docs/specs/features/webview-import.md

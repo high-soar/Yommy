@@ -67,7 +67,7 @@ tags:
   - ho-37
   - ho-38
 related_specs:
-  - docs/specs/changes/issue-342-cloud-sync-bookmark-protection.md
+  - docs/specs/changes/archive/issue-342-cloud-sync-bookmark-protection.md
   - docs/specs/changes/issue-343-novel-detail-header-menu.md
   - docs/specs/changes/archive/issue-304-v1-release-readiness.md
   - docs/quality/reports/v0.9-persistent-queue-and-webview-fallback.md

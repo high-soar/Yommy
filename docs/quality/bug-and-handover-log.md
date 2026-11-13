@@ -6,7 +6,7 @@ status: "Approved"
 updated: "2026-11-13"
 tags: [quality, bug-log, handover, dre, kaizen, ho-37, ho-38]
 related_specs:
-  - docs/specs/changes/issue-342-cloud-sync-bookmark-protection.md
+  - docs/specs/changes/archive/issue-342-cloud-sync-bookmark-protection.md
   - docs/specs/changes/issue-343-novel-detail-header-menu.md
   - docs/quality/archive/v1.0-release-audit-log.md
   - docs/quality/reports/v1.0-full-system-quality-audit.md

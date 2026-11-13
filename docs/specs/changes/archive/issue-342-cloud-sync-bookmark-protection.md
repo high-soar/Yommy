@@ -3,8 +3,8 @@ type: spec-delta
 title: "複数端末利用時（リーダー表示のまま画面ロック・復帰時）のクラウド同期しおり上書き防止と競合確認ダイアログの設計"
 description: "Issue #342 に対する差分仕様、全画面バックグラウンド復帰自動Pull（5分閾値）、リーダー画面（SCR-03）しおり競合確認モーダルダイアログ（OSバックキー・背景タップ抑止）、未操作離脱時flushBookmark上書き防止・画面ロック時即時フラッシュ、作品詳細（SCR-02）自動更新、テスト計画、およびSub-issue分割計画。"
 issue: "#342"
-status: "Review (#342)"
-updated: "2026-11-13"
+status: "Completed (Archived)"
+updated: "2026-11-14"
 tags:
   - delta
   - cloud-sync
@@ -68,7 +68,7 @@ Step 1 で確定した要件・合意事項に基づき、以下のアーキテ�
 
 ### 2.1 Cloud Sync 層（`SyncEngine` 完了購読と全画面自動 Pull フック）
 
-[docs/specs/architecture.md](../architecture.md) §3.8.2 および `src/features/cloud-sync/`・`src/App.tsx` を以下の通り拡張します。
+[docs/specs/architecture.md](../../architecture.md) §3.8.2 および `src/features/cloud-sync/`・`src/App.tsx` を以下の通り拡張します。
 
 1. **`SyncEngine.subscribePullCompleted`（Pull 完了イベント購読機構の追加）**:
    - `SyncEngine`（`src/features/cloud-sync/services/syncEngine.ts`）に以下の結果型および購読メソッドを追加する。
@@ -97,7 +97,7 @@ Step 1 で確定した要件・合意事項に基づき、以下のアーキテ�
 
 ### 2.2 Application Router・App シェルの OS バックキー抑止ガード
 
-[docs/specs/architecture.md](../architecture.md) §3.5（`src/app/router.tsx`）および `src/App.tsx` を拡張し、競合確認モーダル表示中の誤操作（画面離脱）を物理的・論理的に遮断します。
+[docs/specs/architecture.md](../../architecture.md) §3.5（`src/app/router.tsx`）および `src/App.tsx` を拡張し、競合確認モーダル表示中の誤操作（画面離脱）を物理的・論理的に遮断します。
 
 1. **`RouterContextValue` への戻る遷移ブロック API 追加（`src/app/router.tsx`）**:
    ```ts
@@ -111,7 +111,7 @@ Step 1 で確定した要件・合意事項に基づき、以下のアーキテ�
 
 ### 2.3 作品詳細・目次画面（`SCR-02`）の自動更新
 
-[docs/specs/features/novel-detail.md](../features/novel-detail.md) §4.1・§4.2 を以下の通り拡張します。
+[docs/specs/features/novel-detail.md](../../features/novel-detail.md) §4.1・§4.2 を以下の通り拡張します。
 
 - **`useNovelDetail` における Pull 完了時サイレント自動更新（`reloadDetail({ silent: true })`）**:
   - `UseNovelDetailResult.reloadDetail` を `reloadDetail: (options?: { silent?: boolean }) => Promise<void>` へ拡張する。
@@ -122,7 +122,7 @@ Step 1 で確定した要件・合意事項に基づき、以下のアーキテ�
 
 ### 2.4 小説リーダー画面（`SCR-03`）のしおり保護・即時フラッシュ・競合ダイアログ
 
-[docs/specs/features/reader-view.md](../features/reader-view.md) を以下の通り拡張します。
+[docs/specs/features/reader-view.md](../../features/reader-view.md) を以下の通り拡張します。
 
 #### 2.4.1 未保存進捗フラグ（`hasPendingBookmarkRef`）と画面ロック時即時フラッシュ（`useReader` / `ReaderView`）
 
