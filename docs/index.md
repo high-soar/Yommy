@@ -25,16 +25,16 @@ docs/
 │   │   ├── search.md                  # 検索画面仕様書（SCR-06: SearchPage / SearchNovelCard / useNovelSearch）
 │   │   ├── ranking.md                 # ランキング画面仕様書（SCR-07: RankingPage / RankingNovelCard / useNovelRanking）
 │   │   ├── novel-detail.md            # 作品詳細・目次画面仕様書（SCR-02: NovelDetailPage / EpisodeList / useNovelDetail）
-│   │   ├── reader-view.md             # 小説リーダー画面仕様書（SCR-03: ReaderPage / ReaderView / ReaderTopOverlay / ReaderBottomOverlay / ReaderChapterNav / useReader / useReaderGestures）
+│   │   ├── reader-view.md             # 小説リーダー画面仕様書（SCR-03: ReaderPage / ReaderView / ReaderTopOverlay / ReaderBottomOverlay / ReaderChapterNav / BookmarkConflictDialog / useReader / useReaderGestures）
 │   │   ├── webview-import.md          # 内蔵ブラウザ・DOMインポート画面仕様書（SCR-04: WebViewImportPage / WebViewImportContainer / useWebViewImport）
 │   │   └── settings.md                # 設定画面仕様書（SCR-05: SettingsPage / SettingsContainer / SampleTextPreview / useSettings）
 │   ├── parsers/                       # [App全体正本] 小説サイト別の現在スクレイピング・DOM解析仕様書
 │   │   ├── kakuyomu.md                # カクヨム パーサー・スクレイピング仕様書（kakuyomu.jp）
 │   │   └── narou.md                   # 小説家になろう パーサー・スクレイピング仕様書（ncode.syosetu.com）
 │   └── changes/                       # [差分仕様 (Delta Specs)] 要望（親Issue）ごとの設計差分・テスト計画・Sub-issue分割
-│       ├── issue-342-cloud-sync-bookmark-protection.md # [Review (#342)] 複数端末利用時（リーダー表示のまま画面ロック・復帰時）のクラウド同期しおり上書き防止と競合確認ダイアログの設計 (#342)
 │       ├── issue-343-novel-detail-header-menu.md # [Review (#343)] 作品詳細ヘッダー（SCR-02）の管理アクションバー整理（お気に入り・更新のアイコン化と3点メニュー集約）の差分仕様 (#343)
 │       └── archive/                   # 完了済みの差分仕様アーカイブ（親Issueクローズ時に git mv で移動）
+│           ├── issue-342-cloud-sync-bookmark-protection.md # [Archived] 複数端末利用時（リーダー表示のまま画面ロック・復帰時）のクラウド同期しおり上書き防止と競合確認ダイアログの設計 (#342)
 │           ├── issue-304-v1-release-readiness.md # [Archived] v1.0 リリース整備（バージョン1.0.0統一・設定画面バージョン表示・reference/撤去・README.md整備）の差分仕様 (#304)
 │           ├── issue-269-webview-fallback-and-dom-import.md # [Archived] 内蔵ブラウザ画面（SCR-04）とWebView表示中DOM手動インポート・フォールバック遷移（TR-09〜11）の実装差分仕様 (#269)
 │           ├── issue-268-persistent-download-queue.md # [Archived] 永続ダウンロードキュー（QueueRepository / download_queue）の実装と一括キャッシュ中断再開・再試行統合の差分仕様 (#268)
