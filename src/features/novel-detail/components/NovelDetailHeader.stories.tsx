@@ -237,3 +237,63 @@ export const ExpandedSynopsis: Story = {
     }
   },
 };
+
+/**
+ * 3点メニュー展開状態（通常：4アクション＋区切り線表示）
+ */
+export const MenuOpen: Story = {
+  name: "3点メニュー展開（通常）",
+  args: {
+    novel: sampleNovel,
+  },
+  play: async ({ canvasElement }) => {
+    const menuButton = canvasElement.querySelector(
+      '[data-testid="novel-detail-menu-button"]',
+    );
+    if (menuButton instanceof HTMLElement) {
+      await userEvent.click(menuButton);
+    }
+  },
+};
+
+/**
+ * 3点メニュー展開状態（全話キャッシュ済み：一括キャッシュ項目 disabled）
+ */
+export const MenuOpenAllCached: Story = {
+  name: "3点メニュー展開（全話キャッシュ済み）",
+  args: {
+    isAllCached: true,
+    novel: {
+      ...sampleNovel,
+      cachedChapters: 45,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const menuButton = canvasElement.querySelector(
+      '[data-testid="novel-detail-menu-button"]',
+    );
+    if (menuButton instanceof HTMLElement) {
+      await userEvent.click(menuButton);
+    }
+  },
+};
+
+/**
+ * 3点メニュー展開状態（失敗話の再試行待ち：「失敗した話を再試行（N話）」表示）
+ */
+export const MenuOpenRetryFailed: Story = {
+  name: "3点メニュー展開（失敗話再試行待ち）",
+  args: {
+    pendingCacheCount: 0,
+    failedCacheCount: 3,
+    error: "3話の取得に失敗しました（再試行可能）",
+  },
+  play: async ({ canvasElement }) => {
+    const menuButton = canvasElement.querySelector(
+      '[data-testid="novel-detail-menu-button"]',
+    );
+    if (menuButton instanceof HTMLElement) {
+      await userEvent.click(menuButton);
+    }
+  },
+};

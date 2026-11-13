@@ -296,26 +296,35 @@ describe("NovelDetailContainer", () => {
       });
     });
 
-    it("ResumePending ストーリーで「キャッシュを再開」ボタンが表示されること (AC-ND-24)", async () => {
+    it("ResumePending ストーリーで pendingCacheCount=2 が NovelDetailPage へ伝達されること (AC-ND-24)", async () => {
+      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
       render(<ResumePending />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("batch-cache-button")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            pendingCacheCount: 2,
+          }),
+          undefined,
+        );
       });
-      expect(screen.getByTestId("batch-cache-button")).toHaveTextContent(
-        "キャッシュを再開（残り2話）",
-      );
     });
 
-    it("RetryFailed ストーリーで「失敗した話を再試行」ボタンが表示されること (AC-ND-25)", async () => {
+    it("RetryFailed ストーリーで failedCacheCount=1 が NovelDetailPage へ伝達されること (AC-ND-25)", async () => {
+      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
       render(<RetryFailed />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("batch-cache-button")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            pendingCacheCount: 0,
+            failedCacheCount: 1,
+          }),
+          undefined,
+        );
       });
-      expect(screen.getByTestId("batch-cache-button")).toHaveTextContent(
-        "失敗した話を再試行（1話）",
-      );
     });
   });
 
