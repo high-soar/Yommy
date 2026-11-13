@@ -490,7 +490,11 @@ describe("NovelDetailHeader", () => {
 
         await openMenu(user);
 
-        // Escape 以外のキーでは閉じない
+        // Escape・矢印以外のキー（例: Tab や文字キー）では閉じない
+        await user.keyboard("a");
+        expect(screen.getByTestId("novel-detail-menu")).toBeInTheDocument();
+
+        // Escape 以外の矢印キーでも閉じない
         await user.keyboard("{ArrowDown}");
         expect(screen.getByTestId("novel-detail-menu")).toBeInTheDocument();
 
@@ -570,6 +574,19 @@ describe("NovelDetailHeader", () => {
 
         await user.keyboard("{ArrowDown}");
         expect(webViewItem).toHaveFocus();
+      });
+
+      it("活性なメニュー項目が0件の状態で ArrowDown / ArrowUp を押下してもエラーにならないこと (AC-ND-27)", async () => {
+        const user = userEvent.setup();
+        render(<NovelDetailHeader {...defaultProps} />);
+
+        const menu = await openMenu(user);
+        menu.querySelectorAll('[role="menuitem"]').forEach((item) => {
+          item.setAttribute("disabled", "true");
+        });
+
+        await user.keyboard("{ArrowDown}");
+        expect(screen.getByTestId("novel-detail-menu-button")).toHaveFocus();
       });
 
       it("メニュー展開中に isRefreshing または isBatchCaching が true に遷移した場合、メニューが自動クローズし false 復帰後も閉じたまま維持されること", async () => {

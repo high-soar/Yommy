@@ -47,21 +47,47 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
     }
   }, [isActionDisabled]);
 
-  // メニュー展開中の外クリック（タップ）および Escape キーによる自動クローズとフォーカス復帰
+  // メニュー展開中の外クリック（タップ）、Escape クローズ（フォーカス復帰）および ArrowDown/ArrowUp 循環移動
   useEffect(() => {
     if (!showMenu) {
       return;
     }
     const handlePointerDown = (event: PointerEvent) => {
-      if (!menuContainerRef.current!.contains(event.target as Node)) {
+      if (!menuContainerRef.current?.contains(event.target as Node)) {
         setIsMenuOpen(false);
       }
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setIsMenuOpen(false);
-        menuButtonRef.current!.focus();
+        menuButtonRef.current?.focus();
+        return;
       }
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
+        return;
+      }
+      const items: HTMLButtonElement[] = [];
+      menuContainerRef.current
+        ?.querySelectorAll<HTMLButtonElement>(
+          '[role="menuitem"]:not([disabled])',
+        )
+        .forEach((item) => {
+          items.push(item);
+        });
+      if (items.length === 0) {
+        return;
+      }
+      event.preventDefault();
+      const currentIndex = (items as (Element | null)[]).indexOf(
+        document.activeElement,
+      );
+      const nextIndex =
+        event.key === "ArrowDown"
+          ? (currentIndex + 1) % items.length
+          : currentIndex <= 0
+            ? items.length - 1
+            : currentIndex - 1;
+      items[nextIndex].focus();
     };
     document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
@@ -72,6 +98,7 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
   }, [showMenu]);
 
   // メタ情報のフォールバックおよび空文字判定
+  const bookmarkChapterIndex = novel.bookmarkChapterIndex;
   const isStartDisabled = novel.totalChapters === 0 || isBatchCaching;
   const authorText = novel.author?.trim() ? novel.author : "著者不明";
   const hasSynopsis = Boolean(
@@ -323,16 +350,16 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
 
       {/* 読書開始ボタンエリア（しおり未設定時は1ボタン、しおり設定時は2ボタン並列） */}
       <div className="flex flex-wrap items-center gap-3 pt-2">
-        {novel.bookmarkChapterIndex !== null ? (
+        {bookmarkChapterIndex !== null ? (
           <>
             <button
               type="button"
               data-testid="detail-resume-button"
-              onClick={() => onResumeBookmark(novel.bookmarkChapterIndex!)}
+              onClick={() => onResumeBookmark(bookmarkChapterIndex)}
               disabled={isStartDisabled}
               className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs md:text-sm font-medium rounded-xl shadow-xs transition-colors focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:bg-blue-400 cursor-pointer disabled:cursor-not-allowed"
             >
-              続きから読む（第{novel.bookmarkChapterIndex}話）
+              続きから読む（第{bookmarkChapterIndex}話）
             </button>
             <button
               type="button"
