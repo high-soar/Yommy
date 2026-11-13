@@ -20,10 +20,19 @@ describe("DeleteConfirmDialog", () => {
       render(<Default />);
       const dialog = screen.getByTestId("delete-confirm-dialog");
       expect(dialog).toBeInTheDocument();
-      expect(screen.getByRole("dialog")).toHaveAttribute("aria-modal", "true");
+      const roleDialog = screen.getByRole("dialog");
+      expect(roleDialog).toHaveAttribute("aria-modal", "true");
+      expect(roleDialog).toHaveAttribute(
+        "aria-describedby",
+        "delete-confirm-message",
+      );
 
       const message = screen.getByTestId("delete-confirm-message");
+      expect(message).toHaveAttribute("id", "delete-confirm-message");
       expect(message).toHaveTextContent(
+        "「テスト対象小説のタイトル」を本棚から削除しますか？取得済みの本文データもすべて削除されます。",
+      );
+      expect(roleDialog).toHaveAccessibleDescription(
         "「テスト対象小説のタイトル」を本棚から削除しますか？取得済みの本文データもすべて削除されます。",
       );
 
