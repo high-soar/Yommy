@@ -423,6 +423,7 @@ describe("ReaderBottomOverlay", () => {
         navProps?.onPrevChapter();
       });
       expect(onPrev).toHaveBeenCalledTimes(1);
+      navSpy.mockRestore();
     });
 
     it("ReaderChapterNav の onNextChapter 呼び出し時に onNextChapter コールバックが呼ばれること", () => {
@@ -443,6 +444,7 @@ describe("ReaderBottomOverlay", () => {
         navProps?.onNextChapter();
       });
       expect(onNext).toHaveBeenCalledTimes(1);
+      navSpy.mockRestore();
     });
 
     it("「本棚」タブボタン押下で onSelectTab('bookshelf') が呼び出されること", async () => {

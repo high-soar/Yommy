@@ -3087,7 +3087,7 @@ describe("useReader", () => {
         expect(result.current.chapter?.url).toBe(ch2!.url);
       });
 
-      it("goToChapter 失敗時に旧話の進捗がリセットされ、flushBookmark で新話進捗 0 が保存されること (R2-01)", async () => {
+      it("goToChapter 失敗時にエラー状態となり、hasPendingBookmark が false に保たれ flushBookmark で失敗先エピソードへ上書きされないこと (R1-18, R2-01)", async () => {
         const db = await resetTestDb();
         const novelRepo = new SqlNovelRepository(db);
         const chapterRepo = new SqlChapterRepository(db);
@@ -3139,14 +3139,126 @@ describe("useReader", () => {
         expect(result.current.chapterIndex).toBe(2);
         expect(result.current.scrollProgress).toBe(0);
 
-        // 失敗後に flushBookmark を呼び出した場合、旧話の 0.8 ではなく新話の進捗 0 で保存されること (R2-01)
+        // R1-18: 失敗後は hasPendingBookmark が false のため、flushBookmark で第2話へ上書きされず第1話進捗 0.8 が保持されること
         await act(async () => {
           await result.current.flushBookmark();
         });
 
         const updatedNovel = await novelRepo.getNovelById(seeded.id);
-        expect(updatedNovel?.bookmarkChapterIndex).toBe(2);
-        expect(updatedNovel?.bookmarkScrollProgress).toBe(0);
+        expect(updatedNovel?.bookmarkChapterIndex).toBe(1);
+        expect(updatedNovel?.bookmarkScrollProgress).toBe(0.8);
+      });
+
+      it("未保存のスクロール進捗がある状態で goToChapter を呼ぶと、遷移前に旧話の進捗がフラッシュされ遷移失敗時も保持されること (R1-18)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 3,
+          cachedCount: 1,
+        });
+
+        const ch2 = await chapterRepo.getChapter(seeded.id, 2);
+        expect(ch2).not.toBeNull();
+
+        const httpClient = createMockHttpClient();
+        httpClient.setResponse(ch2!.url, {
+          status: 500,
+          headers: {},
+          html: "",
+        });
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              httpClient,
+            }),
+          },
+        );
+
+        await act(async () => {
+          await Promise.resolve();
+        });
+        expect(result.current.isLoading).toBe(false);
+
+        // 第1話でスクロール進捗を更新（300ms デバウンス待機中・未フラッシュ）
+        act(() => {
+          void result.current.updateScrollProgress(0.75);
+        });
+
+        // 第2話へ遷移を試行（通信エラーで失敗するが、先に第1話進捗 0.75 が DB へフラッシュ済みであること）
+        let success = true;
+        await act(async () => {
+          success = await result.current.goToChapter(2);
+        });
+
+        expect(success).toBe(false);
+        const updatedNovel = await novelRepo.getNovelById(seeded.id);
+        expect(updatedNovel?.bookmarkChapterIndex).toBe(1);
+        expect(updatedNovel?.bookmarkScrollProgress).toBe(0.75);
+      });
+
+      it("goToChapter 開始時の flushBookmark 実行中にアンマウントされた場合、後続の既読・遷移処理を中断して false を返すこと (R1-18)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 3,
+          cachedCount: 3,
+        });
+
+        const { result, unmount } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await act(async () => {
+          await Promise.resolve();
+        });
+
+        act(() => {
+          void result.current.updateScrollProgress(0.5);
+        });
+
+        let resolveFlush: (() => void) | null = null;
+        const updateSpy = vi
+          .spyOn(novelRepo, "updateBookmark")
+          .mockImplementationOnce(
+            () =>
+              new Promise<void>((resolve) => {
+                resolveFlush = resolve;
+              }),
+          );
+        const markReadSpy = vi.spyOn(chapterRepo, "markChapterRead");
+
+        let goPromise: Promise<boolean>;
+        act(() => {
+          goPromise = result.current.goToChapter(2);
+        });
+        await act(async () => {
+          await Promise.resolve();
+        });
+
+        unmount();
+
+        let goResult = true;
+        await act(async () => {
+          resolveFlush?.();
+          goResult = await goPromise!;
+        });
+
+        expect(goResult).toBe(false);
+        expect(markReadSpy).not.toHaveBeenCalled();
+        updateSpy.mockRestore();
+        markReadSpy.mockRestore();
       });
     });
 
@@ -3745,6 +3857,78 @@ describe("useReader", () => {
         expect(result.current.isLoading).toBe(false);
       });
 
+      expect(mockSyncEngine.notifyChanged).toHaveBeenCalled();
+    });
+
+    it("loadInitialData で対象話が既読済みかつ bookmarkChapterIndex が異なる場合、しおり更新後に syncEngine.notifyChanged が呼び出されること (R1-18)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 2,
+        cachedCount: 2,
+      });
+
+      // 第1話・第2話とも既読済みにしておき、しおりだけ第1話のまま第2話を開く
+      await db.execute("UPDATE chapters SET is_read = 1 WHERE novel_id = ?", [
+        seeded.id,
+      ]);
+      await novelRepo.updateBookmark(seeded.id, 1, 0.2);
+
+      const mockSyncEngine = {
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+      };
+      const httpClient = createMockHttpClient();
+
+      const { result } = renderHook(
+        () => useReader({ novelId: seeded.id, chapterIndex: 2 }),
+        {
+          wrapper: createWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+            syncEngine: mockSyncEngine as unknown as SyncEngine,
+            httpClient,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(mockSyncEngine.notifyChanged).toHaveBeenCalledTimes(1);
+    });
+
+    it("fetchNovelFromUrl でしおり更新後に syncEngine.notifyChanged が呼び出されること (R1-18)", async () => {
+      const mockSyncEngine = {
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+      };
+      const httpClient = createMockHttpClient();
+
+      const { result } = renderHook(
+        () =>
+          useReader({
+            initialWorkUrl: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}`,
+          }),
+        {
+          wrapper: createWrapper({
+            httpClient,
+            syncEngine: mockSyncEngine as unknown as SyncEngine,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      mockSyncEngine.notifyChanged.mockClear();
+
+      await act(async () => {
+        await result.current.fetchNovelFromUrl();
+      });
+
+      expect(result.current.novel).not.toBeNull();
       expect(mockSyncEngine.notifyChanged).toHaveBeenCalled();
     });
 
@@ -5432,6 +5616,11 @@ describe("useReader", () => {
           });
           expect(result.current.isLoading).toBe(false);
 
+          // スクロールで 300ms デバウンス待機中に競合検知 -> タイマーが破棄されること (R1-17)
+          await act(async () => {
+            void result.current.updateScrollProgress(0.45);
+          });
+
           await novelRepo.updateBookmark(seeded.id, 3, 0.5);
           await act(async () => {
             capturedListener?.({ pulled: true, mergedNovels: 1 });
@@ -5442,13 +5631,10 @@ describe("useReader", () => {
             remoteChapterIndex: 3,
           });
 
-          // スクロールで 300ms デバウンス待機中に updateBookmark 失敗＋keep を実行
+          // keep を実行して DB 保存に失敗してもモーダルは維持され、再解決できること (R1-01)
           const updateSpy = vi
             .spyOn(novelRepo, "updateBookmark")
             .mockRejectedValueOnce(new Error("Keep save failed"));
-          await act(async () => {
-            void result.current.updateScrollProgress(0.45);
-          });
 
           let keepResult = true;
           await act(async () => {
@@ -5456,6 +5642,10 @@ describe("useReader", () => {
           });
           expect(keepResult).toBe(false);
           expect(result.current.error).toContain("Keep save failed");
+          expect(result.current.bookmarkConflict).toEqual({
+            currentChapterIndex: 1,
+            remoteChapterIndex: 3,
+          });
           expect(updateSpy).toHaveBeenCalledTimes(1);
 
           // 旧 300ms タイマーがキャンセルされているため追加呼び出しされないこと
@@ -5463,6 +5653,387 @@ describe("useReader", () => {
             await vi.advanceTimersByTimeAsync(400);
           });
           expect(updateSpy).toHaveBeenCalledTimes(1);
+          updateSpy.mockRestore();
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it("resolveBookmarkConflict('move') 実行中は解決完了まで bookmarkConflict が維持され、二重実行が抑止されること (R1-01)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 3,
+          cachedCount: 1,
+        });
+        await novelRepo.updateBookmark(seeded.id, 1, 0);
+
+        const ch3 = await chapterRepo.getChapter(seeded.id, 3);
+        expect(ch3).not.toBeNull();
+
+        let resolveCh3Fetch:
+          | ((res: {
+              status: number;
+              url: string;
+              headers: Record<string, string>;
+              html: string;
+            }) => void)
+          | null = null;
+        const httpClient = createMockHttpClient();
+        const getHtmlSpy = vi
+          .spyOn(httpClient, "getHtml")
+          .mockImplementation((options) => {
+            if (options.url === ch3!.url) {
+              return new Promise((resolve) => {
+                resolveCh3Fetch = resolve;
+              });
+            }
+            return Promise.resolve({
+              status: 200,
+              url: options.url,
+              headers: {},
+              html: "",
+            });
+          });
+
+        let capturedListener:
+          ((res: { pulled: boolean; mergedNovels: number }) => void) | null =
+          null;
+        const mockSyncEngine = {
+          notifyChanged: vi.fn().mockResolvedValue(undefined),
+          subscribePullCompleted: vi.fn((listener) => {
+            capturedListener = listener;
+            return () => {};
+          }),
+        };
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              httpClient,
+              syncEngine: mockSyncEngine as unknown as SyncEngine,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        await novelRepo.updateBookmark(seeded.id, 3, 0.5);
+        await act(async () => {
+          capturedListener?.({ pulled: true, mergedNovels: 1 });
+        });
+        await waitFor(() => {
+          expect(result.current.bookmarkConflict).toEqual({
+            currentChapterIndex: 1,
+            remoteChapterIndex: 3,
+          });
+        });
+
+        let movePromise: Promise<boolean>;
+        let secondCallResult = true;
+        await act(async () => {
+          movePromise = result.current.resolveBookmarkConflict("move");
+          // 非同期処理進行中に二重呼び出ししても即座に false を返して抑止すること
+          secondCallResult =
+            await result.current.resolveBookmarkConflict("keep");
+          await Promise.resolve();
+        });
+
+        expect(secondCallResult).toBe(false);
+        expect(result.current.bookmarkConflict).toEqual({
+          currentChapterIndex: 1,
+          remoteChapterIndex: 3,
+        });
+
+        await act(async () => {
+          resolveCh3Fetch?.({
+            status: 200,
+            url: ch3!.url,
+            headers: {},
+            html: '<div class="widget-episodeBody"><p>第3話本文</p></div>',
+          });
+          const moveOk = await movePromise!;
+          expect(moveOk).toBe(true);
+        });
+
+        expect(result.current.bookmarkConflict).toBeNull();
+        expect(result.current.chapterIndex).toBe(3);
+        getHtmlSpy.mockRestore();
+      });
+
+      it("resolveBookmarkConflict('move') 失敗時は bookmarkConflict・現在話本文・進捗が維持され、続けて 'keep' で解決できること (R1-01)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 3,
+          cachedCount: 1,
+        });
+        await novelRepo.updateBookmark(seeded.id, 1, 0);
+
+        const ch3 = await chapterRepo.getChapter(seeded.id, 3);
+        expect(ch3).not.toBeNull();
+        const httpClient = createMockHttpClient();
+        httpClient.setResponse(ch3!.url, {
+          status: 500,
+          headers: {},
+          html: "",
+        });
+
+        let capturedListener:
+          ((res: { pulled: boolean; mergedNovels: number }) => void) | null =
+          null;
+        const mockSyncEngine = {
+          notifyChanged: vi.fn().mockResolvedValue(undefined),
+          subscribePullCompleted: vi.fn((listener) => {
+            capturedListener = listener;
+            return () => {};
+          }),
+        };
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              httpClient,
+              syncEngine: mockSyncEngine as unknown as SyncEngine,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        // 第1話の進捗を 0.6 にしておく
+        await act(async () => {
+          void result.current.updateScrollProgress(0.6);
+        });
+
+        await novelRepo.updateBookmark(seeded.id, 3, 0.5);
+        await act(async () => {
+          capturedListener?.({ pulled: true, mergedNovels: 1 });
+        });
+        await waitFor(() => {
+          expect(result.current.bookmarkConflict).toEqual({
+            currentChapterIndex: 1,
+            remoteChapterIndex: 3,
+          });
+        });
+
+        let moveResult = true;
+        await act(async () => {
+          moveResult = await result.current.resolveBookmarkConflict("move");
+        });
+
+        // 失敗してもモーダルは閉じず、第1話の本文・話数・進捗が破壊されないこと
+        expect(moveResult).toBe(false);
+        expect(result.current.bookmarkConflict).toEqual({
+          currentChapterIndex: 1,
+          remoteChapterIndex: 3,
+        });
+        expect(result.current.chapterIndex).toBe(1);
+        expect(result.current.chapter?.chapterIndex).toBe(1);
+        expect(result.current.chapter?.bodyHtml).not.toBeNull();
+        expect(result.current.scrollProgress).toBe(0.6);
+        expect(result.current.error).not.toBeNull();
+
+        // 続けて 'keep' を選ぶと正常解決し、error と bookmarkConflict が解消されること
+        let keepResult = false;
+        await act(async () => {
+          keepResult = await result.current.resolveBookmarkConflict("keep");
+        });
+        expect(keepResult).toBe(true);
+        expect(result.current.bookmarkConflict).toBeNull();
+        expect(result.current.error).toBeNull();
+        const saved = await novelRepo.getNovelById(seeded.id);
+        expect(saved?.bookmarkChapterIndex).toBe(1);
+        expect(saved?.bookmarkScrollProgress).toBe(0.6);
+      });
+
+      it("resolveBookmarkConflict('keep') 実行中の非同期待機中は二重実行を抑止し、完了後に競合状態を解消すること (R1-01)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 3,
+          cachedCount: 3,
+        });
+        await novelRepo.updateBookmark(seeded.id, 1, 0);
+
+        let capturedListener:
+          ((res: { pulled: boolean; mergedNovels: number }) => void) | null =
+          null;
+        const mockSyncEngine = {
+          notifyChanged: vi.fn().mockResolvedValue(undefined),
+          subscribePullCompleted: vi.fn((listener) => {
+            capturedListener = listener;
+            return () => {};
+          }),
+        };
+
+        const { result } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              syncEngine: mockSyncEngine as unknown as SyncEngine,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        await novelRepo.updateBookmark(seeded.id, 3, 0.5);
+        await act(async () => {
+          capturedListener?.({ pulled: true, mergedNovels: 1 });
+        });
+        await waitFor(() => {
+          expect(result.current.bookmarkConflict).toEqual({
+            currentChapterIndex: 1,
+            remoteChapterIndex: 3,
+          });
+        });
+
+        let resolveUpdate: (() => void) | null = null;
+        const updateSpy = vi
+          .spyOn(novelRepo, "updateBookmark")
+          .mockImplementationOnce(
+            () =>
+              new Promise<void>((resolve) => {
+                resolveUpdate = resolve;
+              }),
+          );
+
+        let keepPromise: Promise<boolean>;
+        let secondCall = true;
+        await act(async () => {
+          keepPromise = result.current.resolveBookmarkConflict("keep");
+          secondCall = await result.current.resolveBookmarkConflict("move");
+          await Promise.resolve();
+        });
+        expect(secondCall).toBe(false);
+        expect(result.current.bookmarkConflict).toEqual({
+          currentChapterIndex: 1,
+          remoteChapterIndex: 3,
+        });
+
+        await act(async () => {
+          resolveUpdate?.();
+          const ok = await keepPromise!;
+          expect(ok).toBe(true);
+        });
+        expect(result.current.bookmarkConflict).toBeNull();
+        updateSpy.mockRestore();
+      });
+
+      it("競合表示中は 300ms デバウンスタイマーが破棄され、updateScrollProgress / flushBookmark / visibilitychange が DB しおりを上書きしないこと (R1-17)", async () => {
+        vi.useFakeTimers();
+        try {
+          const db = await resetTestDb();
+          const novelRepo = new SqlNovelRepository(db);
+          const chapterRepo = new SqlChapterRepository(db);
+          const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+            chapterCount: 3,
+            cachedCount: 3,
+          });
+          await novelRepo.updateBookmark(seeded.id, 1, 0);
+
+          let capturedListener:
+            ((res: { pulled: boolean; mergedNovels: number }) => void) | null =
+            null;
+          const mockSyncEngine = {
+            notifyChanged: vi.fn().mockResolvedValue(undefined),
+            subscribePullCompleted: vi.fn((listener) => {
+              capturedListener = listener;
+              return () => {};
+            }),
+          };
+
+          const { result } = renderHook(
+            () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+            {
+              wrapper: createWrapper({
+                novelRepository: novelRepo,
+                chapterRepository: chapterRepo,
+                syncEngine: mockSyncEngine as unknown as SyncEngine,
+              }),
+            },
+          );
+
+          await act(async () => {
+            await vi.advanceTimersByTimeAsync(50);
+          });
+          expect(result.current.isLoading).toBe(false);
+
+          // 競合検知前に 300ms タイマーを張る
+          await act(async () => {
+            void result.current.updateScrollProgress(0.4);
+          });
+
+          // リモートしおり（第3話）反映で競合検知 -> タイマー解除
+          await novelRepo.updateBookmark(seeded.id, 3, 0.7);
+          const updateSpy = vi.spyOn(novelRepo, "updateBookmark");
+          await act(async () => {
+            capturedListener?.({ pulled: true, mergedNovels: 1 });
+            await vi.advanceTimersByTimeAsync(20);
+          });
+          expect(result.current.bookmarkConflict).toEqual({
+            currentChapterIndex: 1,
+            remoteChapterIndex: 3,
+          });
+
+          // 400ms 経過しても旧 300ms デバウンスタイマーが発火しないこと
+          await act(async () => {
+            await vi.advanceTimersByTimeAsync(400);
+          });
+          expect(updateSpy).not.toHaveBeenCalled();
+
+          // 競合表示中の updateScrollProgress / flushBookmark / visibilitychange も DB 上書きしないこと
+          await act(async () => {
+            await result.current.updateScrollProgress(0.9);
+            await result.current.flushBookmark();
+          });
+          const originalVisibility = Object.getOwnPropertyDescriptor(
+            document,
+            "visibilityState",
+          );
+          Object.defineProperty(document, "visibilityState", {
+            value: "hidden",
+            configurable: true,
+          });
+          act(() => {
+            document.dispatchEvent(new Event("visibilitychange"));
+          });
+          if (originalVisibility) {
+            Object.defineProperty(
+              document,
+              "visibilityState",
+              originalVisibility,
+            );
+          }
+
+          await act(async () => {
+            await vi.advanceTimersByTimeAsync(400);
+          });
+          expect(updateSpy).not.toHaveBeenCalled();
+          expect(result.current.scrollProgress).toBe(0.4);
+
+          const dbNovel = await novelRepo.getNovelById(seeded.id);
+          expect(dbNovel?.bookmarkChapterIndex).toBe(3);
+          expect(dbNovel?.bookmarkScrollProgress).toBe(0.7);
+          updateSpy.mockRestore();
         } finally {
           vi.useRealTimers();
         }

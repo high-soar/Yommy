@@ -2059,6 +2059,7 @@ describe("useReaderGestures", () => {
 
       unmount();
       expect(clearTimeoutSpy).toHaveBeenCalled();
+      clearTimeoutSpy.mockRestore();
     });
 
     it("タッチイベントのガード条件およびエッジケースが網羅されること", () => {
@@ -2322,6 +2323,7 @@ describe("useReaderGestures", () => {
       });
 
       expect(clearTimeoutSpy).toHaveBeenCalled();
+      clearTimeoutSpy.mockRestore();
     });
   });
 

@@ -324,6 +324,7 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
     effectivePagingMode === "paged"
       ? "left-[20%] right-[20%]"
       : "left-0 right-0";
+  const isConflictOpen = Boolean(bookmarkConflict);
 
   return (
     <div
@@ -333,6 +334,7 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
       {/* メイン本文領域（排他描画） */}
       <main
         ref={mainRef}
+        inert={isConflictOpen || undefined}
         className={`w-full h-full min-w-0 ${
           effectivePagingMode === "paged" ? "touch-none" : ""
         }`}
@@ -422,12 +424,17 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
       </main>
 
       {/* 上部オーバーレイ（作品名・サブタイトル1行省略・目次導線、AC-RD-22〜24） */}
-      <ReaderTopOverlay
-        isOpen={isOpen}
-        novelTitle={novel?.title ?? ""}
-        chapterTitle={chapter?.title ?? ""}
-        onBackToToc={onBackToToc ?? (() => {})}
-      />
+      <div
+        data-testid="reader-top-overlay-wrapper"
+        inert={isConflictOpen || undefined}
+      >
+        <ReaderTopOverlay
+          isOpen={isOpen}
+          novelTitle={novel?.title ?? ""}
+          chapterTitle={chapter?.title ?? ""}
+          onBackToToc={onBackToToc ?? (() => {})}
+        />
+      </div>
 
       {/* エピソード境界案内ヒントバッジ */}
       {boundaryHint && (
@@ -443,6 +450,7 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
       {/* 最下部タッチゾーン（下端約 72px） */}
       <div
         data-testid="reader-bottom-touch-zone"
+        inert={isConflictOpen || undefined}
         className={`absolute bottom-0 ${touchZonePositionClass} h-[72px] z-30 pointer-events-auto cursor-pointer`}
         onPointerDown={handleTouchZonePointerDown}
         onPointerUp={handleTouchZonePointerUp}
@@ -451,24 +459,29 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
         aria-label="下部ナビゲーション表示"
         aria-expanded={isOpen}
         role="button"
-        tabIndex={0}
+        tabIndex={isConflictOpen ? -1 : 0}
       />
 
       {/* 下部オーバーレイ（シークバー＋前後話ナビ＋下部タブ、AC-RD-22, 25） */}
-      <ReaderBottomOverlay
-        isOpen={isOpen}
-        chapterIndex={chapterIndex}
-        totalChapters={totalChapters}
-        isLoading={isLoading}
-        activeTab={activeTab}
-        effectivePagingMode={effectivePagingMode}
-        currentPage={currentPage}
-        totalPages={totalPages}
-        onPrevChapter={handlePrevChapter}
-        onNextChapter={handleNextChapter}
-        onPageChange={handleSeekbarPageChange}
-        onSelectTab={onSelectTab}
-      />
+      <div
+        data-testid="reader-bottom-overlay-wrapper"
+        inert={isConflictOpen || undefined}
+      >
+        <ReaderBottomOverlay
+          isOpen={isOpen}
+          chapterIndex={chapterIndex}
+          totalChapters={totalChapters}
+          isLoading={isLoading}
+          activeTab={activeTab}
+          effectivePagingMode={effectivePagingMode}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPrevChapter={handlePrevChapter}
+          onNextChapter={handleNextChapter}
+          onPageChange={handleSeekbarPageChange}
+          onSelectTab={onSelectTab}
+        />
+      </div>
 
       {/* クラウド同期しおり競合確認モーダルダイアログ (Issue #342) */}
       <BookmarkConflictDialog
