@@ -1815,7 +1815,7 @@ describe("ReaderContainer", () => {
           screen.queryByTestId("bookmark-conflict-dialog"),
         ).not.toBeInTheDocument();
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
-          `/novels/${sampleNovel.id}/chapters/3`,
+          `/novels/${encodeURIComponent(sampleNovel.id)}/chapters/3`,
         );
       });
       pageSpy.mockRestore();

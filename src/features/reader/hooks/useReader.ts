@@ -1058,6 +1058,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           setCurrentChapterIndex(targetChapterIndex);
           currentChapterIndexRef.current = targetChapterIndex;
           resetPaginationState(0, 0);
+          hasPendingBookmarkRef.current = true;
         }
         isSuccess = false;
       } finally {
