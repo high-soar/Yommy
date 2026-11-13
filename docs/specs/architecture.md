@@ -56,6 +56,7 @@ tags:
   - conflict-dialog
   - ho-38
 related_specs:
+  - docs/specs/changes/archive/issue-343-novel-detail-header-menu.md
   - docs/specs/changes/archive/issue-342-cloud-sync-bookmark-protection.md
   - docs/specs/changes/archive/issue-304-v1-release-readiness.md
   - docs/specs/changes/archive/issue-269-webview-fallback-and-dom-import.md
@@ -236,15 +237,18 @@ Yommy/
     │   ├── app/                       # 【AppBridge】システム戻るボタン・アプリ終了制御（Issue #78）
     │   │   ├── types.ts               # AppBridge, BackButtonEvent, BackButtonListener 定義
     │   │   ├── capacitorAppBridge.ts  # @capacitor/app 実装
-    │   │   └── mockAppBridge.ts       # UT / Storybook / IT 用モック実装（triggerBackButton）
+    │   │   ├── mockAppBridge.ts       # UT / Storybook / IT 用モック実装（triggerBackButton）
+    │   │   └── index.ts               # ブリッジ生成・エクスポート
     │   ├── cloud-sync/                # 【CloudSyncBridge】Google Drive appDataFolder クラウド同期（Issue #120）
     │   │   ├── types.ts               # CloudSyncBridge, CloudSyncAuthState 定義
     │   │   ├── capacitorCloudSyncBridge.ts # Android ネイティブ Capacitor プラグイン実装
-    │   │   └── mockCloudSyncBridge.ts # UT / Storybook / IT 用インメモリ同期モック
+    │   │   ├── mockCloudSyncBridge.ts # UT / Storybook / IT 用インメモリ同期モック
+    │   │   └── index.ts               # ブリッジ生成・エクスポート
     │   ├── volume-key/                # 【VolumeKeyBridge】ハードウェア音量キーインターセプト・ページ送り（Issue #203）
     │   │   ├── types.ts               # VolumeKeyBridge, VolumeKeyEvent, VolumeKeyListener 定義
     │   │   ├── capacitorVolumeKeyBridge.ts # Capacitor プラグイン（VolumeKeyPlugin）ラッパー実装
-    │   │   └── mockVolumeKeyBridge.ts # UT / Storybook / IT 用モック実装（triggerVolumeKey）
+    │   │   ├── mockVolumeKeyBridge.ts # UT / Storybook / IT 用モック実装（triggerVolumeKey）
+    │   │   └── index.ts               # ブリッジ生成・エクスポート
     │   ├── http/
     │   │   ├── types.ts               # HttpClientBridge インターフェース定義
     │   │   ├── capacitorHttpClient.ts # CapacitorHttp 実装（CORS回避・User-Agent・タイムアウト制御）
@@ -257,9 +261,10 @@ Yommy/
     │       └── index.ts               # ブリッジ生成・エクスポート
     ├── features/                      # 【3. Viewer & UI Layer（画面・機能別モジュール）】
     │   ├── bookshelf/                 # SCR-01: 本棚一覧（空状態での検索/ランキング誘導・更新チェック・ソート・お気に入りトグル＆フィルタ）
-    │   ├── novel-detail/              # SCR-02: 作品詳細・目次一覧・お気に入りトグル・取得操作・一括キャッシュ・内蔵ブラウザ導線（TR-09）
+    │   ├── novel-detail/              # SCR-02: 作品詳細・目次一覧・1行アイコンバー（お気に入り/目次更新/3点メニュー）・一括キャッシュ・キャッシュ整理・内蔵ブラウザ導線（TR-09）・削除（Issue #343）
     │   ├── reader/                    # SCR-03: 小説リーダー（全画面100dvh・上下連動オーバーレイ＆RTLシークバー・縦書きCSSマルチカラム組版・2段階水平スライドアニメーション・音量キー送り・ルビ・しおり保存・取得エラー時内蔵ブラウザフォールバック導線 TR-10）
     │   ├── webview-import/            # SCR-04: 内蔵ブラウザ・DOMインポート画面（URLバー・ネイティブWebView起動・DOMキャプチャ保存・作品詳細/リーダー遷移・Issue #269）
+    │   │   ├── index.ts               # 内蔵ブラウザ機能バレルエクスポート
     │   │   ├── types.ts
     │   │   ├── hooks/useWebViewImport.ts
     │   │   └── components/
@@ -790,7 +795,7 @@ export interface RouterContextValue {
   - ブラウザ履歴順に依存せず、常に論理階層順（**各話View `SCR-03` → 目次 `SCR-02` → 直前の遷移元（本棚 `SCR-01`、検索 `SCR-06`、ランキング `SCR-07`）**、**設定 `SCR-05` → 直前画面（リーダー `SCR-03`、作品詳細 `SCR-02`、または本棚 `SCR-01`）**、**検索 `SCR-06` / ランキング `SCR-07` → 本棚 `SCR-01`**）で戻るよう制御する。
   - 本棚の「続きから読む」から各話Viewへ直行した場合も、ルーターが履歴スタックに目次（`/novels/:novelId`）を介在させることで、バックキー 1 回で確実に目次画面へ戻る。
   - リーダー画面内の前後話連続遷移（第1話 → 第2話）では `history.replaceState` を適用し、履歴の肥大化を防ぎつつバックキー 1 回で目次へ復帰できるようにする。
-  - リーダー離脱時には最新の閲覧話数・スクロール進捗率を SQLite へ自動保存（`flushBookmark`）する。
+  - リーダー離脱時には未保存のしおり進捗変更がある場合のみ最新の閲覧話数・スクロール進捗率を SQLite へ自動保存（`flushBookmark`）し、未操作離脱時は `last_read_at` を上書きしない（`AC-RD-34`）。
   - 作品詳細・目次画面（`SCR-02`）からのバックキー操作時は、直前の呼び出し元画面（本棚 `SCR-01`、検索 `SCR-06`、またはランキング `SCR-07`）へ戻る（`TR-07`、直前履歴が存在しない場合は本棚 `/` へ復帰）。
   - 設定画面（`SCR-05`）で OS バックキーを実行したとき、直前の画面（リーダー `SCR-03`、作品詳細 `SCR-02`）またはホームの本棚画面（`SCR-01`）へ復帰する。検索画面（`SCR-06`）、ランキング画面（`SCR-07`）ではホームの本棚画面（`/`）へ復帰する（`TR-12`）。
   - 本棚画面（`SCR-01: /`）でバックボタンが押された際は、2秒以内の連続2回押下で `AppBridge.exitApp()` を呼び出してアプリを終了し、1回目押下時は画面下部に「もう一度バックボタンを押すと終了します」の一時確認トースト（`role="status"`、2秒後に自動消去）を表示する（`TR-13`）。
@@ -864,7 +869,7 @@ export const PREFETCH_COUNT = 5;
    - 対象サーバーの過負荷防止（第 $N$ 話取得直後の連続リクエスト抑止）のため、最初の先読み（第 $N+1$ 話）リクエスト開始前に `PREFETCH_INTERVAL_MS`（1.5秒）の初期インターバルを空け、以降も 1話の取得完了ごとに 1.5秒のウェイトを空けて直列実行する。
    - 処理全体を `AbortController` で制御し、ユーザーが `goToChapter` で別エピソードへ移動した際やリーダー画面を離脱した際は、直ちに直前の処理をキャンセルしてリソースを解放する。またエピソード連続遷移時においても、先行先読みタスク（進行中の HTTP 通信含む）の Promise 完了を待機して直列化を保証し、1.5 秒の間隔規律を担保する。初期ロード通信完了後のマウント状態ガード（`isMounted`）および先読みタスクの `AbortSignal` 連動により、画面離脱後の DB 書き込みを防止する（R1-29）。
 3. **作品詳細での未取得話一括キャッシュと永続ダウンロードキュー統合（`useNovelDetail` / `QueueRepository`、`v0.3` Issue #81 / `v0.9` Issue #268）**:
-   - 作品詳細ヘッダーの「未取得話を一括キャッシュ」（または中断後の「キャッシュを再開（残りN話）」、失敗後の「失敗した話を再試行（N話）」）操作（`TR-18`）により、未キャッシュエピソード（および TTL 7日経過した古いキャッシュ）を `QueueRepository`（`download_queue` テーブル）へ `'pending'` として登録し、`PREFETCH_INTERVAL_MS`（1.5秒）間隔で順次直列取得する。
+   - 作品詳細ヘッダーの3点メニュー内「未取得話を一括キャッシュ」（または中断後の「キャッシュを再開（残りN話）」、失敗後の「失敗した話を再試行（N話）」）操作（`TR-18`、`v1.1` Issue #343）により、未キャッシュエピソード（および TTL 7日経過した古いキャッシュ）を `QueueRepository`（`download_queue` テーブル）へ `'pending'` として登録し、`PREFETCH_INTERVAL_MS`（1.5秒）間隔で順次直列取得する。
    - 1話取得開始時にステータスを `'downloading'`、保存成功時に `'completed'` へ更新し、ヘッダーの取得済み話数（`cachedChapters`）・容量および各話リストのキャッシュバッジをリアルタイムに更新する（`novels.updated_at` は更新せず保持する、R2-16）。
    - 特定話の取得に失敗（通信エラー・タイムアウトかつ既存キャッシュなし）した場合は、ループ全体を中断せず `download_queue` に `status = 'failed'`（`retry_count = retry_count + 1`、`last_error` 記録）として保存し、1.5秒ウェイト後に後続の `'pending'` 話の取得を継続する。ループ完了後に失敗話が存在する場合は該当エピソード行に `取得失敗` バッジ（`episode-failed-badge`）、ヘッダーにエラー通知と `失敗した話を再試行（N話）` ボタンを表示する。
    - ユーザー手動中断（「中断」ボタン）および画面アンマウント時は `AbortController` により安全に処理を停止し、中断された `'downloading'` 話を `'pending'` に戻して保持する。画面再表示時は `キャッシュを再開（残りN話）` ボタンを表示し、再開時は残り対象話数 $N$ を分母（`0/N` 〜 `N/N`）として進捗を表示する。またリーダー画面での閲覧・先読みにより既に有効キャッシュ済みとなった話は自動的にキューから除外され、全話取得完了時および本文キャッシュ削除時にはキューレコードが自動クリーンアップされる。
@@ -924,13 +929,17 @@ export interface CloudSyncBridge {
   - 作品削除の伝播（Tombstone）と再登録保護: `deletedNovels` の削除日時がローカル作品の登録日時より新しければ（`remoteDeletedAt >= localNovel.createdAt`）ローカル DB からカスケード削除し、その際リモートの `deletedAt` をローカル DB に保持する（ローカル現在時刻での上書き防止：R1-06）。ローカルで削除された作品は、削除後に他端末で明示的に再追加された場合（リモートの `createdAt` がローカルの `deletedAt` より後である場合）にのみ復元を許可し、単なる `updatedAt` の更新による意図しない削除作品の復活を防止する（R1-11, R1-05）。また新規作品 Pull 復元時（`mergeNewNovel`）に `remoteNovel.createdAt` および `remoteNovel.updatedAt` をローカル DB に同期保持することで、Pull 実行時のローカル現在時刻（`now`）によって後続の未 Push Tombstone 削除判定（`remoteDeletedAt >= created_at`）が妨げられる復活バグを防止する（R2-02）。本棚へ作品が再登録された際は `deleted_novels` テーブルから該当作品 ID の Tombstone を即座に削除する（R1-28）。さらに、定期更新チェック（`useBookshelf`）や目次再取得（`useNovelDetail`）では `upsertNovelWithToc(..., { updateOnly: true })` を使用し、作品削除との競合時に削除された作品が誤って再登録されたり Tombstone が消去されたりする競合を防止する（R1-02）。
   - Push 前の作品和集合およびフィールド単位マージ: `pushCurrentState` 実行時（`buildMergedSyncNovels`）、ローカルの `novels` のみでリモートを全上書きするのではなく、リモートに存在する `novels` と和集合をとってマージする（R1-10）。さらにリモートの `deletedNovels` に存在する削除作品がローカルに残存している場合はローカル DB からも削除して Push ペイロードから除外することでゾンビ復活を防止する（R1-43）。またローカルとリモートの双方に存在する作品（かつ新しい `deletedAt` で削除されていない作品）については、リモート値をローカル値で単純上書きせず、フィールド単位のマージ（`readChapterIds` の和集合、`lastReadAt` 比較による `bookmarkChapterIndex` / `lastReadAt` の LWW、`updatedAt` 比較による `isFavorite` / `updatedAt` の LWW）を実施して他端末の最新進捗消失を防止する（R2-01）。
   - 30日経過 Tombstone の自動パージ: 削除日時から30日（`TOMBSTONE_RETENTION_MS` = 30日）以上経過した古い Tombstone はローカル DB（`purgeExpiredDeletedNovels`）およびリモートへの Push 対象から自動的にパージし、同期データ容量の肥大化を防止する（R1-28）。
+  - 既存作品の差分目次自動補完とオフライン/範囲外保護（`mergeExistingNovel` / `buildMergedSyncNovels`、`R1-19`）:
+    - 既存作品の Pull マージ（`mergeExistingNovel`）では先にローカル `chapters` を取得し、`remoteNovel.totalChapters > localNovel.totalChapters`、`(remoteNovel.bookmarkChapterIndex !== null && remoteNovel.bookmarkChapterIndex > localNovel.totalChapters)`、または `remoteNovel.readChapterIds` にローカル未登録 ID が含まれる場合に、`parseNovelUrl`（`siteType` / `workId` 整合検証）と `fetchFullNovelIndex` 経由で最新目次を取得して `upsertNovelWithToc(..., { updateOnly: true })` でローカル目次を補完し、`localNovel` と `chapters` を再取得した上でしおり・既読マージを適用する。
+    - オフライン・通信エラー等で差分目次取得に失敗した場合は例外で同期全体を止めず警告に留め、かつ `remoteIsNewer` かつ `remoteNovel.bookmarkChapterIndex > currentLocalNovel.totalChapters` の場合はローカル未存在話への不正なしおりおよび `lastReadAt` 上書きをスキップして整合性を保つ（`isFavorite` や既知 `readChapterIds` はマージ継続し、次回同期で再試行可能とする）。
+    - Push マージ（`buildMergedSyncNovels`）では `totalChapters: Math.max(local.totalChapters, remoteNovel.totalChapters)`（および新しい `latestEpisodePublishedAt`）を保持し、旧目次のままの端末からの Push によるリモート話数ダウングレードを防止する。
   - しおり話数のマージ: 同一作品が両端末にある場合、`lastReadAt` が新しい方の `bookmarkChapterIndex` を採用する（話数変更時はスクロール率を `0.0` にリセット、同一話数の場合は端末ローカルのスクロール率を維持）。この際、`updateBookmark` による `last_read_at` のローカル現在時刻上書きを防ぐため、リモートの `lastReadAt` を `updateSyncMetadata` で復元・維持する（R1-07）。
   - お気に入り状態（`isFavorite`）の双方向 LWW マージと `updated_at` 保護規約（`v0.8` Issue #266 / R1-01 / R2-02）: 同一作品が両端末にある場合の Pull マージ（`mergeExistingNovel`）において、ローカル `localNovel.updatedAt` と `remoteNovel.updatedAt` を比較し、`Date.parse(remoteNovel.updatedAt) > Date.parse(localNovel.updatedAt)` の場合は `novelRepository.updateSyncMetadata(novelId, { isFavorite: remoteNovel.isFavorite === 1, updatedAt: remoteNovel.updatedAt })` を呼び出してローカルの `is_favorite` および `updated_at` をリモート側の最新状態へ更新する。また新規作品の Pull マージ（`mergeNewNovel`）時も `updateSyncMetadata` へリモート `createdAt` および `updatedAt` を伝播する（R1-19, R2-02）。さらに、定常的な目次更新チェック（`upsertNovelWithToc`）、読書時のしおり更新（`updateBookmark`）、本文キャッシュ保存・再集計（`saveChapterBody`, `recalculateNovelStats`）、キャッシュ削除（`deleteCachedBodies`）では `novels.updated_at` を更新せず既存値を保持する規律を徹底し、ローカルの定常動作によって `updated_at` が不当に進んで他端末の最新お気に入り状態が上書き消失する競合を防止する（R1-01）。これにより Push 時（`buildMergedSyncNovels`）および Pull 時の双方向でお気に入り状態の確実な Last-Write-Wins（LWW）同期が保証される。
   - 既読状態のマージ: 両端末の既読エピソード ID の和集合（Union）を採用する。
 - **自動同期トリガーと排他・デバウンス制御**:
   - 未連携時のガード: `cloudSyncBridge.getAuthState()` が `connected` 状態でない場合、`pullAndMerge()` および `pushCurrentState()` は通信を行わず即座に安全にリターンする（R1-14）。
-  - 自動 Pull: アプリ起動時（`useBookshelf` 初回マウント）、および全画面共通のバックグラウンド復帰時（`useBackgroundAutoPull` により `AppContent` ルートで監視、休止から 5 分 `300,000ms` 以上経過、`v1.1` Issue #342 にて本棚限定から全画面へ拡張）。未送信ローカル変更がある場合はマージ後に自動 Push。
-  - Pull 完了購読通知（`SyncEngine.subscribePullCompleted`、`v1.1` Issue #342）: `pullAndMerge()` 完了時に `{ pulled, mergedNovels }` を購読リスナーへ通知し、現在表示中の画面フック（`useBookshelf` 再取得、`useNovelDetail` しおり・既読表示自動更新、`useReader` しおり話数競合検知）へ安全に伝播する。
+  - 自動 Pull と保留変更の自動 Push（`hasUnsyncedChanges`、`R1-23`）: アプリ起動時（`useBookshelf` 初回マウント）、および全画面共通のバックグラウンド復帰時（`useBackgroundAutoPull` により `AppContent` ルートで監視、休止から 5 分 `300,000ms` 以上経過、`v1.1` Issue #342 にて本棚限定から全画面へ拡張）に `pullAndMerge()` を自動実行する。`SyncEngine` は `scheduleDebouncedPush()` で `hasUnsyncedChanges = true` を記録（`cancelDebouncedPush()`・未連携時・`pushFile` 成功時に `false` クリア）しており、`pullAndMerge()` で `doPullAndMerge()` を完了した後に `hasUnsyncedChanges === true` が残っている場合は進行中デバウンスを解除して `pushCurrentState()` を即時実行する（送信失敗時は例外を送出せず `hasUnsyncedChanges = true` を保持して次回再送に備える）。
+  - Pull 完了購読通知（`SyncEngine.subscribePullCompleted`、`v1.1` Issue #342 / `R1-23`）: `pullAndMerge()` 完了時に `{ pulled, mergedNovels }` を購読リスナーへ通知し、現在表示中の画面フック（`useBookshelf` サイレント再取得、`useNovelDetail` しおり・既読表示サイレント自動更新、`useReader` しおり話数競合検知、`useCloudSync` 最終同期日時再取得、`useStorageCache` ストレージ容量サイレント再集計）へ安全に伝播する。
   - 自動 Push: 本棚作品追加・削除、お気に入り（★）登録・解除（`SCR-01` / `SCR-02` での `toggleFavorite`）、およびリーダー話数遷移・既読更新・しおり進捗保存時に 2〜3秒（2500ms）デバウンス付き非同期実行（`syncEngine.notifyChanged()`）。なおリーダー未操作離脱時の `flushBookmark()` スキップ時は `notifyChanged()` を発火しない（`v1.1` Issue #342）。
   - 多重並行実行防止（排他制御・Single-flight）: `SyncEngine` 内部に排他制御機構（`isSyncing` フラグおよび FIFO キュー排他制御）を導入し、`pullAndMerge`、`pushCurrentState`、`sync` が同時に重なって実行されないよう安全にガードする。`sync()` が実行中に重複して呼び出された場合、実行中の Promise を再利用して単一実行に合流（Single-flight）させる。`scheduleDebouncedPush()` では生成した Promise に内部で `.catch(() => {})` を登録し、未処理例外（`UnhandledPromiseRejection`）を防止するとともに、`cancelDebouncedPush()` 実行時には保留中の Promise ハンドラーを漏れなく `resolve()` して呼び出し元のハングを防止する（R2-09）。
 
@@ -977,7 +986,7 @@ export interface UseStorageCacheResult {
   notice: string | null;
   error: string | null;
   clearCache: (options: { onlyRead: boolean }) => Promise<number>;
-  refreshSummary: () => Promise<void>;
+  refreshSummary: (options?: { silent?: boolean }) => Promise<void>;
 }
 ```
 
@@ -1087,7 +1096,7 @@ export interface WebViewDomBridge {
    - `android.app.Dialog` 上に全画面 `android.webkit.WebView` と操作バー（URL 表示、戻る/進む/リロード、「取り込み」確定ボタン、閉じるボタン）を展開。
    - `evaluateJavascript("(function(){return document.documentElement.outerHTML;})()", ...)` を実行し、表示中 DOM を抽出して React 側へ返却。
    - **スキーム検証とセキュリティ保護**: `WebViewClient.shouldOverrideUrlLoading` で `https:` 以外の危険・平文スキーム（平文 `http:`, `javascript:`, `data:`, `file:`, `intent:` 等）を即時遮断（平文 http は Android cleartextTraffic 制限およびセキュリティ境界の観点から遮断）。
-   - **ライフサイクル破棄保護**: `close()` / `handleOnDestroy()` およびダイアログ閉塞時に `webView.destroy()` を実行し、直近 DOM キャッシュを確実に破棄してリソースリークを防止。
+   - **ライフサイクル破棄保護（2段階管理、`R1-27`）**: `btnClose` / `btnCapture` / `Dialog.onDismiss` によるダイアログ閉鎖時（`dismissDialogOnly()`）は後続の JS 側 `captureDom()` 呼び出しを成立させるため `webView` および直近 DOM キャッシュ（`lastCapturedHtml` / `lastCapturedUrl` / `lastCapturedTitle`）を保持し、セッション終了の `close()`・新規 `open()` 前の既存セッション破棄・`handleOnDestroy()` 時（`dismissAndDestroyDialog()`）に `webView.destroy()` と直近 DOM キャッシュの完全破棄を実行してリソースリークを防止。
 2. **`MainActivity.java`**:
    - `registerPlugin(WebViewDomPlugin.class);` を登録。
 3. **ブラウザ／テスト用モック（`MockWebViewDomBridge`）**:

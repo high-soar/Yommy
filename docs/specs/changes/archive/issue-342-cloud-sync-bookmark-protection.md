@@ -31,9 +31,11 @@ related_specs:
 related_tests:
   - src/App.test.tsx
   - src/app/router.test.tsx
+  - src/features/cloud-sync/hooks/useBackgroundAutoPull.test.ts
   - src/features/cloud-sync/services/syncEngine.test.ts
   - src/features/bookshelf/hooks/useBookshelf.test.ts
   - src/features/novel-detail/hooks/useNovelDetail.test.ts
+  - src/features/reader/components/BookmarkConflictDialog.test.tsx
   - src/features/reader/components/ReaderView.test.tsx
   - src/features/reader/components/ReaderPage.test.tsx
   - src/features/reader/components/ReaderContainer.test.tsx
@@ -93,7 +95,7 @@ Step 1 で確定した要件・合意事項に基づき、以下のアーキテ�
      - `document.visibilityState === "visible"` 復帰時、`lastHiddenAt !== null` かつ `Date.now() - lastHiddenAt >= 300_000` の場合に `lastHiddenAt = null` にリセットした上で処理を起動する（5 分未満の場合は `lastHiddenAt = null` のみ行いスキップ）。
      - `cloudSyncBridge?.getAuthState` が存在する場合は認証状態を確認し、`authState.status !== "connected"`（`unlinked` 等）のときは `pullAndMerge()` を呼び出さない（R1-14）。
      - 同一復帰処理の多重実行ガード（`isPullingRef`）および例外吸収（`.catch(() => {})`）を備え、アプリが通信失敗でクラッシュしないこと。
-     - ※`useBookshelf.ts` からは重複する `visibilitychange` リスナーを撤去し、代わりに `useBookshelf` マウント中の `syncEngine.subscribePullCompleted` 購読（`if (result.pulled) void reloadNovels()`）に統一する（初回マウント時の `pullAndMerge()` は従来通り維持）。
+     - ※`useBookshelf.ts` からは重複する `visibilitychange` リスナーを撤去し、代わりに `useBookshelf` マウント中の `syncEngine.subscribePullCompleted` 購読（`if (result.pulled) void reloadNovels({ silent: true })`）および `pullHandledBySubscriptionRef` による初回起動 Pull の重複リロード抑止に統一する（初回マウント時の `pullAndMerge()` 自体は従来通り維持）。
 
 ### 2.2 Application Router・App シェルの OS バックキー抑止ガード
 
@@ -226,7 +228,7 @@ Step 1 で確定した要件・合意事項に基づき、以下のアーキテ�
 ### 3.2 機能別 Hooks・UI コンポーネント単体テスト ＆ VRT（Vitest / Storybook / Playwright VRT）
 
 - `src/features/bookshelf/hooks/useBookshelf.test.ts`:
-  - 従来の `useBookshelf` 内 `visibilitychange` テストを `subscribePullCompleted` 連携テスト（`pulled: true` 通知で `reloadNovels()` が実行されること、`pulled: false` では不要リロードしないこと）へ整理・更新（アプリ全体の `visibilitychange` 5分検証は `useBackgroundAutoPull.test.ts` / `App.test.tsx` へ移管）。
+  - 従来の `useBookshelf` 内 `visibilitychange` テストを `subscribePullCompleted` 連携テスト（`pulled: true` 通知で `reloadNovels({ silent: true })` が `isLoading` を変えずに実行されること、`pulled: false` では不要リロードしないこと、および `pullHandledBySubscriptionRef` による初回重複リロード抑止）へ整理・更新（アプリ全体の `visibilitychange` 5分検証は `useBackgroundAutoPull.test.ts` / `App.test.tsx` へ移管）。
 - `src/features/novel-detail/hooks/useNovelDetail.test.ts`:
   - `syncEngine.subscribePullCompleted` で `{ pulled: true, mergedNovels: 1 }` が通知された際、`reloadDetail({ silent: true })` が `isLoading` を `true` に変えずに自動実行され、`novel.bookmarkChapterIndex` や既読状態が最新化されること。
 - `src/features/reader/components/BookmarkConflictDialog.stories.tsx` / `BookmarkConflictDialog.test.tsx`:

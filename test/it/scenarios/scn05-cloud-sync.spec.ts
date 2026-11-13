@@ -1,4 +1,12 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+
+async function waitForServicesReady(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () =>
+      typeof window.__yommyServices !== "undefined" &&
+      window.__yommyServices.isReady === true,
+  );
+}
 
 test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・端末間引き継ぎ・Tombstone伝播・401失効検知シナリオ", () => {
   test.setTimeout(60000);
@@ -6,13 +14,10 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
   test.beforeEach(async ({ page }) => {
     // ローカルストレージをクリアして初期状態から開始
     await page.goto("/");
+    await waitForServicesReady(page);
     await page.evaluate(() => localStorage.clear());
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady === true,
-    );
+    await waitForServicesReady(page);
   });
 
   test("設定画面でのGoogle連携・端末Aでの作品閲覧とお気に入り変更自動Push・端末Bでの自動Pull復元とお気に入りLWWマージ・削除Tombstone伝播・401失効検知安全フォールバックが一連として正常に機能する", async ({
@@ -103,11 +108,7 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
       return oneMinAgo;
     });
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady === true,
-    );
+    await waitForServicesReady(page);
 
     // 3. 本棚にカクヨムおよびなろうの2作品カードが表示されていることを確認
     const novelCards = page.getByTestId("novel-card");
@@ -237,6 +238,7 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
 
     // 3. 本棚（/）を開く（起動時マウントフック useBookshelf による自動 Pull が実行される）
     await page.goto("/");
+    await waitForServicesReady(page);
 
     // 偽陽性防止（R1-19）: 端末 B が最初は空本棚から開始することを確認
     await expect(page.getByTestId("bookshelf-page")).toBeVisible();
@@ -554,11 +556,7 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
 
     // 6. ページをリロードして本棚を表示。初期化待機を確実に挟む
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady,
-    );
+    await waitForServicesReady(page);
 
     // 起動時自動 Pull によりリモートの Tombstone を検知し、
     // 端末 A のローカル DB からもカクヨム作品が削除され、なろう作品のみが残存することを確認
@@ -657,47 +655,69 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
 
 const SAMPLE_NOVEL_ID = "kakuyomu:16817330658027210412";
 const SAMPLE_NOVEL_URL = "https://kakuyomu.jp/works/16817330658027210412";
+const INITIAL_VIRTUAL_CLOCK_OFFSET_MS = -20 * 60_000;
 
 interface MockTimeWindow extends Window {
   __yommyTimeOffsetMs?: number;
   __yommyVisibilityState?: DocumentVisibilityState;
+  __yommyObservedBookshelfLoading?: boolean;
+  __yommyAppBridge?: { triggerBackButton: () => Promise<void> };
 }
 
 async function seedCloudConnectedSampleNovel(
-  page: import("@playwright/test").Page,
-) {
-  await page.evaluate(async (workUrl) => {
-    const services = window.__yommyServices!;
-    await services.cloudSyncBridge?.signIn();
-    const response = await services.httpClient.getHtml({ url: workUrl });
-    const parser = services.parserRegistry.requireParser(workUrl);
-    const parsedIndex = parser.parseNovelIndex(response.html, workUrl);
-    await services.novelRepository.upsertNovelWithToc(
-      parsedIndex,
-      new Date().toISOString(),
-    );
-    await services.novelRepository.updateBookmark(
-      "kakuyomu:16817330658027210412",
-      1,
-      0,
-    );
-    const tenMinAgo = new Date(Date.now() - 600_000).toISOString();
-    await services.databaseAdapter.execute(
-      "UPDATE novels SET last_read_at = ?, updated_at = ? WHERE id = ?",
-      [tenMinAgo, tenMinAgo, "kakuyomu:16817330658027210412"],
-    );
-    await services.syncEngine?.sync();
-  }, SAMPLE_NOVEL_URL);
+  page: Page,
+  extraChaptersCount = 0,
+): Promise<void> {
+  await page.evaluate(
+    async ({ workUrl, extraCount }) => {
+      const services = window.__yommyServices!;
+      await services.cloudSyncBridge?.signIn();
+      const response = await services.httpClient.getHtml({ url: workUrl });
+      const parser = services.parserRegistry.requireParser(workUrl);
+      const parsedIndex = parser.parseNovelIndex(response.html, workUrl);
+      const baseChapters = parsedIndex.chapters;
+      const extraChapters = Array.from({ length: extraCount }, (_, i) => {
+        const chapterIndex = baseChapters.length + i + 1;
+        return {
+          chapterIndex,
+          remoteChapterId: `mock-ep-${chapterIndex}`,
+          partTitle: null,
+          title: `第${chapterIndex}話 追加エピソード`,
+          url: `${workUrl}/episodes/mock-ep-${chapterIndex}`,
+          publishedAt: null,
+        };
+      });
+      await services.novelRepository.upsertNovelWithToc(
+        {
+          ...parsedIndex,
+          chapters: [...baseChapters, ...extraChapters],
+        },
+        new Date().toISOString(),
+      );
+      await services.novelRepository.updateBookmark(
+        "kakuyomu:16817330658027210412",
+        1,
+        0,
+      );
+      const thirtyMinAgo = new Date(Date.now() - 30 * 60_000).toISOString();
+      await services.databaseAdapter.execute(
+        "UPDATE novels SET last_read_at = ?, updated_at = ? WHERE id = ?",
+        [thirtyMinAgo, thirtyMinAgo, "kakuyomu:16817330658027210412"],
+      );
+      await services.syncEngine?.sync();
+    },
+    { workUrl: SAMPLE_NOVEL_URL, extraCount: extraChaptersCount },
+  );
 }
 
 async function setMockRemoteState(
-  page: import("@playwright/test").Page,
+  page: Page,
   params: {
     bookmarkChapterIndex: number;
     lastReadAtIso: string;
     readChapterIndexes?: number[];
   },
-) {
+): Promise<void> {
   await page.evaluate(
     async ({
       novelId,
@@ -741,29 +761,61 @@ async function setMockRemoteState(
   );
 }
 
-async function installMockVisibilityClock(
-  page: import("@playwright/test").Page,
-) {
-  await page.evaluate(() => {
+async function installMockVisibilityClock(page: Page): Promise<void> {
+  await page.evaluate((initialOffsetMs) => {
     const win = window as MockTimeWindow;
     if (win.__yommyTimeOffsetMs === undefined) {
-      win.__yommyTimeOffsetMs = 0;
-      const origNow = Date.now.bind(Date);
-      Date.now = () => origNow() + (win.__yommyTimeOffsetMs ?? 0);
+      win.__yommyTimeOffsetMs = initialOffsetMs;
+      const RealDate = Date;
+      const MockDate = new Proxy(RealDate, {
+        construct(target, argArray, newTarget) {
+          const nextArgs =
+            argArray.length === 0
+              ? [RealDate.now() + (win.__yommyTimeOffsetMs ?? 0)]
+              : argArray;
+          return Reflect.construct(
+            target,
+            nextArgs,
+            newTarget === MockDate ? target : newTarget,
+          );
+        },
+        apply(target, _thisArg, argArray) {
+          if (argArray.length === 0) {
+            return new RealDate(
+              RealDate.now() + (win.__yommyTimeOffsetMs ?? 0),
+            ).toString();
+          }
+          return Reflect.apply(target, undefined, argArray);
+        },
+        get(target, prop, receiver) {
+          if (prop === "now") {
+            return () => RealDate.now() + (win.__yommyTimeOffsetMs ?? 0);
+          }
+          return Reflect.get(target, prop, receiver);
+        },
+      });
+      window.Date = MockDate;
     }
     win.__yommyVisibilityState = "visible";
     Object.defineProperty(document, "visibilityState", {
       configurable: true,
       get: () => win.__yommyVisibilityState ?? "visible",
     });
-  });
+  }, INITIAL_VIRTUAL_CLOCK_OFFSET_MS);
+}
+
+async function advanceMockClock(page: Page, advanceMs: number): Promise<void> {
+  await page.evaluate((ms) => {
+    const win = window as MockTimeWindow;
+    win.__yommyTimeOffsetMs = (win.__yommyTimeOffsetMs ?? 0) + ms;
+  }, advanceMs);
 }
 
 async function triggerVisibilityChange(
-  page: import("@playwright/test").Page,
+  page: Page,
   state: DocumentVisibilityState,
   advanceMs = 0,
-) {
+): Promise<void> {
   await page.evaluate(
     ({ nextState, ms }) => {
       const win = window as MockTimeWindow;
@@ -777,18 +829,46 @@ async function triggerVisibilityChange(
   );
 }
 
+async function triggerAppBackButton(page: Page): Promise<boolean> {
+  return page.evaluate(async () => {
+    const win = window as MockTimeWindow;
+    if (!win.__yommyAppBridge) {
+      return false;
+    }
+    await win.__yommyAppBridge.triggerBackButton();
+    return true;
+  });
+}
+
+async function readLocalAndRemoteLastReadAt(page: Page): Promise<{
+  localLastReadAt: string | null;
+  remoteLastReadAt: string | null;
+}> {
+  return page.evaluate(async (novelId) => {
+    const novel =
+      await window.__yommyServices!.novelRepository.getNovelById(novelId);
+    const raw = localStorage.getItem("yommy_mock_gdrive_file");
+    const parsed = raw
+      ? (JSON.parse(raw) as {
+          novels?: Record<string, { lastReadAt: string | null }>;
+        })
+      : null;
+    return {
+      localLastReadAt: novel?.lastReadAt ?? null,
+      remoteLastReadAt: parsed?.novels?.[novelId]?.lastReadAt ?? null,
+    };
+  }, SAMPLE_NOVEL_ID);
+}
+
 test.describe("SCN-05 (Issue #342): 画面ロック・復帰時のクラウド同期しおり保護と競合ダイアログ", () => {
   test.setTimeout(60000);
 
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
+    await waitForServicesReady(page);
     await page.evaluate(() => localStorage.clear());
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady === true,
-    );
+    await waitForServicesReady(page);
     await seedCloudConnectedSampleNovel(page);
   });
 
@@ -797,6 +877,7 @@ test.describe("SCN-05 (Issue #342): 画面ロック・復帰時のクラウド�
   }) => {
     // 1. 本棚から作品詳細 → 第1話リーダー画面（SCR-03）へ遷移
     await page.reload();
+    await waitForServicesReady(page);
     await page.getByTestId("novel-card-select").first().click();
     await expect(page).toHaveURL(
       /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
@@ -811,8 +892,10 @@ test.describe("SCN-05 (Issue #342): 画面ロック・復帰時のクラウド�
 
     await installMockVisibilityClock(page);
 
-    // 2. 別端末が第3話（より新しい lastReadAt）まで進めた状態をリモートへ設定
-    const newerIso = new Date(Date.now() + 60_000).toISOString();
+    // 2. 別端末が第3話（より新しい lastReadAt）まで進めた状態をリモートへ設定（過去タイムライン内 T1 < T2 < T3 <= realNow）
+    const newerIso = await page.evaluate(() =>
+      new Date(Date.now() - 60_000).toISOString(),
+    );
     await setMockRemoteState(page, {
       bookmarkChapterIndex: 3,
       lastReadAtIso: newerIso,
@@ -839,7 +922,7 @@ test.describe("SCN-05 (Issue #342): 画面ロック・復帰時のクラウド�
       "第1話",
     );
 
-    // 5. 誤操作ガード: 背景クリック・Escape キー・ブラウザ戻る（goBack）で閉じず遷移もしないこと
+    // 5. 誤操作ガード: 背景クリック・Escape キー・ブラウザ戻る（popstate）・Android OS バックキーで閉じず遷移もしないこと
     await page
       .getByTestId("bookmark-conflict-backdrop")
       .click({ position: { x: 8, y: 8 }, force: true });
@@ -849,6 +932,13 @@ test.describe("SCN-05 (Issue #342): 画面ロック・復帰時のクラウド�
     await expect(dialog).toBeVisible();
 
     await page.goBack();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1$/,
+    );
+    await expect(dialog).toBeVisible();
+
+    const triggeredBack = await triggerAppBackButton(page);
+    expect(triggeredBack).toBe(true);
     await expect(page).toHaveURL(
       /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1$/,
     );
@@ -874,6 +964,7 @@ test.describe("SCN-05 (Issue #342): 画面ロック・復帰時のクラウド�
     await page.goto(
       `/novels/${encodeURIComponent(SAMPLE_NOVEL_ID)}/chapters/1`,
     );
+    await waitForServicesReady(page);
     await expect(page.getByTestId("reader-view")).toBeVisible();
     await installMockVisibilityClock(page);
 
@@ -900,13 +991,15 @@ test.describe("SCN-05 (Issue #342): 画面ロック・復帰時のクラウド�
       )
       .toBeGreaterThan(0);
 
-    // 2. 他端末の第3話と競合させて「第1話のまま読む」選択時は第1話のままリモート同期されること
-    const newerIso = new Date(Date.now() + 100).toISOString();
+    // 2. 他端末の第3話と競合させて「第1話のまま読む」選択時は第1話のまま新しい lastReadAt でリモート同期されること
+    await advanceMockClock(page, 10_000);
+    const remoteConflictIso = await page.evaluate(() =>
+      new Date(Date.now() - 1_000).toISOString(),
+    );
     await setMockRemoteState(page, {
       bookmarkChapterIndex: 3,
-      lastReadAtIso: newerIso,
+      lastReadAtIso: remoteConflictIso,
     });
-    await page.waitForTimeout(200);
     await triggerVisibilityChange(page, "visible", 305_000);
 
     const dialog = page.getByTestId("bookmark-conflict-dialog");
@@ -919,61 +1012,129 @@ test.describe("SCN-05 (Issue #342): 画面ロック・復帰時のクラウド�
     await expect(page).toHaveURL(
       /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1$/,
     );
-    await page.waitForFunction((novelId) => {
-      const raw = localStorage.getItem("yommy_mock_gdrive_file");
-      if (!raw) return false;
-      const parsed = JSON.parse(raw) as {
-        novels?: Record<string, { bookmarkChapterIndex: number | null }>;
-      };
-      return parsed.novels?.[novelId]?.bookmarkChapterIndex === 1;
-    }, SAMPLE_NOVEL_ID);
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(
+            ({ novelId, prevRemoteIso }) => {
+              const raw = localStorage.getItem("yommy_mock_gdrive_file");
+              if (!raw) return null;
+              const parsed = JSON.parse(raw) as {
+                novels?: Record<
+                  string,
+                  {
+                    bookmarkChapterIndex: number | null;
+                    lastReadAt: string | null;
+                  }
+                >;
+              };
+              const pushedNovel = parsed.novels?.[novelId];
+              if (!pushedNovel || !pushedNovel.lastReadAt) return null;
+              return {
+                bookmarkChapterIndex: pushedNovel.bookmarkChapterIndex,
+                isNewerThanRemote:
+                  Date.parse(pushedNovel.lastReadAt) >
+                  Date.parse(prevRemoteIso),
+              };
+            },
+            { novelId: SAMPLE_NOVEL_ID, prevRemoteIso: remoteConflictIso },
+          ),
+        { timeout: 10000 },
+      )
+      .toEqual({ bookmarkChapterIndex: 1, isNewerThanRemote: true });
 
-    // 3. 未操作のまま 5分後復帰（同一話・より新しい lastReadAt）し、「← 目次」で離脱しても
-    //    リモート由来の新しい lastReadAt がローカル時刻で上書きされないこと
-    const futureLastReadAt = "2099-01-01T00:00:00.000Z";
+    // 3. 未操作のまま 5分後復帰（同一話・より新しい lastReadAt）し、「← 目次」・下部タブ・OS バックキーで離脱しても
+    //    ローカル DB およびリモート双方の lastReadAt がローカル時刻で上書きされないこと（AC-RD-34）
+    await triggerVisibilityChange(page, "hidden", 10_000);
+    const remoteProtectedIso = await page.evaluate(() =>
+      new Date(Date.now() - 1_000).toISOString(),
+    );
     await setMockRemoteState(page, {
       bookmarkChapterIndex: 1,
-      lastReadAtIso: futureLastReadAt,
+      lastReadAtIso: remoteProtectedIso,
     });
-    await triggerVisibilityChange(page, "hidden");
     await triggerVisibilityChange(page, "visible", 305_000);
 
     await expect
-      .poll(async () =>
-        page.evaluate(async (novelId) => {
-          const novel =
-            await window.__yommyServices!.novelRepository.getNovelById(novelId);
-          return novel?.lastReadAt ?? null;
-        }, SAMPLE_NOVEL_ID),
-      )
-      .toBe(futureLastReadAt);
+      .poll(async () => readLocalAndRemoteLastReadAt(page))
+      .toEqual({
+        localLastReadAt: remoteProtectedIso,
+        remoteLastReadAt: remoteProtectedIso,
+      });
 
-    // 下部タッチゾーンから上部オーバーレイを開いて「← 目次」で離脱（未操作）
+    // 経路A: 下部タッチゾーンから上部オーバーレイを開いて「← 目次」で未操作離脱（TR-06）
     await page.getByTestId("reader-bottom-touch-zone").click();
     await expect(page.getByTestId("reader-top-back-to-toc")).toBeVisible();
     await page.getByTestId("reader-top-back-to-toc").click();
     await expect(page).toHaveURL(
       /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
     );
+    expect(await readLocalAndRemoteLastReadAt(page)).toEqual({
+      localLastReadAt: remoteProtectedIso,
+      remoteLastReadAt: remoteProtectedIso,
+    });
 
-    const preservedLastReadAt = await page.evaluate(async (novelId) => {
-      const novel =
-        await window.__yommyServices!.novelRepository.getNovelById(novelId);
-      return novel?.lastReadAt ?? null;
-    }, SAMPLE_NOVEL_ID);
-    expect(preservedLastReadAt).toBe(futureLastReadAt);
+    // 経路B: 「続きから読む」で第1話へ再入室後、未操作で下部オーバーレイ「本棚」タブへ離脱（TR-01b）
+    await page.getByTestId("detail-resume-button").click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1$/,
+    );
+    await expect(readerView).toBeVisible();
+    await page.getByTestId("reader-bottom-touch-zone").click();
+    await expect(page.getByTestId("reader-bottom-tab-bookshelf")).toBeVisible();
+    await page.getByTestId("reader-bottom-tab-bookshelf").click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByTestId("bookshelf-page")).toBeVisible();
+    expect(await readLocalAndRemoteLastReadAt(page)).toEqual({
+      localLastReadAt: remoteProtectedIso,
+      remoteLastReadAt: remoteProtectedIso,
+    });
+
+    // 経路C: 本棚 → 作品詳細 → 第1話へ再入室後、未操作で Android OS バックキー離脱（TR-06）
+    await page.getByTestId("novel-card-select").first().click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
+    );
+    await page.getByTestId("detail-resume-button").click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1$/,
+    );
+    await expect(readerView).toBeVisible();
+    expect(await triggerAppBackButton(page)).toBe(true);
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
+    );
+    expect(await readLocalAndRemoteLastReadAt(page)).toEqual({
+      localLastReadAt: remoteProtectedIso,
+      remoteLastReadAt: remoteProtectedIso,
+    });
   });
 
-  test("作品詳細画面（SCR-02）表示のまま5分以上画面ロック後に復帰するとリロードなしでしおり・既読表示が自動更新される", async ({
+  test("作品詳細画面（SCR-02）表示のまま5分以上画面ロック後に復帰するとスクロール位置を維持したまましおり・既読表示が自動更新される", async ({
     page,
   }) => {
+    // 1. 目次リストが確実にスクロール可能となるよう 20 話分の追加目次を投入して同期
+    await seedCloudConnectedSampleNovel(page, 20);
     await page.goto(`/novels/${encodeURIComponent(SAMPLE_NOVEL_ID)}`);
+    await waitForServicesReady(page);
     const resumeButton = page.getByTestId("detail-resume-button");
     await expect(resumeButton).toContainText("続きから読む（第1話）");
+    await expect(page.getByTestId("episode-item")).toHaveCount(24);
+
+    // 2. 目次リストをスクロール状態にする（AC-ND-28）
+    const episodeListContainer = page.getByTestId("episode-list-container");
+    const scrolledTop = await episodeListContainer.evaluate((el) => {
+      el.scrollTop = 180;
+      return el.scrollTop;
+    });
+    expect(scrolledTop).toBeGreaterThan(0);
+
     await installMockVisibilityClock(page);
 
-    // 他端末で第3話まで読み進めた状態をリモートへ設定
-    const newerIso = new Date(Date.now() + 60_000).toISOString();
+    // 3. 他端末で第3話まで読み進めた状態をリモートへ設定（過去タイムライン内 T1 < T2 < T3 <= realNow）
+    const newerIso = await page.evaluate(() =>
+      new Date(Date.now() - 60_000).toISOString(),
+    );
     await setMockRemoteState(page, {
       bookmarkChapterIndex: 3,
       lastReadAtIso: newerIso,
@@ -983,12 +1144,67 @@ test.describe("SCN-05 (Issue #342): 画面ロック・復帰時のクラウド�
     await triggerVisibilityChange(page, "hidden");
     await triggerVisibilityChange(page, "visible", 305_000);
 
-    // ページリロードなしで SCR-02 上の「続きから読む」としおり・既読バッジが自動更新されること
+    // 4. ページリロードおよびスクロールリセットなしで SCR-02 上のしおり・既読表示が自動更新されること
     await expect(resumeButton).toContainText("続きから読む（第3話）", {
       timeout: 10000,
     });
+    const thirdEpisode = page.getByTestId("episode-item").nth(2);
     await expect(
-      page.getByTestId("episode-item").nth(2).getByTestId("episode-read-badge"),
+      thirdEpisode.getByTestId("episode-bookmark-badge"),
     ).toBeVisible();
+    await expect(thirdEpisode.getByTestId("episode-read-badge")).toBeVisible();
+    const preservedScrollTop = await episodeListContainer.evaluate(
+      (el) => el.scrollTop,
+    );
+    expect(preservedScrollTop).toBe(scrolledTop);
+  });
+
+  test("本棚画面（SCR-01）表示のまま5分以上画面ロック後に復帰するとローディング表示なしで読書進捗がサイレント自動更新される（AC-BS-13）", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await waitForServicesReady(page);
+    const cardBookmark = page.getByTestId("novel-card-bookmark").first();
+    const cardResume = page.getByTestId("novel-card-resume").first();
+    await expect(cardBookmark).toContainText("しおり: 第1話");
+    await expect(cardResume).toContainText("第1話から読む");
+    await expect(page.getByTestId("bookshelf-loading")).not.toBeVisible();
+
+    await installMockVisibilityClock(page);
+
+    // サイレント更新（reloadNovels({ silent: true })）中にスピナーが一瞬でも描画されないことを監視
+    await page.evaluate(() => {
+      const win = window as MockTimeWindow;
+      win.__yommyObservedBookshelfLoading = false;
+      const observer = new MutationObserver(() => {
+        if (document.querySelector('[data-testid="bookshelf-loading"]')) {
+          win.__yommyObservedBookshelfLoading = true;
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    });
+
+    // 他端末で第3話まで読み進めた状態をリモートへ設定
+    const newerIso = await page.evaluate(() =>
+      new Date(Date.now() - 60_000).toISOString(),
+    );
+    await setMockRemoteState(page, {
+      bookmarkChapterIndex: 3,
+      lastReadAtIso: newerIso,
+      readChapterIndexes: [1, 2, 3],
+    });
+
+    await triggerVisibilityChange(page, "hidden");
+    await triggerVisibilityChange(page, "visible", 305_000);
+
+    await expect(cardBookmark).toContainText("しおり: 第3話", {
+      timeout: 10000,
+    });
+    await expect(cardResume).toContainText("第3話から読む");
+
+    const observedLoading = await page.evaluate(
+      () => (window as MockTimeWindow).__yommyObservedBookshelfLoading ?? false,
+    );
+    expect(observedLoading).toBe(false);
   });
 });
