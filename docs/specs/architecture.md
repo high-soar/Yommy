@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Approved"
+status: "Review (#344)"
 updated: "2026-11-14"
 tags:
   - architecture
@@ -55,7 +55,11 @@ tags:
   - ho-35
   - conflict-dialog
   - ho-38
+  - cache-scheduler
+  - priority-queue
+  - ho-39
 related_specs:
+  - docs/specs/changes/issue-344-priority-cache-scheduler.md
   - docs/specs/changes/archive/issue-343-novel-detail-header-menu.md
   - docs/specs/changes/archive/issue-342-cloud-sync-bookmark-protection.md
   - docs/specs/changes/archive/issue-304-v1-release-readiness.md
@@ -273,6 +277,10 @@ Yommy/
     │   ├── search/                    # SCR-06: 検索画面（カクヨム・小説家になろうサイト切替・作品検索・カードから本棚追加・SCR-02遷移）
     │   ├── ranking/                   # SCR-07: ランキング画面（カクヨム・小説家になろうサイト切替・期間/ジャンル別ランキング・カードから本棚追加・SCR-02遷移）
     │   ├── settings/                  # SCR-05: 設定画面（組版・テーマ・フォント・余白・音量キー送り設定・サンプル文章プレビュー・クラウド同期・キャッシュ管理）
+    │   ├── cache/                     # 優先度付きバックグラウンドキャッシュスケジューラ（high > medium > low）（Issue #344）
+    │   │   ├── types.ts               # CachePriority, CacheFetchTask, CacheNovelProgress, CacheScheduler 契約定義
+    │   │   └── services/
+    │   │       └── cacheScheduler.ts  # 0ms割り込み・1.5sレート制限・download_queue同期・自動再開スケジューラ実装
     │   └── cloud-sync/                # クラウド同期（Google Drive appDataFolder・SyncEngine）（Issue #120, #342）
     │       ├── types.ts               # YommySyncState, SyncNovelData 等の同期データ型定義
     │       ├── hooks/                 # useBackgroundAutoPull.ts（全画面 5分復帰自動 Pull フック）
@@ -864,15 +872,68 @@ export const PREFETCH_COUNT = 5;
 1. **キャッシュ鮮度判定（TTL 7日間）**:
    - `chapters.downloaded_at` が現在時刻から `CACHE_TTL_MS`（7日）以内の場合、キャッシュを「有効（Fresh）」とみなし、通信を行わず即座に SQLite の本文を描画する。
    - 先読みおよび一括キャッシュにおいても、有効なキャッシュを持つ話数はスキップされる。
-2. **読書中 5 話自動先読み（`useReader`）**:
-   - 第 $N$ 話の本文読み込み完了後、バックグラウンドで $N+1 \sim \min(N+5, \text{totalChapters})$ のエピソードを昇順で順次取得・SQLite 保存する。
+2. **読書中 5 話自動先読み（`useReader` → `CacheScheduler` 優先度 `'medium'`）**:
+   - 第 $N$ 話の本文読み込み完了後、バックグラウンドで $N+1 \sim \min(N+5, \text{totalChapters})$ のエピソードを昇順で順次取得・SQLite 保存する（なお現在話の即時取得は最優先 `'high'` として 0ms 待機・進行中 `'medium'`/`'low'` 即中断で実行）。
    - 対象サーバーの過負荷防止（第 $N$ 話取得直後の連続リクエスト抑止）のため、最初の先読み（第 $N+1$ 話）リクエスト開始前に `PREFETCH_INTERVAL_MS`（1.5秒）の初期インターバルを空け、以降も 1話の取得完了ごとに 1.5秒のウェイトを空けて直列実行する。
-   - 処理全体を `AbortController` で制御し、ユーザーが `goToChapter` で別エピソードへ移動した際やリーダー画面を離脱した際は、直ちに直前の処理をキャンセルしてリソースを解放する。またエピソード連続遷移時においても、先行先読みタスク（進行中の HTTP 通信含む）の Promise 完了を待機して直列化を保証し、1.5 秒の間隔規律を担保する。初期ロード通信完了後のマウント状態ガード（`isMounted`）および先読みタスクの `AbortSignal` 連動により、画面離脱後の DB 書き込みを防止する（R1-29）。
-3. **作品詳細での未取得話一括キャッシュと永続ダウンロードキュー統合（`useNovelDetail` / `QueueRepository`、`v0.3` Issue #81 / `v0.9` Issue #268）**:
-   - 作品詳細ヘッダーの3点メニュー内「未取得話を一括キャッシュ」（または中断後の「キャッシュを再開（残りN話）」、失敗後の「失敗した話を再試行（N話）」）操作（`TR-18`、`v1.1` Issue #343）により、未キャッシュエピソード（および TTL 7日経過した古いキャッシュ）を `QueueRepository`（`download_queue` テーブル）へ `'pending'` として登録し、`PREFETCH_INTERVAL_MS`（1.5秒）間隔で順次直列取得する。
-   - 1話取得開始時にステータスを `'downloading'`、保存成功時に `'completed'` へ更新し、ヘッダーの取得済み話数（`cachedChapters`）・容量および各話リストのキャッシュバッジをリアルタイムに更新する（`novels.updated_at` は更新せず保持する、R2-16）。
+   - `CacheScheduler` 注入時はリーダーの先読み（`'medium'`）のみを `AbortController` / キャンセル ID で制御し、ユーザーが `goToChapter` で別エピソードへ移動した際やリーダー画面を離脱した際は、直前の `'medium'` タスク（進行中の HTTP 通信含む）のみを直ちにキャンセルしてリソースを解放する（`'low'` 一括キャッシュタスクは中断せず完了後に自動再開させる）。また先行先読みタスク（進行中の HTTP 通信含む）の完了・中断待機による直列化、初期ロード通信完了後のマウント状態ガード（`isMounted`）、および `AbortSignal` 連動により、画面離脱後の DB 書き込みを防止する（R1-29）。
+3. **作品詳細での未取得話一括キャッシュと優先度スケジューラ・永続ダウンロードキュー統合（`useNovelDetail` → `CacheScheduler` 優先度 `'low'` / `QueueRepository`、`v0.3` Issue #81 / `v0.9` Issue #268 / `v1.2` Issue #344）**:
+   - 作品詳細ヘッダーの3点メニュー内「未取得話を一括キャッシュ」（または中断後の「キャッシュを再開（残りN話）」、失敗後の「失敗した話を再試行（N話）」）操作（`TR-18`、`v1.1` Issue #343）により、未キャッシュエピソード（および TTL 7日経過した古いキャッシュ）を `QueueRepository`（`download_queue` テーブル）へ `'pending'` として登録し、`CacheScheduler` に優先度 `'low'` として委譲して `PREFETCH_INTERVAL_MS`（1.5秒）間隔で順次直列取得する。
+   - **`SCR-02` 非ブロッキング ＆ 画面離脱継続**: 一括キャッシュ実行中も `SCR-02` の閲覧操作・リーダー遷移（`TR-04`）をブロックせず、`SCR-02` を離脱（アンマウント）しても `CacheScheduler` 上の `'low'` タスクは中断せずアプリ起動中バックグラウンド継続する。リーダー遷移で `'high'`（即時取得）や `'medium'`（5話先読み）が投入された場合は `'low'` を自動退避（実行中の `'downloading'` 行は `retryCount` を増加させず `'pending'` へ巻き戻し）し、上位優先度キューが空になった時点で残 `'pending'` 話から自動再開する。
+   - 1話取得開始時にステータスを `'downloading'`、保存成功時に `'completed'` へ更新し、進捗購読（`subscribeProgress`）経由で `SCR-02` 表示中または再訪問時にヘッダーの取得済み話数（`cachedChapters`）・容量および各話リストのキャッシュバッジをリアルタイムに更新する（`novels.updated_at` は更新せず保持する、R2-16）。`SCR-02` 再訪問時に `cacheScheduler.isNovelBatchCaching(novelId) === true` の場合は `resetInterruptedToPending` を呼び出さない。
    - 特定話の取得に失敗（通信エラー・タイムアウトかつ既存キャッシュなし）した場合は、ループ全体を中断せず `download_queue` に `status = 'failed'`（`retry_count = retry_count + 1`、`last_error` 記録）として保存し、1.5秒ウェイト後に後続の `'pending'` 話の取得を継続する。ループ完了後に失敗話が存在する場合は該当エピソード行に `取得失敗` バッジ（`episode-failed-badge`）、ヘッダーにエラー通知と `失敗した話を再試行（N話）` ボタンを表示する。
-   - ユーザー手動中断（「中断」ボタン）および画面アンマウント時は `AbortController` により安全に処理を停止し、中断された `'downloading'` 話を `'pending'` に戻して保持する。画面再表示時は `キャッシュを再開（残りN話）` ボタンを表示し、再開時は残り対象話数 $N$ を分母（`0/N` 〜 `N/N`）として進捗を表示する。またリーダー画面での閲覧・先読みにより既に有効キャッシュ済みとなった話は自動的にキューから除外され、全話取得完了時および本文キャッシュ削除時にはキューレコードが自動クリーンアップされる。
+   - ユーザー手動中断（「中断」ボタン）時は `pauseNovelTasks` で安全に処理を停止して未完了 `'downloading'` 話を `'pending'` に戻して保持する（`キャッシュを再開（残りN話）` へ遷移）。作品削除・本文キャッシュ削除時は `cancelNovelTasks(novelId, { clearQueue })` / `cancelAllTasks({ clearQueue })` で書き込み完了を待機した上で、全削除（`onlyRead: false`）時のみキューをクリアし、既読のみ削除（`onlyRead: true`）時は未読 `'pending'`/`'failed'` キューを保持する（`R1-18`）。またリーダー閲覧・先読み・DOM インポートで既に有効キャッシュ済みとなった話は自動的にキューから除外され、全話取得完了時および全削除時にはキューレコードが自動クリーンアップされる。
+
+#### 3.7.1 `CacheScheduler` 契約（`src/features/cache/types.ts`、`v1.2` Issue #344 新設）
+
+アプリ全体で単一インスタンスとして `ServiceProvider` が保持・提供（`cacheScheduler?: CacheScheduler`）し、リーダー即時取得（`high`）・5話先読み（`medium`）・バックグラウンド一括キャッシュ（`low`）の優先順位調停および 1.5 秒レート制限を一元管理します：
+
+```ts
+export type CachePriority = "high" | "medium" | "low";
+
+export interface CacheNovelProgress {
+  novelId: string;
+  isBatchCaching: boolean;
+  current: number;
+  total: number;
+  failedCount: number;
+  pausedReason: "none" | "preempted";
+}
+
+export interface CacheScheduler {
+  /** 指定優先度（high: 0ms割り込み［既存キャッシュ無ければ失敗時reject］ / medium: 1.5s先読み［失敗時は警告ログのみでrejectしない］）で単話/複数話を取得する */
+  enqueuePrefetch(options: {
+    novelId: string;
+    chapterIndexes: number[];
+    priority: "high" | "medium";
+    signal?: AbortSignal;
+  }): Promise<void>;
+  /** 作品の未取得話を low 優先度バッチとしてバックグラウンド取得する */
+  enqueueBatchCache(novelId: string, chapterIndexes: number[]): Promise<void>;
+  /** 一時停止（実行中の 'downloading' は retryCount 非増加で 'pending' に戻し、既存キュー行を保持） */
+  pauseNovelTasks(novelId: string): Promise<void>;
+  /** 指定作品のタスクを中断・完了待機する（clearQueue !== false で clearNovelQueue を実行） */
+  cancelNovelTasks(
+    novelId: string,
+    options?: { clearQueue?: boolean },
+  ): Promise<void>;
+  /** 全作品の全タスクを中断・完了待機する（SCR-05 設定画面キャッシュ一括整理前等に実行、clearQueue !== false で clearAllQueue） */
+  cancelAllTasks(options?: { clearQueue?: boolean }): Promise<void>;
+  /** 対象作品で現在バックグラウンド一括キャッシュがアクティブか判定 */
+  isNovelBatchCaching(novelId: string): boolean;
+  /** 対象作品の現在の進捗スナップショットを取得 */
+  getNovelProgress(novelId: string): CacheNovelProgress | null;
+  /** 進捗更新・完了・失敗通知を購読（アンマウント時は購読解除のみ行いタスク継続） */
+  subscribeProgress(
+    novelId: string,
+    listener: (progress: CacheNovelProgress) => void,
+  ): () => void;
+  /** DOMインポート等の外部保存後にキュー・進捗を再同期 */
+  syncNovelProgress(novelId: string): Promise<void>;
+  /** ServiceProvider アンマウント時に全メモリタイマー・コントローラを破棄 */
+  dispose(): void;
+}
+```
+
 4. **7日経過キャッシュの短タイムアウトフォールバック**:
    - 取得から 7日以上経過したキャッシュは、閲覧時・先読み時・一括キャッシュ時に `SHORT_TIMEOUT_MS`（3秒）で再取得を試みる。
    - 3秒以内に取得成功した場合は新本文で DB および画面を更新する。
@@ -972,6 +1033,8 @@ export function formatByteSize(bytes: number): string {
 #### 3.9.2 ストレージ・キャッシュ管理フック契約（`src/features/settings/hooks/useStorageCache.ts`）
 
 設定画面（`SCR-05`）における全体キャッシュ容量の可視化と一括本文キャッシュ削除（既読のみ／全話）を管理するカスタムフック契約です：
+
+- `useStorageCache` は削除実行前（`clearCache(options)`）に `cacheScheduler?.cancelAllTasks({ clearQueue: !options.onlyRead })` を先行呼び出しし、バックグラウンド動作中タスクの書き込み競合を防止する（`onlyRead: true` 時は未読キューを保持、`R1-18`、`v1.2` Issue #344）。
 
 ```ts
 export interface StorageCacheSummary {
@@ -1109,7 +1172,7 @@ export interface WebViewDomBridge {
 - **`useWebViewImport`**:
   - `initialUrl`, `initialNovelId`, `initialChapterIndex` を受け取り、URL バリデーション、DOM キャプチャ、および作品トップ vs 各話エピソードの自動判別保存を実行。
   - 作品トップ目次解析時: `parseNovelIndex` → `upsertNovelWithToc`（なろう短編時は本文も同時保存）→ `TR-11`（`/novels/:novelId` 遷移）。
-  - 各話本文解析時: `parseChapterContent` → `saveChapterBody`（未登録時は目次自動補完試行）→ `TR-11`（`/novels/:novelId/chapters/:chapterIndex` 遷移）。
+  - 各話本文解析時: `parseChapterContent` → `saveChapterBody`（未登録時は目次自動補完試行）→ `queueRepository.deleteByNovelAndChapters` ＆ `cacheScheduler?.syncNovelProgress` で重複抑止同期 → `TR-11`（`/novels/:novelId/chapters/:chapterIndex` 遷移）。
 - **`WebViewImportPage`**:
   - 100dvh 全画面シェル、固定 URL バー、操作ボタン（「内蔵ブラウザで直接操作」「表示中ページを取り込む」）、非対応 URL 警告トースト、下部 4 タブバー。
 - **`WebViewImportContainer`**:
@@ -1119,7 +1182,7 @@ export interface WebViewDomBridge {
 
 ## 4. テスト環境での DI（依存性注入）と決定論的初期化
 
-- `src/app/ServiceProvider.tsx` を介して `HttpClientBridge`、`AppBridge`、`CloudSyncBridge`、`VolumeKeyBridge`、`WebViewDomBridge`、各 `Repository`（および基底の `DatabaseAdapter`）を React Context 経由で提供する。
+- `src/app/ServiceProvider.tsx` を介して `HttpClientBridge`、`AppBridge`、`CloudSyncBridge`、`VolumeKeyBridge`、`WebViewDomBridge`、各 `Repository`（および基底の `DatabaseAdapter`）、およびアプリ共有 `cacheScheduler?: CacheScheduler`（プロバイダアンマウント時に `dispose()` 解放）を React Context 経由で提供する。
 - **Android / iOS ネイティブ実行時**: `Capacitor.isNativePlatform()` によりネイティブ環境を自動検知し、`CapacitorHttpClient`、`CapacitorAppBridge`、`CapacitorCloudSyncBridge`、`CapacitorVolumeKeyBridge`、`CapacitorWebViewDomBridge`、および `createDefaultNativeSqliteAdapter`（`CapacitorSqliteAdapter` ＋ `src/storage/schema.ts` の DDL 初期化）を注入する。
 - **Web ブラウザ / Dev 実行時**: `createInMemoryDb`（`sql.js`）および `localStorage` への Base64 バイナリバックアップ（`yommy_sqlite_db_backup`）によるハイブリッド永続化を提供し、`createDefaultMockHttpClient`、`MockAppBridge`、`MockCloudSyncBridge`、`MockVolumeKeyBridge`、および `MockWebViewDomBridge` を使用する。既存 DB バイナリからの復元時にも `initializeDatabaseSchema` によるスキーママイグレーションを確実に実行する。
 - **UT（Vitest）/ Storybook / Playwright IT 実行時**: `MockHttpClient` ＋ `MockAppBridge` ＋ `MockCloudSyncBridge` ＋ `MockVolumeKeyBridge` ＋ `MockWebViewDomBridge` ＋ `InMemoryDatabaseAdapter` を注入し、各テストの開始前に `resetTestDb()` を呼び出して 100% 決定論的な状態で検証する。

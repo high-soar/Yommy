@@ -4,12 +4,13 @@ title: 品質記録・バグ記録票 ＆ 申し送り管理シート（Bug & Ha
 description: 製品コードと支援成果物を分離したバグ記録（原因5分類 L/S/D/B/A）および後続タスクへの申し送り事項（HO-xx）を追跡する正本シート。
 status: "Approved"
 updated: "2026-11-14"
-tags: [quality, bug-log, handover, dre, kaizen]
+tags: [quality, bug-log, handover, dre, kaizen, ho-39]
 related_specs:
   - docs/quality/archive/v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md
   - docs/quality/reports/v1.1-cloud-sync-bookmark-and-detail-header-ux.md
   - docs/specs/changes/archive/issue-342-cloud-sync-bookmark-protection.md
   - docs/specs/changes/archive/issue-343-novel-detail-header-menu.md
+  - docs/specs/changes/issue-344-priority-cache-scheduler.md
   - docs/quality/archive/v1.0-release-audit-log.md
   - docs/quality/reports/v1.0-full-system-quality-audit.md
   - docs/specs/changes/archive/issue-304-v1-release-readiness.md
@@ -125,11 +126,11 @@ related_tests: []
 > - Milestone `v1.0` で解決済みの申し送り（`HO-36`）: [docs/quality/archive/v1.0-release-audit-log.md](archive/v1.0-release-audit-log.md)
 > - Milestone `v1.1` で解決済みの申し送り（`HO-37`, `HO-38`）: [docs/quality/archive/v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md](archive/v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md)
 
-現在、未解決（`Open`）の申し送り事項は **0 件** です（すべての既存 `HO-xx` は上記アーカイブにて完了精算済み）。
+現在、未解決（`Open`）の申し送り事項は **1 件**（`HO-39`）です。
 
-| ID  | 起票元 Issue / PR | 申し送り事項の内容                       | 解決先（対象 Issue / 成果物） | 完了ゲート | 状態 (`Open` / `Resolved`) |
-| :-: | :---------------: | :--------------------------------------- | :---------------------------- | :--------: | :------------------------: |
-|  -  |         -         | （現在 Open の申し送り事項はありません） | -                             |     -      |             -              |
+|     ID      | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                               | 解決先（対象 Issue / 成果物）                                                                     |       完了ゲート        | 状態 (`Open` / `Resolved`) |
+| :---------: | :---------------: | :----------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------ | :---------------------: | :------------------------: |
+| **`HO-39`** |    Issue #344     | Android 実機における長編一括キャッシュ実行中の即時リーダー遷移・先読み統合動作、手動中断・再開および作品別/全体キャッシュ整理時の安全停止整合確認 | 親 Issue #344 の Step 2 判定（カテゴリ B）に基づき Milestone `v1.2` 最終レビューで実機検証予定 | Milestone `v1.2` 完了前 |           `Open`           |
 
 ---
 
