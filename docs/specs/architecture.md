@@ -2,8 +2,8 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Approved"
-updated: "2026-11-12"
+status: "Review (#342)"
+updated: "2026-11-13"
 tags:
   - architecture
   - parser
@@ -53,7 +53,10 @@ tags:
   - ho-32
   - ho-34
   - ho-35
+  - conflict-dialog
+  - ho-38
 related_specs:
+  - docs/specs/changes/issue-342-cloud-sync-bookmark-protection.md
   - docs/specs/changes/archive/issue-304-v1-release-readiness.md
   - docs/specs/changes/archive/issue-269-webview-fallback-and-dom-import.md
   - docs/specs/features/webview-import.md
@@ -763,12 +766,17 @@ export interface RouterContextValue {
   navigateToSettings: () => void;
   navigateToBrowser: (url: string, options?: NavigateToBrowserOptions) => void;
   back: () => void;
+  blockBackNavigation?: () => () => void;
+  isBackNavigationBlocked?: () => boolean;
 }
 ```
 
 - `novelId`（例: `"kakuyomu:16817330658027210412"`）を URL パスに含める際は `encodeURIComponent` でエンコードし、ルート解決（`matchRoute`）時に `decodeURIComponent` でデコードする。
 - `RouterProvider` は `initialPath?: string` プロパティを受け取り、Vitest 単体テストや Storybook において任意のルート状態を決定論的に再現できる。
 - `navigate` は同一パスへの遷移呼び出し時（例: `/settings` での「設定」タブ再タップ、`/search` での「検索」タブ再タップ）は履歴追加（`pushState`）および `previousPath` の上書きを行わず no-op とする。
+- **モーダル表示中の戻る遷移抑止ガード（`blockBackNavigation`、`v1.1` Issue #342）**:
+  - リーダー画面のしおり競合確認モーダル（`BookmarkConflictDialog`）等の誤操作防止が必要な状態では `blockBackNavigation()` を登録（戻り値のクリーンアップ関数で解除）し、登録中は `isBackNavigationBlocked()` が `true` を返却する。
+  - `isBackNavigationBlocked() === true` の間は、`App.tsx` の `appBridge.addBackButtonListener` が Android OS バックキー処理をスキップするとともに、`popstate` イベント発火時もルート遷移を行わず現在パスを復元維持する。
 - **設定画面復帰オリジン制御（`settingsOrigin`、Issue #124 / R1-22）**:
   - 設定画面（`SCR-05: /settings`）への遷移時、直前画面がリーダー（`SCR-03`）または作品詳細（`SCR-02`）の場合はそのパスを `settingsOrigin` として保持する。
   - OS バックキー実行時、`settingsOrigin` が保持されていれば直前画面へ復帰し、`settingsOrigin` を `null` にリセットする。
@@ -919,8 +927,9 @@ export interface CloudSyncBridge {
   - 既読状態のマージ: 両端末の既読エピソード ID の和集合（Union）を採用する。
 - **自動同期トリガーと排他・デバウンス制御**:
   - 未連携時のガード: `cloudSyncBridge.getAuthState()` が `connected` 状態でない場合、`pullAndMerge()` および `pushCurrentState()` は通信を行わず即座に安全にリターンする（R1-14）。
-  - 自動 Pull: アプリ起動時、およびバックグラウンド復帰時（休止から5分以上経過）。未送信ローカル変更がある場合はマージ後に自動 Push。
-  - 自動 Push: 本棚作品追加・削除、お気に入り（★）登録・解除（`SCR-01` / `SCR-02` での `toggleFavorite`）、およびリーダー話数遷移・既読更新時に 2〜3秒（2500ms）デバウンス付き非同期実行（`syncEngine.notifyChanged()`）。
+  - 自動 Pull: アプリ起動時（`useBookshelf` 初回マウント）、および全画面共通のバックグラウンド復帰時（`useBackgroundAutoPull` により `AppContent` ルートで監視、休止から 5 分 `300,000ms` 以上経過、`v1.1` Issue #342 にて本棚限定から全画面へ拡張）。未送信ローカル変更がある場合はマージ後に自動 Push。
+  - Pull 完了購読通知（`SyncEngine.subscribePullCompleted`、`v1.1` Issue #342）: `pullAndMerge()` 完了時に `{ pulled, mergedNovels }` を購読リスナーへ通知し、現在表示中の画面フック（`useBookshelf` 再取得、`useNovelDetail` しおり・既読表示自動更新、`useReader` しおり話数競合検知）へ安全に伝播する。
+  - 自動 Push: 本棚作品追加・削除、お気に入り（★）登録・解除（`SCR-01` / `SCR-02` での `toggleFavorite`）、およびリーダー話数遷移・既読更新・しおり進捗保存時に 2〜3秒（2500ms）デバウンス付き非同期実行（`syncEngine.notifyChanged()`）。なおリーダー未操作離脱時の `flushBookmark()` スキップ時は `notifyChanged()` を発火しない（`v1.1` Issue #342）。
   - 多重並行実行防止（排他制御・Single-flight）: `SyncEngine` 内部に排他制御機構（`isSyncing` フラグおよび FIFO キュー排他制御）を導入し、`pullAndMerge`、`pushCurrentState`、`sync` が同時に重なって実行されないよう安全にガードする。`sync()` が実行中に重複して呼び出された場合、実行中の Promise を再利用して単一実行に合流（Single-flight）させる。`scheduleDebouncedPush()` では生成した Promise に内部で `.catch(() => {})` を登録し、未処理例外（`UnhandledPromiseRejection`）を防止するとともに、`cancelDebouncedPush()` 実行時には保留中の Promise ハンドラーを漏れなく `resolve()` して呼び出し元のハングを防止する（R2-09）。
 
 #### 3.8.3 ネイティブ Google Identity Services と 5 層セキュリティ設計
@@ -1145,14 +1154,14 @@ Android Debug APK の継続的な検証と上書きインストール（`INSTALL
 
 ### 6.2 システム戻るボタン・階層遷移・終了 UX（`AC-AB-xx`）
 
-|  受入条件 ID   | 項目                       | 内容                                                                                                                                                             |   対応要件 ID    | 検証成果物                              |
-| :------------: | :------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------: | :-------------------------------------- |
-| **`AC-AB-01`** | Bridge 抽象層の隔離        | `AppBridge`（`CapacitorAppBridge` / `MockAppBridge`）が整備され、Web/Vitest/Storybook 環境では Capacitor ネイティブ例外を一切発生させずにモック動作すること。    |   `SYS-REQ-16`   | `src/bridges/app/mockAppBridge.test.ts` |
-| **`AC-AB-02`** | リーダー画面からの階層復帰 | `SCR-03` でバックボタン押下時、しおり（`flushBookmark`）が即時保存され、目次画面（`SCR-02`）へ復帰すること（`TR-06`）。                                          | `SYS-REQ-12, 16` | `src/App.test.tsx` / `SCN-01`           |
-| **`AC-AB-03`** | 目次画面からの階層復帰     | `SCR-02` でバックボタン押下時、本棚画面（`SCR-01`）へ復帰すること（`TR-07`）。                                                                                   | `SYS-REQ-01, 16` | `src/App.test.tsx` / `SCN-01`           |
-| **`AC-AB-04`** | 設定画面からの直前復帰     | `SCR-05` でバックボタン押下時、直前に開いていた画面へ正確に復帰すること（`TR-12`）。                                                                             |   `SYS-REQ-16`   | `src/App.test.tsx` / `SCN-01`           |
-| **`AC-AB-05`** | 本棚での終了確認トースト   | `SCR-01`（`/`）でバックボタン 1 回目押下時、アプリは終了せず「もう一度バックボタンを押すと終了します」のトーストが表示され、2秒後に自動消滅すること（`TR-13`）。 |   `SYS-REQ-16`   | `src/App.test.tsx` / `SCN-01`           |
-| **`AC-AB-06`** | 本棚での二重押下アプリ終了 | `SCR-01`（`/`）でトースト表示中（2秒以内）に再度バックボタンを押下したとき、`appBridge.exitApp()` が呼び出されること（`TR-13`）。                                |   `SYS-REQ-16`   | `src/App.test.tsx` / `SCN-01`           |
+|  受入条件 ID   | 項目                       | 内容                                                                                                                                                                                                                                                                   |   対応要件 ID    | 検証成果物                              |
+| :------------: | :------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------: | :-------------------------------------- |
+| **`AC-AB-01`** | Bridge 抽象層の隔離        | `AppBridge`（`CapacitorAppBridge` / `MockAppBridge`）が整備され、Web/Vitest/Storybook 環境では Capacitor ネイティブ例外を一切発生させずにモック動作すること。                                                                                                          |   `SYS-REQ-16`   | `src/bridges/app/mockAppBridge.test.ts` |
+| **`AC-AB-02`** | リーダー画面からの階層復帰 | `SCR-03` でバックボタン押下時、未保存のしおり進捗変更があれば `flushBookmark` で即時保存し（未操作時は `last_read_at` を上書きせず）、目次画面（`SCR-02`）へ復帰すること（`TR-06`）。なおしおり競合確認モーダル表示中は戻る遷移が抑止されること（`v1.1` Issue #342）。 | `SYS-REQ-12, 16` | `src/App.test.tsx` / `SCN-01`, `SCN-05` |
+| **`AC-AB-03`** | 目次画面からの階層復帰     | `SCR-02` でバックボタン押下時、本棚画面（`SCR-01`）へ復帰すること（`TR-07`）。                                                                                                                                                                                         | `SYS-REQ-01, 16` | `src/App.test.tsx` / `SCN-01`           |
+| **`AC-AB-04`** | 設定画面からの直前復帰     | `SCR-05` でバックボタン押下時、直前に開いていた画面へ正確に復帰すること（`TR-12`）。                                                                                                                                                                                   |   `SYS-REQ-16`   | `src/App.test.tsx` / `SCN-01`           |
+| **`AC-AB-05`** | 本棚での終了確認トースト   | `SCR-01`（`/`）でバックボタン 1 回目押下時、アプリは終了せず「もう一度バックボタンを押すと終了します」のトーストが表示され、2秒後に自動消滅すること（`TR-13`）。                                                                                                       |   `SYS-REQ-16`   | `src/App.test.tsx` / `SCN-01`           |
+| **`AC-AB-06`** | 本棚での二重押下アプリ終了 | `SCR-01`（`/`）でトースト表示中（2秒以内）に再度バックボタンを押下したとき、`appBridge.exitApp()` が呼び出されること（`TR-13`）。                                                                                                                                      |   `SYS-REQ-16`   | `src/App.test.tsx` / `SCN-01`           |
 
 ### 6.3 Android ビルド・署名・バージョン管理（`AC-APK-xx`）
 

@@ -2,8 +2,8 @@
 type: spec-feature
 title: "本棚画面仕様書（SCR-01: Bookshelf）"
 description: "登録済み小説カード一覧の表示、お気に入り（★）登録・絞り込みフィルタ、しおり位置からのワンタップ読書再開、および検索・ランキング画面への誘導を提供する本棚画面（SCR-01）の正本仕様。"
-status: "Approved"
-updated: "2026-11-12"
+status: "Review (#342)"
+updated: "2026-11-13"
 tags:
   - bookshelf
   - scr-01
@@ -20,7 +20,9 @@ tags:
   - narou
   - multi-page-toc
   - ho-32
+  - ho-38
 related_specs:
+  - docs/specs/changes/issue-342-cloud-sync-bookmark-protection.md
   - docs/specs/changes/archive/issue-266-bookshelf-favorite-and-sync.md
   - docs/specs/changes/archive/issue-239-narou-parser-and-multi-page-toc.md
   - docs/specs/parsers/narou.md
@@ -305,8 +307,8 @@ export interface UseBookshelfResult {
    - `syncEngine` が存在する場合は `syncEngine.notifyChanged()` を呼び出し、デバウンス自動 Push をスケジュールする。
 6. **「NEW（更新あり）」解除（`clearNovelUpdate`）**:
    - 作品カードタップ（`TR-02`）または「続きから読む」タップ（`TR-03`）時に、`novelRepository.clearNewUpdate(novelId)` を呼び出し、対象作品の `has_new_update = 0` に更新してバッジを消去する。
-7. **クラウド同期連携（自動 Pull / 自動 Push / Tombstone 記録: v0.4 Issue #120 / v0.7 Issue #239 / v0.8 Issue #266 拡張）**:
-   - アプリ起動時およびバックグラウンド復帰時（休止から5分以上経過時）に、`SyncEngine.pullAndMerge()` がバックグラウンド実行され、リモートの新規作品・更新されたしおり話数・お気に入り状態（`updatedAt` LWW 比較）が本棚一覧へ自動反映される。未登録作品は `fetchFullNovelIndex`（複数ページ目次連続取得・結合対応）および `upsertNovelWithToc` により目次が自動取得される。
+7. **クラウド同期連携（自動 Pull / 自動 Push / Tombstone 記録: v0.4 Issue #120 / v0.7 Issue #239 / v0.8 Issue #266 / v1.1 Issue #342 拡張）**:
+   - アプリ起動時（`useBookshelf` 初回マウント）およびバックグラウンド復帰時（休止から 5 分 `300,000ms` 以上経過時、`v1.1` Issue #342 にてアプリ全体の `useBackgroundAutoPull` に集約）に、`SyncEngine.pullAndMerge()` がバックグラウンド実行され、リモートの新規作品・更新されたしおり話数・お気に入り状態（`updatedAt` LWW 比較）がローカル DB へ反映される。`useBookshelf` は `syncEngine.subscribePullCompleted` を購読し、`pulled === true` の場合に `reloadNovels()` を実行して本棚一覧を最新化する。未登録作品は `fetchFullNovelIndex`（複数ページ目次連続取得・結合対応）および `upsertNovelWithToc` により目次が自動取得される。
    - 作品の追加（検索/ランキングからの登録、または `addNovel` 実行時［`fetchFullNovelIndex` 経由で全ページ目次を取得・保存］）、作品の削除（`deleteNovel`）、およびお気に入り状態の変更（`toggleFavorite`）時に、`SyncEngine.notifyChanged()` が呼び出され、2〜3秒デバウンス付きで自動 Push される。
    - 作品削除時（`novelRepository.deleteNovel`）は、カスケード削除と同時に `deleted_novels` テーブルへ該当 ID と削除日時（ミリ秒タイムスタンプ `Date.now()`）を記録し、次回 Push 時にリモート Tombstone へ結合する。
 
