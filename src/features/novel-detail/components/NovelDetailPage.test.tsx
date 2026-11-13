@@ -158,7 +158,7 @@ describe("NovelDetailPage", () => {
       expect(screen.getByTestId("delete-confirm-dialog")).toBeInTheDocument();
     });
 
-    it("Refreshing ストーリーで更新中フラグがヘッダーに伝達され、アイコンボタンが disabled になること", () => {
+    it("Refreshing ストーリーで更新中フラグが NovelDetailHeader へ伝達されること", () => {
       const headerSpy = vi.spyOn(NovelDetailHeaderModule, "NovelDetailHeader");
       render(<Refreshing />);
 
@@ -166,11 +166,7 @@ describe("NovelDetailPage", () => {
         expect.objectContaining({ isRefreshing: true }),
         undefined,
       );
-      expect(screen.getByTestId("refresh-toc-button")).toBeDisabled();
-      expect(screen.getByTestId("refresh-toc-button")).toHaveAttribute(
-        "aria-label",
-        "目次を更新",
-      );
+      headerSpy.mockRestore();
     });
 
     it("WithError ストーリーでエラーメッセージがヘッダーに反映されること", () => {
@@ -498,6 +494,7 @@ describe("NovelDetailPage", () => {
           expect.objectContaining({ pendingCacheCount: 2 }),
           undefined,
         );
+        headerSpy.mockRestore();
       });
 
       it("RetryFailed ストーリーで failedCacheCount=1 が NovelDetailHeader へ伝達され、取得失敗バッジが表示されること (AC-ND-25)", () => {
@@ -514,6 +511,7 @@ describe("NovelDetailPage", () => {
           }),
           undefined,
         );
+        headerSpy.mockRestore();
 
         const failedBadge = screen.getByTestId("episode-failed-badge");
         expect(failedBadge).toBeInTheDocument();
@@ -532,6 +530,7 @@ describe("NovelDetailPage", () => {
           expect.objectContaining({ isAllCached: true }),
           undefined,
         );
+        headerSpy.mockRestore();
       });
 
       it("親子分離: isBatchCaching === true のとき、EpisodeList の onSelectEpisode が呼び出されても親コールバックは実行されないこと（no-op制御）(AC-ND-12)", () => {

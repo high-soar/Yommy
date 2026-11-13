@@ -230,7 +230,7 @@ describe("NovelDetailHeader", () => {
       expect(favButton).toHaveClass("border", "border-slate-200");
     });
 
-    it("MenuOpen ストーリーで play 関数実行後に3点メニューが開き、4つの操作項目と区切り線が表示されること (AC-ND-27, AC-ND-28)", async () => {
+    it("MenuOpen ストーリーで play 関数実行後に3点メニューが開き、4つの操作項目と区切り線が表示されること (AC-ND-27)", async () => {
       const { container } = render(<MenuOpen />);
       await act(async () => {
         await MenuOpen.play?.({ canvasElement: container });
@@ -258,7 +258,7 @@ describe("NovelDetailHeader", () => {
       expect(screen.getByRole("separator")).toBeInTheDocument();
     });
 
-    it("MenuOpenAllCached ストーリーで「全話キャッシュ済み」項目が disabled で表示されること (AC-ND-13, AC-ND-28)", async () => {
+    it("MenuOpenAllCached ストーリーで「全話キャッシュ済み」項目が disabled で表示されること (AC-ND-13, AC-ND-27)", async () => {
       const { container } = render(<MenuOpenAllCached />);
       await act(async () => {
         await MenuOpenAllCached.play?.({ canvasElement: container });
@@ -269,7 +269,7 @@ describe("NovelDetailHeader", () => {
       expect(batchButton).toBeDisabled();
     });
 
-    it("MenuOpenRetryFailed ストーリーで「失敗した話を再試行（3話）」項目およびエラーメッセージが表示されること (AC-ND-25, AC-ND-28)", async () => {
+    it("MenuOpenRetryFailed ストーリーで「失敗した話を再試行（3話）」項目およびエラーメッセージが表示されること (AC-ND-25, AC-ND-27)", async () => {
       const { container } = render(<MenuOpenRetryFailed />);
       await act(async () => {
         await MenuOpenRetryFailed.play?.({ canvasElement: container });
@@ -434,7 +434,7 @@ describe("NovelDetailHeader", () => {
       expect(screen.getByTestId("detail-read-first-button")).toBeDisabled();
     });
 
-    describe("3点メニューの開閉・アクセシビリティ・自動クローズ制御 (AC-ND-27, AC-ND-28)", () => {
+    describe("3点メニューの開閉・アクセシビリティ・自動クローズ制御 (AC-ND-27)", () => {
       it("3点メニューボタンをクリックするとメニューが開閉トグルされ、aria-expanded / aria-controls が切り替わること", async () => {
         const user = userEvent.setup();
         render(<NovelDetailHeader {...defaultProps} />);
@@ -895,7 +895,7 @@ describe("NovelDetailHeader", () => {
       });
     });
 
-    describe("「内蔵ブラウザで開く」メニュー項目の検証 (Issue #269 / AC-ND-26, AC-ND-28, TR-09)", () => {
+    describe("「内蔵ブラウザで開く」メニュー項目の検証 (Issue #269 / AC-ND-26, AC-ND-27, TR-09)", () => {
       it("「内蔵ブラウザで開く」メニュー項目が表示され、クリック時にメニューが閉じて onOpenWebView が呼び出されること", async () => {
         const user = userEvent.setup();
         const onOpenWebView = vi.fn();

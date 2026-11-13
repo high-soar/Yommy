@@ -309,6 +309,7 @@ describe("NovelDetailContainer", () => {
           undefined,
         );
       });
+      pageSpy.mockRestore();
     });
 
     it("RetryFailed ストーリーで failedCacheCount=1 が NovelDetailPage へ伝達されること (AC-ND-25)", async () => {
@@ -325,6 +326,7 @@ describe("NovelDetailContainer", () => {
           undefined,
         );
       });
+      pageSpy.mockRestore();
     });
   });
 
