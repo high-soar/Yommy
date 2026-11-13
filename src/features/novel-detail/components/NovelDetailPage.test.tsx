@@ -79,20 +79,53 @@ const sampleChapters: ChapterSummary[] = [
 describe("NovelDetailPage", () => {
   describe("Storybook Stories 検証 (composeStories)", () => {
     it("Default ストーリーで作品ヘッダーと目次一覧が表示され、ローディング・Not Found・削除ダイアログは表示されないこと", () => {
+      const headerSpy = vi.spyOn(NovelDetailHeaderModule, "NovelDetailHeader");
+      const episodeListSpy = vi.spyOn(EpisodeListModule, "EpisodeList");
+      const deleteDialogSpy = vi.spyOn(
+        DeleteConfirmDialogModule,
+        "DeleteConfirmDialog",
+      );
+      const clearCacheDialogSpy = vi.spyOn(
+        ClearCacheConfirmDialogModule,
+        "ClearCacheConfirmDialog",
+      );
+
       render(<Default />);
 
       expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
-      expect(screen.getByTestId("novel-detail-header")).toBeInTheDocument();
-      expect(screen.getByTestId("episode-list")).toBeInTheDocument();
+      expect(headerSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          novel: expect.objectContaining({
+            title: expect.any(String),
+          }),
+        }),
+        undefined,
+      );
+      expect(episodeListSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          chapters: expect.any(Array),
+        }),
+        undefined,
+      );
+      expect(deleteDialogSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ isOpen: false }),
+        undefined,
+      );
+      expect(clearCacheDialogSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ isOpen: false }),
+        undefined,
+      );
       expect(
         screen.queryByTestId("novel-detail-loading"),
       ).not.toBeInTheDocument();
       expect(
         screen.queryByTestId("novel-detail-not-found"),
       ).not.toBeInTheDocument();
-      expect(
-        screen.queryByTestId("delete-confirm-dialog"),
-      ).not.toBeInTheDocument();
+
+      headerSpy.mockRestore();
+      episodeListSpy.mockRestore();
+      deleteDialogSpy.mockRestore();
+      clearCacheDialogSpy.mockRestore();
     });
 
     it("Default ストーリーで画面ルートおよび各話リストコンテナのスクロールクラス構成が適用されていること (AC-ND-02, AC-ND-09)", () => {
@@ -111,26 +144,62 @@ describe("NovelDetailPage", () => {
     });
 
     it("WithBookmark ストーリーで作品情報・しおり情報がヘッダーと目次に反映されること", () => {
+      const headerSpy = vi.spyOn(NovelDetailHeaderModule, "NovelDetailHeader");
+      const episodeListSpy = vi.spyOn(EpisodeListModule, "EpisodeList");
+
       render(<WithBookmark />);
 
-      expect(screen.getByTestId("detail-resume-button")).toBeInTheDocument();
+      expect(headerSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          novel: expect.objectContaining({ bookmarkChapterIndex: 2 }),
+        }),
+        undefined,
+      );
+      expect(episodeListSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bookmarkChapterIndex: 2,
+        }),
+        undefined,
+      );
+
+      headerSpy.mockRestore();
+      episodeListSpy.mockRestore();
     });
 
     it("Loading ストーリーでローディング表示になり、ヘッダー・目次・Not Found が非表示であること", () => {
+      const headerSpy = vi.spyOn(NovelDetailHeaderModule, "NovelDetailHeader");
+      const episodeListSpy = vi.spyOn(EpisodeListModule, "EpisodeList");
+      const deleteDialogSpy = vi.spyOn(
+        DeleteConfirmDialogModule,
+        "DeleteConfirmDialog",
+      );
+      const clearCacheDialogSpy = vi.spyOn(
+        ClearCacheConfirmDialogModule,
+        "ClearCacheConfirmDialog",
+      );
+
       render(<Loading />);
 
       expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
       expect(screen.getByTestId("novel-detail-loading")).toBeInTheDocument();
       expect(
-        screen.queryByTestId("novel-detail-header"),
-      ).not.toBeInTheDocument();
-      expect(screen.queryByTestId("episode-list")).not.toBeInTheDocument();
-      expect(
         screen.queryByTestId("novel-detail-not-found"),
       ).not.toBeInTheDocument();
+      expect(headerSpy).not.toHaveBeenCalled();
+      expect(episodeListSpy).not.toHaveBeenCalled();
+      expect(deleteDialogSpy).not.toHaveBeenCalled();
+      expect(clearCacheDialogSpy).not.toHaveBeenCalled();
+
+      headerSpy.mockRestore();
+      episodeListSpy.mockRestore();
+      deleteDialogSpy.mockRestore();
+      clearCacheDialogSpy.mockRestore();
     });
 
     it("NotFound ストーリーで未検出表示と「本棚へ戻る」ボタンが表示され、ヘッダー・目次は非表示であること (AC-ND-07)", () => {
+      const headerSpy = vi.spyOn(NovelDetailHeaderModule, "NovelDetailHeader");
+      const episodeListSpy = vi.spyOn(EpisodeListModule, "EpisodeList");
+
       render(<NotFound />);
 
       expect(screen.getByTestId("novel-detail-page")).toBeInTheDocument();
@@ -146,16 +215,27 @@ describe("NovelDetailPage", () => {
       expect(
         screen.queryByTestId("novel-detail-loading"),
       ).not.toBeInTheDocument();
-      expect(
-        screen.queryByTestId("novel-detail-header"),
-      ).not.toBeInTheDocument();
-      expect(screen.queryByTestId("episode-list")).not.toBeInTheDocument();
+      expect(headerSpy).not.toHaveBeenCalled();
+      expect(episodeListSpy).not.toHaveBeenCalled();
+
+      headerSpy.mockRestore();
+      episodeListSpy.mockRestore();
     });
 
     it("WithDeleteDialog ストーリーで削除確認ダイアログが表示されること", () => {
+      const deleteDialogSpy = vi.spyOn(
+        DeleteConfirmDialogModule,
+        "DeleteConfirmDialog",
+      );
+
       render(<WithDeleteDialog />);
 
-      expect(screen.getByTestId("delete-confirm-dialog")).toBeInTheDocument();
+      expect(deleteDialogSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ isOpen: true }),
+        undefined,
+      );
+
+      deleteDialogSpy.mockRestore();
     });
 
     it("Refreshing ストーリーで更新中フラグが NovelDetailHeader へ伝達されること", () => {
@@ -170,33 +250,47 @@ describe("NovelDetailPage", () => {
     });
 
     it("WithError ストーリーでエラーメッセージがヘッダーに反映されること", () => {
+      const headerSpy = vi.spyOn(NovelDetailHeaderModule, "NovelDetailHeader");
+
       render(<WithError />);
 
-      expect(screen.getByTestId("novel-detail-error")).toHaveTextContent(
-        "通信エラーが発生しました",
+      expect(headerSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ error: "通信エラーが発生しました" }),
+        undefined,
       );
+
+      headerSpy.mockRestore();
     });
 
     it("WithClearCacheDialog ストーリーでキャッシュ整理確認ダイアログが表示されること (AC-ND-21)", () => {
+      const clearCacheDialogSpy = vi.spyOn(
+        ClearCacheConfirmDialogModule,
+        "ClearCacheConfirmDialog",
+      );
+
       render(<WithClearCacheDialog />);
 
-      expect(
-        screen.getByTestId("clear-cache-confirm-dialog"),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByTestId("confirm-clear-read-cache-button"),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByTestId("confirm-clear-all-cache-button"),
-      ).toBeInTheDocument();
+      expect(clearCacheDialogSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ isOpen: true }),
+        undefined,
+      );
+
+      clearCacheDialogSpy.mockRestore();
     });
 
-    it("WithClearCacheNotice ストーリーでキャッシュ削除完了通知メッセージが表示されること (AC-ND-22)", () => {
+    it("WithClearCacheNotice ストーリーでキャッシュ削除完了通知メッセージがヘッダーへ伝達されること (AC-ND-22)", () => {
+      const headerSpy = vi.spyOn(NovelDetailHeaderModule, "NovelDetailHeader");
+
       render(<WithClearCacheNotice />);
 
-      const notice = screen.getByTestId("novel-detail-notice");
-      expect(notice).toBeInTheDocument();
-      expect(notice).toHaveTextContent("本文キャッシュを削除しました（2話）");
+      expect(headerSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          refreshMessage: "本文キャッシュを削除しました（2話）",
+        }),
+        undefined,
+      );
+
+      headerSpy.mockRestore();
     });
   });
 
@@ -465,22 +559,45 @@ describe("NovelDetailPage", () => {
     });
 
     describe("未取得話一括キャッシュ関連の連携・操作ロック制御 (AC-ND-11, AC-ND-12, AC-ND-13)", () => {
-      it("BatchCaching ストーリーで一括キャッシュヘッダーが表示され、各話リストタップが無効化されること (AC-ND-12)", () => {
+      it("BatchCaching ストーリーで一括キャッシュ状態が NovelDetailHeader へ伝達され、各話リストタップが無効化されること (AC-ND-12)", () => {
+        const headerSpy = vi.spyOn(
+          NovelDetailHeaderModule,
+          "NovelDetailHeader",
+        );
+
         render(<BatchCaching />);
 
-        expect(screen.getByTestId("batch-cache-progress")).toBeInTheDocument();
+        expect(headerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            isBatchCaching: true,
+            batchCacheProgress: { current: 1, total: 2 },
+          }),
+          undefined,
+        );
         const container = screen.getByTestId("episode-list-container");
         expect(container.className).toContain("pointer-events-none");
+
+        headerSpy.mockRestore();
       });
 
-      it("BatchCachingWithFailures ストーリーで一括キャッシュヘッダーに失敗件数が表示されること (AC-ND-25)", () => {
+      it("BatchCachingWithFailures ストーリーで一括キャッシュ失敗件数が NovelDetailHeader へ伝達されること (AC-ND-25)", () => {
+        const headerSpy = vi.spyOn(
+          NovelDetailHeaderModule,
+          "NovelDetailHeader",
+        );
+
         render(<BatchCachingWithFailures />);
 
-        const progressEl = screen.getByTestId("batch-cache-progress");
-        expect(progressEl).toHaveTextContent(
-          "キャッシュ中 (1/2) [失敗 1話]...",
+        expect(headerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            isBatchCaching: true,
+            batchCacheProgress: { current: 1, total: 2 },
+            failedCacheCount: 1,
+          }),
+          undefined,
         );
-        expect(progressEl.className).toContain("text-amber-600");
+
+        headerSpy.mockRestore();
       });
 
       it("ResumePending ストーリーで pendingCacheCount=2 が NovelDetailHeader へ伝達されること (AC-ND-24)", () => {
@@ -497,11 +614,12 @@ describe("NovelDetailPage", () => {
         headerSpy.mockRestore();
       });
 
-      it("RetryFailed ストーリーで failedCacheCount=1 が NovelDetailHeader へ伝達され、取得失敗バッジが表示されること (AC-ND-25)", () => {
+      it("RetryFailed ストーリーで failedCacheCount=1 が NovelDetailHeader へ、failedChapterIndexes=[2] が EpisodeList へ伝達されること (AC-ND-25)", () => {
         const headerSpy = vi.spyOn(
           NovelDetailHeaderModule,
           "NovelDetailHeader",
         );
+        const episodeListSpy = vi.spyOn(EpisodeListModule, "EpisodeList");
         render(<RetryFailed />);
 
         expect(headerSpy).toHaveBeenCalledWith(
@@ -511,12 +629,14 @@ describe("NovelDetailPage", () => {
           }),
           undefined,
         );
+        expect(episodeListSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            failedChapterIndexes: [2],
+          }),
+          undefined,
+        );
         headerSpy.mockRestore();
-
-        const failedBadge = screen.getByTestId("episode-failed-badge");
-        expect(failedBadge).toBeInTheDocument();
-        expect(failedBadge).toHaveTextContent("取得失敗");
-        expect(failedBadge.closest("[data-chapter-index='2']")).not.toBeNull();
+        episodeListSpy.mockRestore();
       });
 
       it("AllCached ストーリーで isAllCached=true が NovelDetailHeader へ伝達されること (AC-ND-13)", () => {
@@ -571,7 +691,12 @@ describe("NovelDetailPage", () => {
     });
 
     describe("本文キャッシュ整理ダイアログ連携 (AC-ND-21, AC-ND-22, TR-19)", () => {
-      it("isClearCacheDialogOpen === true のとき ClearCacheConfirmDialog が描画されること (AC-ND-21)", () => {
+      it("isClearCacheDialogOpen === true のとき ClearCacheConfirmDialog へ isOpen=true が伝達されること (AC-ND-21)", () => {
+        const dialogSpy = vi.spyOn(
+          ClearCacheConfirmDialogModule,
+          "ClearCacheConfirmDialog",
+        );
+
         render(
           <NovelDetailPage
             {...defaultPageProps}
@@ -579,12 +704,20 @@ describe("NovelDetailPage", () => {
           />,
         );
 
-        expect(
-          screen.getByTestId("clear-cache-confirm-dialog"),
-        ).toBeInTheDocument();
+        expect(dialogSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ isOpen: true }),
+          undefined,
+        );
+
+        dialogSpy.mockRestore();
       });
 
-      it("isClearCacheDialogOpen が false または未定義のとき ClearCacheConfirmDialog が非表示であること", () => {
+      it("isClearCacheDialogOpen が false または未定義のとき ClearCacheConfirmDialog へ isOpen=false が伝達されること", () => {
+        const dialogSpy = vi.spyOn(
+          ClearCacheConfirmDialogModule,
+          "ClearCacheConfirmDialog",
+        );
+
         render(
           <NovelDetailPage
             {...defaultPageProps}
@@ -592,9 +725,12 @@ describe("NovelDetailPage", () => {
           />,
         );
 
-        expect(
-          screen.queryByTestId("clear-cache-confirm-dialog"),
-        ).not.toBeInTheDocument();
+        expect(dialogSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ isOpen: false }),
+          undefined,
+        );
+
+        dialogSpy.mockRestore();
       });
 
       it("親子分離: NovelDetailHeader の onOpenClearCacheDialog が正しく伝達されること", () => {
@@ -726,7 +862,12 @@ describe("NovelDetailPage", () => {
         dialogSpy.mockRestore();
       });
 
-      it("refreshMessage にキャッシュ削除完了メッセージが設定された場合、インライン通知に表示されること (AC-ND-22)", () => {
+      it("refreshMessage にキャッシュ削除完了メッセージが設定された場合、NovelDetailHeader へ伝達されること (AC-ND-22)", () => {
+        const headerSpy = vi.spyOn(
+          NovelDetailHeaderModule,
+          "NovelDetailHeader",
+        );
+
         render(
           <NovelDetailPage
             {...defaultPageProps}
@@ -734,9 +875,14 @@ describe("NovelDetailPage", () => {
           />,
         );
 
-        const notice = screen.getByTestId("novel-detail-notice");
-        expect(notice).toBeInTheDocument();
-        expect(notice).toHaveTextContent("本文キャッシュを削除しました（2話）");
+        expect(headerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            refreshMessage: "本文キャッシュを削除しました（2話）",
+          }),
+          undefined,
+        );
+
+        headerSpy.mockRestore();
       });
 
       it("onToggleFavorite が指定された場合、NovelDetailHeader へコールバックが正しく伝搬されること (Issue #266, R1-04)", () => {
