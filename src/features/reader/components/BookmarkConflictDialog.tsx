@@ -10,9 +10,9 @@ export interface BookmarkConflictDialogProps {
   /** 解決アクション（移動／維持）の実行中フラグ */
   isResolving?: boolean;
   /** 「第{remoteChapterIndex}話へ移動する」押下時のコールバック */
-  onMoveToRemote: () => void;
+  onMoveToRemote?: () => void;
   /** 「第{currentChapterIndex}話のまま読む」押下時のコールバック */
-  onKeepCurrent: () => void;
+  onKeepCurrent?: () => void;
 }
 
 /**

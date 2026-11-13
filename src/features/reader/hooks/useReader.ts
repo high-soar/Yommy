@@ -759,6 +759,49 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     });
   }, []);
 
+  const clearBookmarkDebounceTimer = useCallback(() => {
+    if (bookmarkDebounceTimerRef.current) {
+      clearTimeout(bookmarkDebounceTimerRef.current);
+      bookmarkDebounceTimerRef.current = null;
+    }
+  }, []);
+
+  // しおり永続化・メモリ状態同期・クラウド同期通知の共通ヘルパー
+  const persistBookmark = useCallback(
+    async (
+      targetNovel: NovelRecord | null,
+      chapterIdx: number,
+      progress: number,
+    ): Promise<boolean> => {
+      if (!targetNovel) {
+        return false;
+      }
+      try {
+        await novelRepository.updateBookmark(
+          targetNovel.id,
+          chapterIdx,
+          progress,
+        );
+        hasPendingBookmarkRef.current = false;
+        const updatedNovel: NovelRecord = {
+          ...targetNovel,
+          bookmarkChapterIndex: chapterIdx,
+          bookmarkScrollProgress: progress,
+        };
+        setNovel(updatedNovel);
+        novelRef.current = updatedNovel;
+        if (syncEngine) {
+          syncEngine.notifyChanged().catch(() => {});
+        }
+        return true;
+      } catch (err: unknown) {
+        setError(toErrorMessage(err));
+        return false;
+      }
+    },
+    [novelRepository, syncEngine],
+  );
+
   // スクロール進捗率更新（0.0〜1.0 クランプ）および DB 自動保存（300ms デバウンス: R1-12）
   const updateScrollProgress = useCallback(
     async (progress: number): Promise<void> => {
@@ -770,39 +813,18 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       setScrollProgress(clamped);
       scrollProgressRef.current = clamped;
 
-      if (bookmarkDebounceTimerRef.current) {
-        clearTimeout(bookmarkDebounceTimerRef.current);
-        bookmarkDebounceTimerRef.current = null;
-      }
+      clearBookmarkDebounceTimer();
 
-      bookmarkDebounceTimerRef.current = setTimeout(async () => {
+      bookmarkDebounceTimerRef.current = setTimeout(() => {
         bookmarkDebounceTimerRef.current = null;
-        const currentNovel = novelRef.current;
-        if (currentNovel) {
-          try {
-            await novelRepository.updateBookmark(
-              currentNovel.id,
-              currentChapterIndexRef.current,
-              clamped,
-            );
-            hasPendingBookmarkRef.current = false;
-            const updatedNovel: NovelRecord = {
-              ...currentNovel,
-              bookmarkChapterIndex: currentChapterIndexRef.current,
-              bookmarkScrollProgress: clamped,
-            };
-            setNovel(updatedNovel);
-            novelRef.current = updatedNovel;
-            if (syncEngine) {
-              syncEngine.notifyChanged().catch(() => {});
-            }
-          } catch (err: unknown) {
-            setError(toErrorMessage(err));
-          }
-        }
+        void persistBookmark(
+          novelRef.current,
+          currentChapterIndexRef.current,
+          clamped,
+        );
       }, 300);
     },
-    [novelRepository, syncEngine],
+    [clearBookmarkDebounceTimer, persistBookmark],
   );
 
   // 指定ページへの遷移およびしおり自動保存
@@ -836,37 +858,16 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
 
   // しおり最新値即時保存（未変更時は書き込まず保護: Issue #342、ref 安定化: R1-12）
   const flushBookmark = useCallback(async (): Promise<void> => {
-    if (bookmarkDebounceTimerRef.current) {
-      clearTimeout(bookmarkDebounceTimerRef.current);
-      bookmarkDebounceTimerRef.current = null;
-    }
+    clearBookmarkDebounceTimer();
     if (!hasPendingBookmarkRef.current) {
       return;
     }
-    const currentNovel = novelRef.current;
-    if (currentNovel) {
-      try {
-        await novelRepository.updateBookmark(
-          currentNovel.id,
-          currentChapterIndexRef.current,
-          scrollProgressRef.current,
-        );
-        hasPendingBookmarkRef.current = false;
-        const updatedNovel: NovelRecord = {
-          ...currentNovel,
-          bookmarkChapterIndex: currentChapterIndexRef.current,
-          bookmarkScrollProgress: scrollProgressRef.current,
-        };
-        setNovel(updatedNovel);
-        novelRef.current = updatedNovel;
-        if (syncEngine) {
-          syncEngine.notifyChanged().catch(() => {});
-        }
-      } catch (err: unknown) {
-        setError(toErrorMessage(err));
-      }
-    }
-  }, [novelRepository, syncEngine]);
+    await persistBookmark(
+      novelRef.current,
+      currentChapterIndexRef.current,
+      scrollProgressRef.current,
+    );
+  }, [clearBookmarkDebounceTimer, persistBookmark]);
 
   // 画面ロック・バックグラウンド移行時に未保存進捗を即時フラッシュ (Issue #342)
   useEffect(() => {
@@ -1212,38 +1213,14 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         return goToChapter(conflict.remoteChapterIndex);
       }
 
-      if (bookmarkDebounceTimerRef.current) {
-        clearTimeout(bookmarkDebounceTimerRef.current);
-        bookmarkDebounceTimerRef.current = null;
-      }
-      const currentNovel = novelRef.current;
-      if (!currentNovel) {
-        return false;
-      }
-      try {
-        await novelRepository.updateBookmark(
-          currentNovel.id,
-          currentChapterIndexRef.current,
-          scrollProgressRef.current,
-        );
-        hasPendingBookmarkRef.current = false;
-        const updatedNovel: NovelRecord = {
-          ...currentNovel,
-          bookmarkChapterIndex: currentChapterIndexRef.current,
-          bookmarkScrollProgress: scrollProgressRef.current,
-        };
-        setNovel(updatedNovel);
-        novelRef.current = updatedNovel;
-        if (syncEngine) {
-          syncEngine.notifyChanged().catch(() => {});
-        }
-        return true;
-      } catch (err: unknown) {
-        setError(toErrorMessage(err));
-        return false;
-      }
+      clearBookmarkDebounceTimer();
+      return persistBookmark(
+        novelRef.current,
+        currentChapterIndexRef.current,
+        scrollProgressRef.current,
+      );
     },
-    [goToChapter, novelRepository, syncEngine],
+    [clearBookmarkDebounceTimer, goToChapter, persistBookmark],
   );
 
   return {

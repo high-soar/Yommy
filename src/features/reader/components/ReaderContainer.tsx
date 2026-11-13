@@ -135,22 +135,30 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
     [flushBookmark, onBackToBookshelf, onNavigateSettings, router],
   );
 
+  // リーダー URL を対象話へ同期（TR-05）
+  const syncReaderUrl = useCallback(
+    (targetIndex: number) => {
+      const targetId = novelId ?? novel?.id;
+      if (targetId) {
+        if (onNavigateChapter) {
+          onNavigateChapter(targetId, targetIndex);
+        } else {
+          router.navigateToReader(targetId, targetIndex, { replace: true });
+        }
+      }
+    },
+    [novel?.id, novelId, onNavigateChapter, router],
+  );
+
   // 前後話エピソード遷移共通処理（TR-05）
   const navigateToTargetChapter = useCallback(
     async (targetIndex: number, options?: GoToChapterOptions) => {
       const ok = await goToChapter(targetIndex, options);
       if (ok) {
-        const targetId = novelId ?? novel?.id;
-        if (targetId) {
-          if (onNavigateChapter) {
-            onNavigateChapter(targetId, targetIndex);
-          } else {
-            router.navigateToReader(targetId, targetIndex, { replace: true });
-          }
-        }
+        syncReaderUrl(targetIndex);
       }
     },
-    [goToChapter, novelId, novel?.id, onNavigateChapter, router],
+    [goToChapter, syncReaderUrl],
   );
 
   // 前の話へ（TR-05, R1-07: 前話末尾復元）
@@ -208,50 +216,21 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
     router,
   ]);
 
-  // しおり競合解決: 他端末の最新話へ移動（成功時のみ URL を同期）
-  const handleResolveBookmarkConflictMove = useCallback(async () => {
-    if (!bookmarkConflict || isResolvingBookmarkConflict) {
-      return;
-    }
-    const targetChapter = bookmarkConflict.remoteChapterIndex;
-    setIsResolvingBookmarkConflict(true);
-    try {
-      const ok = await resolveBookmarkConflict("move");
-      if (ok) {
-        const targetId = novelId ?? novel?.id;
-        if (targetId) {
-          if (onNavigateChapter) {
-            onNavigateChapter(targetId, targetChapter);
-          } else {
-            router.navigateToReader(targetId, targetChapter, { replace: true });
-          }
+  // しおり競合解決（"move": 他端末話へ移動＋URL同期、"keep": 現在話を明示保存）
+  const resolveConflictAction = useCallback(
+    async (action: "move" | "keep", targetChapter?: number) => {
+      setIsResolvingBookmarkConflict(true);
+      try {
+        const ok = await resolveBookmarkConflict(action);
+        if (ok && targetChapter !== undefined) {
+          syncReaderUrl(targetChapter);
         }
+      } finally {
+        setIsResolvingBookmarkConflict(false);
       }
-    } finally {
-      setIsResolvingBookmarkConflict(false);
-    }
-  }, [
-    bookmarkConflict,
-    isResolvingBookmarkConflict,
-    novel?.id,
-    novelId,
-    onNavigateChapter,
-    resolveBookmarkConflict,
-    router,
-  ]);
-
-  // しおり競合解決: 現在話を維持して明示保存（URL 維持）
-  const handleResolveBookmarkConflictKeep = useCallback(async () => {
-    if (!bookmarkConflict || isResolvingBookmarkConflict) {
-      return;
-    }
-    setIsResolvingBookmarkConflict(true);
-    try {
-      await resolveBookmarkConflict("keep");
-    } finally {
-      setIsResolvingBookmarkConflict(false);
-    }
-  }, [bookmarkConflict, isResolvingBookmarkConflict, resolveBookmarkConflict]);
+    },
+    [resolveBookmarkConflict, syncReaderUrl],
+  );
 
   return (
     <ReaderPage
@@ -283,8 +262,18 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
       onOpenWebView={handleOpenWebView}
       bookmarkConflict={bookmarkConflict}
       isResolvingBookmarkConflict={isResolvingBookmarkConflict}
-      onResolveBookmarkConflictMove={handleResolveBookmarkConflictMove}
-      onResolveBookmarkConflictKeep={handleResolveBookmarkConflictKeep}
+      onResolveBookmarkConflictMove={
+        bookmarkConflict
+          ? () =>
+              void resolveConflictAction(
+                "move",
+                bookmarkConflict.remoteChapterIndex,
+              )
+          : undefined
+      }
+      onResolveBookmarkConflictKeep={
+        bookmarkConflict ? () => void resolveConflictAction("keep") : undefined
+      }
     />
   );
 };

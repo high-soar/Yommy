@@ -1980,7 +1980,7 @@ describe("ReaderPage", () => {
       );
 
       act(() => {
-        mockBridge.emitVolumeKey("down");
+        mockBridge.triggerVolumeKey("down");
       });
 
       expect(onPageChange).not.toHaveBeenCalled();

@@ -480,8 +480,8 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
           bookmarkConflict?.remoteChapterIndex ?? chapterIndex
         }
         isResolving={isResolvingBookmarkConflict}
-        onMoveToRemote={onResolveBookmarkConflictMove ?? (() => {})}
-        onKeepCurrent={onResolveBookmarkConflictKeep ?? (() => {})}
+        onMoveToRemote={onResolveBookmarkConflictMove}
+        onKeepCurrent={onResolveBookmarkConflictKeep}
       />
     </div>
   );
