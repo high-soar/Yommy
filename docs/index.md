@@ -33,6 +33,7 @@ docs/
 │   │   └── narou.md                   # 小説家になろう パーサー・スクレイピング仕様書（ncode.syosetu.com）
 │   └── changes/                       # [差分仕様 (Delta Specs)] 要望（親Issue）ごとの設計差分・テスト計画・Sub-issue分割
 │       ├── issue-342-cloud-sync-bookmark-protection.md # [Review (#342)] 複数端末利用時（リーダー表示のまま画面ロック・復帰時）のクラウド同期しおり上書き防止と競合確認ダイアログの設計 (#342)
+│       ├── issue-343-novel-detail-header-menu.md # [Review (#343)] 作品詳細ヘッダー（SCR-02）の管理アクションバー整理（お気に入り・更新のアイコン化と3点メニュー集約）の差分仕様 (#343)
 │       └── archive/                   # 完了済みの差分仕様アーカイブ（親Issueクローズ時に git mv で移動）
 │           ├── issue-304-v1-release-readiness.md # [Archived] v1.0 リリース整備（バージョン1.0.0統一・設定画面バージョン表示・reference/撤去・README.md整備）の差分仕様 (#304)
 │           ├── issue-269-webview-fallback-and-dom-import.md # [Archived] 内蔵ブラウザ画面（SCR-04）とWebView表示中DOM手動インポート・フォールバック遷移（TR-09〜11）の実装差分仕様 (#269)
