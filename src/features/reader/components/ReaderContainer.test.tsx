@@ -448,7 +448,13 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
         expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
       });
 
@@ -517,7 +523,13 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
         expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
       });
 
@@ -584,7 +596,13 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
         expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
       });
 
@@ -622,7 +640,13 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
         expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
       });
 
@@ -662,7 +686,6 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
             isLoading: false,
@@ -715,7 +738,6 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
             isLoading: false,
@@ -751,6 +773,7 @@ describe("ReaderContainer", () => {
     }, 15000);
 
     it("未操作のまま popstate やアンマウントが発生したとき updateBookmark が再呼び出しされないこと (Issue #342)", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
       const novelAtChapter1 = {
         ...sampleNovel,
         bookmarkChapterIndex: 1,
@@ -770,7 +793,13 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
       });
 
       updateBookmarkSpy.mockClear();
@@ -781,6 +810,7 @@ describe("ReaderContainer", () => {
       await new Promise((r) => setTimeout(r, 30));
 
       expect(updateBookmarkSpy).not.toHaveBeenCalled();
+      pageSpy.mockRestore();
     });
   });
 
@@ -1388,7 +1418,13 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
         expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
       });
 
@@ -1423,7 +1459,13 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
         expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
       });
 
@@ -1778,7 +1820,13 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
       });
 
       // 他端末が第3話へ進めた状態を模擬して Pull 完了通知
@@ -1790,9 +1838,15 @@ describe("ReaderContainer", () => {
       });
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("bookmark-conflict-dialog"),
-        ).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            bookmarkConflict: {
+              currentChapterIndex: 1,
+              remoteChapterIndex: 3,
+            },
+          }),
+          undefined,
+        );
       });
 
       // 競合ダイアログ表示中の popstate はルート遷移も flushBookmark も実行しないこと
@@ -1811,9 +1865,12 @@ describe("ReaderContainer", () => {
       });
 
       await waitFor(() => {
-        expect(
-          screen.queryByTestId("bookmark-conflict-dialog"),
-        ).not.toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            bookmarkConflict: null,
+          }),
+          undefined,
+        );
         expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
           `/novels/${encodeURIComponent(sampleNovel.id)}/chapters/3`,
         );
@@ -1852,7 +1909,13 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
       });
 
       await novelRepository.updateBookmark(sampleNovel.id, 3, 0.5);
@@ -1863,9 +1926,15 @@ describe("ReaderContainer", () => {
       });
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("bookmark-conflict-dialog"),
-        ).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            bookmarkConflict: {
+              currentChapterIndex: 1,
+              remoteChapterIndex: 3,
+            },
+          }),
+          undefined,
+        );
       });
 
       const lastProps = pageSpy.mock.lastCall?.[0];
@@ -1874,9 +1943,12 @@ describe("ReaderContainer", () => {
       });
 
       await waitFor(() => {
-        expect(
-          screen.queryByTestId("bookmark-conflict-dialog"),
-        ).not.toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            bookmarkConflict: null,
+          }),
+          undefined,
+        );
       });
       expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 0);
       expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
@@ -1926,7 +1998,13 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
       });
 
       await novelRepository.updateBookmark(sampleNovel.id, 3, 0.5);
@@ -1935,9 +2013,15 @@ describe("ReaderContainer", () => {
       });
 
       await waitFor(() => {
-        expect(
-          screen.getByTestId("bookmark-conflict-dialog"),
-        ).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            bookmarkConflict: {
+              currentChapterIndex: 1,
+              remoteChapterIndex: 3,
+            },
+          }),
+          undefined,
+        );
       });
 
       const lastProps = pageSpy.mock.lastCall?.[0];
@@ -1946,9 +2030,12 @@ describe("ReaderContainer", () => {
       });
 
       await waitFor(() => {
-        expect(
-          screen.queryByTestId("bookmark-conflict-dialog"),
-        ).not.toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            bookmarkConflict: null,
+          }),
+          undefined,
+        );
       });
       expect(onNavigateChapter).not.toHaveBeenCalled();
       expect(screen.getByTestId("observed-current-path")).toHaveTextContent(

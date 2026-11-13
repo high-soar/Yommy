@@ -87,18 +87,20 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
     isConflictOpenRef.current = Boolean(bookmarkConflict);
   }, [bookmarkConflict]);
 
+  const { blockBackNavigation, isBackNavigationBlocked } = router;
+
   // 競合ダイアログ表示中は OS バックキー・popstate による画面離脱を抑止 (Issue #342)
   useEffect(() => {
     if (!bookmarkConflict) {
       return;
     }
-    return router.blockBackNavigation?.();
-  }, [bookmarkConflict, router]);
+    return blockBackNavigation?.();
+  }, [blockBackNavigation, bookmarkConflict]);
 
   // OS バックキー（popstate イベント）およびアンマウント離脱時のしおり保存（AC-RD-08, TR-06）
   useEffect(() => {
     const handlePopState = () => {
-      if (isConflictOpenRef.current || router.isBackNavigationBlocked?.()) {
+      if (isConflictOpenRef.current || isBackNavigationBlocked?.()) {
         return;
       }
       void flushBookmark();
@@ -108,7 +110,7 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
       window.removeEventListener("popstate", handlePopState);
       void flushBookmark();
     };
-  }, [flushBookmark, router]);
+  }, [flushBookmark, isBackNavigationBlocked]);
 
   // 下部タブ選択（本棚 / 検索 / ランキング / 設定）および画面遷移前のしおり保存（AC-RD-08, TR-01）
   const handleSelectTab = useCallback(
