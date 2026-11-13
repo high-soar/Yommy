@@ -3413,7 +3413,7 @@ describe("useNovelDetail", () => {
       });
       await waitFor(() => expect(resolveTocHttp).not.toBeNull());
 
-      const getByIdBeforeUnmount = getByIdSpy.mock.calls.length;
+      const listCallsBeforeUnmount = listChaptersSpy.mock.calls.length;
       act(() => {
         capturedListener?.({ pulled: true, mergedNovels: 1 });
       });
@@ -3425,8 +3425,8 @@ describe("useNovelDetail", () => {
         headers: {},
       });
       await pendingRefresh;
-      // refreshToc 自体は 1 回 getNovelById を呼ぶが、unmount 後の遅延 reloadDetail は走らない
-      expect(getByIdSpy).toHaveBeenCalledTimes(getByIdBeforeUnmount + 1);
+      // refreshToc 自体は 1 回 listChaptersByNovelId を呼ぶが、unmount 後の遅延 reloadDetail は走らない
+      expect(listChaptersSpy).toHaveBeenCalledTimes(listCallsBeforeUnmount + 1);
     });
 
     it("R1-22: confirmDeleteNovel 失敗時は遅延サイレント更新を完了後に実行し、成功（削除完了）時は破棄して reloadDetail を呼ばないこと (AC-ND-28)", async () => {
