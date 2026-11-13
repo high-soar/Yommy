@@ -3290,4 +3290,167 @@ describe("syncEngine", () => {
       expect(healthyListener).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe("未同期ローカル変更の保持と pullAndMerge 後の自動 Push (R1-23)", () => {
+    it("scheduleDebouncedPush 保留中に pullAndMerge を実行するとタイマーを解除して即時に pushCurrentState を実行し、保留 Promise を解決すること", async () => {
+      vi.useFakeTimers();
+      try {
+        await resetTestDb();
+        const db = await createInMemoryDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const appSettingsRepo = new SqlAppSettingsRepository(db);
+        const bridge = new MockCloudSyncBridge();
+        await bridge.signIn();
+
+        const parserRegistry = createDefaultParserRegistry();
+        const httpClient = new MockHttpClient();
+        const validUrl = "https://kakuyomu.jp/works/16817330658027210412";
+        const parser = parserRegistry.getParser(validUrl)!;
+        const index = parser.parseNovelIndex(workIndexHtml, validUrl);
+        await novelRepo.upsertNovelWithToc(index, new Date().toISOString());
+        await novelRepo.updateBookmark("kakuyomu:16817330658027210412", 2, 0);
+
+        const engine = new SyncEngine({
+          bridge,
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          appSettingsRepository: appSettingsRepo,
+          parserRegistry,
+          httpClient,
+        });
+
+        const pushFileSpy = vi.spyOn(bridge, "pushFile");
+        const pendingPromise = engine.scheduleDebouncedPush(2500);
+
+        const pullResult = await engine.pullAndMerge();
+        expect(pullResult).toEqual({ pulled: false, mergedNovels: 0 });
+        expect(pushFileSpy).toHaveBeenCalledTimes(1);
+        await expect(pendingPromise).resolves.toBeUndefined();
+
+        // タイマーが既に解除されており重複 Push が起きないこと
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(pushFileSpy).toHaveBeenCalledTimes(1);
+
+        // Push 成功後は未同期フラグがクリアされ、次回 pullAndMerge で再 Push されないこと
+        await engine.pullAndMerge();
+        expect(pushFileSpy).toHaveBeenCalledTimes(1);
+        pushFileSpy.mockRestore();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("cancelDebouncedPush および未連携状態への遷移で未同期フラグがクリアされること", async () => {
+      vi.useFakeTimers();
+      try {
+        await resetTestDb();
+        const db = await createInMemoryDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const appSettingsRepo = new SqlAppSettingsRepository(db);
+        const bridge = new MockCloudSyncBridge();
+        await bridge.signIn();
+        const parserRegistry = createDefaultParserRegistry();
+        const httpClient = new MockHttpClient();
+
+        const engine = new SyncEngine({
+          bridge,
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          appSettingsRepository: appSettingsRepo,
+          parserRegistry,
+          httpClient,
+        });
+
+        const pushFileSpy = vi.spyOn(bridge, "pushFile");
+
+        // 1. cancelDebouncedPush 後は pullAndMerge で Push しない
+        const p1 = engine.scheduleDebouncedPush(2500);
+        engine.cancelDebouncedPush();
+        await expect(p1).resolves.toBeUndefined();
+        await engine.pullAndMerge();
+        expect(pushFileSpy).not.toHaveBeenCalled();
+
+        // 2. 未連携状態で pullAndMerge すると未同期フラグがクリアされ、再連携後の pullAndMerge で不要な Push が走らないこと
+        engine.scheduleDebouncedPush(2500);
+        await bridge.signOut();
+        await engine.pullAndMerge();
+        await bridge.signIn();
+        await engine.pullAndMerge();
+        expect(pushFileSpy).not.toHaveBeenCalled();
+
+        engine.cancelDebouncedPush();
+        pushFileSpy.mockRestore();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("pullAndMerge 後の即時 Push がオフライン等で失敗しても pullAndMerge は例外を投げず、hasUnsyncedChanges を保持して次回オンライン時にリトライすること", async () => {
+      vi.useFakeTimers();
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        await resetTestDb();
+        const db = await createInMemoryDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const appSettingsRepo = new SqlAppSettingsRepository(db);
+        const bridge = new MockCloudSyncBridge();
+        await bridge.signIn();
+
+        const parserRegistry = createDefaultParserRegistry();
+        const httpClient = new MockHttpClient();
+        const validUrl = "https://kakuyomu.jp/works/16817330658027210412";
+        const parser = parserRegistry.getParser(validUrl)!;
+        const index = parser.parseNovelIndex(workIndexHtml, validUrl);
+        await novelRepo.upsertNovelWithToc(index, new Date().toISOString());
+
+        const engine = new SyncEngine({
+          bridge,
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          appSettingsRepository: appSettingsRepo,
+          parserRegistry,
+          httpClient,
+        });
+
+        // 初回リモートデータを設定
+        await engine.pushCurrentState();
+
+        const pushFileSpy = vi.spyOn(bridge, "pushFile");
+        pushFileSpy.mockRejectedValueOnce(new Error("Offline push error"));
+
+        // ケース1: タイマー保留中に pullAndMerge の追撃 Push が失敗しても例外をスローせず保留 Promise を解決し、次回 pullAndMerge で再Push されること
+        const pendingPromise = engine.scheduleDebouncedPush(2500);
+        const result1 = await engine.pullAndMerge();
+        expect(result1.pulled).toBe(true);
+        await expect(pendingPromise).resolves.toBeUndefined();
+        expect(pushFileSpy).toHaveBeenCalledTimes(1);
+
+        // 次回オンライン時（保留タイマーなしでも hasUnsyncedChanges が保持されているため自動リトライ）
+        const result2 = await engine.pullAndMerge();
+        expect(result2.pulled).toBe(true);
+        expect(pushFileSpy).toHaveBeenCalledTimes(2);
+
+        // ケース2: デバウンスタイマー自体の発火時 Push がオフラインで失敗したあと、次回 pullAndMerge で追撃 Push されること
+        pushFileSpy.mockRejectedValueOnce(new Error("Debounced offline error"));
+        const failedDebouncePromise = engine
+          .scheduleDebouncedPush(100)
+          .catch((err) => err);
+        await vi.advanceTimersByTimeAsync(150);
+        const caughtErr = await failedDebouncePromise;
+        expect(caughtErr).toBeInstanceOf(Error);
+        expect(pushFileSpy).toHaveBeenCalledTimes(3);
+
+        await engine.pullAndMerge();
+        expect(pushFileSpy).toHaveBeenCalledTimes(4);
+
+        pushFileSpy.mockRestore();
+      } finally {
+        warnSpy.mockRestore();
+        vi.useRealTimers();
+      }
+    });
+  });
 });
