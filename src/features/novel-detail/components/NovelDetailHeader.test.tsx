@@ -504,6 +504,74 @@ describe("NovelDetailHeader", () => {
         expect(menuButton).toHaveFocus();
       });
 
+      it("メニュー展開中に ArrowDown / ArrowUp キーで活性な menuitem 要素間を循環してフォーカス移動できること (AC-ND-27)", async () => {
+        const user = userEvent.setup();
+        render(<NovelDetailHeader {...defaultProps} />);
+
+        await openMenu(user);
+
+        const batchItem = screen.getByTestId("batch-cache-button");
+        const clearItem = screen.getByTestId("open-clear-cache-dialog-button");
+        const webViewItem = screen.getByTestId("open-webview-button");
+        const deleteItem = screen.getByTestId("open-delete-dialog-button");
+
+        await user.keyboard("{ArrowDown}");
+        expect(batchItem).toHaveFocus();
+
+        await user.keyboard("{ArrowDown}");
+        expect(clearItem).toHaveFocus();
+
+        await user.keyboard("{ArrowDown}");
+        expect(webViewItem).toHaveFocus();
+
+        await user.keyboard("{ArrowDown}");
+        expect(deleteItem).toHaveFocus();
+
+        // 末尾から ArrowDown で先頭に循環する
+        await user.keyboard("{ArrowDown}");
+        expect(batchItem).toHaveFocus();
+
+        // 先頭から ArrowUp で末尾に循環する
+        await user.keyboard("{ArrowUp}");
+        expect(deleteItem).toHaveFocus();
+
+        await user.keyboard("{ArrowUp}");
+        expect(webViewItem).toHaveFocus();
+      });
+
+      it("disabled なメニュー項目がある場合は ArrowDown / ArrowUp で無効項目をスキップして循環すること (AC-ND-27)", async () => {
+        const user = userEvent.setup();
+        render(
+          <NovelDetailHeader
+            {...defaultProps}
+            isAllCached={true}
+            novel={{ ...sampleNovel, cachedChapters: 0 }}
+          />,
+        );
+
+        await openMenu(user);
+
+        expect(screen.getByTestId("batch-cache-button")).toBeDisabled();
+        expect(
+          screen.getByTestId("open-clear-cache-dialog-button"),
+        ).toBeDisabled();
+        const webViewItem = screen.getByTestId("open-webview-button");
+        const deleteItem = screen.getByTestId("open-delete-dialog-button");
+
+        // メニューボタンにフォーカスがある状態で ArrowUp すると末尾の活性項目へ移動する
+        await user.keyboard("{ArrowUp}");
+        expect(deleteItem).toHaveFocus();
+
+        await user.keyboard("{ArrowUp}");
+        expect(webViewItem).toHaveFocus();
+
+        await user.keyboard("{ArrowDown}");
+        expect(deleteItem).toHaveFocus();
+
+        await user.keyboard("{ArrowDown}");
+        expect(webViewItem).toHaveFocus();
+      });
+
       it("メニュー展開中に isRefreshing または isBatchCaching が true に遷移した場合、メニューが自動クローズし false 復帰後も閉じたまま維持されること", async () => {
         const user = userEvent.setup();
         const { rerender } = render(<NovelDetailHeader {...defaultProps} />);
