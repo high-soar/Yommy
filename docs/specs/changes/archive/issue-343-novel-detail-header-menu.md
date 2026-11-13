@@ -3,8 +3,8 @@ type: spec-delta
 title: "作品詳細ヘッダー（SCR-02）の管理アクションバー整理（お気に入り・更新のアイコン化と3点メニュー集約）"
 description: "Issue #343 に対する差分仕様、影響する全体正本、UT/VRT/ITテスト計画、実装Sub-issue分割計画、および実機検証計画（HO-37）。"
 issue: "#343"
-status: "Review (#343)"
-updated: "2026-11-13"
+status: "Completed (Archived)"
+updated: "2026-11-14"
 tags:
   - delta
   - novel-detail
@@ -177,8 +177,8 @@ flowchart TD
     end
 ```
 
-1. **Sub-issue ①（MK）**: `NovelDetailHeader` の 1 行アイコンバー＆3 点ドロップダウンメニュー実装、Storybook（`MenuOpen` 等追加）・単体テスト（`NovelDetailHeader.test.tsx`, `NovelDetailPage.test.tsx`, `NovelDetailContainer.test.tsx`、C0/C1/Functions 100%）、および VRT スナップショット更新（1280px / 375px）。（Gate 1〜6 完遂後、AI 自律マージ）
-2. **Sub-issue ②（IT）**: Playwright IT（`SCN-01`, `SCN-03`, `SCN-04`, `SCN-05`, `SCN-07`）の追従更新と全シナリオ回帰 PASS、差分仕様書の `docs/specs/changes/archive/` 移動、`Closes #343`（および `Closes #Sub-issue②`）での完了 PR 作成。（Gate 1〜6 完遂後、人間レビュー・マージ）
+1. **Sub-issue ①（MK / #353）**: `NovelDetailHeader` の 1 行アイコンバー＆3 点ドロップダウンメニュー実装、Storybook（`MenuOpen` 等追加）・単体テスト（`NovelDetailHeader.test.tsx`, `NovelDetailPage.test.tsx`, `NovelDetailContainer.test.tsx`、C0/C1/Functions 100%）、および VRT スナップショット更新（1280px / 375px）。
+2. **Sub-issue ②（IT / #354）**: Playwright IT（`SCN-01`, `SCN-03`, `SCN-04`, `SCN-05`, `SCN-07`）の追従更新と全シナリオ回帰 PASS、差分仕様書の `docs/specs/changes/archive/` 移動、`Closes #343` での完了 PR 作成。（全 PR で CI IT ゲート PASS が必須となるため、PR #356 にて `#353` と `#354` を統合実施し人間レビュー・マージへ進行）
 
 ---
 

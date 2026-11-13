@@ -392,13 +392,14 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
 
     const detailFavBtn = page.getByTestId("detail-favorite-toggle-button");
     await expect(detailFavBtn).toBeVisible();
+    await expect(detailFavBtn).toHaveAttribute("aria-label", "お気に入り");
     await expect(detailFavBtn).toHaveAttribute("aria-pressed", "false");
-    await expect(detailFavBtn).toHaveText("☆ お気に入り");
+    await expect(detailFavBtn).toHaveText("☆");
 
     // 作品詳細ヘッダーでお気に入り登録
     await detailFavBtn.click();
     await expect(detailFavBtn).toHaveAttribute("aria-pressed", "true");
-    await expect(detailFavBtn).toHaveText("★ お気に入り");
+    await expect(detailFavBtn).toHaveText("★");
 
     // 作品詳細でのお気に入りトグルでも DB の updated_at が実際に新しい日時へ増加していることを確認 (AC-ND-23, R2-05)
     const work2FavRow = await page.evaluate(async () => {
@@ -439,7 +440,7 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
       page.getByTestId("detail-favorite-toggle-button"),
     ).toHaveAttribute("aria-pressed", "false");
     await expect(page.getByTestId("detail-favorite-toggle-button")).toHaveText(
-      "☆ お気に入り",
+      "☆",
     );
 
     await page.goBack();

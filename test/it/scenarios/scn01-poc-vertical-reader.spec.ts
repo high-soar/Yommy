@@ -237,9 +237,10 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     );
     expect(scrolledTop).toBeGreaterThan(0);
 
-    // 「目次を更新」ボタン押下で最新状態が通知され、スクロール位置が維持されることを確認（AC-ND-05, AC-ND-08）
+    // 「目次を更新」アイコンボタン押下で最新状態が通知され、スクロール位置が維持されることを確認（AC-ND-05, AC-ND-08, AC-ND-27）
     const refreshButton = page.getByTestId("refresh-toc-button");
     await expect(refreshButton).toBeVisible();
+    await expect(refreshButton).toHaveAttribute("aria-label", "目次を更新");
     await refreshButton.click();
 
     const refreshNotice = page.getByTestId("novel-detail-notice");
@@ -251,6 +252,22 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       (el) => el.scrollTop,
     );
     expect(maintainedTop).toBe(scrolledTop);
+
+    // 375px モバイル狭幅で管理アイコンバー（お気に入り・目次更新・3点メニュー）が1行に収まることを確認（AC-ND-27）
+    await page.setViewportSize({ width: 375, height: 812 });
+    const favBox = await page
+      .getByTestId("detail-favorite-toggle-button")
+      .boundingBox();
+    const refreshBox = await refreshButton.boundingBox();
+    const menuBtn = page.getByTestId("novel-detail-menu-button");
+    const menuBox = await menuBtn.boundingBox();
+    expect(favBox).not.toBeNull();
+    expect(refreshBox).not.toBeNull();
+    expect(menuBox).not.toBeNull();
+    expect(Math.abs(favBox!.y - refreshBox!.y)).toBeLessThan(2);
+    expect(Math.abs(refreshBox!.y - menuBox!.y)).toBeLessThan(2);
+    expect(favBox!.x).toBeLessThan(refreshBox!.x);
+    expect(refreshBox!.x).toBeLessThan(menuBox!.x);
 
     // ビューポートサイズを復元
     if (defaultViewport) {
@@ -1075,17 +1092,41 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(page.getByTestId("bookshelf-page")).toBeVisible();
     await expect(tabBookshelf).toHaveAttribute("aria-selected", "true");
 
-    // 12. 作品削除ボタンをクリックして確認ダイアログから削除を実行し、本棚（/）へ戻り空状態（bookshelf-empty）となることを確認（TR-07）
+    // 12. 3点メニューの開閉（Escape・メニュー外クリック自動クローズ含む）と作品削除実行を確認（AC-ND-27, TR-07）
     await page.getByTestId("novel-card-select").click();
     await expect(page).toHaveURL(
       /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
     );
 
+    const menuButton = page.getByTestId("novel-detail-menu-button");
+    await expect(menuButton).toBeVisible();
+    await expect(menuButton).toHaveAttribute("aria-haspopup", "menu");
+    await expect(menuButton).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByTestId("novel-detail-menu")).not.toBeVisible();
+
+    // メニューを開いて Escape で閉じ、トリガーボタンへフォーカス復帰すること
+    await menuButton.click();
+    await expect(menuButton).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByTestId("novel-detail-menu")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("novel-detail-menu")).not.toBeVisible();
+    await expect(menuButton).toHaveAttribute("aria-expanded", "false");
+    await expect(menuButton).toBeFocused();
+
+    // 再度メニューを開き、メニュー外（タイトル領域）クリックで閉じること
+    await menuButton.click();
+    await expect(page.getByTestId("novel-detail-menu")).toBeVisible();
+    await page.getByTestId("novel-detail-title").click();
+    await expect(page.getByTestId("novel-detail-menu")).not.toBeVisible();
+
+    // 3点メニューから「作品を削除」をクリックし、メニューが閉じて確認ダイアログが開くこと
+    await menuButton.click();
     const openDeleteDialogButton = page.getByTestId(
       "open-delete-dialog-button",
     );
     await expect(openDeleteDialogButton).toBeVisible();
     await openDeleteDialogButton.click();
+    await expect(page.getByTestId("novel-detail-menu")).not.toBeVisible();
 
     const deleteDialog = page.getByTestId("delete-confirm-dialog");
     await expect(deleteDialog).toBeVisible();

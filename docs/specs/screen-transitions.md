@@ -2,8 +2,8 @@
 type: spec-screen-transition
 title: 全体画面一覧・画面遷移の骨格（App 全体正本）
 description: "主要7画面（SCR-01〜SCR-07）の役割・ルート定義と、4タブ・画面間遷移（TR-01〜TR-20）の全体マップ正本。"
-status: "Review (#343)"
-updated: "2026-11-13"
+status: "Approved"
+updated: "2026-11-14"
 tags:
   - screens
   - transitions
@@ -59,7 +59,7 @@ tags:
   - ho-38
 related_specs:
   - docs/specs/changes/archive/issue-342-cloud-sync-bookmark-protection.md
-  - docs/specs/changes/issue-343-novel-detail-header-menu.md
+  - docs/specs/changes/archive/issue-343-novel-detail-header-menu.md
   - docs/specs/changes/archive/issue-269-webview-fallback-and-dom-import.md
   - docs/specs/features/webview-import.md
   - docs/specs/changes/archive/issue-268-persistent-download-queue.md

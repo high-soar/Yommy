@@ -104,7 +104,8 @@ test.describe("SCN-07: 内蔵ブラウザ画面（SCR-04）による目次・本
     );
     await expect(page.getByTestId("episode-item")).toHaveCount(1);
 
-    // 3. 作品詳細ヘッダーの「内蔵ブラウザで開く」ボタンを押下 (TR-09)
+    // 3. 3点メニューを開き、「内蔵ブラウザで開く」を押下 (AC-ND-27, TR-09)
+    await page.getByTestId("novel-detail-menu-button").click();
     const openWebviewBtn = page.getByTestId("open-webview-button");
     await expect(openWebviewBtn).toBeVisible();
     await openWebviewBtn.click();
@@ -450,7 +451,8 @@ test.describe("SCN-07: 内蔵ブラウザ画面（SCR-04）による目次・本
     );
     await expect(page.getByTestId("novel-detail-page")).toBeVisible();
 
-    // 2. 「内蔵ブラウザで開く」を押下して内蔵ブラウザ画面 (SCR-04) へ遷移
+    // 2. 3点メニューから「内蔵ブラウザで開く」を押下して内蔵ブラウザ画面 (SCR-04) へ遷移
+    await page.getByTestId("novel-detail-menu-button").click();
     await page.getByTestId("open-webview-button").click();
     await expect(page.getByTestId("webview-import-page")).toBeVisible();
 
