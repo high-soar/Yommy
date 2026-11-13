@@ -78,7 +78,7 @@ test.describe("Storybook VRT (1280px / 375px)", () => {
         await expect(page).toHaveScreenshot(
           `${story.id}-${viewport.name}.png`,
           {
-            maxDiffPixelRatio: 0.01,
+            maxDiffPixelRatio: 0.001,
             animations: "disabled",
           },
         );
