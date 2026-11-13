@@ -237,25 +237,47 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
   }, [isReady, novelId, novelRepository, chapterRepository, syncQueueState]);
 
   /**
-   * 作品情報およびエピソード目次一覧を手動で再取得・更新する
+   * 作品情報およびエピソード目次一覧を再取得・更新する（`silent: true` 時は `isLoading` を変更せず一覧 DOM・スクロール位置を保持）
    */
-  const reloadDetail = useCallback(async (): Promise<void> => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const [fetchedNovel, fetchedChapters] = await Promise.all([
-        novelRepository.getNovelById(novelId),
-        chapterRepository.listChaptersByNovelId(novelId),
-      ]);
-      setNovel(fetchedNovel);
-      setChapters(fetchedChapters);
-      await syncQueueState(novelId, fetchedChapters);
-    } catch (err: unknown) {
-      setError(extractErrorMessage(err, DEFAULT_FETCH_ERROR_MESSAGE));
-    } finally {
-      setIsLoading(false);
+  const reloadDetail = useCallback(
+    async (options?: { silent?: boolean }): Promise<void> => {
+      const silent = options?.silent === true;
+      if (!silent) {
+        setIsLoading(true);
+        setError(null);
+      }
+      try {
+        const [fetchedNovel, fetchedChapters] = await Promise.all([
+          novelRepository.getNovelById(novelId),
+          chapterRepository.listChaptersByNovelId(novelId),
+        ]);
+        if (!isMountedRef.current) return;
+        setNovel(fetchedNovel);
+        setChapters(fetchedChapters);
+        await syncQueueState(novelId, fetchedChapters);
+      } catch (err: unknown) {
+        if (!isMountedRef.current) return;
+        setError(extractErrorMessage(err, DEFAULT_FETCH_ERROR_MESSAGE));
+      } finally {
+        if (!silent && isMountedRef.current) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [novelId, novelRepository, chapterRepository, syncQueueState],
+  );
+
+  // 全画面自動 Pull 完了時に表示中作品・目次・既読状態をサイレント更新 (AC-ND-28)
+  useEffect(() => {
+    if (!isReady || !syncEngine?.subscribePullCompleted) {
+      return;
     }
-  }, [novelId, novelRepository, chapterRepository, syncQueueState]);
+    return syncEngine.subscribePullCompleted((result) => {
+      if (result.pulled) {
+        void reloadDetail({ silent: true });
+      }
+    });
+  }, [isReady, syncEngine, reloadDetail]);
 
   /**
    * 作品トップ HTML をリモートから再取得して最新目次へ更新する（差分更新）。

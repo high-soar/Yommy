@@ -30,7 +30,7 @@ export interface UseNovelDetailResult {
   closeClearCacheDialog: () => void;
   confirmClearCache: (options: { onlyRead: boolean }) => Promise<number>;
   toggleFavorite: () => Promise<boolean>;
-  reloadDetail: () => Promise<void>;
+  reloadDetail: (options?: { silent?: boolean }) => Promise<void>;
 }
 
 /**

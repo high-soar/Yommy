@@ -22,7 +22,7 @@ export interface UseBookshelfResult {
   toggleFavoriteFilter: () => Promise<void>;
   toggleFavorite: (novelId: string, nextIsFavorite?: boolean) => Promise<void>;
   checkUpdates: (forceAll?: boolean) => Promise<void>;
-  reloadNovels: () => Promise<void>;
+  reloadNovels: (options?: { silent?: boolean }) => Promise<void>;
   clearNovelUpdate: (novelId: string) => Promise<void>;
   deleteNovel?: (novelId: string) => Promise<void>;
   addNovel?: (url: string) => Promise<void>;
@@ -102,6 +102,7 @@ export function useBookshelf(
   const sortOrderRef = useRef<BookshelfSortOrder>(DEFAULT_SORT_ORDER);
   const allNovelsRef = useRef<NovelSummary[]>([]);
   const favoriteOnlyRef = useRef<boolean>(false);
+  const pullHandledBySubscriptionRef = useRef<boolean>(false);
 
   useEffect(() => {
     sortOrderRef.current = sortOrder;
@@ -253,8 +254,14 @@ export function useBookshelf(
                 return;
               }
             }
-            await syncEngine.pullAndMerge();
-            if (!cancelled && isMountedRef.current) {
+            pullHandledBySubscriptionRef.current = false;
+            const pullResult = await syncEngine.pullAndMerge();
+            if (
+              !cancelled &&
+              isMountedRef.current &&
+              !pullHandledBySubscriptionRef.current &&
+              pullResult?.pulled !== false
+            ) {
               const refreshed = await novelRepository.listNovels(
                 sortOrderRef.current,
               );
@@ -288,55 +295,6 @@ export function useBookshelf(
     runSequentialUpdateCheck,
     syncEngine,
   ]);
-
-  // バックグラウンド復帰時の自動 Pull（休止5分以上経過検知: AC-BS-13）
-  useEffect(() => {
-    let lastHiddenAt: number | null = null;
-    const backgroundThresholdMs = 5 * 60 * 1000; // 5分 (300,000ms)
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        lastHiddenAt = Date.now();
-      } else if (document.visibilityState === "visible") {
-        if (lastHiddenAt !== null) {
-          const elapsed = Date.now() - lastHiddenAt;
-          lastHiddenAt = null;
-          if (elapsed >= backgroundThresholdMs && syncEngine) {
-            (async () => {
-              if (cloudSyncBridge?.getAuthState) {
-                const authState = await cloudSyncBridge.getAuthState();
-                if (authState.status !== "connected") {
-                  return;
-                }
-              }
-              await syncEngine.pullAndMerge();
-              if (isMountedRef.current) {
-                const refreshed = await novelRepository.listNovels(
-                  sortOrderRef.current,
-                );
-                if (isMountedRef.current) {
-                  setAllNovels(refreshed);
-                  allNovelsRef.current = refreshed;
-                }
-              }
-            })().catch(() => {});
-          }
-        }
-      }
-    };
-
-    if (typeof document !== "undefined") {
-      document.addEventListener("visibilitychange", handleVisibilityChange);
-    }
-    return () => {
-      if (typeof document !== "undefined") {
-        document.removeEventListener(
-          "visibilitychange",
-          handleVisibilityChange,
-        );
-      }
-    };
-  }, [cloudSyncBridge, novelRepository, syncEngine]);
 
   const setSortOrder = useCallback(
     async (order: BookshelfSortOrder): Promise<void> => {
@@ -450,27 +408,47 @@ export function useBookshelf(
     [novelRepository],
   );
 
-  const reloadNovels = useCallback(async (): Promise<void> => {
-    if (isMountedRef.current) {
-      setIsLoading(true);
-      setError(null);
+  /**
+   * 作品一覧を再取得して State を更新する（`silent: true` 時は `isLoading` を変更せずスクロール位置を保持）
+   */
+  const reloadNovels = useCallback(
+    async (options?: { silent?: boolean }): Promise<void> => {
+      const silent = options?.silent === true;
+      if (!silent && isMountedRef.current) {
+        setIsLoading(true);
+        setError(null);
+      }
+      try {
+        const list = await novelRepository.listNovels(sortOrderRef.current);
+        if (isMountedRef.current) {
+          setAllNovels(list);
+          allNovelsRef.current = list;
+        }
+      } catch (err: unknown) {
+        if (isMountedRef.current) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      } finally {
+        if (!silent && isMountedRef.current) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [novelRepository],
+  );
+
+  // 全画面共通自動 Pull（useBackgroundAutoPull）の完了通知を受けて本棚一覧をサイレント最新化
+  useEffect(() => {
+    if (!syncEngine?.subscribePullCompleted) {
+      return;
     }
-    try {
-      const list = await novelRepository.listNovels(sortOrderRef.current);
-      if (isMountedRef.current) {
-        setAllNovels(list);
-        allNovelsRef.current = list;
+    return syncEngine.subscribePullCompleted((result) => {
+      if (result.pulled && isMountedRef.current) {
+        pullHandledBySubscriptionRef.current = true;
+        void reloadNovels({ silent: true });
       }
-    } catch (err: unknown) {
-      if (isMountedRef.current) {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    } finally {
-      if (isMountedRef.current) {
-        setIsLoading(false);
-      }
-    }
-  }, [novelRepository]);
+    });
+  }, [reloadNovels, syncEngine]);
 
   const deleteNovel = useCallback(
     async (novelId: string): Promise<void> => {

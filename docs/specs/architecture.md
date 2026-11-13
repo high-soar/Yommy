@@ -127,6 +127,7 @@ related_tests:
   - src/bridges/cloud-sync/mockCloudSyncBridge.test.ts
   - src/bridges/cloud-sync/index.test.ts
   - src/features/cloud-sync/services/syncEngine.test.ts
+  - src/features/cloud-sync/hooks/useBackgroundAutoPull.test.ts
   - src/storage/repositories/appSettingsRepository.test.ts
   - src/storage/repositories/chapterRepository.test.ts
   - src/storage/repositories/queueRepository.test.ts
@@ -267,9 +268,10 @@ Yommy/
     │   ├── search/                    # SCR-06: 検索画面（カクヨム・小説家になろうサイト切替・作品検索・カードから本棚追加・SCR-02遷移）
     │   ├── ranking/                   # SCR-07: ランキング画面（カクヨム・小説家になろうサイト切替・期間/ジャンル別ランキング・カードから本棚追加・SCR-02遷移）
     │   ├── settings/                  # SCR-05: 設定画面（組版・テーマ・フォント・余白・音量キー送り設定・サンプル文章プレビュー・クラウド同期・キャッシュ管理）
-    │   └── cloud-sync/                # クラウド同期（Google Drive appDataFolder・SyncEngine）（Issue #120）
+    │   └── cloud-sync/                # クラウド同期（Google Drive appDataFolder・SyncEngine）（Issue #120, #342）
     │       ├── types.ts               # YommySyncState, SyncNovelData 等の同期データ型定義
-    │       └── services/              # スキーマ検証・競合マージ・デバウンス同期エンジン
+    │       ├── hooks/                 # useBackgroundAutoPull.ts（全画面 5分復帰自動 Pull フック）
+    │       └── services/              # スキーマ検証・競合マージ・デバウンス同期エンジン・完了購読
     ├── parsers/                       # 【1. Parser Layer（スクレイピング・DOM解析層）】
     │   ├── types.ts                   # NovelParser, ParsedNovelMetadata, ParsedChapterContent, ParsedSearchResult, ParsedRankingResult 等の型契約
     │   ├── parserRegistry.ts          # URL から対応サイト（kakuyomu / narou 等）を判定・ディスパッチ

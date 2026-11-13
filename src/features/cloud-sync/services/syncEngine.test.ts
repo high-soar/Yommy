@@ -3181,4 +3181,113 @@ describe("syncEngine", () => {
       expect(localAfterPull?.updatedAt).toBe(remoteFavoriteTime);
     });
   });
+
+  describe("Pull 完了イベント購読 (subscribePullCompleted)", () => {
+    it("pullAndMerge 完了時に購読リスナーへ結果が通知され、unsubscribe 後は通知されないこと", async () => {
+      await resetTestDb();
+      const db = await createInMemoryDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const appSettingsRepo = new SqlAppSettingsRepository(db);
+      const bridge = new MockCloudSyncBridge();
+      const parserRegistry = createDefaultParserRegistry();
+      const httpClient = new MockHttpClient();
+
+      const engine = new SyncEngine({
+        bridge,
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        appSettingsRepository: appSettingsRepo,
+        parserRegistry,
+        httpClient,
+      });
+
+      const listener = vi.fn();
+      const unsubscribe = engine.subscribePullCompleted(listener);
+
+      // 未連携状態でも完了結果 { pulled: false, mergedNovels: 0 } が通知されること
+      await engine.pullAndMerge();
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listener).toHaveBeenLastCalledWith({
+        pulled: false,
+        mergedNovels: 0,
+      });
+
+      // 連携済み・リモートデータありの場合 { pulled: true, mergedNovels: N } が通知されること
+      await bridge.signIn();
+      const nowIso = new Date().toISOString();
+      const remoteState: YommySyncState = {
+        version: 1,
+        lastSyncedAt: nowIso,
+        novels: {
+          "kakuyomu:16817330658027210412": {
+            id: "kakuyomu:16817330658027210412",
+            siteType: "kakuyomu",
+            remoteWorkId: "16817330658027210412",
+            canonicalUrl: "https://kakuyomu.jp/works/16817330658027210412",
+            title: "同期作品",
+            author: "著者",
+            synopsis: "あらすじ",
+            totalChapters: 3,
+            isFavorite: 0,
+            hasNewUpdate: 0,
+            latestEpisodePublishedAt: null,
+            bookmarkChapterIndex: 2,
+            lastReadAt: nowIso,
+            readChapterIds: [],
+            createdAt: nowIso,
+            updatedAt: nowIso,
+          },
+        },
+        deletedNovels: {},
+      };
+      await bridge.pushFile(JSON.stringify(remoteState));
+
+      await engine.pullAndMerge();
+      expect(listener).toHaveBeenCalledTimes(2);
+      expect(listener).toHaveBeenLastCalledWith({
+        pulled: true,
+        mergedNovels: 1,
+      });
+
+      // unsubscribe 後は通知されない
+      unsubscribe();
+      await engine.pullAndMerge();
+      expect(listener).toHaveBeenCalledTimes(2);
+    });
+
+    it("購読リスナー内で例外がスローされても後続リスナーおよび pullAndMerge 本体が正常完了すること", async () => {
+      await resetTestDb();
+      const db = await createInMemoryDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const appSettingsRepo = new SqlAppSettingsRepository(db);
+      const bridge = new MockCloudSyncBridge();
+      await bridge.signIn();
+      const parserRegistry = createDefaultParserRegistry();
+      const httpClient = new MockHttpClient();
+
+      const engine = new SyncEngine({
+        bridge,
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        appSettingsRepository: appSettingsRepo,
+        parserRegistry,
+        httpClient,
+      });
+
+      const throwingListener = vi.fn(() => {
+        throw new Error("Listener failure");
+      });
+      const healthyListener = vi.fn();
+
+      engine.subscribePullCompleted(throwingListener);
+      engine.subscribePullCompleted(healthyListener);
+
+      const result = await engine.pullAndMerge();
+      expect(result).toEqual({ pulled: false, mergedNovels: 0 });
+      expect(throwingListener).toHaveBeenCalledTimes(1);
+      expect(healthyListener).toHaveBeenCalledTimes(1);
+    });
+  });
 });
