@@ -1926,4 +1926,64 @@ describe("ReaderPage", () => {
       await expect(user.click(openButton)).resolves.not.toThrow();
     });
   });
+
+  describe("しおり競合確認ダイアログ連携 (Issue #342)", () => {
+    it("bookmarkConflict が設定されているとき BookmarkConflictDialog が描画され、選択ボタンで解決コールバックが呼ばれること", async () => {
+      const user = userEvent.setup();
+      const onResolveMove = vi.fn();
+      const onResolveKeep = vi.fn();
+
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            bookmarkConflict: {
+              currentChapterIndex: 1,
+              remoteChapterIndex: 3,
+            },
+            isResolvingBookmarkConflict: false,
+            onResolveBookmarkConflictMove: onResolveMove,
+            onResolveBookmarkConflictKeep: onResolveKeep,
+          })}
+        />,
+      );
+
+      expect(
+        screen.getByTestId("bookmark-conflict-dialog"),
+      ).toBeInTheDocument();
+      await user.click(screen.getByTestId("bookmark-conflict-move-button"));
+      expect(onResolveMove).toHaveBeenCalledTimes(1);
+
+      await user.click(screen.getByTestId("bookmark-conflict-keep-button"));
+      expect(onResolveKeep).toHaveBeenCalledTimes(1);
+    });
+
+    it("bookmarkConflict 表示中はハードウェア音量キーによるページめくりが抑止されること", () => {
+      const onPageChange = vi.fn();
+      const mockBridge = new MockVolumeKeyBridge();
+
+      render(
+        <ServiceProvider services={{ volumeKeyBridge: mockBridge }}>
+          <ReaderPage
+            {...createDefaultProps({
+              enableVolumeKeyPaging: true,
+              pagingMode: "paged",
+              currentPage: 1,
+              totalPages: 5,
+              onPageChange,
+              bookmarkConflict: {
+                currentChapterIndex: 1,
+                remoteChapterIndex: 3,
+              },
+            })}
+          />
+        </ServiceProvider>,
+      );
+
+      act(() => {
+        mockBridge.emitVolumeKey("down");
+      });
+
+      expect(onPageChange).not.toHaveBeenCalled();
+    });
+  });
 });
