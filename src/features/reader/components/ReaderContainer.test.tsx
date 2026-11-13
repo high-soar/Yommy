@@ -2032,7 +2032,12 @@ describe("ReaderContainer", () => {
       await waitFor(() => {
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
-            bookmarkConflict: null,
+            bookmarkConflict: {
+              currentChapterIndex: 1,
+              remoteChapterIndex: 3,
+            },
+            isResolvingBookmarkConflict: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
           }),
           undefined,
         );
@@ -2041,6 +2046,202 @@ describe("ReaderContainer", () => {
       expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
         `/novels/${sampleNovel.id}/chapters/1`,
       );
+      pageSpy.mockRestore();
+    });
+
+    it("「移動する」解決の非同期通信中は isResolvingBookmarkConflict が true・bookmarkConflict が維持され、二重実行が抑止されること (R1-01)", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const onNavigateChapter = vi.fn();
+      const { repo: novelRepository } = createMockNovelRepo({
+        ...sampleNovel,
+        bookmarkChapterIndex: 1,
+        bookmarkScrollProgress: 0,
+      });
+      const { repo: chapterRepository } = createMockChapterRepo([
+        sampleChapter1,
+        sampleChapter2,
+        { ...sampleChapter3, bodyHtml: null, downloadedAt: null },
+      ]);
+      let resolveFetch:
+        | ((res: {
+            status: number;
+            url: string;
+            headers: Record<string, string>;
+            html: string;
+          }) => void)
+        | null = null;
+      const getHtmlMock = vi.fn().mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveFetch = resolve;
+          }),
+      );
+      const deferredHttpClient: HttpClientBridge = {
+        getHtml: getHtmlMock,
+      };
+
+      let pullListener:
+        ((res: { pulled: boolean; mergedNovels: number }) => void) | null =
+        null;
+      const mockSyncEngine = {
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+        subscribePullCompleted: vi.fn((listener) => {
+          pullListener = listener;
+          return () => {};
+        }),
+      } as unknown as SyncEngine;
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          onNavigateChapter={onNavigateChapter}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+          httpClient={deferredHttpClient}
+          syncEngine={mockSyncEngine}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
+      });
+
+      await novelRepository.updateBookmark(sampleNovel.id, 3, 0.5);
+      await act(async () => {
+        pullListener?.({ pulled: true, mergedNovels: 1 });
+      });
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            bookmarkConflict: {
+              currentChapterIndex: 1,
+              remoteChapterIndex: 3,
+            },
+          }),
+          undefined,
+        );
+      });
+
+      const lastProps = pageSpy.mock.lastCall?.[0];
+      let movePromise: Promise<void> | void | undefined;
+      act(() => {
+        movePromise = lastProps?.onResolveBookmarkConflictMove?.();
+        // 二重連打はガードされること
+        void lastProps?.onResolveBookmarkConflictKeep?.();
+      });
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            bookmarkConflict: {
+              currentChapterIndex: 1,
+              remoteChapterIndex: 3,
+            },
+            isResolvingBookmarkConflict: true,
+          }),
+          undefined,
+        );
+      });
+      expect(getHtmlMock).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        resolveFetch?.({
+          status: 200,
+          url: sampleChapter3.url,
+          headers: {},
+          html: '<div class="widget-episodeBody"><p>第3話本文</p></div>',
+        });
+        await Promise.resolve(movePromise);
+      });
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            bookmarkConflict: null,
+            isResolvingBookmarkConflict: false,
+          }),
+          undefined,
+        );
+        expect(screen.getByTestId("observed-current-path")).toHaveTextContent(
+          `/novels/${encodeURIComponent(sampleNovel.id)}/chapters/3`,
+        );
+      });
+      pageSpy.mockRestore();
+    });
+
+    it("bookmarkConflict 表示中のアンマウントでは flushBookmark（updateBookmark）が実行されないこと (R1-17)", async () => {
+      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const { repo: novelRepository, updateBookmarkSpy } = createMockNovelRepo({
+        ...sampleNovel,
+        bookmarkChapterIndex: 1,
+        bookmarkScrollProgress: 0,
+      });
+      const { repo: chapterRepository } = createMockChapterRepo();
+
+      let pullListener:
+        ((res: { pulled: boolean; mergedNovels: number }) => void) | null =
+        null;
+      const mockSyncEngine = {
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+        subscribePullCompleted: vi.fn((listener) => {
+          pullListener = listener;
+          return () => {};
+        }),
+      } as unknown as SyncEngine;
+
+      const { unmount } = render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+          syncEngine={mockSyncEngine}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
+          undefined,
+        );
+      });
+
+      // スクロールして未保存しおり状態を作った直後に競合検知
+      act(() => {
+        pageSpy.mock.lastCall?.[0]?.onScrollProgressChange?.(0.5);
+      });
+      await novelRepository.updateBookmark(sampleNovel.id, 3, 0.8);
+      updateBookmarkSpy.mockClear();
+
+      await act(async () => {
+        pullListener?.({ pulled: true, mergedNovels: 1 });
+      });
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            bookmarkConflict: {
+              currentChapterIndex: 1,
+              remoteChapterIndex: 3,
+            },
+          }),
+          undefined,
+        );
+      });
+
+      unmount();
+      expect(updateBookmarkSpy).not.toHaveBeenCalled();
       pageSpy.mockRestore();
     });
   });
