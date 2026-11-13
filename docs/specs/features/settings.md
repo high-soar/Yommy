@@ -3,7 +3,7 @@ type: spec-feature
 title: "設定画面仕様書（SCR-05: Settings）"
 description: 小説リーダーの組版設定（縦書き/横書き、ページ送りモード、4カラーテーマ、文字サイズ、行間、フォント種別、画面余白、ハードウェア音量キー送り）の一括カスタマイズ・永続化、ルビ・傍点を含むサンプル文章プレビュー、Google Drive クラウド同期連携、ストレージ・本文キャッシュ管理、および下部タブ・OSバックキー連携を提供する設定画面（SCR-05）の正本仕様。
 status: "Approved"
-updated: "2026-11-12"
+updated: "2026-11-14"
 tags:
   [
     settings,
@@ -441,6 +441,8 @@ export interface UseCloudSyncResult {
    - `isSyncing = true` を設定し、`syncEngine.sync()`（Pull → マージ → Push）を実行する。
    - 完了時に `cloud_sync_last_synced_at` を現在時刻で `app_settings` へ更新し、`isSyncing = false` とする。
    - 失敗時は直前の状態を維持し、`error` をセットして画面上に通知する。
+5. **自動 Pull 完了購読による最終同期日時の自動最新化（`subscribePullCompleted`、`R1-23`）**:
+   - `syncEngine?.subscribePullCompleted` を購読し、バックグラウンド自動 Pull 等により `result.pulled === true` で完了した際、`appSettingsRepository.getSyncSettings()` から最新の `lastSyncedAt` を再取得して State を自動更新する。
 
 ### 4.4 `useStorageCache` フック契約・キャッシュ整理パイプライン（v0.5 新設: Issue #170）
 
@@ -457,13 +459,14 @@ export interface UseStorageCacheResult {
   notice: string | null;
   error: string | null;
   clearCache: (options: { onlyRead: boolean }) => Promise<number>;
-  refreshSummary: () => Promise<void>;
+  refreshSummary: (options?: { silent?: boolean }) => Promise<void>;
 }
 ```
 
-1. **初期ロード（`refreshSummary`）**:
+1. **初期ロード ＆ 自動 Pull 連動サイレント更新（`refreshSummary`、`R1-23`）**:
    - `ServiceProvider` の `isReady` 完了後、`chapterRepository.getStorageCacheSummary()` を呼び出して全登録作品の合計キャッシュ話数（`totalCachedChapters`）および合計バイト容量（`totalByteSize`）を取得して `summary` State を初期化する。
    - `getStorageCacheSummary` が未定義の環境では `{ totalCachedChapters: 0, totalByteSize: 0 }` に安全にフォールバックする。
+   - `syncEngine?.subscribePullCompleted` を購読し、自動 Pull / 手動同期で `result.pulled === true`（Tombstone 作品削除・差分取り込み等）となった際に `refreshSummary({ silent: true })`（`isLoading` を `true` に切り替えず既存表示を維持）を実行してキャッシュ容量サマリーを自動再集計する。
 2. **全体一括キャッシュ削除（`clearCache`）**:
    - `isClearing = true`, `error = null`, `notice = null` を設定する。
    - `deletedCount = await chapterRepository.deleteAllCachedBodies(options)` を実行する。
