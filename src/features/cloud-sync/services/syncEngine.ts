@@ -25,6 +25,9 @@ export interface ParsedNovelUrl {
   canonicalUrl: string;
 }
 
+/**
+ * Pull＆マージ実行結果
+ */
 export interface PullMergeResult {
   pulled: boolean;
   mergedNovels: number;
@@ -344,6 +347,9 @@ export class SyncEngine {
     return this.activeOperations > 0;
   }
 
+  /**
+   * pullAndMerge の正常終了時に呼ばれるリスナーを登録し、解除関数を返す。
+   */
   subscribePullCompleted(
     listener: (result: PullMergeResult) => void,
   ): () => void {
@@ -849,7 +855,7 @@ export class SyncEngine {
     return this.runExclusive(() => this.doPushCurrentState());
   }
 
-  async sync(): Promise<{ pulled: boolean; mergedNovels: number }> {
+  async sync(): Promise<PullMergeResult> {
     if (this.activeSync) {
       return this.activeSync;
     }
