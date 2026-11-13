@@ -587,7 +587,7 @@ export interface UseReaderResult {
     targetChapterIndex: number,
     options?: GoToChapterOptions,
   ) => Promise<boolean>;
-  resolveBookmarkConflict: (action: "move" | "keep") => Promise<void>; // 【新設: v1.1 Issue #342】
+  resolveBookmarkConflict: (action: "move" | "keep") => Promise<boolean>; // 【新設: v1.1 Issue #342】
   fetchNovelFromUrl: () => Promise<void>;
 }
 ```
@@ -645,8 +645,8 @@ export interface UseReaderResult {
    - **復帰時自動 Pull によるしおり競合検知と解決（`subscribePullCompleted` / `resolveBookmarkConflict`、`v1.1` Issue #342）**:
      - `useReader` はマウント中に `syncEngine?.subscribePullCompleted` を購読し、`result.pulled === true` 完了時に `novelRepository.getNovelById(novelId)` を再取得する。
      - 再取得した `latestNovel.bookmarkChapterIndex` が非 null（有効範囲 `1..totalChapters`）かつ現在表示中話数 `currentChapterIndexRef.current` と異なる場合、`bookmarkConflict = { currentChapterIndex, remoteChapterIndex }` をセットして `BookmarkConflictDialog` を表示する（この時点で未保存フラグは立てない）。
-     - `resolveBookmarkConflict("move")`: ダイアログを閉じ、`goToChapter(remoteChapterIndex)` により他端末の最新話数へ移動する。
-     - `resolveBookmarkConflict("keep")`: ダイアログを閉じ、現在表示中の話数・進捗率で `novelRepository.updateBookmark(..., currentChapterIndex, scrollProgress)`（`last_read_at = now`）および `syncEngine?.notifyChanged()` を明示実行して他端末へ現在話維持を同期する。
+     - `resolveBookmarkConflict("move")`: ダイアログを閉じ、`goToChapter(remoteChapterIndex)` を実行して結果の `boolean`（成功 `true`／失敗 `false`）を返す。`ReaderContainer` 側は `isResolvingBookmarkConflict` を制御しつつ、返却値が `true` の場合のみ既存 `navigateToTargetChapter` 同様の URL 同期（`onNavigateChapter` または `router.navigateToReader(..., { replace: true })`）を行う。
+     - `resolveBookmarkConflict("keep")`: ダイアログを閉じ、現在表示中の話数・進捗率で `novelRepository.updateBookmark(..., currentChapterIndex, scrollProgress)`（`last_read_at = now`）および `syncEngine?.notifyChanged()` を明示実行して他端末へ現在話維持を同期し、成否 `boolean` を返す。
 
 ---
 
