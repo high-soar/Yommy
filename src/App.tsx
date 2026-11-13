@@ -9,6 +9,7 @@ import { SearchContainer } from "./features/search/components/SearchContainer";
 import { RankingContainer } from "./features/ranking/components/RankingContainer";
 import { SettingsContainer } from "./features/settings/components/SettingsContainer";
 import { WebViewImportContainer } from "./features/webview-import/components/WebViewImportContainer";
+import { useBackgroundAutoPull } from "./features/cloud-sync/hooks/useBackgroundAutoPull";
 import { BottomTabBar, type BottomTab } from "./shared/ui/BottomTabBar";
 
 /**
@@ -71,6 +72,7 @@ export const AppContent: React.FC<AppContentProps> = ({
 }) => {
   const router = useRouter();
   const { appBridge } = useServices();
+  useBackgroundAutoPull();
   const isReader = router.route.name === "reader";
   const isBrowser = router.route.name === "browser";
   const activeTab = getActiveTab(router.route.name, router.novelOrigin);
@@ -88,6 +90,10 @@ export const AppContent: React.FC<AppContentProps> = ({
     };
 
     const removeListener = appBridge.addBackButtonListener(async () => {
+      if (router.isBackNavigationBlocked?.()) {
+        return;
+      }
+
       // 本棚画面 (SCR-01: /): 2秒以内連続2回押下でアプリ終了、1回目は確認トースト表示 (TR-13)
       if (router.route.name === "bookshelf") {
         const now = Date.now();

@@ -25,6 +25,11 @@ export interface ParsedNovelUrl {
   canonicalUrl: string;
 }
 
+export interface PullMergeResult {
+  pulled: boolean;
+  mergedNovels: number;
+}
+
 /**
  * オブジェクトおよび子孫のプロパティ名にプロトタイプ汚染の危険性がないか再帰的に検査する
  */
@@ -330,15 +335,32 @@ export class SyncEngine {
 
   private activeOperations = 0;
   private syncLock: Promise<void> = Promise.resolve();
-  private activeSync: Promise<{
-    pulled: boolean;
-    mergedNovels: number;
-  }> | null = null;
+  private activeSync: Promise<PullMergeResult> | null = null;
+  private pullCompletedListeners = new Set<(result: PullMergeResult) => void>();
 
   constructor(private readonly deps: SyncEngineDependencies) {}
 
   get isSyncing(): boolean {
     return this.activeOperations > 0;
+  }
+
+  subscribePullCompleted(
+    listener: (result: PullMergeResult) => void,
+  ): () => void {
+    this.pullCompletedListeners.add(listener);
+    return () => {
+      this.pullCompletedListeners.delete(listener);
+    };
+  }
+
+  private notifyPullCompleted(result: PullMergeResult): void {
+    for (const listener of Array.from(this.pullCompletedListeners)) {
+      try {
+        listener(result);
+      } catch (err) {
+        console.warn("[SyncEngine] Pull completion listener failed:", err);
+      }
+    }
   }
 
   private async runExclusive<T>(fn: () => Promise<T>): Promise<T> {
@@ -565,13 +587,12 @@ export class SyncEngine {
     }
   }
 
-  private async doPullAndMerge(): Promise<{
-    pulled: boolean;
-    mergedNovels: number;
-  }> {
+  private async doPullAndMerge(): Promise<PullMergeResult> {
     const authState = await this.deps.bridge.getAuthState();
     if (authState.status !== "connected") {
-      return { pulled: false, mergedNovels: 0 };
+      const result: PullMergeResult = { pulled: false, mergedNovels: 0 };
+      this.notifyPullCompleted(result);
+      return result;
     }
 
     let rawContent: string | null;
@@ -583,7 +604,9 @@ export class SyncEngine {
     }
 
     if (rawContent === null) {
-      return { pulled: false, mergedNovels: 0 };
+      const result: PullMergeResult = { pulled: false, mergedNovels: 0 };
+      this.notifyPullCompleted(result);
+      return result;
     }
 
     const remoteState = validateSyncState(rawContent);
@@ -608,13 +631,15 @@ export class SyncEngine {
     const now = Date.now();
     await this.deps.appSettingsRepository.setCloudSyncLastSyncedAt?.(now);
 
-    return {
+    const result: PullMergeResult = {
       pulled: true,
       mergedNovels: Object.keys(remoteState.novels).length,
     };
+    this.notifyPullCompleted(result);
+    return result;
   }
 
-  async pullAndMerge(): Promise<{ pulled: boolean; mergedNovels: number }> {
+  async pullAndMerge(): Promise<PullMergeResult> {
     return this.runExclusive(() => this.doPullAndMerge());
   }
 

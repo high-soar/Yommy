@@ -1125,9 +1125,11 @@ describe("App コンポーネント", () => {
     describe("戻るブロック連携と全画面バックグラウンド自動 Pull (Issue #342)", () => {
       it("router.blockBackNavigation 登録中は AppBridge のシステム戻るボタン押下でも遷移・終了トーストが発火しないこと", async () => {
         const mockAppBridge = new MockAppBridge();
-        let routerRef: RouterContextValue | null = null;
+        const routerRef: { current: RouterContextValue | null } = {
+          current: null,
+        };
         const RouterCapture: React.FC = () => {
-          routerRef = useRouter();
+          routerRef.current = useRouter();
           return null;
         };
 
@@ -1142,13 +1144,13 @@ describe("App コンポーネント", () => {
 
         let release: (() => void) | undefined;
         act(() => {
-          release = routerRef?.blockBackNavigation?.();
+          release = routerRef.current?.blockBackNavigation?.();
         });
 
         await act(async () => {
           await mockAppBridge.triggerBackButton();
         });
-        expect(routerRef?.route.name).toBe("reader");
+        expect(routerRef.current?.route.name).toBe("reader");
 
         // 解除後は通常通り目次画面へ戻る
         act(() => {
@@ -1158,7 +1160,7 @@ describe("App コンポーネント", () => {
           await mockAppBridge.triggerBackButton();
         });
         await waitFor(() => {
-          expect(routerRef?.route.name).toBe("novel-detail");
+          expect(routerRef.current?.route.name).toBe("novel-detail");
         });
       });
 

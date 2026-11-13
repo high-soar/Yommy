@@ -2992,11 +2992,13 @@ describe("useNovelDetail", () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      let resolveFetch: ((v: null) => void) | null = null;
+      const deferredFetch: { resolve: ((v: null) => void) | null } = {
+        resolve: null,
+      };
       vi.spyOn(novelRepo, "getNovelById").mockImplementationOnce(
         () =>
           new Promise((resolve) => {
-            resolveFetch = resolve;
+            deferredFetch.resolve = resolve;
           }),
       );
 
@@ -3006,7 +3008,7 @@ describe("useNovelDetail", () => {
       });
 
       unmount();
-      resolveFetch?.(null);
+      deferredFetch.resolve?.(null);
       await pendingPromise;
 
       // アンマウント後のエラーケース

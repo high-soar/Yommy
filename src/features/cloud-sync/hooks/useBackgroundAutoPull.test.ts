@@ -1,6 +1,7 @@
 import { renderHook, act, waitFor } from "@testing-library/react";
 import React from "react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import * as ServiceProviderModule from "../../../app/ServiceProvider";
 import { ServiceProvider } from "../../../app/ServiceProvider";
 import type { CloudSyncBridge } from "../../../bridges/cloud-sync/types";
 import type { SyncEngine } from "../services/syncEngine";
@@ -280,12 +281,14 @@ describe("useBackgroundAutoPull", () => {
         .mockResolvedValue({ pulled: true, mergedNovels: 0 }),
     } as unknown as SyncEngine;
 
-    const { unmount } = renderHook(() => useBackgroundAutoPull(), {
-      wrapper: createWrapper({
+    const useServicesSpy = vi
+      .spyOn(ServiceProviderModule, "useServices")
+      .mockReturnValue({
         syncEngine: mockSyncEngine,
-        cloudSyncBridge: null as unknown as CloudSyncBridge,
-      }),
-    });
+        cloudSyncBridge: undefined,
+      } as unknown as ReturnType<typeof ServiceProviderModule.useServices>);
+
+    const { unmount } = renderHook(() => useBackgroundAutoPull());
 
     const baseTime = 1_700_000_000_000;
     const nowSpy = vi.spyOn(Date, "now").mockReturnValue(baseTime);
@@ -319,11 +322,12 @@ describe("useBackgroundAutoPull", () => {
     expect(mockSyncEngine.pullAndMerge).toHaveBeenCalledTimes(1);
 
     // syncEngine 未提供時も安全にスキップされること
-    renderHook(() => useBackgroundAutoPull(), {
-      wrapper: createWrapper({
-        syncEngine: null as unknown as SyncEngine,
-      }),
-    });
+    useServicesSpy.mockReturnValue({
+      syncEngine: undefined,
+      cloudSyncBridge: undefined,
+    } as unknown as ReturnType<typeof ServiceProviderModule.useServices>);
+
+    renderHook(() => useBackgroundAutoPull());
     act(() => {
       setVisibilityState("hidden");
       document.dispatchEvent(new Event("visibilitychange"));

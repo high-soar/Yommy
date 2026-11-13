@@ -289,55 +289,6 @@ export function useBookshelf(
     syncEngine,
   ]);
 
-  // バックグラウンド復帰時の自動 Pull（休止5分以上経過検知: AC-BS-13）
-  useEffect(() => {
-    let lastHiddenAt: number | null = null;
-    const backgroundThresholdMs = 5 * 60 * 1000; // 5分 (300,000ms)
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        lastHiddenAt = Date.now();
-      } else if (document.visibilityState === "visible") {
-        if (lastHiddenAt !== null) {
-          const elapsed = Date.now() - lastHiddenAt;
-          lastHiddenAt = null;
-          if (elapsed >= backgroundThresholdMs && syncEngine) {
-            (async () => {
-              if (cloudSyncBridge?.getAuthState) {
-                const authState = await cloudSyncBridge.getAuthState();
-                if (authState.status !== "connected") {
-                  return;
-                }
-              }
-              await syncEngine.pullAndMerge();
-              if (isMountedRef.current) {
-                const refreshed = await novelRepository.listNovels(
-                  sortOrderRef.current,
-                );
-                if (isMountedRef.current) {
-                  setAllNovels(refreshed);
-                  allNovelsRef.current = refreshed;
-                }
-              }
-            })().catch(() => {});
-          }
-        }
-      }
-    };
-
-    if (typeof document !== "undefined") {
-      document.addEventListener("visibilitychange", handleVisibilityChange);
-    }
-    return () => {
-      if (typeof document !== "undefined") {
-        document.removeEventListener(
-          "visibilitychange",
-          handleVisibilityChange,
-        );
-      }
-    };
-  }, [cloudSyncBridge, novelRepository, syncEngine]);
-
   const setSortOrder = useCallback(
     async (order: BookshelfSortOrder): Promise<void> => {
       try {
@@ -471,6 +422,18 @@ export function useBookshelf(
       }
     }
   }, [novelRepository]);
+
+  // 全画面共通自動 Pull（useBackgroundAutoPull）の完了通知を受けて本棚一覧を最新化
+  useEffect(() => {
+    if (!syncEngine?.subscribePullCompleted) {
+      return;
+    }
+    return syncEngine.subscribePullCompleted((result) => {
+      if (result.pulled && isMountedRef.current) {
+        void reloadNovels();
+      }
+    });
+  }, [reloadNovels, syncEngine]);
 
   const deleteNovel = useCallback(
     async (novelId: string): Promise<void> => {

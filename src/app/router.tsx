@@ -56,6 +56,8 @@ export interface RouterContextValue {
   navigateToSettings: () => void;
   navigateToBrowser: (url: string, options?: NavigateToBrowserOptions) => void;
   back: () => void;
+  blockBackNavigation?: () => () => void;
+  isBackNavigationBlocked?: () => boolean;
 }
 
 export interface RouterProviderProps {
@@ -241,6 +243,19 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
   const settingsOriginRef = useRef<string | null>(null);
   const [browserOrigin, setBrowserOrigin] = useState<string | null>(null);
   const browserOriginRef = useRef<string | null>(null);
+  const backBlockersRef = useRef<Set<symbol>>(new Set());
+
+  const blockBackNavigation = useCallback((): (() => void) => {
+    const token = Symbol("back-blocker");
+    backBlockersRef.current.add(token);
+    return () => {
+      backBlockersRef.current.delete(token);
+    };
+  }, []);
+
+  const isBackNavigationBlocked = useCallback((): boolean => {
+    return backBlockersRef.current.size > 0;
+  }, []);
 
   useEffect(() => {
     if (initialPath !== undefined) {
@@ -262,6 +277,12 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
   useEffect(() => {
     const handlePopState = () => {
       const nextPath = `${window.location.pathname}${window.location.search}`;
+      if (backBlockersRef.current.size > 0) {
+        if (nextPath !== currentPathRef.current) {
+          window.history.pushState(null, "", currentPathRef.current);
+        }
+        return;
+      }
       currentPathRef.current = nextPath;
       if (!nextPath.startsWith("/novels/")) {
         novelOriginRef.current = null;
@@ -461,6 +482,9 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
   const route = useMemo(() => matchRoute(currentPath), [currentPath]);
 
   const back = useCallback(() => {
+    if (backBlockersRef.current.size > 0) {
+      return;
+    }
     let target: string | null = null;
 
     // 論理階層遷移制御
@@ -530,6 +554,8 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
       navigateToSettings,
       navigateToBrowser,
       back,
+      blockBackNavigation,
+      isBackNavigationBlocked,
     }),
     [
       currentPath,
@@ -547,6 +573,8 @@ export const RouterProvider: React.FC<RouterProviderProps> = ({
       navigateToSettings,
       navigateToBrowser,
       back,
+      blockBackNavigation,
+      isBackNavigationBlocked,
     ],
   );
 
