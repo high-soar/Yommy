@@ -1417,7 +1417,7 @@ describe("useBookshelf", () => {
       });
     });
 
-    it("syncEngine.subscribePullCompleted で pulled: true が通知されたとき、作品一覧が再取得されること", async () => {
+    it("syncEngine.subscribePullCompleted で pulled: true が通知されたとき、isLoading を true にせずサイレントに作品一覧が再取得されること", async () => {
       let capturedListener:
         ((result: { pulled: boolean; mergedNovels: number }) => void) | null =
         null;
@@ -1433,27 +1433,18 @@ describe("useBookshelf", () => {
         notifyChanged: vi.fn().mockResolvedValue(undefined),
       };
 
+      let resolvePendingReload:
+        ((value: Array<Record<string, unknown>>) => void) | null = null;
       const customNovelRepo = {
         listNovels: vi
           .fn()
           .mockResolvedValueOnce([])
-          .mockResolvedValueOnce([])
-          .mockResolvedValueOnce([
-            {
-              id: "kakuyomu:222",
-              title: "復帰自動Pullで同期された作品",
-              author: "作者",
-              totalChapters: 5,
-              cachedChapters: 0,
-              bookmarkChapterIndex: null,
-              bookmarkScrollProgress: 0,
-              hasNewUpdate: false,
-              lastReadAt: null,
-              latestEpisodePublishedAt: null,
-              canonicalUrl: "https://kakuyomu.jp/works/222",
-              isFavorite: false,
-            },
-          ]),
+          .mockImplementationOnce(
+            () =>
+              new Promise((resolve) => {
+                resolvePendingReload = resolve;
+              }),
+          ),
         getNovelById: vi.fn(),
         upsertNovelWithToc: vi.fn(),
         updateBookmark: vi.fn(),
@@ -1478,9 +1469,7 @@ describe("useBookshelf", () => {
         expect(result.current.isLoading).toBe(false);
         expect(mockSyncEngine.pullAndMerge).toHaveBeenCalledTimes(1);
       });
-      await waitFor(() => {
-        expect(customNovelRepo.listNovels).toHaveBeenCalledTimes(2);
-      });
+      expect(customNovelRepo.listNovels).toHaveBeenCalledTimes(1);
       expect(result.current.novels).toHaveLength(0);
       expect(mockSyncEngine.subscribePullCompleted).toHaveBeenCalledTimes(1);
 
@@ -1488,11 +1477,32 @@ describe("useBookshelf", () => {
       await act(async () => {
         capturedListener?.({ pulled: false, mergedNovels: 0 });
       });
-      expect(customNovelRepo.listNovels).toHaveBeenCalledTimes(2);
+      expect(customNovelRepo.listNovels).toHaveBeenCalledTimes(1);
 
-      // pulled: true の通知で一覧がリロードされること
-      await act(async () => {
+      // pulled: true の通知では実行中も isLoading が true に遷移せずサイレント更新されること
+      act(() => {
         capturedListener?.({ pulled: true, mergedNovels: 1 });
+      });
+      expect(customNovelRepo.listNovels).toHaveBeenCalledTimes(2);
+      expect(result.current.isLoading).toBe(false);
+
+      await act(async () => {
+        resolvePendingReload?.([
+          {
+            id: "kakuyomu:222",
+            title: "復帰自動Pullで同期された作品",
+            author: "作者",
+            totalChapters: 5,
+            cachedChapters: 0,
+            bookmarkChapterIndex: null,
+            bookmarkScrollProgress: 0,
+            hasNewUpdate: false,
+            lastReadAt: null,
+            latestEpisodePublishedAt: null,
+            canonicalUrl: "https://kakuyomu.jp/works/222",
+            isFavorite: false,
+          },
+        ]);
       });
 
       await waitFor(() => {
@@ -1501,9 +1511,73 @@ describe("useBookshelf", () => {
           "復帰自動Pullで同期された作品",
         );
       });
+      expect(result.current.isLoading).toBe(false);
 
       unmount();
       expect(unsubscribeMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("初回マウントの pullAndMerge が subscribePullCompleted で pulled: true を通知したとき、重複再取得せず 1 回のみサイレント更新されること", async () => {
+      let capturedListener:
+        ((result: { pulled: boolean; mergedNovels: number }) => void) | null =
+        null;
+      const mockSyncEngine = {
+        pullAndMerge: vi.fn(async () => {
+          const res = { pulled: true, mergedNovels: 1 };
+          capturedListener?.(res);
+          return res;
+        }),
+        subscribePullCompleted: vi.fn((listener) => {
+          capturedListener = listener;
+          return () => {};
+        }),
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const customNovelRepo = {
+        listNovels: vi
+          .fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([
+            {
+              id: "kakuyomu:333",
+              title: "初回同期で通知された作品",
+              author: "作者",
+              totalChapters: 3,
+              cachedChapters: 0,
+              bookmarkChapterIndex: null,
+              bookmarkScrollProgress: 0,
+              hasNewUpdate: false,
+              lastReadAt: null,
+              latestEpisodePublishedAt: null,
+              canonicalUrl: "https://kakuyomu.jp/works/333",
+              isFavorite: false,
+            },
+          ]),
+        getNovelById: vi.fn(),
+        upsertNovelWithToc: vi.fn(),
+        updateBookmark: vi.fn(),
+        setFavorite: vi.fn(),
+        deleteNovel: vi.fn(),
+        clearNewUpdate: vi.fn(),
+        updateLastCheckedAt: vi.fn(),
+      };
+
+      const { result } = renderHook(() => useBookshelf({ intervalMs: 0 }), {
+        wrapper: createWrapper({
+          cloudSyncBridge: connectedBridge,
+          syncEngine: mockSyncEngine as unknown as SyncEngine,
+          novelRepository: customNovelRepo,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.novels).toHaveLength(1);
+        expect(result.current.novels[0].title).toBe("初回同期で通知された作品");
+      });
+      expect(result.current.isLoading).toBe(false);
+      // 初回表示 (1回) + subscribePullCompleted 経由 (1回) の計2回のみで重複しないこと
+      expect(customNovelRepo.listNovels).toHaveBeenCalledTimes(2);
     });
 
     it("作品削除時（deleteNovel）に syncEngine.notifyChanged が呼び出され一覧が更新されること", async () => {
