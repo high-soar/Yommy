@@ -2051,7 +2051,6 @@ describe("ReaderContainer", () => {
 
     it("「移動する」解決の非同期通信中は isResolvingBookmarkConflict が true・bookmarkConflict が維持され、二重実行が抑止されること (R1-01)", async () => {
       const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
-      const onNavigateChapter = vi.fn();
       const { repo: novelRepository } = createMockNovelRepo({
         ...sampleNovel,
         bookmarkChapterIndex: 1,
@@ -2095,7 +2094,6 @@ describe("ReaderContainer", () => {
         <TestWrapper
           novelId={sampleNovel.id}
           chapterIndex={1}
-          onNavigateChapter={onNavigateChapter}
           novelRepository={novelRepository}
           chapterRepository={chapterRepository}
           httpClient={deferredHttpClient}

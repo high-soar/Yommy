@@ -3179,9 +3179,10 @@ describe("useReader", () => {
           },
         );
 
-        await waitFor(() => {
-          expect(result.current.isLoading).toBe(false);
+        await act(async () => {
+          await Promise.resolve();
         });
+        expect(result.current.isLoading).toBe(false);
 
         // 第1話でスクロール進捗を更新（300ms デバウンス待機中・未フラッシュ）
         act(() => {
@@ -3198,6 +3199,66 @@ describe("useReader", () => {
         const updatedNovel = await novelRepo.getNovelById(seeded.id);
         expect(updatedNovel?.bookmarkChapterIndex).toBe(1);
         expect(updatedNovel?.bookmarkScrollProgress).toBe(0.75);
+      });
+
+      it("goToChapter 開始時の flushBookmark 実行中にアンマウントされた場合、後続の既読・遷移処理を中断して false を返すこと (R1-18)", async () => {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 3,
+          cachedCount: 3,
+        });
+
+        const { result, unmount } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+            }),
+          },
+        );
+
+        await act(async () => {
+          await Promise.resolve();
+        });
+
+        act(() => {
+          void result.current.updateScrollProgress(0.5);
+        });
+
+        let resolveFlush: (() => void) | null = null;
+        const updateSpy = vi
+          .spyOn(novelRepo, "updateBookmark")
+          .mockImplementationOnce(
+            () =>
+              new Promise<void>((resolve) => {
+                resolveFlush = resolve;
+              }),
+          );
+        const markReadSpy = vi.spyOn(chapterRepo, "markChapterRead");
+
+        let goPromise: Promise<boolean>;
+        act(() => {
+          goPromise = result.current.goToChapter(2);
+        });
+        await act(async () => {
+          await Promise.resolve();
+        });
+
+        unmount();
+
+        let goResult = true;
+        await act(async () => {
+          resolveFlush?.();
+          goResult = await goPromise!;
+        });
+
+        expect(goResult).toBe(false);
+        expect(markReadSpy).not.toHaveBeenCalled();
+        updateSpy.mockRestore();
+        markReadSpy.mockRestore();
       });
     });
 
