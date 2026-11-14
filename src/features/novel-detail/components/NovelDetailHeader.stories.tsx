@@ -297,3 +297,23 @@ export const MenuOpenRetryFailed: Story = {
     }
   },
 };
+
+/**
+ * 3点メニュー展開状態（一括キャッシュ実行中：「一括キャッシュ実行中...」が disabled、他操作項目は利用可能）
+ */
+export const MenuOpenBatchCaching: Story = {
+  name: "3点メニュー展開（一括キャッシュ実行中）",
+  args: {
+    isBatchCaching: true,
+    batchCacheProgress: { current: 3, total: 15 },
+    pendingCacheCount: 12,
+  },
+  play: async ({ canvasElement }) => {
+    const menuButton = canvasElement.querySelector(
+      '[data-testid="novel-detail-menu-button"]',
+    );
+    if (menuButton instanceof HTMLElement) {
+      await userEvent.click(menuButton);
+    }
+  },
+};
