@@ -1,16 +1,24 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+
+/**
+ * アプリケーションのサービス初期化（SQLite / DB / スケジューラ準備）完了まで待機する。
+ */
+async function waitForServicesReady(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () =>
+      typeof window.__yommyServices !== "undefined" &&
+      window.__yommyServices.isReady === true,
+  );
+}
 
 test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷移・既読しおり復元シナリオ", () => {
   test.beforeEach(async ({ page }) => {
     // ローカルストレージをクリアして初期状態から開始
     await page.goto("/");
+    await waitForServicesReady(page);
     await page.evaluate(() => localStorage.clear());
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady === true,
-    );
+    await waitForServicesReady(page);
   });
 
   test("全画面シェル・設定画面組版変更・作品登録からSCR-02目次確認・リーダー本文設定即時反映・前後話遷移・OSバックキー論理階層遷移・既読しおり復元・作品削除までの一連の動作が正常に機能する", async ({
@@ -158,11 +166,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       );
     });
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady === true,
-    );
+    await waitForServicesReady(page);
 
     const novelCard = page.getByTestId("novel-card");
     await expect(novelCard).toBeVisible();
@@ -1147,6 +1151,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
 
     // 13. 未存在作品 ID (/novels/non-existent-id) 指定時の Not Found 画面と「本棚へ戻る」ボタンによる本棚復帰を検証（AC-ND-07, TR-07）
     await page.goto("/novels/kakuyomu:9999999999999999999");
+    await waitForServicesReady(page);
     const notFoundElement = page.getByTestId("novel-detail-not-found");
     await expect(notFoundElement).toBeVisible();
     await expect(notFoundElement).toContainText(
@@ -1162,6 +1167,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
 
     // 14. 未存在作品・エピソードのリーダー画面 (/novels/non-existent/chapters/1) において、空状態（reader-empty）および上下オーバーレイ初期表示（translate-y-0）と「本棚」タブによる復帰を検証（AC-RD-10, AC-RD-22）
     await page.goto("/novels/kakuyomu:9999999999999999999/chapters/1");
+    await waitForServicesReady(page);
     const readerEmpty = page.getByTestId("reader-empty");
     await expect(readerEmpty).toBeVisible();
     const errorOverlay = page.getByTestId("reader-bottom-overlay");
@@ -1233,6 +1239,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
   }) => {
     // 1. 設定画面（/settings）へ遷移
     await page.goto("/settings");
+    await waitForServicesReady(page);
     const settingsPage = page.getByTestId("settings-page");
     await expect(settingsPage).toBeVisible();
 
@@ -1302,11 +1309,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
 
     // 4. 設定の永続化確認（リロード後も維持されていること）
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady === true,
-    );
+    await waitForServicesReady(page);
     await expect(fontFamilySelect).toHaveValue("biz-ud-gothic");
     await expect(pageMarginValue).toHaveText("32px");
     await expect(samplePreview).toHaveAttribute(
@@ -1329,6 +1332,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     });
 
     await page.goto("/novels/kakuyomu:16817330658027210412/chapters/1");
+    await waitForServicesReady(page);
     const readerView = page.getByTestId("reader-view");
     await expect(readerView).toBeVisible();
 
@@ -1388,15 +1392,17 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
         {
           remoteChapterId: "16817330658027210414",
           title: "第1話 見知らぬ空",
-          url: "https://kakuyomu.jp/works/16817330658027210412/episodes/16817330658027210414",
           bodyHtml: longBodyHtml,
           byteSize: longBodyHtml.length,
+          prevChapterUrl: null,
+          nextChapterUrl: null,
         },
         new Date().toISOString(),
       );
     });
 
     await page.goto("/novels/kakuyomu:16817330658027210412/chapters/2");
+    await waitForServicesReady(page);
     await expect(readerView).toBeVisible();
     await expect(readerView).toHaveAttribute(
       "data-total-pages",
@@ -1442,6 +1448,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     // 7. 横書きスクロール表示時の余白スタイル反映確認
     // 設定画面へ移動して横書きへ切り替え
     await page.goto("/settings");
+    await waitForServicesReady(page);
     const toggleOrientation = page.getByTestId("toggle-orientation");
     await toggleOrientation.click();
     await expect(samplePreview).toHaveAttribute(
@@ -1451,6 +1458,7 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
 
     // リーダーへ戻る
     await page.goto("/novels/kakuyomu:16817330658027210412/chapters/1");
+    await waitForServicesReady(page);
     await expect(readerView).toBeVisible();
     await expect(readerView).toHaveAttribute(
       "data-writing-mode",
