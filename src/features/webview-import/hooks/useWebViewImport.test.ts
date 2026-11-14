@@ -2169,4 +2169,169 @@ describe("useWebViewImport", () => {
       ]);
     });
   });
+
+  describe("アンマウント時の onImportComplete 抑止と DB・スケジューラ同期完遂 (R1-01)", () => {
+    const createMockQueueRepo = (): QueueRepository =>
+      ({
+        deleteByNovelAndChapters: vi.fn().mockResolvedValue(undefined),
+      }) as unknown as QueueRepository;
+
+    const createMockCacheScheduler = (): CacheScheduler =>
+      ({
+        syncNovelProgress: vi.fn().mockResolvedValue(undefined),
+        dispose: vi.fn(),
+      }) as unknown as CacheScheduler;
+
+    it("作品目次（短編本文含む）のインポート実行中にアンマウントされた場合、DB保存・キュー削除・CacheScheduler・同期通知は完遂し onImportComplete は呼ばれないこと (AC-WV-05, R1-01)", async () => {
+      const narouShortNovel: NovelRecord = {
+        ...sampleNovel,
+        id: "narou:n9669bk",
+        siteType: "narou",
+        remoteWorkId: "n9669bk",
+        canonicalUrl: "https://ncode.syosetu.com/n9669bk/",
+      };
+
+      let resolveUpsert!: (novel: NovelRecord) => void;
+      const upsertPromise = new Promise<NovelRecord>((resolve) => {
+        resolveUpsert = resolve;
+      });
+      (
+        mockNovelRepo.upsertNovelWithToc as ReturnType<typeof vi.fn>
+      ).mockImplementation(() => upsertPromise);
+
+      const mockQueueRepo = createMockQueueRepo();
+      const mockScheduler = createMockCacheScheduler();
+      const onImportCompleteMock = vi.fn();
+
+      bridge.setMockPage({
+        html: "<html><body><div id='novel_honbun'>短編本文</div></body></html>",
+        url: "https://ncode.syosetu.com/n9669bk/",
+        title: "なろう短編",
+      });
+
+      const { result, unmount } = renderHook(() =>
+        useWebViewImport({
+          initialUrl: "https://ncode.syosetu.com/n9669bk/",
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          queueRepository: mockQueueRepo,
+          parserRegistry: mockParserRegistry,
+          syncEngine: mockSyncEngine,
+          cacheScheduler: mockScheduler,
+          onImportComplete: onImportCompleteMock,
+        }),
+      );
+
+      let importPromise!: Promise<unknown>;
+      await act(async () => {
+        importPromise = result.current.importCurrentDom();
+        await Promise.resolve();
+      });
+
+      expect(mockNovelRepo.upsertNovelWithToc).toHaveBeenCalledTimes(1);
+
+      // 非同期 DB 保存待機中にアンマウント
+      unmount();
+
+      let importResult: unknown = null;
+      await act(async () => {
+        resolveUpsert(narouShortNovel);
+        importResult = await importPromise;
+      });
+
+      expect(importResult).toEqual({
+        type: "novel",
+        novelId: narouShortNovel.id,
+      });
+      expect(mockChapterRepo.saveChapterBody).toHaveBeenCalledWith(
+        narouShortNovel.id,
+        1,
+        expect.anything(),
+        expect.any(String),
+      );
+      expect(mockQueueRepo.deleteByNovelAndChapters).toHaveBeenCalledWith(
+        narouShortNovel.id,
+        [1],
+      );
+      expect(mockScheduler.syncNovelProgress).toHaveBeenCalledWith(
+        narouShortNovel.id,
+      );
+      expect(mockSyncEngine.notifyChanged).toHaveBeenCalledTimes(1);
+      expect(onImportCompleteMock).not.toHaveBeenCalled();
+    });
+
+    it("各話エピソード本文のインポート実行中にアンマウントされた場合、saveChapterBody・キュー削除・CacheScheduler・同期通知は完遂し onImportComplete は呼ばれないこと (AC-WV-06, R1-01)", async () => {
+      let resolveSaveBody!: () => void;
+      const saveBodyPromise = new Promise<void>((resolve) => {
+        resolveSaveBody = resolve;
+      });
+      (
+        mockChapterRepo.saveChapterBody as ReturnType<typeof vi.fn>
+      ).mockImplementation(() => saveBodyPromise);
+
+      const mockQueueRepo = createMockQueueRepo();
+      const mockScheduler = createMockCacheScheduler();
+      const onImportCompleteMock = vi.fn();
+
+      bridge.setMockPage({
+        html: "<html><body><div class='widget-episodeBody'>第2話本文</div></body></html>",
+        url: sampleChapters[1].url,
+        title: "第1話",
+      });
+
+      const { result, unmount } = renderHook(() =>
+        useWebViewImport({
+          initialUrl: sampleChapters[1].url,
+          initialNovelId: sampleNovel.id,
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          queueRepository: mockQueueRepo,
+          parserRegistry: mockParserRegistry,
+          syncEngine: mockSyncEngine,
+          cacheScheduler: mockScheduler,
+          onImportComplete: onImportCompleteMock,
+        }),
+      );
+
+      let importPromise!: Promise<unknown>;
+      await act(async () => {
+        importPromise = result.current.importCurrentDom();
+        await Promise.resolve();
+      });
+
+      expect(mockChapterRepo.saveChapterBody).toHaveBeenCalledTimes(1);
+
+      // 非同期本文保存待機中にアンマウント
+      unmount();
+
+      let importResult: unknown = null;
+      await act(async () => {
+        resolveSaveBody();
+        importResult = await importPromise;
+      });
+
+      expect(importResult).toEqual({
+        type: "chapter",
+        novelId: sampleNovel.id,
+        chapterIndex: 2,
+      });
+      expect(mockChapterRepo.saveChapterBody).toHaveBeenCalledWith(
+        sampleNovel.id,
+        2,
+        expect.anything(),
+        expect.any(String),
+      );
+      expect(mockQueueRepo.deleteByNovelAndChapters).toHaveBeenCalledWith(
+        sampleNovel.id,
+        [2],
+      );
+      expect(mockScheduler.syncNovelProgress).toHaveBeenCalledWith(
+        sampleNovel.id,
+      );
+      expect(mockSyncEngine.notifyChanged).toHaveBeenCalledTimes(1);
+      expect(onImportCompleteMock).not.toHaveBeenCalled();
+    });
+  });
 });

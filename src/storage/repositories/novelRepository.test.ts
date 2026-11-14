@@ -1,10 +1,14 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { resetTestDb, initTestDb } from "../adapter/inMemoryDb";
 import { SqlNovelRepository } from "./novelRepository";
 import type { ParsedNovelIndex } from "../../parsers/types";
 
 describe("SqlNovelRepository", () => {
   let repository: SqlNovelRepository;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   beforeEach(async () => {
     const adapter = await resetTestDb();

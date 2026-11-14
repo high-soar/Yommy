@@ -1,6 +1,6 @@
 import { renderHook, act, waitFor } from "@testing-library/react";
 import React from "react";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import * as ServiceProviderModule from "../../../app/ServiceProvider";
 import { ServiceProvider } from "../../../app/ServiceProvider";
 import { RouterProvider } from "../../../app/router";
@@ -24,6 +24,10 @@ import type { NovelRepository } from "../../../storage/types";
 
 describe("useNovelRanking", () => {
   let mockHttpClient: MockHttpClient;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   beforeEach(async () => {
     await resetTestDb();

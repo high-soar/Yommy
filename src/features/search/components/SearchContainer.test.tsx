@@ -1,5 +1,5 @@
 import { render, screen, waitFor, act } from "@testing-library/react";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./SearchContainer.stories";
 import { SearchContainer } from "./SearchContainer";
@@ -16,6 +16,10 @@ const { Default } = composeStories(stories);
 
 describe("SearchContainer コンポーネント", () => {
   let mockHttpClient: MockHttpClient;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   beforeEach(async () => {
     await resetTestDb();

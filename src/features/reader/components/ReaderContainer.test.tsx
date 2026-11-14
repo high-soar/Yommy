@@ -1,6 +1,6 @@
 import { render, screen, waitFor, act } from "@testing-library/react";
 import React from "react";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./ReaderContainer.stories";
 import { ReaderContainer, type ReaderContainerProps } from "./ReaderContainer";
@@ -286,6 +286,10 @@ const TestObserver: React.FC<{
 };
 
 describe("ReaderContainer", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   beforeEach(() => {
     localStorage.clear();
     window.history.pushState(null, "", "/");

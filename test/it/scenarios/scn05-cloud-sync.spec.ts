@@ -767,8 +767,12 @@ async function installMockVisibilityClock(page: Page): Promise<void> {
     if (win.__yommyTimeOffsetMs === undefined) {
       win.__yommyTimeOffsetMs = initialOffsetMs;
       const RealDate = Date;
-      const MockDate = new Proxy(RealDate, {
-        construct(target, argArray, newTarget) {
+      const MockDate: DateConstructor = new Proxy(RealDate, {
+        construct(
+          target: DateConstructor,
+          argArray: unknown[],
+          newTarget,
+        ): Date {
           const nextArgs =
             argArray.length === 0
               ? [RealDate.now() + (win.__yommyTimeOffsetMs ?? 0)]
@@ -777,7 +781,7 @@ async function installMockVisibilityClock(page: Page): Promise<void> {
             target,
             nextArgs,
             newTarget === MockDate ? target : newTarget,
-          );
+          ) as Date;
         },
         apply(target, _thisArg, argArray) {
           if (argArray.length === 0) {
@@ -785,7 +789,7 @@ async function installMockVisibilityClock(page: Page): Promise<void> {
               RealDate.now() + (win.__yommyTimeOffsetMs ?? 0),
             ).toString();
           }
-          return Reflect.apply(target, undefined, argArray);
+          return Reflect.apply(target, undefined, argArray) as string;
         },
         get(target, prop, receiver) {
           if (prop === "now") {

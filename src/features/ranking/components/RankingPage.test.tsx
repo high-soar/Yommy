@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./RankingPage.stories";
 import { RankingPage } from "./RankingPage";
@@ -22,6 +22,10 @@ const {
 } = composeStories(stories);
 
 describe("RankingPage コンポーネント", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("WeeklyOverall ストーリー: ランキングヘッダー、フィルタ、作品一覧の props が子コンポーネントへ伝播されること (AC-RK-01)", () => {
     const siteSelectorSpy = vi
       .spyOn(siteSelectorModule, "SiteSelector")

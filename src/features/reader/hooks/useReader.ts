@@ -218,6 +218,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     bookmarkConflict,
   );
   const prefetchAbortControllerRef = useRef<AbortController | null>(null);
+  const chapterFetchAbortControllerRef = useRef<AbortController | null>(null);
   const activePrefetchPromiseRef = useRef<Promise<void> | null>(null);
   const lastGoToChapterIndexRef = useRef<number | null>(null);
   const bookmarkDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -297,13 +298,24 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     }
   }, []);
 
+  /**
+   * 進行中のオンデマンド本文取得（high優先度・直接取得）を即座に中断する内部関数
+   */
+  const stopChapterFetch = useCallback(() => {
+    if (chapterFetchAbortControllerRef.current) {
+      chapterFetchAbortControllerRef.current.abort();
+      chapterFetchAbortControllerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
       stopPrefetch();
+      stopChapterFetch();
     };
-  }, [stopPrefetch]);
+  }, [stopChapterFetch, stopPrefetch]);
 
   /**
    * 指定エピソードの本文をオンデマンドで取得・パースして DB に保存する共通関数
@@ -357,6 +369,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       targetNovelId: string,
       targetChapterIndex: number,
       initialChapter: ChapterRecord,
+      signal: AbortSignal,
     ): Promise<ChapterRecord | null> => {
       let resolved: ChapterRecord | null = initialChapter;
       if (cacheScheduler) {
@@ -368,7 +381,11 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
               novelId: targetNovelId,
               chapterIndexes: [targetChapterIndex],
               priority: "high",
+              signal,
             });
+            if (signal.aborted) {
+              return null;
+            }
             const refreshed = await chapterRepository.getChapter(
               targetNovelId,
               targetChapterIndex,
@@ -377,7 +394,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
               resolved = refreshed;
             }
           } catch (err: unknown) {
-            if (isStaleExisting) {
+            if (!signal.aborted && isStaleExisting) {
               console.warn(
                 `[useReader] Stale chapter refresh failed for index ${targetChapterIndex}, falling back to existing cache`,
                 err,
@@ -398,11 +415,15 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
               targetChapterIndex,
               resolved.url,
               SHORT_TIMEOUT_MS,
+              signal,
             );
             if (refreshed) {
               resolved = refreshed;
             }
           } catch (err: unknown) {
+            if (signal.aborted) {
+              throw err;
+            }
             console.warn(
               `[useReader] Stale chapter refresh failed for index ${targetChapterIndex}, falling back to existing cache`,
               err,
@@ -415,6 +436,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           targetChapterIndex,
           resolved.url,
           STANDARD_TIMEOUT_MS,
+          signal,
         );
       }
       return resolved;
@@ -568,6 +590,9 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
 
     let isMounted = true;
     stopPrefetch();
+    stopChapterFetch();
+    const fetchAbortController = new AbortController();
+    chapterFetchAbortControllerRef.current = fetchAbortController;
     setIsLoading(true);
     setError(null);
 
@@ -641,6 +666,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             targetNovel.id,
             targetIndex,
             targetChapter,
+            fetchAbortController.signal,
           );
           if (resolved) {
             targetChapter = resolved;
@@ -653,8 +679,8 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           }
         }
 
-        // R1-29: 初期通信（resolveChapterBody）完了後にアンマウントされていた場合は DB 更新・同期をスキップ
-        if (!isMounted) return;
+        // R1-29 / R1-13: 初期通信（resolveChapterBody）完了・中断後にアンマウントまたは別取得へ切り替わっていた場合は DB 更新・同期をスキップ
+        if (!isMounted || fetchAbortController.signal.aborted) return;
 
         // 既読自動更新
         if (
@@ -703,7 +729,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           startPrefetch(targetNovel.id, targetIndex, targetNovel.totalChapters);
         }
       } catch (err: unknown) {
-        if (isMounted) {
+        if (isMounted && !fetchAbortController.signal.aborted) {
           setError(toErrorMessage(err));
           // エラー時も内蔵ブラウザ連携 (TR-10) のために対象作品・対象話メタデータを設定
           if (targetNovel) {
@@ -715,7 +741,10 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           }
         }
       } finally {
-        if (isMounted) {
+        if (chapterFetchAbortControllerRef.current === fetchAbortController) {
+          chapterFetchAbortControllerRef.current = null;
+        }
+        if (isMounted && !fetchAbortController.signal.aborted) {
           setIsLoading(false);
         }
       }
@@ -725,6 +754,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
 
     return () => {
       isMounted = false;
+      stopChapterFetch();
     };
   }, [
     isReady,
@@ -736,6 +766,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     resolveChapterBody,
     resetPaginationState,
     startPrefetch,
+    stopChapterFetch,
     stopPrefetch,
     syncEngine,
   ]);
@@ -1025,8 +1056,6 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         return false;
       }
 
-      stopPrefetch();
-
       const currentNovel = novelRef.current;
       if (
         !currentNovel ||
@@ -1035,6 +1064,13 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       ) {
         return false;
       }
+
+      stopPrefetch();
+      stopChapterFetch();
+
+      const fetchAbortController = new AbortController();
+      chapterFetchAbortControllerRef.current = fetchAbortController;
+      const { signal } = fetchAbortController;
 
       let isSuccess = false;
       isNavigatingChapterRef.current = true;
@@ -1083,15 +1119,20 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
               currentNovel.id,
               targetChapterIndex,
               targetChapter,
+              signal,
             );
-            if (!isMountedRef.current) return false;
+            if (!isMountedRef.current || signal.aborted) return false;
             if (resolved) {
               targetChapter = resolved;
             }
           } catch (fetchErr) {
             // エラー時も内蔵ブラウザ連携 (TR-10) のために対象話メタデータ・目標話数を保持 (R1-27)
             // R2-01: 旧話のスクロール進捗が残ったまま新話のしおりへ誤保存されないようリセット
-            if (isMountedRef.current && !options?.preserveChapterOnError) {
+            if (
+              isMountedRef.current &&
+              !signal.aborted &&
+              !options?.preserveChapterOnError
+            ) {
               setChapter(targetChapter);
               setCurrentChapterIndex(targetChapterIndex);
               currentChapterIndexRef.current = targetChapterIndex;
@@ -1152,7 +1193,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           );
         }
       } catch (err: unknown) {
-        if (isMountedRef.current) {
+        if (isMountedRef.current && !signal.aborted) {
           setError(toErrorMessage(err));
           if (!options?.preserveChapterOnError) {
             // R1-27: 取得失敗時でも目標話数 index を保持して表示・遷移パラメータが食い違わないよう是正
@@ -1165,7 +1206,10 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         isSuccess = false;
       } finally {
         isNavigatingChapterRef.current = false;
-        if (isMountedRef.current) {
+        if (chapterFetchAbortControllerRef.current === fetchAbortController) {
+          chapterFetchAbortControllerRef.current = null;
+        }
+        if (isMountedRef.current && !signal.aborted) {
           setIsLoading(false);
         }
       }
@@ -1179,6 +1223,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       resetPaginationState,
       resolveChapterBody,
       startPrefetch,
+      stopChapterFetch,
       stopPrefetch,
       syncEngine,
     ],

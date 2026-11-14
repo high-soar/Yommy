@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as BottomTabBarModule from "../../../shared/ui/BottomTabBar";
 import * as stories from "./WebViewImportPage.stories";
@@ -10,6 +10,10 @@ const { Default, UnsupportedUrl, Loading, WithNotice, WithError } =
   composeStories(stories);
 
 describe("WebViewImportPage", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("Default ストーリーが正常に描画され、主要要素が存在すること", () => {
     render(<Default />);
 
