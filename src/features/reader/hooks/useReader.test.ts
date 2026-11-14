@@ -3643,9 +3643,10 @@ describe("useReader", () => {
         const { result } = renderHook(
           () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
           {
-            wrapper: createWrapper({
+            wrapper: createWithoutSchedulerWrapper({
               novelRepository: novelRepo,
               chapterRepository: chapterRepo,
+              settingsRepository: new SqlSettingsRepository(db),
               httpClient,
             }),
           },
@@ -3695,9 +3696,10 @@ describe("useReader", () => {
         const { result } = renderHook(
           () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
           {
-            wrapper: createWrapper({
+            wrapper: createWithoutSchedulerWrapper({
               novelRepository: novelRepo,
               chapterRepository: chapterRepo,
+              settingsRepository: new SqlSettingsRepository(db),
               httpClient,
             }),
           },
@@ -6618,6 +6620,185 @@ describe("useReader", () => {
       expect(httpSpy).toHaveBeenCalledTimes(1);
       expect(result.current.chapter?.bodyHtml).not.toBeNull();
       unmount();
+    });
+
+    it("cacheScheduler 未注入時のフォールバックで鮮度判定・HTTP 400エラー・先読み直列制御および中断保護が網羅的に動作すること", async () => {
+      vi.useFakeTimers();
+      try {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const settingsRepo = new SqlSettingsRepository(db);
+        const eightDaysAgo = new Date(
+          Date.now() - (CACHE_TTL_MS + 24 * 60 * 60 * 1000),
+        ).toISOString();
+
+        // 全6話構成、全話一旦キャッシュ済みにし、鮮度と未キャッシュ状態を作り分ける
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 6,
+          cachedCount: 6,
+          cachedDownloadedAt: eightDaysAgo,
+        });
+        // 第2話のみ鮮度内に更新（先読みスキップ検証）
+        await chapterRepo.saveChapterBody(
+          seeded.id,
+          2,
+          {
+            remoteChapterId: KAKUYOMU_EPISODE_IDS[1],
+            title: "第2話",
+            bodyHtml: "<p>第2話 鮮度内キャッシュ</p>",
+            byteSize: 80,
+            prevChapterUrl: null,
+            nextChapterUrl: null,
+          },
+          new Date().toISOString(),
+        );
+        // 第4話は未キャッシュ状態にする
+        await db.execute(
+          "UPDATE chapters SET body_html = NULL, byte_size = 0, downloaded_at = NULL WHERE novel_id = ? AND chapter_index = 4",
+          [seeded.id],
+        );
+
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const ch5Gate: {
+          resolve:
+            | ((res: {
+                url: string;
+                status: number;
+                headers: Record<string, string>;
+                html: string;
+              }) => void)
+            | null;
+        } = { resolve: null };
+        const ch4AbortGate: { reject: ((err: Error) => void) | null } = {
+          reject: null,
+        };
+        let forceStaleError = false;
+        let useCh4AbortGate = false;
+
+        // abort シグナルで即時 reject しないカスタム HttpClientBridge を使い、
+        // 直列待機 (previousPromise)・完了後 abort (326行目)・例外後 abort (530行目) を通す
+        const httpClient: HttpClientBridge = {
+          getHtml: async (req) => {
+            if (forceStaleError) {
+              return {
+                url: req.url,
+                status: 503,
+                headers: {},
+                html: "unavailable",
+              };
+            }
+            if (req.url.includes(KAKUYOMU_EPISODE_IDS[3])) {
+              if (useCh4AbortGate) {
+                return new Promise((_resolve, reject) => {
+                  ch4AbortGate.reject = reject;
+                });
+              }
+              return {
+                url: req.url,
+                status: 500,
+                headers: {},
+                html: "server error",
+              };
+            }
+            if (req.url.endsWith("/episodes/ep-5")) {
+              return new Promise((resolve) => {
+                ch5Gate.resolve = resolve;
+              });
+            }
+            return {
+              url: req.url,
+              status: 200,
+              headers: {},
+              html: episodeContentHtml,
+            };
+          },
+        };
+
+        const { result, unmount } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWithoutSchedulerWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              settingsRepository: settingsRepo,
+              httpClient,
+            }),
+          },
+        );
+
+        await act(async () => {
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+        expect(result.current.isLoading).toBe(false);
+
+        // 1500ms 待機して第2話スキップ → 第3話 (stale SHORT_TIMEOUT_MS) → 第4話 (HTTP 500 -> warn) → 第5話待機まで進む
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(PREFETCH_INTERVAL_MS);
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(PREFETCH_INTERVAL_MS);
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(PREFETCH_INTERVAL_MS);
+        });
+        expect(warnSpy).toHaveBeenCalledWith(
+          "[useReader] Prefetch failed for chapter 4",
+          expect.any(Error),
+        );
+
+        // 第5話待機中に第2話（鮮度内）→第3話（stale エラーフォールバック）へ遷移し
+        // previousPromise 待機中に signal.aborted = true となる経路 (490行目) も検証
+        expect(ch5Gate.resolve).not.toBeNull();
+        let goPromise: Promise<boolean> | null = null;
+        await act(async () => {
+          goPromise = result.current.goToChapter(2);
+          await Promise.resolve();
+        });
+        await goPromise;
+
+        forceStaleError = true;
+        await db.execute(
+          "UPDATE chapters SET downloaded_at = ? WHERE novel_id = ? AND chapter_index = 3",
+          [eightDaysAgo, seeded.id],
+        );
+        await act(async () => {
+          await result.current.goToChapter(3);
+        });
+        expect(warnSpy).toHaveBeenCalledWith(
+          "[useReader] Stale chapter refresh failed for index 3, falling back to existing cache",
+          expect.any(Error),
+        );
+
+        // 第5話の HTTP が abort 後に応答を返しても signal.aborted で破棄され (326行目)、
+        // 第2話→第3話の先読み直列待機を順次解放して第4話待機へ進める
+        forceStaleError = false;
+        useCh4AbortGate = true;
+        await act(async () => {
+          ch5Gate.resolve?.({
+            url: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/ep-5`,
+            status: 200,
+            headers: {},
+            html: episodeContentHtml,
+          });
+          await Promise.resolve();
+        });
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(PREFETCH_INTERVAL_MS);
+        });
+
+        // 第4話通信中にアンマウントしてから reject し signal.aborted 時 catch 早期リターン (530行目) を検証
+        expect(ch4AbortGate.reject).not.toBeNull();
+        unmount();
+        await act(async () => {
+          ch4AbortGate.reject?.(new DOMException("Aborted", "AbortError"));
+          await Promise.resolve();
+        });
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

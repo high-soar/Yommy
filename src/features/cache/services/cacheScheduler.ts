@@ -229,7 +229,9 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     }
 
     if (response.status >= 400) {
-      throw new Error(`HTTP ${response.status}`);
+      throw new Error(
+        `エピソードの取得に失敗しました (HTTP ${response.status})`,
+      );
     }
 
     const parser = parserRegistry.requireParser(chapter.url);
