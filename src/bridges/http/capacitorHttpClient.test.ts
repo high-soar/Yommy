@@ -25,6 +25,7 @@ describe("CapacitorHttpClient", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.clearAllMocks();
   });
 

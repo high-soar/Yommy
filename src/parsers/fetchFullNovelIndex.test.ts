@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MockHttpClient } from "../bridges/http/mockHttpClient";
 import type { NovelParser, ParsedNovelIndex } from "./types";
 import {
@@ -10,6 +10,10 @@ import {
 describe("fetchFullNovelIndex: 複数ページ目次連続取得パイプライン", () => {
   let mockHttpClient: MockHttpClient;
   let mockParser: NovelParser;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   beforeEach(() => {
     mockHttpClient = new MockHttpClient();
