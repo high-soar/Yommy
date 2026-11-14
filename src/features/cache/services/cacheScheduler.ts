@@ -200,7 +200,13 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     chapterIndex: number,
   ): Promise<void> => {
     const batch = batches.get(novelId);
-    if (!batch || !batch.isBatchCaching) {
+    if (!batch) {
+      return;
+    }
+    if (!batch.isBatchCaching) {
+      if (batch.failedChapterIndexes.delete(chapterIndex)) {
+        emitProgress(batch);
+      }
       return;
     }
     const idx = batch.remainingChapterIndexes.indexOf(chapterIndex);
@@ -264,9 +270,6 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
       parsed,
       new Date().toISOString(),
     );
-    if (signal.aborted) {
-      return "aborted";
-    }
     await queueRepository.deleteByNovelAndChapters(novelId, [
       chapter.chapterIndex,
     ]);
