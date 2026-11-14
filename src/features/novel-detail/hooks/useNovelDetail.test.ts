@@ -4929,7 +4929,7 @@ describe("useNovelDetail", () => {
       expect(scheduler.pauseNovelTasks).toHaveBeenCalledWith(seeded.id);
     });
 
-    it("refreshToc: pauseNovelTasks 待機前から即時 isRefreshing === true となり(No. 450)、失敗時・全話既キャッシュ時は再登録せず、各 await 境界のアンマウントで後続を実行しないこと", async () => {
+    it("refreshToc: pauseNovelTasks 待機前から即時 isRefreshing === true となり(No. 450)、失敗時やアンマウント時でも一時停止中の一括キャッシュを自動再開し、全話既キャッシュ時は再登録しないこと", async () => {
       const db = await resetTestDb();
       const novelRepo = new SqlNovelRepository(db);
       const chapterRepo = new SqlChapterRepository(db);
@@ -4969,13 +4969,18 @@ describe("useNovelDetail", () => {
       expect(hookA.result.current.isRefreshing).toBe(true);
       await waitFor(() => expect(resolvePause).not.toBeNull());
 
-      // pauseNovelTasks 中にアンマウントされると通信へ進まない
+      // pauseNovelTasks 中にアンマウントされると TOC 通信へは進まず、一時停止したバッチのみ DB 最新状態で自動再開する
       hookA.unmount();
       resolvePause!();
       expect(await refreshPromiseA).toBe(false);
       expect(getHtmlSpy).not.toHaveBeenCalled();
+      expect(scheduler.enqueueBatchCache).toHaveBeenCalledWith(
+        seeded.id,
+        [1, 2],
+      );
+      vi.mocked(scheduler.enqueueBatchCache).mockClear();
 
-      // TOC 取得失敗時は enqueueBatchCache を再呼び出ししない
+      // TOC 取得失敗時でも中断していたバックグラウンド一括キャッシュを自動再開する (R1-14)
       const hookB = renderHook(() => useNovelDetail(seeded.id), {
         wrapper: createWrapper({
           novelRepository: novelRepo,
@@ -4997,9 +5002,13 @@ describe("useNovelDetail", () => {
         okB = await hookB.result.current.refreshToc();
       });
       expect(okB).toBe(false);
-      expect(scheduler.enqueueBatchCache).not.toHaveBeenCalled();
+      expect(scheduler.enqueueBatchCache).toHaveBeenCalledWith(
+        seeded.id,
+        [1, 2],
+      );
+      vi.mocked(scheduler.enqueueBatchCache).mockClear();
 
-      // TOC 成功後、全話既キャッシュの場合は再エンキューせず、queue 読込中にアンマウントしても再エンキューしない
+      // TOC 成功後、全話既キャッシュ（または残余が failed のみ）の場合は再エンキューしない
       await chapterRepo.saveChapterBody(
         seeded.id,
         1,
@@ -5036,7 +5045,7 @@ describe("useNovelDetail", () => {
       expect(okB2).toBe(true);
       expect(scheduler.enqueueBatchCache).not.toHaveBeenCalled();
 
-      // listByNovelId(再エンキュー判定)待機中のアンマウントで enqueueBatchCache を呼ばない
+      // listByNovelId(再エンキュー判定)待機中のアンマウントでも DB から再エンキューし、React State 更新のみ抑止する (R1-14)
       await queueRepo.clearNovelQueue(seeded.id);
       const origList = queueRepo.listByNovelId.bind(queueRepo);
       let queueCallCount = 0;
@@ -5060,7 +5069,10 @@ describe("useNovelDetail", () => {
       hookB.unmount();
       resolveListOnRefresh!();
       await refreshPromiseB3;
-      expect(scheduler.enqueueBatchCache).not.toHaveBeenCalled();
+      expect(scheduler.enqueueBatchCache).toHaveBeenCalledWith(
+        seeded.id,
+        [3, 4],
+      );
     });
 
     it("confirmClearCache: onlyRead オプションに応じた cancelNovelTasks({ clearQueue }) 呼び出しと待機中アンマウント時の安全終了、および一括キャッシュ中の toggleFavorite 成功を確認すること", async () => {
@@ -5947,6 +5959,378 @@ describe("useNovelDetail", () => {
 
       expect(result.current.isBatchCaching).toBe(false);
       expect(result.current.batchCacheProgress).toBeNull();
+    });
+  });
+
+  describe("R1-14: refreshToc 失敗・アンマウント時の一括キャッシュ自動再開保護", () => {
+    it("CacheScheduler 実体使用時、refreshToc が通信失敗または pauseNovelTasks 中アンマウントになっても paused 放置せず自動再開して全話完了すること", async () => {
+      // Case 1: TOC HTTP 失敗でも自動再開してキャッシュ完了する
+      const db1 = await resetTestDb();
+      const novelRepo1 = new SqlNovelRepository(db1);
+      const chapterRepo1 = new SqlChapterRepository(db1);
+      const queueRepo1 = new SqlQueueRepository(db1);
+      const seeded1 = await seedSampleNovel(novelRepo1, 2);
+
+      const httpClient1 = new MockHttpClient();
+      let releaseEp1!: () => void;
+      const ep1Gate = new Promise<void>((r) => {
+        releaseEp1 = r;
+      });
+      let ep1Entered!: () => void;
+      const ep1Started = new Promise<void>((r) => {
+        ep1Entered = r;
+      });
+      httpClient1.setResponse(new RegExp(KAKUYOMU_EPISODE_IDS[0]), async () => {
+        ep1Entered();
+        await ep1Gate;
+        return { status: 200, headers: {}, html: episodeContentHtml };
+      });
+      httpClient1.setResponse(new RegExp(KAKUYOMU_EPISODE_IDS[1]), {
+        status: 200,
+        headers: {},
+        html: episodeContentHtml,
+      });
+      httpClient1.setResponse(
+        new RegExp(`kakuyomu\\.jp/works/${KAKUYOMU_WORK_ID}$`),
+        () => {
+          throw new Error("TOC Error 503");
+        },
+      );
+
+      const scheduler1 = createCacheScheduler({
+        novelRepository: novelRepo1,
+        chapterRepository: chapterRepo1,
+        queueRepository: queueRepo1,
+        httpClient: httpClient1,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: 0,
+      });
+
+      const hook1 = renderHook(() => useNovelDetail(seeded1.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo1,
+          chapterRepository: chapterRepo1,
+          queueRepository: queueRepo1,
+          httpClient: httpClient1,
+          cacheScheduler: scheduler1,
+        }),
+      });
+      await waitFor(() => expect(hook1.result.current.isLoading).toBe(false));
+
+      await act(async () => {
+        await hook1.result.current.startBatchCache();
+      });
+      await ep1Started;
+
+      let refreshPromise1: Promise<boolean> | undefined;
+      act(() => {
+        refreshPromise1 = hook1.result.current.refreshToc();
+      });
+      releaseEp1();
+
+      await act(async () => {
+        expect(await refreshPromise1).toBe(false);
+      });
+      expect(hook1.result.current.error).toBe("TOC Error 503");
+
+      await waitFor(() => {
+        expect(scheduler1.getNovelProgress(seeded1.id)?.status).toBe(
+          "completed",
+        );
+        expect(hook1.result.current.isBatchCaching).toBe(false);
+      });
+      expect(
+        (await chapterRepo1.getChapter(seeded1.id, 1))?.bodyHtml,
+      ).not.toBeNull();
+      expect(
+        (await chapterRepo1.getChapter(seeded1.id, 2))?.bodyHtml,
+      ).not.toBeNull();
+      scheduler1.dispose();
+
+      // Case 2: pauseNovelTasks 待機中にアンマウントしてもバックグラウンド自動再開して完了する
+      const db2 = await resetTestDb();
+      const novelRepo2 = new SqlNovelRepository(db2);
+      const chapterRepo2 = new SqlChapterRepository(db2);
+      const queueRepo2 = new SqlQueueRepository(db2);
+      const seeded2 = await seedSampleNovel(novelRepo2, 2);
+
+      const httpClient2 = new MockHttpClient();
+      let releaseEp2Gate!: () => void;
+      const ep2Gate = new Promise<void>((r) => {
+        releaseEp2Gate = r;
+      });
+      let notifyEp2Entered!: () => void;
+      const ep2Entered = new Promise<void>((r) => {
+        notifyEp2Entered = r;
+      });
+      let ep1Calls = 0;
+      httpClient2.setResponse(new RegExp(KAKUYOMU_EPISODE_IDS[0]), async () => {
+        ep1Calls += 1;
+        if (ep1Calls === 1) {
+          notifyEp2Entered();
+          await ep2Gate;
+        }
+        return { status: 200, headers: {}, html: episodeContentHtml };
+      });
+      httpClient2.setResponse(new RegExp(KAKUYOMU_EPISODE_IDS[1]), {
+        status: 200,
+        headers: {},
+        html: episodeContentHtml,
+      });
+
+      const scheduler2 = createCacheScheduler({
+        novelRepository: novelRepo2,
+        chapterRepository: chapterRepo2,
+        queueRepository: queueRepo2,
+        httpClient: httpClient2,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: 0,
+      });
+
+      const hook2 = renderHook(() => useNovelDetail(seeded2.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo2,
+          chapterRepository: chapterRepo2,
+          queueRepository: queueRepo2,
+          httpClient: httpClient2,
+          cacheScheduler: scheduler2,
+        }),
+      });
+      await waitFor(() => expect(hook2.result.current.isLoading).toBe(false));
+
+      await act(async () => {
+        await hook2.result.current.startBatchCache();
+      });
+      await ep2Entered;
+
+      let refreshPromise2: Promise<boolean> | undefined;
+      act(() => {
+        refreshPromise2 = hook2.result.current.refreshToc();
+      });
+      hook2.unmount();
+      releaseEp2Gate();
+      expect(await refreshPromise2).toBe(false);
+
+      await waitFor(() => {
+        expect(scheduler2.getNovelProgress(seeded2.id)?.status).toBe(
+          "completed",
+        );
+      });
+      expect(
+        (await chapterRepo2.getChapter(seeded2.id, 1))?.bodyHtml,
+      ).not.toBeNull();
+      expect(
+        (await chapterRepo2.getChapter(seeded2.id, 2))?.bodyHtml,
+      ).not.toBeNull();
+      scheduler2.dispose();
+    });
+
+    it("cancelled 状態・削除済み・排他操作割込・finally DB 例外時は安全に再開抑止または吸収すること", async () => {
+      // 1. status === "cancelled" 時は再開しない
+      const db1 = await resetTestDb();
+      const novelRepo1 = new SqlNovelRepository(db1);
+      const chapterRepo1 = new SqlChapterRepository(db1);
+      const queueRepo1 = new SqlQueueRepository(db1);
+      const seeded1 = await seedSampleNovel(novelRepo1, 2);
+      const mock1 = createMockCacheScheduler();
+      vi.mocked(mock1.scheduler.isNovelBatchCaching).mockReturnValue(true);
+      vi.mocked(mock1.scheduler.getNovelProgress).mockReturnValue({
+        novelId: seeded1.id,
+        isBatchCaching: false,
+        status: "cancelled",
+        current: 0,
+        total: 2,
+        failedCount: 0,
+        failedChapterIndexes: [],
+        pausedReason: "none",
+      });
+      const hook1 = renderHook(() => useNovelDetail(seeded1.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo1,
+          chapterRepository: chapterRepo1,
+          queueRepository: queueRepo1,
+          httpClient: new MockHttpClient(),
+          cacheScheduler: mock1.scheduler,
+        }),
+      });
+      await waitFor(() => expect(hook1.result.current.isLoading).toBe(false));
+      await act(async () => {
+        await hook1.result.current.refreshToc();
+      });
+      expect(mock1.scheduler.enqueueBatchCache).not.toHaveBeenCalled();
+
+      // 2. pauseNovelTasks 待機中にアンマウント+confirmDeleteNovel 完了（isDeletedRef.current === true）で再開しない
+      const db2 = await resetTestDb();
+      const novelRepo2 = new SqlNovelRepository(db2);
+      const chapterRepo2 = new SqlChapterRepository(db2);
+      const queueRepo2 = new SqlQueueRepository(db2);
+      const seeded2 = await seedSampleNovel(novelRepo2, 2);
+      const mock2 = createMockCacheScheduler();
+      vi.mocked(mock2.scheduler.isNovelBatchCaching).mockReturnValue(true);
+      let resolvePause2!: () => void;
+      vi.mocked(mock2.scheduler.pauseNovelTasks).mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolvePause2 = resolve;
+          }),
+      );
+      const hook2 = renderHook(() => useNovelDetail(seeded2.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo2,
+          chapterRepository: chapterRepo2,
+          queueRepository: queueRepo2,
+          httpClient: new MockHttpClient(),
+          cacheScheduler: mock2.scheduler,
+        }),
+      });
+      await waitFor(() => expect(hook2.result.current.isLoading).toBe(false));
+      const refreshFn2 = hook2.result.current.refreshToc;
+      const deleteFn2 = hook2.result.current.confirmDeleteNovel;
+      let refreshPromise2: Promise<boolean> | undefined;
+      act(() => {
+        refreshPromise2 = refreshFn2();
+      });
+      await waitFor(() => expect(resolvePause2).toBeDefined());
+      hook2.unmount();
+      await act(async () => {
+        await deleteFn2();
+      });
+      resolvePause2();
+      expect(await refreshPromise2).toBe(false);
+      expect(mock2.scheduler.enqueueBatchCache).not.toHaveBeenCalled();
+
+      // 3. finally 再開クエリ待機中に排他操作（confirmClearCache）が開始された場合（isClearingCacheRef.current === true）再開しない
+      const db3 = await resetTestDb();
+      const novelRepo3 = new SqlNovelRepository(db3);
+      const chapterRepo3 = new SqlChapterRepository(db3);
+      const queueRepo3 = new SqlQueueRepository(db3);
+      const seeded3 = await seedSampleNovel(novelRepo3, 2);
+      const mock3 = createMockCacheScheduler();
+      vi.mocked(mock3.scheduler.isNovelBatchCaching).mockReturnValue(true);
+      const httpClient3 = new MockHttpClient();
+      httpClient3.setResponse(
+        new RegExp(`kakuyomu\\.jp/works/${KAKUYOMU_WORK_ID}$`),
+        () => {
+          throw new Error("TOC Error");
+        },
+      );
+      let releaseList3!: () => void;
+      const listGate3 = new Promise<void>((r) => {
+        releaseList3 = r;
+      });
+      let list3Entered = false;
+      const origListCh3 = chapterRepo3.listChaptersByNovelId.bind(chapterRepo3);
+      let listChCalls3 = 0;
+      vi.spyOn(chapterRepo3, "listChaptersByNovelId").mockImplementation(
+        async (id) => {
+          listChCalls3 += 1;
+          if (listChCalls3 === 2) {
+            list3Entered = true;
+            await listGate3;
+          }
+          return origListCh3(id);
+        },
+      );
+      let resolveDeleteCached3!: (count: number) => void;
+      vi.spyOn(chapterRepo3, "deleteCachedBodies").mockImplementationOnce(
+        () =>
+          new Promise<number>((r) => {
+            resolveDeleteCached3 = r;
+          }),
+      );
+
+      const hook3 = renderHook(() => useNovelDetail(seeded3.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo3,
+          chapterRepository: chapterRepo3,
+          queueRepository: queueRepo3,
+          httpClient: httpClient3,
+          cacheScheduler: mock3.scheduler,
+        }),
+      });
+      await waitFor(() => expect(hook3.result.current.isLoading).toBe(false));
+
+      let refreshPromise3: Promise<boolean> | undefined;
+      act(() => {
+        refreshPromise3 = hook3.result.current.refreshToc();
+      });
+      await waitFor(() => expect(list3Entered).toBe(true));
+
+      let clearPromise3: Promise<number> | undefined;
+      act(() => {
+        clearPromise3 = hook3.result.current.confirmClearCache({
+          onlyRead: true,
+        });
+      });
+      await waitFor(() => expect(resolveDeleteCached3).toBeDefined());
+      releaseList3();
+      expect(await refreshPromise3).toBe(false);
+      resolveDeleteCached3(0);
+      await act(async () => {
+        await clearPromise3;
+      });
+      expect(mock3.scheduler.enqueueBatchCache).not.toHaveBeenCalled();
+
+      // 4. finally 再開中の DB 読み取りが失敗しても refreshToc 自体は拒否せず完了し、保留 Pull 同期が走る
+      const db4 = await resetTestDb();
+      const novelRepo4 = new SqlNovelRepository(db4);
+      const chapterRepo4 = new SqlChapterRepository(db4);
+      const queueRepo4 = new SqlQueueRepository(db4);
+      const seeded4 = await seedSampleNovel(novelRepo4, 1);
+      const mock4 = createMockCacheScheduler();
+      vi.mocked(mock4.scheduler.isNovelBatchCaching).mockReturnValue(true);
+      const httpClient4 = new MockHttpClient();
+      httpClient4.setResponse(
+        new RegExp(`kakuyomu\\.jp/works/${KAKUYOMU_WORK_ID}$`),
+        () => {
+          throw new Error("TOC Error 500");
+        },
+      );
+      let pullCb4: ((r: { pulled: boolean }) => void) | undefined;
+      const syncEngine4: SyncEngine = {
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+        pullOnStartup: vi.fn().mockResolvedValue({ pulled: false }),
+        subscribePullCompleted: vi.fn((cb) => {
+          pullCb4 = cb;
+          return () => {};
+        }),
+      } as unknown as SyncEngine;
+
+      const hook4 = renderHook(() => useNovelDetail(seeded4.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo4,
+          chapterRepository: chapterRepo4,
+          queueRepository: queueRepo4,
+          httpClient: httpClient4,
+          syncEngine: syncEngine4,
+          cacheScheduler: mock4.scheduler,
+        }),
+      });
+      await waitFor(() => expect(hook4.result.current.isLoading).toBe(false));
+
+      vi.spyOn(chapterRepo4, "listChaptersByNovelId").mockRejectedValueOnce(
+        new Error("finally DB read failed"),
+      );
+      let resolvePause4!: () => void;
+      vi.mocked(mock4.scheduler.pauseNovelTasks).mockImplementationOnce(
+        () =>
+          new Promise<void>((r) => {
+            resolvePause4 = r;
+          }),
+      );
+      let refreshPromise4: Promise<boolean> | undefined;
+      act(() => {
+        refreshPromise4 = hook4.result.current.refreshToc();
+      });
+      await waitFor(() => expect(resolvePause4).toBeDefined());
+      pullCb4?.({ pulled: true });
+      const getNovelSpy4 = vi.spyOn(novelRepo4, "getNovelById");
+      resolvePause4();
+      await act(async () => {
+        expect(await refreshPromise4).toBe(false);
+      });
+      await waitFor(() => expect(getNovelSpy4).toHaveBeenCalled());
+      expect(mock4.scheduler.enqueueBatchCache).not.toHaveBeenCalled();
     });
   });
 });
