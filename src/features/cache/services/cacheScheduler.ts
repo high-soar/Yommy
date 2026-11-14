@@ -40,7 +40,6 @@ interface NovelBatchState {
   status: CacheBatchStatus;
   isBatchCaching: boolean;
   pausedReason: "none" | "preempted";
-  needsDelayBeforeNextFetch: boolean;
 }
 
 type WorkUnit =
@@ -93,6 +92,7 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
   let activeAbortController: AbortController | null = null;
   let activeAbortReason: InternalAbortReason | null = null;
   let activeWorkPromise: Promise<void> | null = null;
+  let lastNetworkRequestCompletedAt: number | null = null;
 
   const emitProgress = (batch: NovelBatchState): void => {
     const listeners = listenersByNovel.get(batch.novelId);
@@ -221,11 +221,18 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     const hasExistingCache = chapter.bodyHtml !== null;
     const requestTimeoutMs = hasExistingCache ? shortTimeoutMs : timeoutMs;
 
-    const response = await httpClient.getHtml({
-      url: chapter.url,
-      timeoutMs: requestTimeoutMs,
-      signal,
-    });
+    let response: Awaited<ReturnType<typeof httpClient.getHtml>>;
+    try {
+      response = await httpClient.getHtml({
+        url: chapter.url,
+        timeoutMs: requestTimeoutMs,
+        signal,
+      });
+    } finally {
+      if (!signal.aborted) {
+        lastNetworkRequestCompletedAt = Date.now();
+      }
+    }
 
     if (signal.aborted) {
       return "aborted";
@@ -426,16 +433,19 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     activeAbortReason = null;
 
     try {
-      if (batch.needsDelayBeforeNextFetch) {
-        activeLowSleeping = true;
-        try {
-          await delay(prefetchIntervalMs, controller.signal);
-        } catch {
-          return;
-        } finally {
-          activeLowSleeping = false;
+      if (prefetchIntervalMs > 0 && lastNetworkRequestCompletedAt !== null) {
+        const remainingMs =
+          prefetchIntervalMs - (Date.now() - lastNetworkRequestCompletedAt);
+        if (remainingMs > 0) {
+          activeLowSleeping = true;
+          try {
+            await delay(remainingMs, controller.signal);
+          } catch {
+            return;
+          } finally {
+            activeLowSleeping = false;
+          }
         }
-        batch.needsDelayBeforeNextFetch = false;
       }
 
       const chapter = await chapterRepository.getChapter(
@@ -484,8 +494,6 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
         if (outcome === "tombstone") {
           return;
         }
-        batch.needsDelayBeforeNextFetch =
-          batch.remainingChapterIndexes.length > 0;
       } catch (err: unknown) {
         if (controller.signal.aborted) {
           await queueRepository.resetInterruptedToPending(batch.novelId);
@@ -530,8 +538,6 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
           batch.remainingChapterIndexes.splice(idx, 1);
           batch.current = Math.min(batch.total, batch.current + 1);
         }
-        batch.needsDelayBeforeNextFetch =
-          batch.remainingChapterIndexes.length > 0;
         await finalizeBatchCompletedIfDone(batch);
         emitProgress(batch);
       }
@@ -730,7 +736,6 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
         status: "completed",
         isBatchCaching: false,
         pausedReason: "none",
-        needsDelayBeforeNextFetch: false,
       };
       batches.set(novelId, completedBatch);
       emitProgress(completedBatch);
@@ -758,7 +763,6 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
       status: preempted ? "preempted" : "running",
       isBatchCaching: true,
       pausedReason: preempted ? "preempted" : "none",
-      needsDelayBeforeNextFetch: false,
     };
 
     batches.set(novelId, batch);
