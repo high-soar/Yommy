@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./WebViewImportContainer.stories";
 import { WebViewImportContainer } from "./WebViewImportContainer";
@@ -11,6 +11,8 @@ import type { UseWebViewImportOptions, WebViewImportPageProps } from "../types";
 import { ServiceProvider } from "../../../app/ServiceProvider";
 import { RouterProvider } from "../../../app/router";
 import { MockWebViewDomBridge } from "../../../bridges/webview/mockWebViewDomBridge";
+import type { QueueRepository } from "../../../storage/types";
+import type { CacheScheduler } from "../../cache/types";
 
 const { Default, UnsupportedUrl, Loading } = composeStories(stories);
 
@@ -19,6 +21,10 @@ describe("WebViewImportContainer", () => {
 
   beforeEach(() => {
     bridge = new MockWebViewDomBridge();
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
     vi.restoreAllMocks();
   });
 
@@ -357,5 +363,56 @@ describe("WebViewImportContainer", () => {
 
     capturedProps!.onImportCurrentDom();
     expect(importCurrentDomMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("useServices から取得した queueRepository と cacheScheduler を useWebViewImport へ受け渡すこと (Issue #344)", () => {
+    const captured: { options: UseWebViewImportOptions | null } = {
+      options: null,
+    };
+    vi.spyOn(useWebViewImportModule, "useWebViewImport").mockImplementation(
+      (options) => {
+        captured.options = options;
+        return {
+          url: "https://kakuyomu.jp/works/1",
+          setUrl: vi.fn(),
+          pageTitle: "",
+          currentCapturedUrl: "",
+          canImport: true,
+          isLoading: false,
+          isImporting: false,
+          notice: null,
+          error: null,
+          loadUrl: vi.fn(),
+          openNativeBrowser: vi.fn(),
+          importCurrentDom: vi.fn(),
+          goBack: vi.fn(),
+        };
+      },
+    );
+
+    const mockQueueRepo = {
+      deleteByNovelAndChapters: vi.fn().mockResolvedValue(undefined),
+    } as unknown as QueueRepository;
+    const mockScheduler = {
+      syncNovelProgress: vi.fn().mockResolvedValue(undefined),
+      dispose: vi.fn(),
+    } as unknown as CacheScheduler;
+
+    render(
+      <ServiceProvider
+        services={{
+          webViewDomBridge: bridge,
+          queueRepository: mockQueueRepo,
+          cacheScheduler: mockScheduler,
+        }}
+      >
+        <RouterProvider initialPath="/browser">
+          <WebViewImportContainer initialUrl="https://kakuyomu.jp/works/1" />
+        </RouterProvider>
+      </ServiceProvider>,
+    );
+
+    expect(captured.options?.queueRepository).toBe(mockQueueRepo);
+    expect(captured.options?.cacheScheduler).toBe(mockScheduler);
   });
 });

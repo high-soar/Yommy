@@ -1,11 +1,12 @@
 import { renderHook, act } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { useWebViewImport, isChapterUrl } from "./useWebViewImport";
 import { MockWebViewDomBridge } from "../../../bridges/webview/mockWebViewDomBridge";
 import type { CapturedDomResult } from "../../../bridges/webview/types";
 import type {
   NovelRepository,
   ChapterRepository,
+  QueueRepository,
   NovelRecord,
   ChapterSummary,
 } from "../../../storage/types";
@@ -16,6 +17,7 @@ import type {
   ParsedChapterContent,
 } from "../../../parsers/types";
 import type { SyncEngine } from "../../cloud-sync/services/syncEngine";
+import type { CacheScheduler } from "../../cache/types";
 import type { HttpClientBridge } from "../../../bridges/http/types";
 
 const mockHttpClient: HttpClientBridge = {
@@ -79,6 +81,10 @@ describe("useWebViewImport", () => {
   let mockKakuyomuParser: NovelParser;
   let mockNarouParser: NovelParser;
   let mockSyncEngine: SyncEngine;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   beforeEach(() => {
     bridge = new MockWebViewDomBridge();
@@ -2009,6 +2015,158 @@ describe("useWebViewImport", () => {
           title: "目次",
         });
       }).not.toThrow();
+    });
+  });
+
+  describe("CacheScheduler / QueueRepository 同期統合 (Issue #344)", () => {
+    const createMockQueueRepo = (): QueueRepository =>
+      ({
+        deleteByNovelAndChapters: vi.fn().mockResolvedValue(undefined),
+      }) as unknown as QueueRepository;
+
+    const createMockCacheScheduler = (): CacheScheduler =>
+      ({
+        syncNovelProgress: vi.fn().mockResolvedValue(undefined),
+        dispose: vi.fn(),
+      }) as unknown as CacheScheduler;
+
+    it("短編作品（isShortStory === true）取り込み成功後、第1話のキュー削除と CacheScheduler.syncNovelProgress が順次実行されること", async () => {
+      const callOrder: string[] = [];
+      const narouShortNovel: NovelRecord = {
+        ...sampleNovel,
+        id: "narou:n9669bk",
+        siteType: "narou",
+        remoteWorkId: "n9669bk",
+        canonicalUrl: "https://ncode.syosetu.com/n9669bk/",
+      };
+
+      (
+        mockNovelRepo.upsertNovelWithToc as ReturnType<typeof vi.fn>
+      ).mockResolvedValue(narouShortNovel);
+      (
+        mockChapterRepo.saveChapterBody as ReturnType<typeof vi.fn>
+      ).mockImplementation(async () => {
+        callOrder.push("saveChapterBody");
+      });
+
+      const mockQueueRepo = createMockQueueRepo();
+      vi.mocked(mockQueueRepo.deleteByNovelAndChapters).mockImplementation(
+        async () => {
+          callOrder.push("deleteByNovelAndChapters");
+        },
+      );
+      const mockScheduler = createMockCacheScheduler();
+      vi.mocked(mockScheduler.syncNovelProgress).mockImplementation(
+        async () => {
+          callOrder.push("syncNovelProgress");
+        },
+      );
+
+      bridge.setMockPage({
+        html: "<html><body><div id='novel_honbun'>短編本文</div></body></html>",
+        url: "https://ncode.syosetu.com/n9669bk/",
+        title: "なろう短編",
+      });
+
+      const { result } = renderHook(() =>
+        useWebViewImport({
+          initialUrl: "https://ncode.syosetu.com/n9669bk/",
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          queueRepository: mockQueueRepo,
+          parserRegistry: mockParserRegistry,
+          syncEngine: mockSyncEngine,
+          cacheScheduler: mockScheduler,
+        }),
+      );
+
+      let importResult: unknown = null;
+      await act(async () => {
+        importResult = await result.current.importCurrentDom();
+      });
+
+      expect(importResult).toEqual({
+        type: "novel",
+        novelId: narouShortNovel.id,
+      });
+      expect(mockQueueRepo.deleteByNovelAndChapters).toHaveBeenCalledWith(
+        narouShortNovel.id,
+        [1],
+      );
+      expect(mockScheduler.syncNovelProgress).toHaveBeenCalledWith(
+        narouShortNovel.id,
+      );
+      expect(callOrder).toEqual([
+        "saveChapterBody",
+        "deleteByNovelAndChapters",
+        "syncNovelProgress",
+      ]);
+    });
+
+    it("各話エピソード取り込み成功後、該当 chapterIndex のキュー削除と CacheScheduler.syncNovelProgress が順次実行されること", async () => {
+      const callOrder: string[] = [];
+      (
+        mockChapterRepo.saveChapterBody as ReturnType<typeof vi.fn>
+      ).mockImplementation(async () => {
+        callOrder.push("saveChapterBody");
+      });
+
+      const mockQueueRepo = createMockQueueRepo();
+      vi.mocked(mockQueueRepo.deleteByNovelAndChapters).mockImplementation(
+        async () => {
+          callOrder.push("deleteByNovelAndChapters");
+        },
+      );
+      const mockScheduler = createMockCacheScheduler();
+      vi.mocked(mockScheduler.syncNovelProgress).mockImplementation(
+        async () => {
+          callOrder.push("syncNovelProgress");
+        },
+      );
+
+      bridge.setMockPage({
+        html: "<html><body>第2話本文</body></html>",
+        url: sampleChapters[1].url,
+        title: "第1話",
+      });
+
+      const { result } = renderHook(() =>
+        useWebViewImport({
+          initialUrl: sampleChapters[1].url,
+          initialNovelId: sampleNovel.id,
+          webViewDomBridge: bridge,
+          novelRepository: mockNovelRepo,
+          chapterRepository: mockChapterRepo,
+          queueRepository: mockQueueRepo,
+          parserRegistry: mockParserRegistry,
+          syncEngine: mockSyncEngine,
+          cacheScheduler: mockScheduler,
+        }),
+      );
+
+      let importResult: unknown = null;
+      await act(async () => {
+        importResult = await result.current.importCurrentDom();
+      });
+
+      expect(importResult).toEqual({
+        type: "chapter",
+        novelId: sampleNovel.id,
+        chapterIndex: 2,
+      });
+      expect(mockQueueRepo.deleteByNovelAndChapters).toHaveBeenCalledWith(
+        sampleNovel.id,
+        [2],
+      );
+      expect(mockScheduler.syncNovelProgress).toHaveBeenCalledWith(
+        sampleNovel.id,
+      );
+      expect(callOrder).toEqual([
+        "saveChapterBody",
+        "deleteByNovelAndChapters",
+        "syncNovelProgress",
+      ]);
     });
   });
 });
