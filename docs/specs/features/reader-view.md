@@ -2,8 +2,8 @@
 type: spec-feature
 title: "小説リーダー画面仕様書（SCR-03: Novel Reader）"
 description: "小説本文の全画面（100dvh）縦書き・横書き組版表示、ページめくり（タップ/Kindle様式スワイプ送り）と連続スクロール切替、ハードウェア音量キー操作連携、エピソード端シームレス遷移、上下連動オーバーレイ（ReaderTopOverlay: 作品名・サブタイトル1行固定省略・目次導線 / ReaderBottomOverlay: RTLページシークバー・前後話ナビ・下部タブ）、ルビ・傍点描画、4カラーテーマ・文字サイズ・行間設定の永続化、前後エピソード遷移、未キャッシュ話のオンデマンド取得、既読・しおり・進捗率の自動保存/復元、およびSCN-01統合シナリオの正本仕様。"
-status: "Approved"
-updated: "2026-11-14"
+status: "Review (#368)"
+updated: "2026-11-15"
 tags:
   - reader
   - scr-03
@@ -548,6 +548,8 @@ export interface UseReaderOptions {
 
 export interface GoToChapterOptions {
   startAt?: "start" | "end";
+  /** 本文取得失敗時に現在表示中の chapter・currentChapterIndex・ページ位置を破棄せず維持する（しおり競合移動失敗時など） */
+  preserveChapterOnError?: boolean;
 }
 
 export interface BookmarkConflictState {
@@ -627,7 +629,7 @@ export interface UseReaderResult {
      - OS バックキー（`TR-06`）、「← 目次」ボタン、下部オーバーレイ 4 タブ（`TR-01` / `TR-01b`）遷移、およびアンマウント時の `flushBookmark()` では、保留中のデバウンスタイマーをキャンセルした上で、**`hasPendingBookmarkRef.current === true` の場合のみ** `novelRepository.updateBookmark()` および `syncEngine.notifyChanged()` を実行する。未保存の進捗変更がない状態（`false`）での離脱時は書き込み・同期通知を一切行わず、別端末が更新した新しい `last_read_at` / しおり話数を保護する。
 5. **前後エピソード遷移（`goToChapter(targetChapterIndex, options?: GoToChapterOptions)`、`TR-05`）**:
    - `novel === null`、または `targetChapterIndex < 1` もしくは `targetChapterIndex > totalChapters`（範囲外）が指定された場合は何もせず `false` を返す。
-   - 有効範囲内の場合は、遷移前の現在話（次話遷移時を含む）に対して `chapterRepository.markChapterRead(novel.id, chapterIndex, true)` を実行した上で、`targetChapterIndex` のエピソード読み込み（未キャッシュ時はオンデマンド本文取得・`saveChapterBody` 保存）、表示完了時の `markChapterRead(novel.id, targetChapterIndex, true)`、および新エピソードへのしおり更新を実行し、`true` を返す。本文取得に失敗した場合（HTTP エラー等）は、エラー画面表示および内蔵ブラウザ遷移（`TR-10`）へ渡すパラメータのために `chapterIndex` を `targetChapterIndex` に更新保持した上で `false` を返す（`R1-27`）。
+   - 有効範囲内の場合は、遷移前の現在話（次話遷移時を含む）に対して `chapterRepository.markChapterRead(novel.id, chapterIndex, true)` を実行した上で、`targetChapterIndex` のエピソード読み込み（未キャッシュ時はオンデマンド本文取得・`saveChapterBody` 保存）、表示完了時の `markChapterRead(novel.id, targetChapterIndex, true)`、および新エピソードへのしおり更新を実行し、`true` を返す。本文取得に失敗した場合（HTTP エラー等）のうち、`options?.preserveChapterOnError === true`（クラウド同期しおり競合確認からの移動失敗時等）を指定した場合は、現在表示中の `chapter`・`currentChapterIndex`・ページ送りを破棄・クリアせずそのまま維持し `error` をセットした上で `false` を返す。通常遷移（`preserveChapterOnError` 未指定または `false`）の場合は、エラー画面表示および内蔵ブラウザ遷移（`TR-10`）へ渡すパラメータのために `chapterIndex` を `targetChapterIndex` に更新保持（`chapter = null`）した上で `false` を返す（`R1-27`）。
    - **前話末尾復元（`startAt: "end"`）とルーター同期時の重複初期化抑止（R1-07, R2-04）**: 前話遷移時など `options?.startAt === "end"` が指定された場合、新エピソードのしおり進捗率を `1.0`（`initialScrollProgress = 1.0, scrollProgress = 1.0`）として保存・初期化し、実効 `paged` 時は初回 `setTotalPages` 時に自動的に最終ページへ復元する（`AC-RD-18`）。デフォルト（`startAt === "start"`）は先頭 `0.0`。また、`goToChapter` 完了直後に親ルーターの `chapterIndex` プロパティが追従更新された際は、`lastGoToChapterIndexRef` により `loadInitialData` の二重実行を抑止し、復元済みのページ位置（`currentPage`）が `1` にリセットされるのを防止する。
 6. **手動作品取得・更新パイプライン（`fetchNovelFromUrl()`）**:
    - 単体検証・手動取得トリガー時、対象 URL を `const targetUrl = novel?.canonicalUrl ?? initialWorkUrl` として解決した上で、**HTTP 通信を行う前に** `parserRegistry.requireParser(targetUrl)` および `parser.normalizeWorkUrl(targetUrl)` を呼び出す（未対応サイトや不正 URL の場合は通信を行わずに直ちに `error` をセットして終了する）。
