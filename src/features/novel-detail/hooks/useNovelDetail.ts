@@ -313,7 +313,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
           if (
             !isMountedRef.current ||
             isDeletedRef.current ||
-            isDeletingRef.current ||
+            isAnyExclusiveOperationActive() ||
             syncSeq !== progressSyncSeqRef.current
           ) {
             return;
@@ -334,8 +334,16 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
             fetchedChapters,
             queueItems,
           );
+          const downloadedIndexes = new Set(
+            fetchedChapters
+              .filter((chapter) => chapter.downloadedAt !== null)
+              .map((chapter) => chapter.chapterIndex),
+          );
+          const filteredProgressFailedIndexes = progressFailedIndexes.filter(
+            (chapterIndex) => !downloadedIndexes.has(chapterIndex),
+          );
           const mergedFailedIndexes = Array.from(
-            new Set([...dbFailedIndexes, ...progressFailedIndexes]),
+            new Set([...dbFailedIndexes, ...filteredProgressFailedIndexes]),
           ).sort((a, b) => a - b);
           setFailedChapterIndexes(mergedFailedIndexes);
         } catch {
@@ -343,7 +351,13 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
         }
       })();
     },
-    [novelId, novelRepository, chapterRepository, queueRepository],
+    [
+      novelId,
+      novelRepository,
+      chapterRepository,
+      queueRepository,
+      isAnyExclusiveOperationActive,
+    ],
   );
 
   // CacheScheduler の現在進捗の即時復元および進捗イベント購読
@@ -354,6 +368,9 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     restoreSchedulerProgress();
 
     return cacheScheduler.subscribeProgress(novelId, (progress) => {
+      if (isAnyExclusiveOperationActive() || isDeletedRef.current) {
+        return;
+      }
       const syncSeq = ++progressSyncSeqRef.current;
 
       if (isBatchProgressActive(progress)) {
@@ -388,6 +405,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     isReady,
     cacheScheduler,
     novelId,
+    isAnyExclusiveOperationActive,
     restoreSchedulerProgress,
     syncProgressFromDb,
   ]);
@@ -442,6 +460,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
    */
   const reloadDetail = useCallback(
     async (options?: { silent?: boolean }): Promise<void> => {
+      progressSyncSeqRef.current += 1;
       const silent = options?.silent === true;
       if (!silent) {
         setIsLoading(true);
@@ -525,6 +544,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
 
     isRefreshingRef.current = true;
     exclusiveOpSeqRef.current += 1;
+    progressSyncSeqRef.current += 1;
     setIsRefreshing(true);
     setError(null);
     setRefreshMessage(null);
@@ -1062,6 +1082,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
 
     isDeletingRef.current = true;
     exclusiveOpSeqRef.current += 1;
+    progressSyncSeqRef.current += 1;
     setIsDeleting(true);
     setError(null);
 
@@ -1087,6 +1108,9 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
       runIfMounted(() => {
         setIsDeleting(false);
       });
+      if (!isDeletedRef.current) {
+        runIfMounted(restoreSchedulerProgress);
+      }
       flushPendingSilentReload();
     }
     return isSuccess;
@@ -1097,6 +1121,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     syncEngine,
     novelId,
     runIfMounted,
+    restoreSchedulerProgress,
     flushPendingSilentReload,
   ]);
 
@@ -1131,6 +1156,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
 
       isClearingCacheRef.current = true;
       exclusiveOpSeqRef.current += 1;
+      progressSyncSeqRef.current += 1;
       setIsClearingCache(true);
       setError(null);
 
@@ -1183,6 +1209,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
         runIfMounted(() => {
           setIsClearingCache(false);
         });
+        runIfMounted(restoreSchedulerProgress);
         flushPendingSilentReload();
       }
       return deletedCount;
@@ -1196,6 +1223,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
       novelId,
       chapters,
       runIfMounted,
+      restoreSchedulerProgress,
       flushPendingSilentReload,
     ],
   );
