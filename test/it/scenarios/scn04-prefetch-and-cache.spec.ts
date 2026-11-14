@@ -1240,13 +1240,13 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     }
   });
 
-  test("一括キャッシュ実行中に設定画面（SCR-05）から『すべての本文キャッシュを削除』を実行するとスケジューラが安全停止・キュー破棄され、保留中レスポンス解決後もゴースト書き込みが発生しないこと (Issue #344, AC-ST-15, AC-ST-16, TR-20)", async ({
+  test("一括キャッシュ実行中に設定画面（SCR-05）から『すべての本文キャッシュを削除』を実行すると AbortSignal による即時中断と完了待ち（cancelAllTasks / cancelNovelTasks）が行われ、削除後の DB・キュー整合性が維持されること (Issue #344, AC-ST-15, AC-ST-16, TR-20)", async ({
     page,
   }) => {
     await seedKakuyomuNovelAndOpenDetail(page, 4);
     await installChapterLatches(page, {
       heldChapters: [2],
-      customBodies: { 2: "キャンセル後に遅れて到着する第2話本文" },
+      customBodies: { 2: "中断・破棄される第2話本文" },
     });
 
     try {
@@ -1312,7 +1312,7 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
       );
       await expect(openGlobalClearBtn).toBeDisabled();
 
-      // 削除完了後に保留していた第2話の HTTP ラッチを解決し、遅着レスポンスによるゴースト書き込みが発生しないことを検証
+      // cancelAllTasks 内で AbortSignal による即時中断と完了待ちが実施済みのため、モック側の待機 Promise クリーンアップとして第2話ラッチを解放したうえで削除後の DB・キュー整合性を検証
       await releaseChapterLatches(page, [2]);
       await page.evaluate(async () => {
         await Promise.resolve();
