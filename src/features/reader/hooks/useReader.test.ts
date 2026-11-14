@@ -6565,15 +6565,27 @@ describe("useReader", () => {
         expect(result.current.chapter?.chapterIndex).toBe(3);
         expect(result.current.chapter?.bodyHtml).not.toBeNull();
 
+        // medium 先読み（第4話）が完了するまで待機してからリーダーを離脱する
+        await waitFor(
+          async () => {
+            const ch4Mid = await chapterRepo.getChapter(seeded.id, 4);
+            expect(ch4Mid?.bodyHtml).not.toBeNull();
+          },
+          { timeout: 3000 },
+        );
+
         // リーダー離脱後、中断された low タスクが自動再開して完了すること
         unmount();
         lowCh1Gate.resolve?.();
 
-        await waitFor(() => {
-          expect(scheduler.getNovelProgress(seeded.id)?.status).toBe(
-            "completed",
-          );
-        });
+        await waitFor(
+          () => {
+            expect(scheduler.getNovelProgress(seeded.id)?.status).toBe(
+              "completed",
+            );
+          },
+          { timeout: 3000 },
+        );
 
         const ch1 = await chapterRepo.getChapter(seeded.id, 1);
         const ch2 = await chapterRepo.getChapter(seeded.id, 2);
