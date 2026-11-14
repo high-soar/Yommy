@@ -1,6 +1,6 @@
 import { render, screen, waitFor, act } from "@testing-library/react";
 import React from "react";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./BookshelfContainer.stories";
 import { BookshelfContainer } from "./BookshelfContainer";
@@ -103,6 +103,10 @@ describe("BookshelfContainer", () => {
     localStorage.clear();
     await resetTestDb();
     window.history.pushState(null, "", "/");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe("Storybook Stories 検証 (composeStories)", () => {

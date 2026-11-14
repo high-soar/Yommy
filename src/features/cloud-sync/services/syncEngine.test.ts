@@ -21,6 +21,10 @@ import {
 } from "./syncEngine";
 
 describe("syncEngine", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe("validateSyncState (スキーマ検証)", () => {
     const validState: YommySyncState = {
       version: 1,

@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./SettingsPage.stories";
 import { SettingsPage } from "./SettingsPage";
@@ -25,6 +25,10 @@ const {
 } = composeStories(stories);
 
 describe("SettingsPage", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe("Storybook Stories 描画検証 (composeStories)", () => {
     it("Default: 縦書き・ライトテーマ、既定ステッパー値、およびプレビュー・各セクションへの Props 伝達が正しく行われること (AC-ST-01, AC-ST-02, AC-ST-17, AC-ST-18)", () => {
       const sampleTextPreviewSpy = vi

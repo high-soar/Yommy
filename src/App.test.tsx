@@ -1,5 +1,5 @@
 import { render, screen, waitFor, act } from "@testing-library/react";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./App.stories";
 import { App, AppContent, getActiveTab } from "./App";
@@ -36,6 +36,10 @@ describe("App コンポーネント", () => {
     localStorage.clear();
     await resetTestDb();
     window.history.pushState(null, "", "/");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe("Storybook ストーリーのレンダリング検証 (composeStories)", () => {

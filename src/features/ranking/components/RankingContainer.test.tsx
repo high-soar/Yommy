@@ -1,5 +1,5 @@
 import { render, screen, waitFor, act } from "@testing-library/react";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./RankingContainer.stories";
 import { RankingContainer } from "./RankingContainer";
@@ -16,6 +16,10 @@ const { Default } = composeStories(stories);
 
 describe("RankingContainer コンポーネント", () => {
   let mockHttpClient: MockHttpClient;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   beforeEach(async () => {
     await resetTestDb();

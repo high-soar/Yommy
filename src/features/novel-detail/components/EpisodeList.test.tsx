@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./EpisodeList.stories";
 import { EpisodeList } from "./EpisodeList";
@@ -65,6 +65,10 @@ const testChapters: ChapterSummary[] = [
 ];
 
 describe("EpisodeList", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe("Storybook Stories 検証 (composeStories)", () => {
     it("Empty ストーリーで空状態メッセージが表示され EpisodeListItem は描画されないこと (AC-ND-02)", () => {
       const itemSpy = vi
