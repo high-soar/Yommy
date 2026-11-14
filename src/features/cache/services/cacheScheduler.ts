@@ -168,10 +168,22 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     }
   };
 
+  const clearCompletedQueueRows = async (novelId: string): Promise<void> => {
+    const remainingQueue = await queueRepository.listByNovelId(novelId);
+    const nonFailedIndexes = remainingQueue
+      .filter((item) => item.status !== "failed")
+      .map((item) => item.chapterIndex);
+    if (nonFailedIndexes.length === remainingQueue.length) {
+      await queueRepository.clearNovelQueue(novelId);
+    } else if (nonFailedIndexes.length > 0) {
+      await queueRepository.deleteByNovelAndChapters(novelId, nonFailedIndexes);
+    }
+  };
+
   const finalizeBatchCompletedIfDone = async (
     batch: NovelBatchState,
   ): Promise<void> => {
-    if (batch.remainingChapterIndexes.length > 0) {
+    if (!batch.isBatchCaching || batch.remainingChapterIndexes.length > 0) {
       return;
     }
     removeFromLowOrder(batch.novelId);
@@ -179,7 +191,7 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     batch.isBatchCaching = false;
     batch.pausedReason = "none";
     if (batch.failedChapterIndexes.size === 0) {
-      await queueRepository.clearNovelQueue(batch.novelId);
+      await clearCompletedQueueRows(batch.novelId);
     }
   };
 
@@ -223,6 +235,9 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
       novelId,
       chapter.chapterIndex,
     );
+    if (signal.aborted) {
+      return "aborted";
+    }
     if (postChapter === null) {
       handleTombstoneDeletion(novelId);
       return "tombstone";
@@ -242,6 +257,9 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
       parsed,
       new Date().toISOString(),
     );
+    if (signal.aborted) {
+      return "aborted";
+    }
     await queueRepository.deleteByNovelAndChapters(novelId, [
       chapter.chapterIndex,
     ]);
@@ -253,13 +271,22 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     reason: InternalAbortReason,
     predicate: () => boolean,
   ): void => {
-    if (activeAbortController && predicate()) {
-      activeAbortReason = reason;
-      activeAbortController.abort();
+    if (!activeAbortController || !predicate()) {
+      return;
     }
+    if (reason === "preempted" && activeAbortReason === "cancelled") {
+      return;
+    }
+    activeAbortReason = reason;
+    activeAbortController.abort();
   };
 
   const runPrefetchTask = async (task: PrefetchTask): Promise<void> => {
+    if (task.aborted || task.callerSignal?.aborted) {
+      settlePrefetchTask(task);
+      return;
+    }
+
     const controller = new AbortController();
     activePrefetchTask = task;
     activeAbortController = controller;
@@ -298,6 +325,9 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
             task.novelId,
             chapterIndex,
           );
+          if (controller.signal.aborted) {
+            break;
+          }
           if (chapter === null) {
             handleTombstoneDeletion(task.novelId);
             settlePrefetchTask(task);
@@ -371,7 +401,8 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
           task.priority === "medium" &&
           activeAbortReason === "preempted" &&
           !task.aborted &&
-          !disposed
+          !disposed &&
+          currentIndexPosition < task.chapterIndexes.length
         ) {
           task.chapterIndexes = task.chapterIndexes.slice(currentIndexPosition);
           mediumQueue.unshift(task);
@@ -411,6 +442,9 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
         batch.novelId,
         chapterIndex,
       );
+      if (controller.signal.aborted) {
+        return;
+      }
       if (chapter === null) {
         handleTombstoneDeletion(batch.novelId);
         return;
@@ -488,8 +522,14 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
           batch.failedChapterIndexes.add(chapterIndex);
         }
 
-        batch.remainingChapterIndexes.shift();
-        batch.current = Math.min(batch.total, batch.current + 1);
+        if (controller.signal.aborted) {
+          return;
+        }
+        const idx = batch.remainingChapterIndexes.indexOf(chapterIndex);
+        if (idx >= 0) {
+          batch.remainingChapterIndexes.splice(idx, 1);
+          batch.current = Math.min(batch.total, batch.current + 1);
+        }
         batch.needsDelayBeforeNextFetch =
           batch.remainingChapterIndexes.length > 0;
         await finalizeBatchCompletedIfDone(batch);
@@ -584,8 +624,10 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
         }
         const targetQueue = priority === "high" ? highQueue : mediumQueue;
         const idx = targetQueue.indexOf(task);
-        targetQueue.splice(idx, 1);
-        settlePrefetchTask(task);
+        if (idx >= 0) {
+          targetQueue.splice(idx, 1);
+          settlePrefetchTask(task);
+        }
       };
 
       signal?.addEventListener("abort", onSignalAbort, { once: true });
@@ -621,10 +663,16 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     }
 
     await queueRepository.resetInterruptedToPending(novelId);
+    if (disposed) {
+      return;
+    }
     const [allChapters, existingQueue] = await Promise.all([
       chapterRepository.listChaptersByNovelId(novelId),
       queueRepository.listByNovelId(novelId),
     ]);
+    if (disposed) {
+      return;
+    }
 
     const now = Date.now();
     const freshIndexes = allChapters
@@ -632,6 +680,9 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
       .map((ch) => ch.chapterIndex);
     if (freshIndexes.length > 0) {
       await queueRepository.deleteByNovelAndChapters(novelId, freshIndexes);
+      if (disposed) {
+        return;
+      }
     }
 
     const chapterByIndex = new Map<number, ChapterSummary>(
@@ -665,6 +716,9 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
 
       if (remainingFailed.length === 0) {
         await queueRepository.clearNovelQueue(novelId);
+        if (disposed) {
+          return;
+        }
       }
 
       const completedBatch: NovelBatchState = {
@@ -690,6 +744,9 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
         targetUrl: ch.url,
       })),
     );
+    if (disposed) {
+      return;
+    }
 
     const preempted = hasHigherPriorityWork();
     const batch: NovelBatchState = {
@@ -747,6 +804,13 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     if (batch) {
       batch.remainingChapterIndexes = [];
       removeFromLowOrder(novelId);
+      batch.status = "cancelled";
+      batch.isBatchCaching = false;
+      batch.pausedReason = "none";
+    }
+
+    if (activePrefetchTask && activePrefetchTask.novelId === novelId) {
+      activePrefetchTask.aborted = true;
     }
 
     const isMatchingActive = (): boolean =>
@@ -766,9 +830,6 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     }
 
     if (batch) {
-      batch.status = "cancelled";
-      batch.isBatchCaching = false;
-      batch.pausedReason = "none";
       emitProgress(batch);
     }
   };
@@ -778,8 +839,15 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     const batchNovelIds = Array.from(batches.keys());
     for (const batch of batches.values()) {
       batch.remainingChapterIndexes = [];
+      batch.status = "cancelled";
+      batch.isBatchCaching = false;
+      batch.pausedReason = "none";
     }
     lowNovelOrder.length = 0;
+
+    if (activePrefetchTask) {
+      activePrefetchTask.aborted = true;
+    }
 
     if (activeWorkPromise) {
       abortActiveIf("cancelled", () => true);
@@ -799,9 +867,6 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     }
 
     for (const batch of batches.values()) {
-      batch.status = "cancelled";
-      batch.isBatchCaching = false;
-      batch.pausedReason = "none";
       emitProgress(batch);
     }
   };
@@ -858,7 +923,7 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
       );
       if (activeQueueCount === 0 && failedCount === 0) {
         batch.status = "completed";
-        await queueRepository.clearNovelQueue(novelId);
+        await clearCompletedQueueRows(novelId);
       }
     }
 
@@ -910,6 +975,9 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
       batch.isBatchCaching = false;
     }
     lowNovelOrder.length = 0;
+    if (activePrefetchTask) {
+      activePrefetchTask.aborted = true;
+    }
     abortActiveIf("cancelled", () => true);
     listenersByNovel.clear();
   };
