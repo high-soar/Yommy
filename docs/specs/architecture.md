@@ -2,8 +2,8 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Approved"
-updated: "2026-11-14"
+status: "Review (#368)"
+updated: "2026-11-15"
 tags:
   - architecture
   - parser
@@ -873,12 +873,13 @@ export const PREFETCH_COUNT = 5;
 1. **キャッシュ鮮度判定（TTL 7日間）**:
    - `chapters.downloaded_at` が現在時刻から `CACHE_TTL_MS`（7日）以内の場合、キャッシュを「有効（Fresh）」とみなし、通信を行わず即座に SQLite の本文を描画する。
    - 先読みおよび一括キャッシュにおいても、有効なキャッシュを持つ話数はスキップされる。
-2. **読書中 5 話自動先読み（`useReader` → `CacheScheduler` 優先度 `'medium'`）**:
+2. **読書中 5 話自動先読み（`useReader` → `CacheScheduler` 優先度 `'medium'`）＆ 即時読込 `'high'` `AbortSignal` 制御**:
    - 第 $N$ 話の本文読み込み完了後、バックグラウンドで $N+1 \sim \min(N+5, \text{totalChapters})$ のエピソードを昇順で順次取得・SQLite 保存する（なお現在話の即時取得は最優先 `'high'` として 0ms 待機・進行中 `'medium'`/`'low'` 即中断で実行）。
    - 対象サーバーの過負荷防止（第 $N$ 話取得直後の連続リクエスト抑止）のため、最初の先読み（第 $N+1$ 話）リクエスト開始前に `PREFETCH_INTERVAL_MS`（1.5秒）の初期インターバルを空け、以降も 1話の取得完了ごとに 1.5秒のウェイトを空けて直列実行する。
-   - `CacheScheduler` 注入時はリーダーの先読み（`'medium'`）のみを `AbortController` / キャンセル ID で制御し、ユーザーが `goToChapter` で別エピソードへ移動した際やリーダー画面を離脱した際は、直前の `'medium'` タスク（進行中の HTTP 通信含む）のみを直ちにキャンセルしてリソースを解放する（`'low'` 一括キャッシュタスクは中断せず完了後に自動再開させる）。また先行先読みタスク（進行中の HTTP 通信含む）の完了・中断待機による直列化、初期ロード通信完了後のマウント状態ガード（`isMounted`）、および `AbortSignal` 連動により、画面離脱後の DB 書き込みを防止する（R1-29）。
+   - **`'high'` / `'medium'` 双方での `AbortSignal` 即時中断制御（`R1-13`）**: `useReader` は初期オンデマンド本文取得および受理済み `goToChapter` の **`'high'` リクエスト（`chapterFetchAbortControllerRef` / `stopChapterFetch()`、`cacheScheduler.enqueuePrefetch({ ..., priority: 'high', signal })` および未注入時フォールバック `fetchAndSaveChapterBody`）** にも、読書中 5 話先読みの **`'medium'` リクエスト（`stopPrefetch()`、`enqueuePrefetch({ ..., priority: 'medium', signal })`）** にもそれぞれ独立した `AbortSignal` を伝播させる。話数プロップ切替・初期ロード中断・受理済み `goToChapter`（既存の `AC-RD-06` 多重遷移ガード通過後）・リーダー画面離脱（アンマウント）時には該当 `AbortController` を即座に `abort()` し、進行中 HTTP 通信を即キャンセルするとともに中断後の State 更新・`isLoading` 解除競合・DB 書き込みを確実に抑止する（`'low'` 一括キャッシュタスクは中断せず完了後に自動再開させる）。また先行先読みタスク（進行中の HTTP 通信含む）の完了・中断待機による直列化、初期ロード通信完了後のマウント状態ガード（`isMounted`）、および `AbortSignal` 連動により、画面離脱後の DB 書き込みを防止する（R1-29）。
 3. **作品詳細での未取得話一括キャッシュと優先度スケジューラ・永続ダウンロードキュー統合（`useNovelDetail` → `CacheScheduler` 優先度 `'low'` / `QueueRepository`、`v0.3` Issue #81 / `v0.9` Issue #268 / `v1.2` Issue #344）**:
    - 作品詳細ヘッダーの3点メニュー内「未取得話を一括キャッシュ」（または中断後の「キャッシュを再開（残りN話）」、失敗後の「失敗した話を再試行（N話）」）操作（`TR-18`、`v1.1` Issue #343）により、未キャッシュエピソード（および TTL 7日経過した古いキャッシュ）を `CacheScheduler.enqueueBatchCache`（優先度 `'low'`）へ委譲し、`CacheScheduler` 内で `QueueRepository`（`download_queue` テーブル）へ `'pending'` 登録（キュー投入完了時に即時 resolve）した上で `PREFETCH_INTERVAL_MS`（1.5秒）間隔で順次直列取得する。
+   - **スケジューラ横断レート制限（`lastNetworkRequestCompletedAt`、`R1-16`）**: `CacheScheduler` は優先度（`'high'` / `'medium'` / `'low'`）を横断して直近の `httpClient.getHtml` 完了時刻 `lastNetworkRequestCompletedAt` を一元管理する。`'low'` タスク開始直前（`'high'` 即時取得や `'medium'` 先読みの HTTP 完了直後に `'low'` を開始・再開する場合を含む）に `elapsed = Date.now() - lastNetworkRequestCompletedAt < PREFETCH_INTERVAL_MS` であれば、残り時間 `remainingMs = PREFETCH_INTERVAL_MS - elapsed`（`1500ms - elapsed`）をウェイトしてから次の HTTP リクエストを送出し、優先度切替を跨いだバースト通信（503 誘発）を防止する（待機中も `activeLowSleeping = true` として新規 `'high'`/`'medium'` による 0ms 再割り込みを許可）。
    - **`SCR-02` 非ブロッキング ＆ 画面離脱継続**: 一括キャッシュ実行中も `SCR-02` の閲覧操作・リーダー遷移（`TR-04`）をブロックせず、`SCR-02` を離脱（アンマウント）しても `CacheScheduler` 上の `'low'` タスクは中断せずアプリ起動中バックグラウンド継続する。リーダー遷移で `'high'`（即時取得）や `'medium'`（5話先読み）が投入された場合は `'low'` を自動退避（実行中の `'downloading'` 行は `retryCount` を増加させず `'pending'` へ巻き戻し）し、上位優先度キューが空になった時点で残 `'pending'` 話から自動再開する。
    - 1話取得開始時にステータスを `'downloading'`、保存成功時に `'completed'` へ更新し、進捗購読（`subscribeProgress`）経由で `SCR-02` 表示中または再訪問時にヘッダーの取得済み話数（`cachedChapters`）・容量および各話リストのキャッシュバッジをリアルタイムに更新する（`novels.updated_at` は更新せず保持する、R2-16）。`SCR-02` 再訪問時に `cacheScheduler.isNovelBatchCaching(novelId) === true` の場合は `resetInterruptedToPending` を呼び出さない。
    - 特定話の取得に失敗（通信エラー・タイムアウトかつ既存キャッシュなし）した場合は、ループ全体を中断せず `download_queue` に `status = 'failed'`（`retry_count = retry_count + 1`、`last_error` 記録）として保存し、1.5秒ウェイト後に後続の `'pending'` 話の取得を継続する。ループ完了後に失敗話が存在する場合は該当エピソード行に `取得失敗` バッジ（`episode-failed-badge`）、ヘッダーにエラー通知と `失敗した話を再試行（N話）` ボタンを表示する。
