@@ -266,9 +266,10 @@ test.describe("SCN-07: 内蔵ブラウザ画面（SCR-04）による目次・本
       ),
     );
 
-    // リロード後の MockHttpClient でエピソード取得時に Cloudflare/Bot 対策エラー (HTTP 403) をシミュレート
+    // リロード後の MockHttpClient でエピソード取得時に Cloudflare/Bot 対策エラー (HTTP 403) をシミュレートし、
+    // 事前に download_queue に当該話の failed 行およびスケジューラ進捗が存在する状態を作成 (AC-WV-05, AC-WV-06)
     await page.evaluate(
-      ({ episodeUrl }) => {
+      async ({ episodeUrl, novelId }) => {
         const services = window.__yommyServices!;
         (services.httpClient as MockHttpClient).setResponse(episodeUrl, {
           status: 403,
@@ -276,9 +277,37 @@ test.describe("SCN-07: 内蔵ブラウザ画面（SCR-04）による目次・本
           html: "<html><head><title>Just a moment...</title></head><body>Cloudflare turnstile block</body></html>",
           url: episodeUrl,
         });
+        await services.cacheScheduler?.enqueueBatchCache(novelId, [1]);
       },
-      { episodeUrl },
+      { episodeUrl, novelId },
     );
+
+    await expect
+      .poll(
+        async () => {
+          return await page.evaluate(async (targetNovelId) => {
+            const services = window.__yommyServices;
+            if (!services) return null;
+            const queue =
+              await services.queueRepository.listByNovelId(targetNovelId);
+            const progress =
+              services.cacheScheduler?.getNovelProgress(targetNovelId) ?? null;
+            return {
+              hasFailedRow: queue.some(
+                (item) => item.chapterIndex === 1 && item.status === "failed",
+              ),
+              failedCount: progress?.failedCount ?? 0,
+              failedIndexes: progress?.failedChapterIndexes ?? [],
+            };
+          }, novelId);
+        },
+        { timeout: 15000 },
+      )
+      .toEqual({
+        hasFailedRow: true,
+        failedCount: 1,
+        failedIndexes: [1],
+      });
 
     // 2. 本棚から作品詳細 (SCR-02) を経由して第1話リーダー (SCR-03) を開く
     const novelCard = page.getByTestId("novel-card-select");
@@ -387,14 +416,19 @@ test.describe("SCN-07: 内蔵ブラウザ画面（SCR-04）による目次・本
     await expect(boutenElement.first()).toBeVisible();
     await expect(boutenElement.first()).toHaveText("覚醒");
 
-    // 10. SQLite DB に本文データがキャッシュ保存されていることを確認
+    // 10. SQLite DB に本文データがキャッシュ保存され、download_queue の該当話行削除およびスケジューラ進捗同期が行われていることを確認 (AC-WV-05, AC-WV-06)
     const isChapterCached = await page.evaluate(
       async ({ novelId }) => {
         const services = window.__yommyServices!;
         const chapter = await services.chapterRepository.getChapter(novelId, 1);
+        const queue = await services.queueRepository.listByNovelId(novelId);
+        const progress = services.cacheScheduler?.getNovelProgress(novelId);
         return {
           hasBody: Boolean(chapter?.bodyHtml && chapter.bodyHtml.length > 0),
           downloadedAt: chapter?.downloadedAt,
+          queueLength: queue.length,
+          failedCount: progress?.failedCount ?? null,
+          failedChapterIndexes: progress?.failedChapterIndexes ?? null,
         };
       },
       { novelId },
@@ -402,6 +436,9 @@ test.describe("SCN-07: 内蔵ブラウザ画面（SCR-04）による目次・本
 
     expect(isChapterCached.hasBody).toBe(true);
     expect(isChapterCached.downloadedAt).not.toBeNull();
+    expect(isChapterCached.queueLength).toBe(0);
+    expect(isChapterCached.failedCount).toBe(0);
+    expect(isChapterCached.failedChapterIndexes).toEqual([]);
   });
 
   test("SCN-07-03: 非対応 URL での警告トースト（browser-unsupported-warning）表示、取り込みボタン disabled 確認、および「← 戻る」ボタン（browser-back-button）・OSバックキーによる直前画面（SCR-02 / 本棚）への論理復帰（TR-12）", async ({

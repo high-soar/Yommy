@@ -220,7 +220,7 @@ async function releaseChapterLatches(
   }, chapterIndexes);
 }
 
-test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャッシュ・永続キュー中断再開・再試行・キャッシュ鮮度フォールバック・キャッシュ容量管理シナリオ (HO-20, HO-21, HO-24, Issue #268)", () => {
+test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャッシュ・永続キュー中断再開・再試行・キャッシュ鮮度フォールバック・キャッシュ容量管理シナリオ (HO-20, HO-21, HO-24, Issue #268, Issue #344, AC-ND-29, AC-ND-30, AC-RD-35)", () => {
   test.beforeEach(async ({ page }) => {
     // ローカルストレージをクリアして初期状態から開始
     await page.goto("/");
@@ -988,7 +988,7 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     await expect(page.getByTestId("episode-bookmark-badge")).toHaveCount(1);
   });
 
-  test("一括キャッシュ実行中も作品詳細画面（SCR-02）が非ブロッキングで操作可能であり、未キャッシュ話タップで即座にリーダー画面（SCR-03）へ割り込み読込（high優先度）され中断キューがretryCount=0でpendingへ巻き戻されること (Issue #344, AC-ND-27, AC-RD-12)", async ({
+  test("一括キャッシュ実行中も作品詳細画面（SCR-02）が非ブロッキングで操作可能であり、未キャッシュ話タップで即座にリーダー画面（SCR-03）へ割り込み読込（high優先度）され中断キューがretryCount=0でpendingへ巻き戻されること (Issue #344, AC-ND-27, AC-ND-29, AC-ND-30, AC-RD-12, AC-RD-35)", async ({
     page,
   }) => {
     await seedKakuyomuNovelAndOpenDetail(page, 8);
@@ -1110,7 +1110,7 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     }
   });
 
-  test("リーダー（SCR-03）で5話先読み（medium優先度）完了後に作品詳細（SCR-02）へ復帰（TR-06）すると、中断していた一括キャッシュ（low優先度）がユーザー操作なしで自動再開・完了すること (Issue #344, AC-ND-12, AC-ND-13, AC-RD-12, TR-06)", async ({
+  test("リーダー（SCR-03）で5話先読み（medium優先度）完了後に作品詳細（SCR-02）へ復帰（TR-06）すると、中断していた一括キャッシュ（low優先度）がユーザー操作なしで自動再開・完了すること (Issue #344, AC-ND-12, AC-ND-13, AC-ND-29, AC-ND-30, AC-RD-12, AC-RD-35, TR-06)", async ({
     page,
   }) => {
     test.setTimeout(60000);
@@ -1217,6 +1217,22 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
       await expect(detailStats).toContainText("全 8 話（取得済み 6 話");
       const progressEl = page.getByTestId("batch-cache-progress");
       await expect(progressEl).toBeVisible();
+
+      // 再開された一括キャッシュにより download_queue 内に status === "downloading" の行が存在すること
+      await expect
+        .poll(
+          async () => {
+            return await page.evaluate(async (novelId) => {
+              const services = window.__yommyServices;
+              if (!services) return false;
+              const queue =
+                await services.queueRepository.listByNovelId(novelId);
+              return queue.some((item) => item.status === "downloading");
+            }, SAMPLE_KAKUYOMU_NOVEL_ID);
+          },
+          { timeout: 10000 },
+        )
+        .toBe(true);
 
       // 第7話ラッチを解放すると残りの第7・8話が自動完了し、キューが空になること
       await releaseChapterLatches(page, [7]);
