@@ -249,9 +249,7 @@ export function useWebViewImport({
             };
             if (isMountedRef.current) {
               setNotice("作品目次を取り込みました");
-            }
-            if (onImportComplete) {
-              onImportComplete(result);
+              onImportComplete?.(result);
             }
           } else {
             // 2. 各話エピソード（本文）インポート
@@ -366,9 +364,7 @@ export function useWebViewImport({
             };
             if (isMountedRef.current) {
               setNotice("本文を取り込みました");
-            }
-            if (onImportComplete) {
-              onImportComplete(result);
+              onImportComplete?.(result);
             }
           }
         }
