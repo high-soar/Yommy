@@ -104,6 +104,12 @@ MK 作業はファイル編集数やテスト・VRT 実行ログが多く、メ�
     - Container / Page レベルの単体テストにおいて、直下の子コンポーネントおよび孫コンポーネントの内部 DOM を直接探索・操作せず、直下の子に対する `vi.spyOn` 経由での Props / コールバック配線検証に統一して親子分離を徹底すること。
     - CI ランナー環境における APT パッケージ取得では、Azure ネイティブミラー維持、タイムアウト緩和（60秒）、再試行回数増加（5回）、`--fix-missing` オプションを追加してビルドの堅牢性を確保すること。
     - 新規テスト追加時は正本仕様書のフロントマター `related_tests` および構成図に即時登録し、バグ台帳の原因 `D` には設計書同期コミット SHA を 1 対 1 で明記すること。
+  - **競合解決・全画面自動Pull調停・DI参照安定化・VRT全件更新・仮想時計/`vi.spyOn`復元規律（原因 `D`/`L`/`S`/`A` 再発防止: `v1.1 Kaizen`）**:
+    - 競合解決ハンドラ（`resolveBookmarkConflict` 等）は `async Promise<boolean>` とし永続化完了前にモーダル状態を閉じず、競合中・取得失敗時・既読再閲覧のみで `hasPendingBookmarkRef`／300ms デバウンスタイマーを発火させないこと。確認・競合モーダルは背面 `inert` 化＋フォーカストラップ＋OS 戻る/背景タップ抑止を徹底すること。
+    - `subscribePullCompleted` は設定画面等を含む全画面へ接続し、`{ silent: true }` 再読込時は `!silent` ガードでエラー画面化を防ぎつつ、排他処理中の通知は `pendingSilentReloadRef` 等で遅延実行し、他端末新着話の目次自動補完も担保すること。
+    - `ServiceProvider` 等の DI フォールバックインスタンスは再レンダーで再生成せず参照安定性を保ち、非同期 Hook の各 `await` 後には `isMountedRef.current` および Abort 状態を必ず検証すること。
+    - VRT 更新は `npm run test:vrt:update`（`--update-snapshots=all` ＆ `maxDiffPixelRatio: 0.001`）を徹底し、Playwright IT の時間経過検証は `waitForTimeout`／固定未来日を排して `window.Date` `Proxy` 仮想時計＋`expect.poll` を用いること。
+    - `vi.spyOn` は `afterEach(() => vi.restoreAllMocks())` または `try-finally` で復元漏れを防ぎ、Step 2 設計更新 PR のレビュー指摘も同一 PR 内で `bug-and-handover-log.md` へ即時記録すること。
   - `*.test.tsx` で `composeStories` による全 Story 実行＋内部ロジック補完テストを記述する。
 - **失敗確認とコミット**: `npx vitest run <対象テスト>` を実行し、未実装により期待通り失敗することを確認して `test(<scope>): ...（Red）` をコミットする。
 
