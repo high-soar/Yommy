@@ -106,6 +106,7 @@ related_specs:
   - docs/specs/changes/archive/issue-15-app-icon-setup.md
   - docs/guidelines/testing.md
 related_tests:
+  - src/features/cache/services/cacheScheduler.test.ts
   - src/app/ServiceProvider.test.tsx
   - src/app/router.test.tsx
   - src/App.test.tsx

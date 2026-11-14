@@ -27,6 +27,7 @@ related_specs:
   - docs/specs/features/webview-import.md
   - docs/quality/bug-and-handover-log.md
 related_tests:
+  - src/features/cache/services/cacheScheduler.test.ts
   - src/app/ServiceProvider.test.tsx
   - src/features/novel-detail/hooks/useNovelDetail.test.ts
   - src/features/novel-detail/components/NovelDetailPage.test.tsx
