@@ -96,13 +96,13 @@ related_tests: []
 > - **Milestone `v0.8`（探索フィルタ高度化 ＆ 本棚お気に入り管理、No. 234〜279）**: [docs/quality/archive/v0.8-discovery-filter-and-bookshelf-favorite-ux-log.md](archive/v0.8-discovery-filter-and-bookshelf-favorite-ux-log.md)
 > - **Milestone `v0.9`（永続ダウンロードキュー ＆ 内蔵WebViewインポート、No. 280〜306）**: [docs/quality/archive/v0.9-persistent-queue-and-webview-fallback-log.md](archive/v0.9-persistent-queue-and-webview-fallback-log.md)
 > - **Milestone `v1.0`（リリース準備 ＆ システム全体横断品質監査、No. 307〜388）**: [docs/quality/archive/v1.0-release-audit-log.md](archive/v1.0-release-audit-log.md)
-> - **Milestone `v1.1`（クラウド同期しおり保護 ＆ 作品詳細ヘッダーUX改善、No. 389〜445）**: [docs/quality/archive/v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md](archive/v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md)
+> - **Milestone `v1.1`（クラウド同期しおり保護 ＆ 作品詳細ヘッダーUX改善、No. 389〜446）**: [docs/quality/archive/v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md](archive/v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md)
 
-次期作業中の **Milestone `v1.2`** で検出されたバグ記録は、本表へ No. 446 より連番で記入します。
+次期作業中の **Milestone `v1.2`** で検出されたバグ記録は、本表へ No. 447 より連番で記入します。
 
 | No. | Issue / PR | 検出フェーズ・手段 | 成果物区分 (`製品コード` / `支援成果物`) | 対象箇所 | 原因 (`L`/`S`/`D`/`B`/`A`) | 不備の概要と是正内容（原因 `D` は設計書同期コミット併記） |
 | :-: | :--------: | :----------------- | :--------------------------------------: | :------- | :------------------------: | :-------------------------------------------------------- |
-| 446 |     -      | -                  |                    -                     | -        |             -              | （Milestone `v1.2` 以降の不備を No. 446 より連番で記入）  |
+| 447 |     -      | -                  |                    -                     | -        |             -              | （Milestone `v1.2` 以降の不備を No. 447 より連番で記入）  |
 
 ---
 
@@ -283,13 +283,13 @@ related_tests: []
   - **GitHub Actions CI における外部ネットワーク・APT ミラー耐性設計（No. 388 再発防止）**: CI ランナー環境におけるパッケージ取得の不安定性を解消するため、外部ミラー置換を廃止し、Azure ネイティブミラー維持、タイムアウト緩和（60秒）、再試行回数増加（5回）、`--fix-missing` オプションを追加してビルドを安定化。
   - **正本仕様書・単体テスト双方向トレーサビリティおよび品質記録台帳の原因分類適正化（`R3-03`, `R3-04`, `R3-07` 再発防止）**: 新規テスト追加時の正本フロントマター `related_tests` への即時登録、バグ記録における原因 `D` と設計書同期コミット SHA の 1 対 1 紐付けを徹底。
 
-### Milestone v1.1: クラウド同期しおり保護 ＆ 作品詳細ヘッダーUX改善（対象 Issue: #342, #343, #345, #358、記録 No. 389〜445）
+### Milestone v1.1: クラウド同期しおり保護 ＆ 作品詳細ヘッダーUX改善（対象 Issue: #342, #343, #345, #358、記録 No. 389〜446）
 
 - **アーカイブ記録**: [docs/quality/archive/v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md](archive/v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md)
 - **詳細分析レポート**: [docs/quality/reports/v1.1-cloud-sync-bookmark-and-detail-header-ux.md](reports/v1.1-cloud-sync-bookmark-and-detail-header-ux.md)
 - **製品コード不備件数**: **14 件**（うち MK / Step 2 PR 独立レビュー検出: 3 件［`No. 389`, `No. 394`, `No. 438`］、Milestone 横断レビュー Round 1 検出: 11 件［`No. 406`, `No. 407`, `No. 417`, `No. 422〜424`, `No. 426〜429`, `No. 436`］、Android 実機検証（`HO-37`, `HO-38`）・リリース後流出: 0 件 → **実機前（自動検証・AI レビュー）段階 DRE: 100%（14/14）、Milestone 完了前 DRE: 100%（14/14）**／**Phase 3〜`v1.1` 累計 DRE: $160/168 \approx 95.2%$（完了前 DRE 100%: 168/168）**）
-- **支援成果物不備件数**: **43 件**（PR 独立レビュー検出: 21 件［`No. 390〜393`, `No. 396〜405`, `No. 439〜445`］、CI IT 検出: 1 件［`No. 395`］、Milestone 横断レビュー Round 1 検出: 21 件［`No. 408〜416`, `No. 418〜421`, `No. 425`, `No. 430〜435`, `No. 437`］、重複計上なし）
-- **原因分類内訳（Milestone `v1.1` 単体 57 件）**: `D`: 22 件（製品 5 / 支援 17） / `L`: 22 件（製品 2 / 支援 20） / `S`: 6 件（製品 4 / 支援 2） / `A`: 5 件（製品 3 / 支援 2） / `B`: 2 件（製品 0 / 支援 2）（計 57 件、Phase 3 からの累計 445 件：製品 168 件 / 支援 277 件）
+- **支援成果物不備件数**: **44 件**（PR 独立レビュー検出: 22 件［`No. 390〜393`, `No. 396〜405`, `No. 439〜446`］、CI IT 検出: 1 件［`No. 395`］、Milestone 横断レビュー Round 1 検出: 21 件［`No. 408〜416`, `No. 418〜421`, `No. 425`, `No. 430〜435`, `No. 437`］、重複計上なし）
+- **原因分類内訳（Milestone `v1.1` 単体 58 件）**: `D`: 22 件（製品 5 / 支援 17） / `L`: 23 件（製品 2 / 支援 21） / `S`: 6 件（製品 4 / 支援 2） / `A`: 5 件（製品 3 / 支援 2） / `B`: 2 件（製品 0 / 支援 2）（計 58 件、Phase 3 からの累計 446 件：製品 168 件 / 支援 278 件）
 - **申し送り事項（`HO-37`〜`HO-38`）清算**: `HO-37`（`#343` 作品詳細ヘッダー 1 行アイコンバー・3 点メニュー）および `HO-38`（`#342` 5 分画面ロック復帰自動 Pull・しおり競合ダイアログ・未操作離脱保護）はいずれも `2026-11-14` Android 実機検証にて全項目 OK（不具合 0 件）で `Resolved`・アーカイブ化完了（残 `Open` 0 件）。
 - **プロセス・ガイドライン・スキル改善アクション（Kaizen 5 施策、`testing.md` §3.9 / `c-ut-workflow` へ反映）**:
   - **モーダル競合解決の非同期状態維持・タイマー解除・未操作離脱保護・背面 `inert` 規律（`No. 406, 422, 423, 426`: `R1-01, R1-17, R1-18, R1-21` 再発防止）**: `resolveBookmarkConflict` の `async Promise<boolean>` 化と保存成功後クローズ徹底、競合中および取得失敗・既読再閲覧時の 300ms デバウンス／`hasPendingBookmarkRef` 誤発火抑止、確認・競合モーダルへの背面 `inert` 化・フォーカストラップ・OS バックキー/背景タップ抑止を標準化。
