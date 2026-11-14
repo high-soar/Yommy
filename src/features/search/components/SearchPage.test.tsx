@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./SearchPage.stories";
 import { SearchPage } from "./SearchPage";
@@ -23,6 +23,10 @@ const {
 } = composeStories(stories);
 
 describe("SearchPage コンポーネント", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("Initial ストーリー: 未検索の初期案内UIが表示され、各子コンポーネントへ初期propsが伝播されること", () => {
     const siteSelectorSpy = vi
       .spyOn(siteSelectorModule, "SiteSelector")

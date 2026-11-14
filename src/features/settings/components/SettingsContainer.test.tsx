@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act } from "@testing-library/react";
+import { render, waitFor, act } from "@testing-library/react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./SettingsContainer.stories";
@@ -21,12 +21,13 @@ describe("SettingsContainer", () => {
   });
 
   describe("Storybook Stories 検証 (composeStories)", () => {
-    it("Default ストーリーで直接の子 SettingsPage に初期設定値とコールバック一式が渡され settings-page が描画されること (AC-ST-02〜05, AC-ST-17〜19, R1-23)", async () => {
-      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
+    it("Default ストーリーで直接の子 SettingsPage に初期設定値とコールバック一式が渡されること (AC-ST-02〜05, AC-ST-17〜19, R1-23)", async () => {
+      const pageSpy = vi
+        .spyOn(SettingsPageModule, "SettingsPage")
+        .mockImplementation(() => null);
       render(<Default />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
             writingMode: "vertical-rl",
@@ -48,7 +49,9 @@ describe("SettingsContainer", () => {
     });
 
     it("SettingsPage に渡された onToggleWritingMode 呼び出し時に writingMode が縦書きと横書きで相互に切り替わること (AC-ST-03, R1-23)", async () => {
-      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
+      const pageSpy = vi
+        .spyOn(SettingsPageModule, "SettingsPage")
+        .mockImplementation(() => null);
       render(<Default />);
 
       await waitFor(() => {
@@ -85,7 +88,9 @@ describe("SettingsContainer", () => {
     });
 
     it("SettingsPage に渡された onChangeTheme 呼び出し時に theme が更新されること (AC-ST-04, R1-23)", async () => {
-      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
+      const pageSpy = vi
+        .spyOn(SettingsPageModule, "SettingsPage")
+        .mockImplementation(() => null);
       render(<Default />);
 
       await waitFor(() => {
@@ -108,7 +113,9 @@ describe("SettingsContainer", () => {
     });
 
     it("SettingsPage に渡された onChangeFontSize 呼び出し時に fontSizePx が更新されること (AC-ST-05, R1-23)", async () => {
-      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
+      const pageSpy = vi
+        .spyOn(SettingsPageModule, "SettingsPage")
+        .mockImplementation(() => null);
       render(<Default />);
 
       await waitFor(() => {
@@ -131,7 +138,9 @@ describe("SettingsContainer", () => {
     });
 
     it("SettingsPage に渡された onChangeLineHeight 呼び出し時に lineHeight が更新されること (AC-ST-05, R1-23)", async () => {
-      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
+      const pageSpy = vi
+        .spyOn(SettingsPageModule, "SettingsPage")
+        .mockImplementation(() => null);
       render(<Default />);
 
       await waitFor(() => {
@@ -154,7 +163,9 @@ describe("SettingsContainer", () => {
     });
 
     it("SettingsPage に渡された onChangeFontFamily 呼び出し時に fontFamily が更新されること (AC-ST-17, R1-23)", async () => {
-      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
+      const pageSpy = vi
+        .spyOn(SettingsPageModule, "SettingsPage")
+        .mockImplementation(() => null);
       render(<Default />);
 
       await waitFor(() => {
@@ -180,7 +191,9 @@ describe("SettingsContainer", () => {
     });
 
     it("SettingsPage に渡された onChangePageMargin 呼び出し時に pageMarginPx が更新されること (AC-ST-18, R1-23)", async () => {
-      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
+      const pageSpy = vi
+        .spyOn(SettingsPageModule, "SettingsPage")
+        .mockImplementation(() => null);
       render(<Default />);
 
       await waitFor(() => {
@@ -203,7 +216,9 @@ describe("SettingsContainer", () => {
     });
 
     it("SettingsPage に渡された onChangePagingMode 呼び出し時に pagingMode が更新されること (AC-ST-13, R1-23)", async () => {
-      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
+      const pageSpy = vi
+        .spyOn(SettingsPageModule, "SettingsPage")
+        .mockImplementation(() => null);
       render(<Default />);
 
       await waitFor(() => {
@@ -226,7 +241,9 @@ describe("SettingsContainer", () => {
     });
 
     it("SettingsPage に渡された onToggleVolumeKeyPaging 呼び出し時に enableVolumeKeyPaging が切り替わること (AC-ST-19, R1-23)", async () => {
-      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
+      const pageSpy = vi
+        .spyOn(SettingsPageModule, "SettingsPage")
+        .mockImplementation(() => null);
       render(<Default />);
 
       await waitFor(() => {
@@ -254,11 +271,12 @@ describe("SettingsContainer", () => {
     });
 
     it("WithCustomClass ストーリーで className が SettingsPage に渡されること (R1-23)", async () => {
-      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
+      const pageSpy = vi
+        .spyOn(SettingsPageModule, "SettingsPage")
+        .mockImplementation(() => null);
       render(<WithCustomClass />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
             className: "custom-settings-container",
@@ -271,7 +289,9 @@ describe("SettingsContainer", () => {
 
   describe("SettingsContainer 単体動作検証", () => {
     it("className が未指定でも SettingsPage に className=undefined が渡されエラーなく描画されること (R1-23)", async () => {
-      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
+      const pageSpy = vi
+        .spyOn(SettingsPageModule, "SettingsPage")
+        .mockImplementation(() => null);
       render(
         <ServiceProvider
           services={{
@@ -283,7 +303,6 @@ describe("SettingsContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("settings-page")).toBeInTheDocument();
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
             className: undefined,
@@ -295,7 +314,9 @@ describe("SettingsContainer", () => {
     });
 
     it("設定保存が reject した場合、SettingsPage に error が伝播されること (R1-20, R1-23)", async () => {
-      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
+      const pageSpy = vi
+        .spyOn(SettingsPageModule, "SettingsPage")
+        .mockImplementation(() => null);
       const mockRepo = stories.createMockSettingsRepository();
       mockRepo.updateReaderSettings = vi
         .fn()
@@ -335,7 +356,9 @@ describe("SettingsContainer", () => {
     });
 
     it("useCloudSync の状態とコールバックが SettingsPage に伝播され、onSyncNow 呼び出しで同期が実行されること (AC-ST-08〜12, R1-23)", async () => {
-      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
+      const pageSpy = vi
+        .spyOn(SettingsPageModule, "SettingsPage")
+        .mockImplementation(() => null);
       const mockBridge = {
         getAuthState: vi.fn().mockResolvedValue({
           status: "connected",
@@ -384,7 +407,9 @@ describe("SettingsContainer", () => {
     });
 
     it("useStorageCache の状態とコールバックが SettingsPage に伝播され、onClearStorageCache 呼び出しでキャッシュ削除が実行されること (AC-ST-14〜16, R1-23)", async () => {
-      const pageSpy = vi.spyOn(SettingsPageModule, "SettingsPage");
+      const pageSpy = vi
+        .spyOn(SettingsPageModule, "SettingsPage")
+        .mockImplementation(() => null);
       let summaryData = { totalCachedChapters: 8, totalByteSize: 204800 };
       const deleteAllCachedBodiesMock = vi.fn(async () => {
         summaryData = { totalCachedChapters: 0, totalByteSize: 0 };

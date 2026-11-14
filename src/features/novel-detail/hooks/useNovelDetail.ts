@@ -13,7 +13,6 @@ import {
 } from "../../../shared/constants/cache";
 import { isChapterFresh, delay } from "../../../shared/utils/cache";
 import { fetchFullNovelIndex } from "../../../parsers/fetchFullNovelIndex";
-import { DEFAULT_MAX_RETRY_COUNT } from "../../cache/services/cacheScheduler";
 import type { CacheNovelProgress } from "../../cache/types";
 
 export type { UseNovelDetailResult } from "../types";
@@ -65,24 +64,6 @@ function getUncachedOrStaleChapters(
   return chapters
     .filter((ch) => !isChapterFresh(ch, now))
     .sort((a, b) => a.chapterIndex - b.chapterIndex);
-}
-
-/**
- * 対象エピソードから最大再試行回数（DEFAULT_MAX_RETRY_COUNT）未満の chapterIndex 一覧を抽出する。
- */
-function selectRetryableChapterIndexes(
-  targetChapters: ChapterSummary[],
-  queueItems: DownloadQueueItem[],
-): number[] {
-  const retryCountByIndex = new Map(
-    queueItems.map((item) => [item.chapterIndex, item.retryCount]),
-  );
-  return targetChapters
-    .filter(
-      (ch) =>
-        (retryCountByIndex.get(ch.chapterIndex) ?? 0) < DEFAULT_MAX_RETRY_COUNT,
-    )
-    .map((ch) => ch.chapterIndex);
 }
 
 /**
@@ -332,7 +313,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
           if (
             !isMountedRef.current ||
             isDeletedRef.current ||
-            isDeletingRef.current ||
+            isAnyExclusiveOperationActive() ||
             syncSeq !== progressSyncSeqRef.current
           ) {
             return;
@@ -353,8 +334,16 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
             fetchedChapters,
             queueItems,
           );
+          const downloadedIndexes = new Set(
+            fetchedChapters
+              .filter((chapter) => chapter.downloadedAt !== null)
+              .map((chapter) => chapter.chapterIndex),
+          );
+          const filteredProgressFailedIndexes = progressFailedIndexes.filter(
+            (chapterIndex) => !downloadedIndexes.has(chapterIndex),
+          );
           const mergedFailedIndexes = Array.from(
-            new Set([...dbFailedIndexes, ...progressFailedIndexes]),
+            new Set([...dbFailedIndexes, ...filteredProgressFailedIndexes]),
           ).sort((a, b) => a - b);
           setFailedChapterIndexes(mergedFailedIndexes);
         } catch {
@@ -362,7 +351,13 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
         }
       })();
     },
-    [novelId, novelRepository, chapterRepository, queueRepository],
+    [
+      novelId,
+      novelRepository,
+      chapterRepository,
+      queueRepository,
+      isAnyExclusiveOperationActive,
+    ],
   );
 
   // CacheScheduler の現在進捗の即時復元および進捗イベント購読
@@ -373,6 +368,9 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     restoreSchedulerProgress();
 
     return cacheScheduler.subscribeProgress(novelId, (progress) => {
+      if (isAnyExclusiveOperationActive() || isDeletedRef.current) {
+        return;
+      }
       const syncSeq = ++progressSyncSeqRef.current;
 
       if (isBatchProgressActive(progress)) {
@@ -407,6 +405,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     isReady,
     cacheScheduler,
     novelId,
+    isAnyExclusiveOperationActive,
     restoreSchedulerProgress,
     syncProgressFromDb,
   ]);
@@ -461,6 +460,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
    */
   const reloadDetail = useCallback(
     async (options?: { silent?: boolean }): Promise<void> => {
+      progressSyncSeqRef.current += 1;
       const silent = options?.silent === true;
       if (!silent) {
         setIsLoading(true);
@@ -544,6 +544,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
 
     isRefreshingRef.current = true;
     exclusiveOpSeqRef.current += 1;
+    progressSyncSeqRef.current += 1;
     setIsRefreshing(true);
     setError(null);
     setRefreshMessage(null);
@@ -552,6 +553,48 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     let isSuccess = false;
     const wasBatchCaching =
       cacheScheduler?.isNovelBatchCaching(novelId) === true;
+
+    const resumePausedBatchCacheIfNeeded = async (): Promise<void> => {
+      if (!cacheScheduler || !wasBatchCaching) {
+        return;
+      }
+      const isResumeBlocked = (): boolean =>
+        isDeletedRef.current ||
+        isAnyExclusiveOperationActive() ||
+        cacheScheduler.getNovelProgress(novelId)?.status === "cancelled";
+
+      if (isResumeBlocked()) {
+        return;
+      }
+      try {
+        const [latestChapters, queueAfterRefresh] = await Promise.all([
+          chapterRepository.listChaptersByNovelId(novelId),
+          queueRepository.listByNovelId(novelId),
+        ]);
+        if (isResumeBlocked()) {
+          return;
+        }
+        const remainingTargets = getUncachedOrStaleChapters(
+          latestChapters,
+          Date.now(),
+        );
+        const failedIndexSet = new Set(
+          queueAfterRefresh
+            .filter((item) => item.status === "failed")
+            .map((item) => item.chapterIndex),
+        );
+        const remainingIndexes = remainingTargets
+          .filter((ch) => !failedIndexSet.has(ch.chapterIndex))
+          .map((ch) => ch.chapterIndex);
+        if (remainingIndexes.length > 0) {
+          await cacheScheduler.enqueueBatchCache(novelId, remainingIndexes);
+          runIfMounted(restoreSchedulerProgress);
+        }
+      } catch {
+        // 目次更新後処理でのバックグラウンド再開失敗は後続クリーンアップを妨げない
+      }
+    };
+
     try {
       await cacheScheduler?.pauseNovelTasks(novelId);
       if (!isMountedRef.current) {
@@ -604,24 +647,6 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
         }
       });
 
-      if (wasBatchCaching && cacheScheduler) {
-        const queueAfterRefresh = await queueRepository.listByNovelId(novelId);
-        if (!isMountedRef.current) {
-          return true;
-        }
-        const remainingTargets = getUncachedOrStaleChapters(
-          updatedChapters,
-          Date.now(),
-        );
-        const remainingIndexes = selectRetryableChapterIndexes(
-          remainingTargets,
-          queueAfterRefresh,
-        );
-        if (remainingIndexes.length > 0) {
-          await cacheScheduler.enqueueBatchCache(novelId, remainingIndexes);
-        }
-      }
-
       isSuccess = true;
     } catch (err: unknown) {
       runIfMounted(() => {
@@ -633,6 +658,8 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
       runIfMounted(() => {
         setIsRefreshing(false);
       });
+      runIfMounted(restoreSchedulerProgress);
+      await resumePausedBatchCacheIfNeeded();
       flushPendingSilentReload();
     }
     return isSuccess;
@@ -649,6 +676,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     syncQueueState,
     novelId,
     runIfMounted,
+    restoreSchedulerProgress,
     flushPendingSilentReload,
   ]);
 
@@ -692,15 +720,22 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
 
     if (cacheScheduler) {
       try {
-        const queueItems = await queueRepository.listByNovelId(novelId);
+        const targetIndexes = targetChapters.map((ch) => ch.chapterIndex);
+        await cacheScheduler.enqueueBatchCache(novelId, targetIndexes);
         if (!isMountedRef.current) {
           return;
         }
+        const progressAfterEnqueue = cacheScheduler.getNovelProgress(novelId);
+        const isStillCaching =
+          progressAfterEnqueue !== null
+            ? isBatchProgressActive(progressAfterEnqueue)
+            : cacheScheduler.isNovelBatchCaching(novelId);
         if (
           batchCancelRequestedRef.current ||
           isAnyExclusiveOperationActive() ||
           isDeletedRef.current ||
-          startExclusiveOpSeq !== exclusiveOpSeqRef.current
+          startExclusiveOpSeq !== exclusiveOpSeqRef.current ||
+          !isStillCaching
         ) {
           isBatchCachingRef.current = false;
           setIsBatchCaching(false);
@@ -710,11 +745,6 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
           }
           return;
         }
-        const targetIndexes = selectRetryableChapterIndexes(
-          targetChapters,
-          queueItems,
-        );
-        await cacheScheduler.enqueueBatchCache(novelId, targetIndexes);
       } catch (err: unknown) {
         isBatchCachingRef.current = false;
         runIfMounted(() => {
@@ -802,12 +832,10 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
           }
 
           if (hasStaleCache) {
-            // 7日経過キャッシュ存在時の短タイムアウト失敗は既存キャッシュへフォールバックして completed とし次話へ
-            await queueRepository.updateStatus(
-              novelId,
+            // 7日経過キャッシュ存在時の短タイムアウト失敗は既存キャッシュへフォールバックして完了扱いとし、不要なキュー行を削除する
+            await queueRepository.deleteByNovelAndChapters(novelId, [
               target.chapterIndex,
-              "completed",
-            );
+            ]);
           } else {
             // 未キャッシュ話の失敗時はループを中断せず failed 記録し後続話を継続
             const errMsg = extractErrorMessage(fetchErr, "通信エラー");
@@ -842,11 +870,9 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
               downloadedAt,
             );
 
-            await queueRepository.updateStatus(
-              novelId,
+            await queueRepository.deleteByNovelAndChapters(novelId, [
               target.chapterIndex,
-              "completed",
-            );
+            ]);
 
             runIfMounted(() => {
               setChapters((prev) =>
@@ -946,6 +972,9 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
         const failedItems = remainingItems.filter(
           (item) => item.status === "failed",
         );
+        const nonFailedIndexes = remainingItems
+          .filter((item) => item.status !== "failed")
+          .map((item) => item.chapterIndex);
 
         if (failedItems.length === 0) {
           await queueRepository.clearNovelQueue(novelId);
@@ -960,6 +989,12 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
             }
           });
         } else {
+          if (nonFailedIndexes.length > 0) {
+            await queueRepository.deleteByNovelAndChapters(
+              novelId,
+              nonFailedIndexes,
+            );
+          }
           const sortedFailed = failedItems
             .map((item) => item.chapterIndex)
             .sort((a, b) => a - b);
@@ -1047,6 +1082,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
 
     isDeletingRef.current = true;
     exclusiveOpSeqRef.current += 1;
+    progressSyncSeqRef.current += 1;
     setIsDeleting(true);
     setError(null);
 
@@ -1072,6 +1108,9 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
       runIfMounted(() => {
         setIsDeleting(false);
       });
+      if (!isDeletedRef.current) {
+        runIfMounted(restoreSchedulerProgress);
+      }
       flushPendingSilentReload();
     }
     return isSuccess;
@@ -1082,6 +1121,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     syncEngine,
     novelId,
     runIfMounted,
+    restoreSchedulerProgress,
     flushPendingSilentReload,
   ]);
 
@@ -1116,6 +1156,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
 
       isClearingCacheRef.current = true;
       exclusiveOpSeqRef.current += 1;
+      progressSyncSeqRef.current += 1;
       setIsClearingCache(true);
       setError(null);
 
@@ -1168,6 +1209,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
         runIfMounted(() => {
           setIsClearingCache(false);
         });
+        runIfMounted(restoreSchedulerProgress);
         flushPendingSilentReload();
       }
       return deletedCount;
@@ -1181,6 +1223,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
       novelId,
       chapters,
       runIfMounted,
+      restoreSchedulerProgress,
       flushPendingSilentReload,
     ],
   );

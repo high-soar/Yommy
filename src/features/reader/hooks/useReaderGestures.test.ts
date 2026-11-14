@@ -89,6 +89,7 @@ describe("useReaderGestures", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.useRealTimers();
   });
 

@@ -1,6 +1,6 @@
 import { render, screen, waitFor, act } from "@testing-library/react";
 import React from "react";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./NovelDetailContainer.stories";
 import { NovelDetailContainer } from "./NovelDetailContainer";
@@ -233,6 +233,10 @@ const RouteObserverWrapper: React.FC<{
 describe("NovelDetailContainer", () => {
   beforeEach(() => {
     window.history.pushState(null, "", "/");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe("Storybook Stories レンダリング検証 (composeStories)", () => {

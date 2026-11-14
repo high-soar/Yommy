@@ -1,6 +1,6 @@
 import { renderHook, act, waitFor } from "@testing-library/react";
 import React from "react";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { ServiceProvider } from "../../../app/ServiceProvider";
 import { useBookshelf } from "./useBookshelf";
 import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
@@ -13,6 +13,10 @@ import narouWorkIndexSerializedHtml from "../../../parsers/narou/__fixtures__/wo
 import narouWorkIndexPage2Html from "../../../parsers/narou/__fixtures__/work_index_page2.html?raw";
 
 describe("useBookshelf", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   beforeEach(async () => {
     vi.useRealTimers();
     await resetTestDb();
@@ -1351,15 +1355,26 @@ describe("useBookshelf", () => {
   });
 
   describe("クラウド同期連携 (AC-BS-13)", () => {
-    const connectedBridge = {
-      getAuthState: vi
-        .fn()
-        .mockResolvedValue({ status: "connected", email: "user@example.com" }),
-      signIn: vi.fn(),
-      signOut: vi.fn(),
-      pullFile: vi.fn(),
-      pushFile: vi.fn(),
+    let connectedBridge: {
+      getAuthState: ReturnType<typeof vi.fn>;
+      signIn: ReturnType<typeof vi.fn>;
+      signOut: ReturnType<typeof vi.fn>;
+      pullFile: ReturnType<typeof vi.fn>;
+      pushFile: ReturnType<typeof vi.fn>;
     };
+
+    beforeEach(() => {
+      connectedBridge = {
+        getAuthState: vi.fn().mockResolvedValue({
+          status: "connected",
+          email: "user@example.com",
+        }),
+        signIn: vi.fn(),
+        signOut: vi.fn(),
+        pullFile: vi.fn(),
+        pushFile: vi.fn(),
+      };
+    });
 
     it("初回マウント時に syncEngine.pullAndMerge が実行され、完了後に作品一覧がリロードされること", async () => {
       const mockSyncEngine = {

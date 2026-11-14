@@ -1,6 +1,6 @@
 import { renderHook, act, waitFor } from "@testing-library/react";
 import React from "react";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { ServiceProvider } from "../../../app/ServiceProvider";
 import { useCloudSync } from "./useCloudSync";
 import type {
@@ -14,6 +14,10 @@ import type {
 } from "../../cloud-sync/services/syncEngine";
 
 describe("useCloudSync", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -746,6 +750,10 @@ describe("useCloudSync", () => {
       });
 
       // 不正な文字列
+      const invalidBridge = createMockBridge({
+        status: "connected",
+        email: "user@example.com",
+      });
       const invalidSettings: AppSettingsRepository = {
         getSetting: vi.fn().mockResolvedValueOnce("not-a-valid-date"),
         setSetting: vi.fn().mockResolvedValue(undefined),
@@ -753,18 +761,26 @@ describe("useCloudSync", () => {
 
       const { result: invalidResult } = renderHook(() => useCloudSync(), {
         wrapper: createWrapper({
-          cloudSyncBridge: bridge,
+          cloudSyncBridge: invalidBridge,
           appSettingsRepository: invalidSettings,
         }),
       });
 
       await waitFor(() => {
-        expect(invalidResult.current.lastSyncedAt).toBeNull();
+        expect(invalidSettings.getSetting).toHaveBeenCalledWith(
+          "cloud_sync_last_synced_at",
+        );
+        expect(invalidBridge.getAuthState).toHaveBeenCalledTimes(1);
+        expect(invalidResult.current.authState.status).toBe("connected");
       });
+      expect(invalidResult.current.lastSyncedAt).toBeNull();
     });
 
     it("getSetting が NaN または無効な数値を返す場合、lastSyncedAt が null となること", async () => {
-      const bridge = createMockBridge({ status: "unlinked" });
+      const bridge = createMockBridge({
+        status: "connected",
+        email: "user@example.com",
+      });
       const fallbackSettings: AppSettingsRepository = {
         getSetting: vi.fn().mockResolvedValueOnce(NaN as unknown as string),
         setSetting: vi.fn().mockResolvedValue(undefined),
@@ -778,8 +794,13 @@ describe("useCloudSync", () => {
       });
 
       await waitFor(() => {
-        expect(result.current.lastSyncedAt).toBeNull();
+        expect(fallbackSettings.getSetting).toHaveBeenCalledWith(
+          "cloud_sync_last_synced_at",
+        );
+        expect(bridge.getAuthState).toHaveBeenCalledTimes(1);
+        expect(result.current.authState.status).toBe("connected");
       });
+      expect(result.current.lastSyncedAt).toBeNull();
     });
 
     it("signIn 中に falsy（null）な例外がスローされた場合も安全に処理されること", async () => {

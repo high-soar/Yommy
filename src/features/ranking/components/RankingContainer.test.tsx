@@ -1,5 +1,5 @@
-import { render, screen, waitFor, act } from "@testing-library/react";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { render, waitFor, act } from "@testing-library/react";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./RankingContainer.stories";
 import { RankingContainer } from "./RankingContainer";
@@ -16,6 +16,10 @@ const { Default } = composeStories(stories);
 
 describe("RankingContainer コンポーネント", () => {
   let mockHttpClient: MockHttpClient;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   beforeEach(async () => {
     await resetTestDb();
@@ -62,31 +66,33 @@ describe("RankingContainer コンポーネント", () => {
     );
   };
 
-  it("Default ストーリー: ランキング画面が描画され作品一覧が自動取得され、子コンポーネント（RankingPage）に初期Propsが正しく伝搬されること (AC-RK-01, R1-21)", async () => {
-    const pageSpy = vi.spyOn(RankingPageModule, "RankingPage");
+  it("Default ストーリー: 子コンポーネント（RankingPage）に初期Propsおよび自動取得された作品一覧が正しく伝播されること (AC-RK-01, R1-21)", async () => {
+    const pageSpy = vi
+      .spyOn(RankingPageModule, "RankingPage")
+      .mockImplementation(() => null);
     render(<Default />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("ranking-page")).toBeInTheDocument();
       expect(pageSpy).toHaveBeenLastCalledWith(
         expect.objectContaining({
           selectedSite: "kakuyomu",
           selectedPeriod: "weekly",
           selectedWorkVariation: "long",
           selectedGenre: undefined,
+          isLoading: false,
         }),
         undefined,
       );
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId("ranking-results-list")).toBeInTheDocument();
+      const lastCallProps = pageSpy.mock.lastCall?.[0];
+      expect(lastCallProps?.items.length).toBeGreaterThan(0);
     });
     pageSpy.mockRestore();
   });
 
   it("期間セレクタで集計期間を切り替えた際にランキングが再取得されること (AC-RK-02)", async () => {
-    const pageSpy = vi.spyOn(RankingPageModule, "RankingPage");
+    const pageSpy = vi
+      .spyOn(RankingPageModule, "RankingPage")
+      .mockImplementation(() => null);
     renderWithProviders();
 
     await waitFor(() => {
@@ -116,7 +122,9 @@ describe("RankingContainer コンポーネント", () => {
   });
 
   it("ジャンルピルでジャンルを切り替えた際にランキングが再取得されること (AC-RK-03)", async () => {
-    const pageSpy = vi.spyOn(RankingPageModule, "RankingPage");
+    const pageSpy = vi
+      .spyOn(RankingPageModule, "RankingPage")
+      .mockImplementation(() => null);
     renderWithProviders();
 
     await waitFor(() => {
@@ -146,7 +154,9 @@ describe("RankingContainer コンポーネント", () => {
   });
 
   it("カードの onAddNovel 呼び出しで本棚に登録され registeredWorkIds に追加されること (AC-RK-06)", async () => {
-    const pageSpy = vi.spyOn(RankingPageModule, "RankingPage");
+    const pageSpy = vi
+      .spyOn(RankingPageModule, "RankingPage")
+      .mockImplementation(() => null);
     renderWithProviders();
 
     await waitFor(() => {
@@ -172,7 +182,9 @@ describe("RankingContainer コンポーネント", () => {
   });
 
   it("onSelectNovel が指定されている場合、未登録カードタップ時に本棚追加の上で onSelectNovel が呼ばれること (AC-RK-07)", async () => {
-    const pageSpy = vi.spyOn(RankingPageModule, "RankingPage");
+    const pageSpy = vi
+      .spyOn(RankingPageModule, "RankingPage")
+      .mockImplementation(() => null);
     const handleSelectNovel = vi.fn();
 
     renderWithProviders({ onSelectNovel: handleSelectNovel });
@@ -197,7 +209,9 @@ describe("RankingContainer コンポーネント", () => {
   });
 
   it("onSelectNovel が指定されている場合、すでに登録済みのカードタップ時は即座に onSelectNovel が呼ばれること (AC-RK-07)", async () => {
-    const pageSpy = vi.spyOn(RankingPageModule, "RankingPage");
+    const pageSpy = vi
+      .spyOn(RankingPageModule, "RankingPage")
+      .mockImplementation(() => null);
     const handleSelectNovel = vi.fn();
 
     renderWithProviders({ onSelectNovel: handleSelectNovel });
@@ -236,7 +250,9 @@ describe("RankingContainer コンポーネント", () => {
   });
 
   it("onSelectNovel が指定されていない場合、未登録作品の onSelectCard 呼び出しで作品が自動登録されること", async () => {
-    const pageSpy = vi.spyOn(RankingPageModule, "RankingPage");
+    const pageSpy = vi
+      .spyOn(RankingPageModule, "RankingPage")
+      .mockImplementation(() => null);
     renderWithProviders();
 
     await waitFor(() => {
@@ -266,7 +282,9 @@ describe("RankingContainer コンポーネント", () => {
       throw new Error("TOC Fetch Failed");
     });
 
-    const pageSpy = vi.spyOn(RankingPageModule, "RankingPage");
+    const pageSpy = vi
+      .spyOn(RankingPageModule, "RankingPage")
+      .mockImplementation(() => null);
     const handleSelectNovel = vi.fn();
 
     renderWithProviders({ onSelectNovel: handleSelectNovel });
@@ -293,7 +311,9 @@ describe("RankingContainer コンポーネント", () => {
   });
 
   it("SiteSelector によるサイト切替コールバック（onSelectSite）呼び出し時に、子コンポーネント（RankingPage）へ selectedSite が伝搬すること (AC-RK-09, R1-21)", async () => {
-    const pageSpy = vi.spyOn(RankingPageModule, "RankingPage");
+    const pageSpy = vi
+      .spyOn(RankingPageModule, "RankingPage")
+      .mockImplementation(() => null);
     renderWithProviders();
 
     await waitFor(() => {
@@ -323,7 +343,9 @@ describe("RankingContainer コンポーネント", () => {
   });
 
   it("RankingPage へ作品種別（selectedWorkVariation: 'long'）および変更コールバック（onSelectWorkVariation）が伝搬されること (AC-RK-10, Issue #265)", async () => {
-    const pageSpy = vi.spyOn(RankingPageModule, "RankingPage");
+    const pageSpy = vi
+      .spyOn(RankingPageModule, "RankingPage")
+      .mockImplementation(() => null);
     renderWithProviders();
 
     await waitFor(() => {

@@ -1,9 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./SettingsPage.stories";
 import { SettingsPage } from "./SettingsPage";
+import * as sampleTextPreviewModule from "./SampleTextPreview";
 import * as cloudSyncSectionModule from "./CloudSyncSection";
 import * as storageCacheSectionModule from "./StorageCacheSection";
 
@@ -24,139 +25,216 @@ const {
 } = composeStories(stories);
 
 describe("SettingsPage", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe("Storybook Stories 描画検証 (composeStories)", () => {
-    it("Default: 縦書き・ライトテーマ、既定ステッパー値、およびプレビューが正しく描画されること (AC-ST-01, AC-ST-02, AC-ST-17, AC-ST-18)", () => {
-      render(<Default />);
+    it("Default: 縦書き・ライトテーマ、既定ステッパー値、およびプレビュー・各セクションへの Props 伝達が正しく行われること (AC-ST-01, AC-ST-02, AC-ST-17, AC-ST-18)", () => {
+      const sampleTextPreviewSpy = vi
+        .spyOn(sampleTextPreviewModule, "SampleTextPreview")
+        .mockImplementation(() => null);
+      const cloudSyncSectionSpy = vi
+        .spyOn(cloudSyncSectionModule, "CloudSyncSection")
+        .mockImplementation(() => null);
+      const storageCacheSectionSpy = vi
+        .spyOn(storageCacheSectionModule, "StorageCacheSection")
+        .mockImplementation(() => null);
+      try {
+        render(<Default />);
 
-      // 画面ルート
-      const page = screen.getByTestId("settings-page");
-      expect(page).toBeInTheDocument();
-      expect(page).toHaveClass("h-full", "flex", "flex-col", "overflow-y-auto");
-      expect(page).toHaveAttribute("data-font-family", "biz-ud-mincho");
-      expect(page).toHaveAttribute("data-page-margin", "20");
+        // 画面ルート
+        const page = screen.getByTestId("settings-page");
+        expect(page).toBeInTheDocument();
+        expect(page).toHaveClass(
+          "h-full",
+          "flex",
+          "flex-col",
+          "overflow-y-auto",
+        );
+        expect(page).toHaveAttribute("data-font-family", "biz-ud-mincho");
+        expect(page).toHaveAttribute("data-page-margin", "20");
 
-      // ヘッダー
-      const header = screen.getByTestId("settings-header");
-      expect(header).toBeInTheDocument();
-      expect(
-        screen.getByRole("heading", { level: 1, name: "設定" }),
-      ).toBeInTheDocument();
+        // ヘッダー
+        const header = screen.getByTestId("settings-header");
+        expect(header).toBeInTheDocument();
+        expect(
+          screen.getByRole("heading", { level: 1, name: "設定" }),
+        ).toBeInTheDocument();
 
-      // 組版設定セクション
-      const typographySection = screen.getByTestId(
-        "typography-settings-section",
-      );
-      expect(typographySection).toBeInTheDocument();
-      expect(
-        screen.getByRole("heading", { level: 2, name: "組版・表示設定" }),
-      ).toBeInTheDocument();
+        // 組版設定セクション
+        const typographySection = screen.getByTestId(
+          "typography-settings-section",
+        );
+        expect(typographySection).toBeInTheDocument();
+        expect(
+          screen.getByRole("heading", { level: 2, name: "組版・表示設定" }),
+        ).toBeInTheDocument();
 
-      // 組み方向切替（vertical-rl 時は「横書き表示に切替」）
-      const toggleButton = screen.getByTestId("toggle-orientation");
-      expect(toggleButton).toHaveTextContent("横書き表示に切替");
-      expect(toggleButton).toBeEnabled();
+        // 組み方向切替（vertical-rl 時は「横書き表示に切替」）
+        const toggleButton = screen.getByTestId("toggle-orientation");
+        expect(toggleButton).toHaveTextContent("横書き表示に切替");
+        expect(toggleButton).toBeEnabled();
 
-      // ページ送りモードセレクター（初期値: auto の場合も 2 択化により paged が選択状態、enabled、注記は非表示） (AC-ST-13)
-      const pagingModeSelect = screen.getByTestId("paging-mode-select");
-      expect(pagingModeSelect).toBeInTheDocument();
-      expect(pagingModeSelect).toHaveValue("paged");
-      expect(pagingModeSelect).toBeEnabled();
-      expect(screen.queryByTestId("paging-mode-note")).not.toBeInTheDocument();
+        // ページ送りモードセレクター（初期値: auto の場合も 2 択化により paged が選択状態、enabled、注記は非表示） (AC-ST-13)
+        const pagingModeSelect = screen.getByTestId("paging-mode-select");
+        expect(pagingModeSelect).toBeInTheDocument();
+        expect(pagingModeSelect).toHaveValue("paged");
+        expect(pagingModeSelect).toBeEnabled();
+        expect(
+          screen.queryByTestId("paging-mode-note"),
+        ).not.toBeInTheDocument();
 
-      // カラーテーマ選択（ライトが選択中）
-      const lightThemeBtn = screen.getByTestId("theme-light");
-      const sepiaThemeBtn = screen.getByTestId("theme-sepia");
-      const darkThemeBtn = screen.getByTestId("theme-dark");
-      const blackThemeBtn = screen.getByTestId("theme-black");
+        // カラーテーマ選択（ライトが選択中）
+        const lightThemeBtn = screen.getByTestId("theme-light");
+        const sepiaThemeBtn = screen.getByTestId("theme-sepia");
+        const darkThemeBtn = screen.getByTestId("theme-dark");
+        const blackThemeBtn = screen.getByTestId("theme-black");
 
-      expect(lightThemeBtn).toHaveAttribute("aria-pressed", "true");
-      expect(sepiaThemeBtn).toHaveAttribute("aria-pressed", "false");
-      expect(darkThemeBtn).toHaveAttribute("aria-pressed", "false");
-      expect(blackThemeBtn).toHaveAttribute("aria-pressed", "false");
+        expect(lightThemeBtn).toHaveAttribute("aria-pressed", "true");
+        expect(sepiaThemeBtn).toHaveAttribute("aria-pressed", "false");
+        expect(darkThemeBtn).toHaveAttribute("aria-pressed", "false");
+        expect(blackThemeBtn).toHaveAttribute("aria-pressed", "false");
 
-      // フォント種別選択ドロップダウン（5種、UD明朝が初期値） (AC-ST-17)
-      const fontSelect = screen.getByTestId("font-family-select");
-      expect(fontSelect).toBeInTheDocument();
-      expect(fontSelect).toHaveValue("biz-ud-mincho");
-      expect(fontSelect).toBeEnabled();
-      const options = fontSelect.querySelectorAll("option");
-      expect(options).toHaveLength(5);
-      expect(options[0]).toHaveValue("biz-ud-mincho");
-      expect(options[1]).toHaveValue("mincho");
-      expect(options[2]).toHaveValue("biz-ud-gothic");
-      expect(options[3]).toHaveValue("gothic");
-      expect(options[4]).toHaveValue("klee");
+        // フォント種別選択ドロップダウン（5種、UD明朝が初期値） (AC-ST-17)
+        const fontSelect = screen.getByTestId("font-family-select");
+        expect(fontSelect).toBeInTheDocument();
+        expect(fontSelect).toHaveValue("biz-ud-mincho");
+        expect(fontSelect).toBeEnabled();
+        const options = fontSelect.querySelectorAll("option");
+        expect(options).toHaveLength(5);
+        expect(options[0]).toHaveValue("biz-ud-mincho");
+        expect(options[1]).toHaveValue("mincho");
+        expect(options[2]).toHaveValue("biz-ud-gothic");
+        expect(options[3]).toHaveValue("gothic");
+        expect(options[4]).toHaveValue("klee");
 
-      // 文字サイズステッパー（18px）
-      expect(screen.getByTestId("font-size-value")).toHaveTextContent("18px");
-      expect(screen.getByTestId("font-size-decrease")).toBeEnabled();
-      expect(screen.getByTestId("font-size-increase")).toBeEnabled();
+        // 文字サイズステッパー（18px）
+        expect(screen.getByTestId("font-size-value")).toHaveTextContent("18px");
+        expect(screen.getByTestId("font-size-decrease")).toBeEnabled();
+        expect(screen.getByTestId("font-size-increase")).toBeEnabled();
 
-      // 行間ステッパー（1.8）
-      expect(screen.getByTestId("line-height-value")).toHaveTextContent("1.8");
-      expect(screen.getByTestId("line-height-decrease")).toBeEnabled();
-      expect(screen.getByTestId("line-height-increase")).toBeEnabled();
+        // 行間ステッパー（1.8）
+        expect(screen.getByTestId("line-height-value")).toHaveTextContent(
+          "1.8",
+        );
+        expect(screen.getByTestId("line-height-decrease")).toBeEnabled();
+        expect(screen.getByTestId("line-height-increase")).toBeEnabled();
 
-      // 画面余白ステッパー（20px） (AC-ST-18)
-      expect(screen.getByTestId("page-margin-value")).toHaveTextContent("20px");
-      expect(screen.getByTestId("page-margin-decrease")).toBeEnabled();
-      expect(screen.getByTestId("page-margin-increase")).toBeEnabled();
+        // 画面余白ステッパー（20px） (AC-ST-18)
+        expect(screen.getByTestId("page-margin-value")).toHaveTextContent(
+          "20px",
+        );
+        expect(screen.getByTestId("page-margin-decrease")).toBeEnabled();
+        expect(screen.getByTestId("page-margin-increase")).toBeEnabled();
 
-      // 音量キーでページ送りトグル（初期値: false / aria-pressed="false"） (AC-ST-19)
-      const volumeKeyToggle = screen.getByTestId("toggle-volume-key-paging");
-      expect(volumeKeyToggle).toBeInTheDocument();
-      expect(volumeKeyToggle).toHaveAttribute("role", "switch");
-      expect(volumeKeyToggle).toHaveAttribute("aria-checked", "false");
-      expect(volumeKeyToggle).toHaveAttribute("aria-pressed", "false");
-      expect(volumeKeyToggle).toHaveAttribute(
-        "aria-label",
-        "音量キーでページ送り",
-      );
-      expect(volumeKeyToggle).toBeEnabled();
-      expect(
-        screen.getByText("音量［ー］で次へ、音量［＋］で前へ移動します"),
-      ).toBeInTheDocument();
+        // 音量キーでページ送りトグル（初期値: false / aria-pressed="false"） (AC-ST-19)
+        const volumeKeyToggle = screen.getByTestId("toggle-volume-key-paging");
+        expect(volumeKeyToggle).toBeInTheDocument();
+        expect(volumeKeyToggle).toHaveAttribute("role", "switch");
+        expect(volumeKeyToggle).toHaveAttribute("aria-checked", "false");
+        expect(volumeKeyToggle).toHaveAttribute("aria-pressed", "false");
+        expect(volumeKeyToggle).toHaveAttribute(
+          "aria-label",
+          "音量キーでページ送り",
+        );
+        expect(volumeKeyToggle).toBeEnabled();
+        expect(
+          screen.getByText("音量［ー］で次へ、音量［＋］で前へ移動します"),
+        ).toBeInTheDocument();
 
-      // プレビューセクション
-      const previewSection = screen.getByTestId("preview-section");
-      expect(previewSection).toBeInTheDocument();
-      expect(
-        screen.getByRole("heading", { level: 2, name: "組版プレビュー" }),
-      ).toBeInTheDocument();
+        // プレビューセクション
+        const previewSection = screen.getByTestId("preview-section");
+        expect(previewSection).toBeInTheDocument();
+        expect(
+          screen.getByRole("heading", { level: 2, name: "組版プレビュー" }),
+        ).toBeInTheDocument();
 
-      // SampleTextPreview のマウント確認 (R1-32)
-      expect(screen.getByTestId("sample-text-preview")).toBeInTheDocument();
+        // 子コンポーネント（SampleTextPreview / CloudSyncSection / StorageCacheSection）への Props 伝達確認 (R1-32, R1-05)
+        expect(sampleTextPreviewSpy).toHaveBeenCalledWith(
+          {
+            writingMode: "vertical-rl",
+            theme: "light",
+            fontSizePx: 18,
+            lineHeight: 1.8,
+            fontFamily: "biz-ud-mincho",
+            pageMarginPx: 20,
+          },
+          undefined,
+        );
+        expect(cloudSyncSectionSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            authState: { status: "unlinked" },
+          }),
+          undefined,
+        );
+        expect(storageCacheSectionSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            summary: { totalCachedChapters: 0, totalByteSize: 0 },
+          }),
+          undefined,
+        );
 
-      // バージョン表示フッター (AC-ST-20)
-      const footer = screen.getByTestId("settings-version-footer");
-      expect(footer).toBeInTheDocument();
-      expect(footer).toHaveTextContent("Yommy v1.0.0");
+        // バージョン表示フッター (AC-ST-20)
+        const footer = screen.getByTestId("settings-version-footer");
+        expect(footer).toBeInTheDocument();
+        expect(footer).toHaveTextContent("Yommy v1.0.0");
+      } finally {
+        sampleTextPreviewSpy.mockRestore();
+        cloudSyncSectionSpy.mockRestore();
+        storageCacheSectionSpy.mockRestore();
+      }
     });
 
-    it("HorizontalSepia: 横書き・セピアテーマ表示が正しく反映されること (AC-ST-03, AC-ST-04)", () => {
-      render(<HorizontalSepia />);
+    it("HorizontalSepia: 横書き・セピアテーマ表示が正しく反映され SampleTextPreview へ Props 伝達されること (AC-ST-03, AC-ST-04)", () => {
+      const sampleTextPreviewSpy = vi
+        .spyOn(sampleTextPreviewModule, "SampleTextPreview")
+        .mockImplementation(() => null);
+      const cloudSyncSectionSpy = vi
+        .spyOn(cloudSyncSectionModule, "CloudSyncSection")
+        .mockImplementation(() => null);
+      const storageCacheSectionSpy = vi
+        .spyOn(storageCacheSectionModule, "StorageCacheSection")
+        .mockImplementation(() => null);
+      try {
+        render(<HorizontalSepia />);
 
-      // 組み方向切替（horizontal-tb 時は「縦書き表示に切替」）
-      const toggleButton = screen.getByTestId("toggle-orientation");
-      expect(toggleButton).toHaveTextContent("縦書き表示に切替");
+        // 組み方向切替（horizontal-tb 時は「縦書き表示に切替」）
+        const toggleButton = screen.getByTestId("toggle-orientation");
+        expect(toggleButton).toHaveTextContent("縦書き表示に切替");
 
-      // セピアテーマが選択状態
-      expect(screen.getByTestId("theme-sepia")).toHaveAttribute(
-        "aria-pressed",
-        "true",
-      );
-      expect(screen.getByTestId("theme-light")).toHaveAttribute(
-        "aria-pressed",
-        "false",
-      );
+        // セピアテーマが選択状態
+        expect(screen.getByTestId("theme-sepia")).toHaveAttribute(
+          "aria-pressed",
+          "true",
+        );
+        expect(screen.getByTestId("theme-light")).toHaveAttribute(
+          "aria-pressed",
+          "false",
+        );
 
-      // SampleTextPreview のマウント確認 (R1-32)
-      expect(screen.getByTestId("sample-text-preview")).toBeInTheDocument();
+        // SampleTextPreview への Props 伝達確認 (R1-32, R1-05)
+        expect(sampleTextPreviewSpy).toHaveBeenCalledWith(
+          {
+            writingMode: "horizontal-tb",
+            theme: "sepia",
+            fontSizePx: 18,
+            lineHeight: 1.8,
+            fontFamily: "biz-ud-mincho",
+            pageMarginPx: 20,
+          },
+          undefined,
+        );
 
-      // バージョン表示フッター (AC-ST-20)
-      const footer = screen.getByTestId("settings-version-footer");
-      expect(footer).toBeInTheDocument();
-      expect(footer).toHaveTextContent("Yommy v1.0.0");
+        // バージョン表示フッター (AC-ST-20)
+        const footer = screen.getByTestId("settings-version-footer");
+        expect(footer).toBeInTheDocument();
+        expect(footer).toHaveTextContent("Yommy v1.0.0");
+      } finally {
+        sampleTextPreviewSpy.mockRestore();
+        cloudSyncSectionSpy.mockRestore();
+        storageCacheSectionSpy.mockRestore();
+      }
     });
 
     it("MinBoundaries: 最小境界値（12px / 1.4 / 8px）で縮小ボタンが無効化されること (AC-ST-05, AC-ST-18)", () => {
@@ -287,39 +365,43 @@ describe("SettingsPage", () => {
     });
 
     it("WithStorageCache: ストレージ・キャッシュ情報と完了通知が StorageCacheSection へ正しく伝達されること (AC-ST-14, AC-ST-16)", () => {
-      const storageCacheSectionSpy = vi.spyOn(
-        storageCacheSectionModule,
-        "StorageCacheSection",
-      );
-      render(<WithStorageCache />);
+      const storageCacheSectionSpy = vi
+        .spyOn(storageCacheSectionModule, "StorageCacheSection")
+        .mockImplementation(() => null);
+      try {
+        render(<WithStorageCache />);
 
-      expect(storageCacheSectionSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          summary: {
-            totalCachedChapters: 12,
-            totalByteSize: 1572864,
-          },
-          notice: "本文キャッシュを一括削除しました（4話）",
-        }),
-        undefined,
-      );
-      storageCacheSectionSpy.mockRestore();
+        expect(storageCacheSectionSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            summary: {
+              totalCachedChapters: 12,
+              totalByteSize: 1572864,
+            },
+            notice: "本文キャッシュを一括削除しました（4話）",
+          }),
+          undefined,
+        );
+      } finally {
+        storageCacheSectionSpy.mockRestore();
+      }
     });
 
     it("WithStorageCacheDialogOpen: initialShowDialog が StorageCacheSection に伝達されること (AC-ST-15)", () => {
-      const storageCacheSectionSpy = vi.spyOn(
-        storageCacheSectionModule,
-        "StorageCacheSection",
-      );
-      render(<WithStorageCacheDialogOpen />);
+      const storageCacheSectionSpy = vi
+        .spyOn(storageCacheSectionModule, "StorageCacheSection")
+        .mockImplementation(() => null);
+      try {
+        render(<WithStorageCacheDialogOpen />);
 
-      expect(storageCacheSectionSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          initialShowDialog: true,
-        }),
-        undefined,
-      );
-      storageCacheSectionSpy.mockRestore();
+        expect(storageCacheSectionSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            initialShowDialog: true,
+          }),
+          undefined,
+        );
+      } finally {
+        storageCacheSectionSpy.mockRestore();
+      }
     });
   });
 
@@ -407,6 +489,38 @@ describe("SettingsPage", () => {
       expect(note).toHaveTextContent(
         "※横書き表示時は連続スクロール固定となります",
       );
+    });
+
+    it("pagingMode が scroll の場合はセレクターに scroll が選択状態として反映されること (AC-ST-13)", () => {
+      const sampleSpy = vi
+        .spyOn(sampleTextPreviewModule, "SampleTextPreview")
+        .mockImplementation(() => null);
+      const cloudSyncSpy = vi
+        .spyOn(cloudSyncSectionModule, "CloudSyncSection")
+        .mockImplementation(() => null);
+      const storageCacheSpy = vi
+        .spyOn(storageCacheSectionModule, "StorageCacheSection")
+        .mockImplementation(() => null);
+
+      try {
+        render(
+          <SettingsPage
+            writingMode="vertical-rl"
+            theme="light"
+            pagingMode="scroll"
+            onToggleWritingMode={vi.fn()}
+            onChangeTheme={vi.fn()}
+            onChangeFontSize={vi.fn()}
+            onChangeLineHeight={vi.fn()}
+          />,
+        );
+
+        expect(screen.getByTestId("paging-mode-select")).toHaveValue("scroll");
+      } finally {
+        sampleSpy.mockRestore();
+        cloudSyncSpy.mockRestore();
+        storageCacheSpy.mockRestore();
+      }
     });
 
     it("各テーマボタン押下時に onChangeTheme が対応するテーマで呼び出されること (AC-ST-04)", async () => {
@@ -699,22 +813,24 @@ describe("SettingsPage", () => {
     });
 
     it("CloudSyncConnected: クラウド同期セクションへ連携中状態が正しく伝達されること (AC-ST-08, AC-ST-09, R1-32)", () => {
-      const cloudSyncSectionSpy = vi.spyOn(
-        cloudSyncSectionModule,
-        "CloudSyncSection",
-      );
-      render(<CloudSyncConnected />);
+      const cloudSyncSectionSpy = vi
+        .spyOn(cloudSyncSectionModule, "CloudSyncSection")
+        .mockImplementation(() => null);
+      try {
+        render(<CloudSyncConnected />);
 
-      expect(cloudSyncSectionSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          authState: {
-            status: "connected",
-            email: "user@example.com",
-          },
-        }),
-        undefined,
-      );
-      cloudSyncSectionSpy.mockRestore();
+        expect(cloudSyncSectionSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            authState: {
+              status: "connected",
+              email: "user@example.com",
+            },
+          }),
+          undefined,
+        );
+      } finally {
+        cloudSyncSectionSpy.mockRestore();
+      }
     });
 
     it("error が null または未指定の場合、エラーアラートが表示されないこと", () => {
@@ -737,157 +853,161 @@ describe("SettingsPage", () => {
     });
 
     it("クラウド同期セクションが統合され、連携・同期コールバックが正しく配線されること (AC-ST-08〜12, R1-32)", async () => {
-      const cloudSyncSectionSpy = vi.spyOn(
-        cloudSyncSectionModule,
-        "CloudSyncSection",
-      );
-      const onSignInGoogle = vi.fn().mockResolvedValue(undefined);
-      const onSignOutGoogle = vi.fn().mockResolvedValue(undefined);
-      const onSyncNow = vi.fn().mockResolvedValue(undefined);
+      const cloudSyncSectionSpy = vi
+        .spyOn(cloudSyncSectionModule, "CloudSyncSection")
+        .mockImplementation(() => null);
+      try {
+        const onSignInGoogle = vi.fn().mockResolvedValue(undefined);
+        const onSignOutGoogle = vi.fn().mockResolvedValue(undefined);
+        const onSyncNow = vi.fn().mockResolvedValue(undefined);
 
-      // 未連携表示
-      const { rerender } = render(
-        <SettingsPage
-          writingMode="vertical-rl"
-          theme="light"
-          cloudSyncAuthState={{ status: "unlinked" }}
-          onToggleWritingMode={vi.fn()}
-          onChangeTheme={vi.fn()}
-          onChangeFontSize={vi.fn()}
-          onChangeLineHeight={vi.fn()}
-          onSignInGoogle={onSignInGoogle}
-          onSignOutGoogle={onSignOutGoogle}
-          onSyncNow={onSyncNow}
-        />,
-      );
+        // 未連携表示
+        const { rerender } = render(
+          <SettingsPage
+            writingMode="vertical-rl"
+            theme="light"
+            cloudSyncAuthState={{ status: "unlinked" }}
+            onToggleWritingMode={vi.fn()}
+            onChangeTheme={vi.fn()}
+            onChangeFontSize={vi.fn()}
+            onChangeLineHeight={vi.fn()}
+            onSignInGoogle={onSignInGoogle}
+            onSignOutGoogle={onSignOutGoogle}
+            onSyncNow={onSyncNow}
+          />,
+        );
 
-      expect(cloudSyncSectionSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          authState: { status: "unlinked" },
-          onSignIn: onSignInGoogle,
-          onSignOut: onSignOutGoogle,
-          onSyncNow: onSyncNow,
-        }),
-        undefined,
-      );
+        expect(cloudSyncSectionSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            authState: { status: "unlinked" },
+            onSignIn: onSignInGoogle,
+            onSignOut: onSignOutGoogle,
+            onSyncNow: onSyncNow,
+          }),
+          undefined,
+        );
 
-      const passedProps1 = cloudSyncSectionSpy.mock.calls[0][0];
-      passedProps1.onSignIn?.();
-      expect(onSignInGoogle).toHaveBeenCalledTimes(1);
+        const passedProps1 = cloudSyncSectionSpy.mock.calls[0][0];
+        passedProps1.onSignIn?.();
+        expect(onSignInGoogle).toHaveBeenCalledTimes(1);
 
-      // 連携中表示
-      cloudSyncSectionSpy.mockClear();
-      rerender(
-        <SettingsPage
-          writingMode="vertical-rl"
-          theme="light"
-          cloudSyncAuthState={{
-            status: "connected",
-            email: "test@example.com",
-          }}
-          cloudSyncLastSyncedAt="2026-10-31T12:00:00.000Z"
-          onToggleWritingMode={vi.fn()}
-          onChangeTheme={vi.fn()}
-          onChangeFontSize={vi.fn()}
-          onChangeLineHeight={vi.fn()}
-          onSignInGoogle={onSignInGoogle}
-          onSignOutGoogle={onSignOutGoogle}
-          onSyncNow={onSyncNow}
-        />,
-      );
+        // 連携中表示
+        cloudSyncSectionSpy.mockClear();
+        rerender(
+          <SettingsPage
+            writingMode="vertical-rl"
+            theme="light"
+            cloudSyncAuthState={{
+              status: "connected",
+              email: "test@example.com",
+            }}
+            cloudSyncLastSyncedAt="2026-10-31T12:00:00.000Z"
+            onToggleWritingMode={vi.fn()}
+            onChangeTheme={vi.fn()}
+            onChangeFontSize={vi.fn()}
+            onChangeLineHeight={vi.fn()}
+            onSignInGoogle={onSignInGoogle}
+            onSignOutGoogle={onSignOutGoogle}
+            onSyncNow={onSyncNow}
+          />,
+        );
 
-      expect(cloudSyncSectionSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          authState: {
-            status: "connected",
-            email: "test@example.com",
-          },
-          lastSyncedAt: "2026-10-31T12:00:00.000Z",
-          onSignIn: onSignInGoogle,
-          onSignOut: onSignOutGoogle,
-          onSyncNow: onSyncNow,
-        }),
-        undefined,
-      );
+        expect(cloudSyncSectionSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            authState: {
+              status: "connected",
+              email: "test@example.com",
+            },
+            lastSyncedAt: "2026-10-31T12:00:00.000Z",
+            onSignIn: onSignInGoogle,
+            onSignOut: onSignOutGoogle,
+            onSyncNow: onSyncNow,
+          }),
+          undefined,
+        );
 
-      const passedProps2 = cloudSyncSectionSpy.mock.calls[0][0];
-      passedProps2.onSyncNow?.();
-      expect(onSyncNow).toHaveBeenCalledTimes(1);
+        const passedProps2 = cloudSyncSectionSpy.mock.calls[0][0];
+        passedProps2.onSyncNow?.();
+        expect(onSyncNow).toHaveBeenCalledTimes(1);
 
-      passedProps2.onSignOut?.();
-      expect(onSignOutGoogle).toHaveBeenCalledTimes(1);
-
-      cloudSyncSectionSpy.mockRestore();
+        passedProps2.onSignOut?.();
+        expect(onSignOutGoogle).toHaveBeenCalledTimes(1);
+      } finally {
+        cloudSyncSectionSpy.mockRestore();
+      }
     });
 
     it("ストレージ・キャッシュ管理セクションが統合され、一括削除コールバックが正しく配線されること (AC-ST-14〜16)", async () => {
-      const storageCacheSectionSpy = vi.spyOn(
-        storageCacheSectionModule,
-        "StorageCacheSection",
-      );
-      const onClearStorageCache = vi.fn().mockResolvedValue(5);
+      const storageCacheSectionSpy = vi
+        .spyOn(storageCacheSectionModule, "StorageCacheSection")
+        .mockImplementation(() => null);
+      try {
+        const onClearStorageCache = vi.fn().mockResolvedValue(5);
 
-      render(
-        <SettingsPage
-          writingMode="vertical-rl"
-          theme="light"
-          storageCacheSummary={{
-            totalCachedChapters: 12,
-            totalByteSize: 1048576,
-          }}
-          storageCacheNotice="本文キャッシュを一括削除しました（5話）"
-          storageCacheError={null}
-          onToggleWritingMode={vi.fn()}
-          onChangeTheme={vi.fn()}
-          onChangeFontSize={vi.fn()}
-          onChangeLineHeight={vi.fn()}
-          onClearStorageCache={onClearStorageCache}
-        />,
-      );
+        render(
+          <SettingsPage
+            writingMode="vertical-rl"
+            theme="light"
+            storageCacheSummary={{
+              totalCachedChapters: 12,
+              totalByteSize: 1048576,
+            }}
+            storageCacheNotice="本文キャッシュを一括削除しました（5話）"
+            storageCacheError={null}
+            onToggleWritingMode={vi.fn()}
+            onChangeTheme={vi.fn()}
+            onChangeFontSize={vi.fn()}
+            onChangeLineHeight={vi.fn()}
+            onClearStorageCache={onClearStorageCache}
+          />,
+        );
 
-      expect(storageCacheSectionSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          summary: {
-            totalCachedChapters: 12,
-            totalByteSize: 1048576,
-          },
-          notice: "本文キャッシュを一括削除しました（5話）",
-          error: null,
-          onClearCache: onClearStorageCache,
-        }),
-        undefined,
-      );
+        expect(storageCacheSectionSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            summary: {
+              totalCachedChapters: 12,
+              totalByteSize: 1048576,
+            },
+            notice: "本文キャッシュを一括削除しました（5話）",
+            error: null,
+            onClearCache: onClearStorageCache,
+          }),
+          undefined,
+        );
 
-      const passedProps = storageCacheSectionSpy.mock.calls[0][0];
-      passedProps.onClearCache?.({ onlyRead: true });
-      expect(onClearStorageCache).toHaveBeenCalledWith({ onlyRead: true });
-
-      storageCacheSectionSpy.mockRestore();
+        const passedProps = storageCacheSectionSpy.mock.calls[0][0];
+        passedProps.onClearCache?.({ onlyRead: true });
+        expect(onClearStorageCache).toHaveBeenCalledWith({ onlyRead: true });
+      } finally {
+        storageCacheSectionSpy.mockRestore();
+      }
     });
 
     it("storageCacheSummary 省略時にデフォルトのキャッシュ0件（0話・0バイト）が適用されて StorageCacheSection へ渡されること (AC-ST-14)", () => {
-      const storageCacheSectionSpy = vi.spyOn(
-        storageCacheSectionModule,
-        "StorageCacheSection",
-      );
-      render(
-        <SettingsPage
-          writingMode="vertical-rl"
-          theme="light"
-          onToggleWritingMode={vi.fn()}
-          onChangeTheme={vi.fn()}
-          onChangeFontSize={vi.fn()}
-          onChangeLineHeight={vi.fn()}
-        />,
-      );
+      const storageCacheSectionSpy = vi
+        .spyOn(storageCacheSectionModule, "StorageCacheSection")
+        .mockImplementation(() => null);
+      try {
+        render(
+          <SettingsPage
+            writingMode="vertical-rl"
+            theme="light"
+            onToggleWritingMode={vi.fn()}
+            onChangeTheme={vi.fn()}
+            onChangeFontSize={vi.fn()}
+            onChangeLineHeight={vi.fn()}
+          />,
+        );
 
-      expect(storageCacheSectionSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          summary: { totalCachedChapters: 0, totalByteSize: 0 },
-        }),
-        undefined,
-      );
-      storageCacheSectionSpy.mockRestore();
+        expect(storageCacheSectionSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            summary: { totalCachedChapters: 0, totalByteSize: 0 },
+          }),
+          undefined,
+        );
+      } finally {
+        storageCacheSectionSpy.mockRestore();
+      }
     });
   });
 

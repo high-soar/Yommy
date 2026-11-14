@@ -1,6 +1,6 @@
 import { renderHook, act, waitFor } from "@testing-library/react";
 import React from "react";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { ServiceProvider } from "../../../app/ServiceProvider";
 import { RouterProvider } from "../../../app/router";
 import { useNovelSearch } from "./useNovelSearch";
@@ -20,6 +20,10 @@ import { createDefaultParserRegistry } from "../../../parsers/parserRegistry";
 
 describe("useNovelSearch", () => {
   let mockHttpClient: MockHttpClient;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   beforeEach(async () => {
     await resetTestDb();

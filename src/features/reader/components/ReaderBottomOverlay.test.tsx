@@ -27,7 +27,10 @@ describe("ReaderBottomOverlay", () => {
   });
 
   describe("Storybook Stories 検証 (composeStories)", () => {
-    it("Default ストーリーでオーバーレイが展開表示され、第2話インジケーターと4タブが表示されること", () => {
+    it("Default ストーリーでオーバーレイが展開表示され、ReaderChapterNav への Props と4タブが表示されること", () => {
+      const navSpy = vi
+        .spyOn(ReaderChapterNavModule, "ReaderChapterNav")
+        .mockImplementation(() => null);
       render(<Default />);
       const overlay = screen.getByTestId("reader-bottom-overlay");
       expect(overlay).toBeInTheDocument();
@@ -41,13 +44,15 @@ describe("ReaderBottomOverlay", () => {
         screen.queryByTestId("reader-page-seekbar-section"),
       ).not.toBeInTheDocument();
 
-      // ReaderChapterNav
-      expect(screen.getByTestId("reader-chapter-nav")).toBeInTheDocument();
-      expect(screen.getByTestId("reader-chapter-indicator")).toHaveTextContent(
-        "第 2 話 / 全 5 話",
+      // ReaderChapterNav への Props 伝達検証（親子分離）
+      expect(navSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          chapterIndex: 2,
+          totalChapters: 5,
+          isLoading: false,
+        }),
+        undefined,
       );
-      expect(screen.getByTestId("reader-prev-chapter")).not.toBeDisabled();
-      expect(screen.getByTestId("reader-next-chapter")).not.toBeDisabled();
 
       // 下部タブ (4タブ)
       const tabs = screen.getByTestId("reader-bottom-tabs");
@@ -86,28 +91,49 @@ describe("ReaderBottomOverlay", () => {
       expect(overlay).not.toHaveClass("translate-y-0");
     });
 
-    it("FirstChapter ストーリーで第1話では前の話へボタンが無効化されること", () => {
+    it("FirstChapter ストーリーで第1話の props が ReaderChapterNav へ渡されること", () => {
+      const navSpy = vi
+        .spyOn(ReaderChapterNavModule, "ReaderChapterNav")
+        .mockImplementation(() => null);
       render(<FirstChapter />);
-      expect(screen.getByTestId("reader-chapter-indicator")).toHaveTextContent(
-        "第 1 話 / 全 5 話",
+      expect(navSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          chapterIndex: 1,
+          totalChapters: 5,
+          isLoading: false,
+        }),
+        undefined,
       );
-      expect(screen.getByTestId("reader-prev-chapter")).toBeDisabled();
-      expect(screen.getByTestId("reader-next-chapter")).not.toBeDisabled();
     });
 
-    it("LastChapter ストーリーで最終話では次の話へボタンが無効化されること", () => {
+    it("LastChapter ストーリーで最終話の props が ReaderChapterNav へ渡されること", () => {
+      const navSpy = vi
+        .spyOn(ReaderChapterNavModule, "ReaderChapterNav")
+        .mockImplementation(() => null);
       render(<LastChapter />);
-      expect(screen.getByTestId("reader-chapter-indicator")).toHaveTextContent(
-        "第 5 話 / 全 5 話",
+      expect(navSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          chapterIndex: 5,
+          totalChapters: 5,
+          isLoading: false,
+        }),
+        undefined,
       );
-      expect(screen.getByTestId("reader-prev-chapter")).not.toBeDisabled();
-      expect(screen.getByTestId("reader-next-chapter")).toBeDisabled();
     });
 
-    it("Loading ストーリーで通信中は前後話ボタンが両方無効化されること", () => {
+    it("Loading ストーリーで通信中フラグ isLoading=true が ReaderChapterNav へ渡されること", () => {
+      const navSpy = vi
+        .spyOn(ReaderChapterNavModule, "ReaderChapterNav")
+        .mockImplementation(() => null);
       render(<Loading />);
-      expect(screen.getByTestId("reader-prev-chapter")).toBeDisabled();
-      expect(screen.getByTestId("reader-next-chapter")).toBeDisabled();
+      expect(navSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          chapterIndex: 2,
+          totalChapters: 5,
+          isLoading: true,
+        }),
+        undefined,
+      );
     });
 
     it("SearchTabActive ストーリーで検索タブが aria-selected=true となること", () => {
@@ -198,7 +224,10 @@ describe("ReaderBottomOverlay", () => {
       expect(label).toHaveTextContent("1 / 1 ページ");
     });
 
-    it("PagedLoading ストーリーで通信中にシークバーおよび前後話ボタンが無効化されること (AC-RD-25)", () => {
+    it("PagedLoading ストーリーで通信中にシークバー無効化と ReaderChapterNav への isLoading=true 伝達がされること (AC-RD-25)", () => {
+      const navSpy = vi
+        .spyOn(ReaderChapterNavModule, "ReaderChapterNav")
+        .mockImplementation(() => null);
       render(<PagedLoading />);
       const seekbarSection = screen.getByTestId("reader-page-seekbar-section");
       expect(seekbarSection).toBeInTheDocument();
@@ -207,8 +236,14 @@ describe("ReaderBottomOverlay", () => {
       expect(seekbar).toBeInTheDocument();
       expect(seekbar).toBeDisabled();
 
-      expect(screen.getByTestId("reader-prev-chapter")).toBeDisabled();
-      expect(screen.getByTestId("reader-next-chapter")).toBeDisabled();
+      expect(navSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          chapterIndex: 2,
+          totalChapters: 5,
+          isLoading: true,
+        }),
+        undefined,
+      );
     });
 
     it("ScrollMode ストーリーで連続スクロール時はシークバー領域が描画されないこと (AC-RD-25)", () => {

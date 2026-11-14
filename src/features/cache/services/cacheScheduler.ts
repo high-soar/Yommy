@@ -16,8 +16,6 @@ import type {
   CacheSchedulerDeps,
 } from "../types";
 
-export const DEFAULT_MAX_RETRY_COUNT = 3;
-
 type InternalAbortReason = "preempted" | "cancelled";
 
 interface PrefetchTask {
@@ -40,7 +38,6 @@ interface NovelBatchState {
   status: CacheBatchStatus;
   isBatchCaching: boolean;
   pausedReason: "none" | "preempted";
-  needsDelayBeforeNextFetch: boolean;
 }
 
 type WorkUnit =
@@ -69,7 +66,7 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     queueRepository,
     httpClient,
     parserRegistry,
-    maxRetryCount = DEFAULT_MAX_RETRY_COUNT,
+    maxRetryCount,
     prefetchIntervalMs = PREFETCH_INTERVAL_MS,
     timeoutMs = STANDARD_TIMEOUT_MS,
     shortTimeoutMs = SHORT_TIMEOUT_MS,
@@ -93,6 +90,14 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
   let activeAbortController: AbortController | null = null;
   let activeAbortReason: InternalAbortReason | null = null;
   let activeWorkPromise: Promise<void> | null = null;
+  let lastNetworkRequestCompletedAt: number | null = null;
+  let globalCancelEpoch = 0;
+  const novelCancelEpochs = new Map<string, number>();
+  const pendingEnqueues = new Map<string, Promise<void>>();
+
+  const bumpNovelCancelEpoch = (novelId: string): void => {
+    novelCancelEpochs.set(novelId, (novelCancelEpochs.get(novelId) ?? 0) + 1);
+  };
 
   const emitProgress = (batch: NovelBatchState): void => {
     const listeners = listenersByNovel.get(batch.novelId);
@@ -155,6 +160,7 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
   };
 
   const handleTombstoneDeletion = (novelId: string): void => {
+    bumpNovelCancelEpoch(novelId);
     cancelQueuedPrefetches(novelId);
 
     const batch = batches.get(novelId);
@@ -190,9 +196,7 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     batch.status = "completed";
     batch.isBatchCaching = false;
     batch.pausedReason = "none";
-    if (batch.failedChapterIndexes.size === 0) {
-      await clearCompletedQueueRows(batch.novelId);
-    }
+    await clearCompletedQueueRows(batch.novelId);
   };
 
   const markChapterCompletedInBatch = async (
@@ -200,7 +204,13 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     chapterIndex: number,
   ): Promise<void> => {
     const batch = batches.get(novelId);
-    if (!batch || !batch.isBatchCaching) {
+    if (!batch) {
+      return;
+    }
+    if (!batch.isBatchCaching) {
+      if (batch.failedChapterIndexes.delete(chapterIndex)) {
+        emitProgress(batch);
+      }
       return;
     }
     const idx = batch.remainingChapterIndexes.indexOf(chapterIndex);
@@ -221,11 +231,18 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     const hasExistingCache = chapter.bodyHtml !== null;
     const requestTimeoutMs = hasExistingCache ? shortTimeoutMs : timeoutMs;
 
-    const response = await httpClient.getHtml({
-      url: chapter.url,
-      timeoutMs: requestTimeoutMs,
-      signal,
-    });
+    let response: Awaited<ReturnType<typeof httpClient.getHtml>>;
+    try {
+      response = await httpClient.getHtml({
+        url: chapter.url,
+        timeoutMs: requestTimeoutMs,
+        signal,
+      });
+    } finally {
+      if (!signal.aborted) {
+        lastNetworkRequestCompletedAt = Date.now();
+      }
+    }
 
     if (signal.aborted) {
       return "aborted";
@@ -257,9 +274,6 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
       parsed,
       new Date().toISOString(),
     );
-    if (signal.aborted) {
-      return "aborted";
-    }
     await queueRepository.deleteByNovelAndChapters(novelId, [
       chapter.chapterIndex,
     ]);
@@ -426,16 +440,19 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     activeAbortReason = null;
 
     try {
-      if (batch.needsDelayBeforeNextFetch) {
-        activeLowSleeping = true;
-        try {
-          await delay(prefetchIntervalMs, controller.signal);
-        } catch {
-          return;
-        } finally {
-          activeLowSleeping = false;
+      if (prefetchIntervalMs > 0 && lastNetworkRequestCompletedAt !== null) {
+        const remainingMs =
+          prefetchIntervalMs - (Date.now() - lastNetworkRequestCompletedAt);
+        if (remainingMs > 0) {
+          activeLowSleeping = true;
+          try {
+            await delay(remainingMs, controller.signal);
+          } catch {
+            return;
+          } finally {
+            activeLowSleeping = false;
+          }
         }
-        batch.needsDelayBeforeNextFetch = false;
       }
 
       const chapter = await chapterRepository.getChapter(
@@ -484,8 +501,6 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
         if (outcome === "tombstone") {
           return;
         }
-        batch.needsDelayBeforeNextFetch =
-          batch.remainingChapterIndexes.length > 0;
       } catch (err: unknown) {
         if (controller.signal.aborted) {
           await queueRepository.resetInterruptedToPending(batch.novelId);
@@ -502,11 +517,9 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
         }
 
         if (hasStaleCache) {
-          await queueRepository.updateStatus(
-            batch.novelId,
+          await queueRepository.deleteByNovelAndChapters(batch.novelId, [
             chapterIndex,
-            "completed",
-          );
+          ]);
           batch.failedChapterIndexes.delete(chapterIndex);
         } else {
           const errorMessage = toErrorMessage(err, "通信エラー");
@@ -530,8 +543,6 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
           batch.remainingChapterIndexes.splice(idx, 1);
           batch.current = Math.min(batch.total, batch.current + 1);
         }
-        batch.needsDelayBeforeNextFetch =
-          batch.remainingChapterIndexes.length > 0;
         await finalizeBatchCompletedIfDone(batch);
         emitProgress(batch);
       }
@@ -654,123 +665,146 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     novelId,
     chapterIndexes,
   ) => {
-    if (disposed) {
-      return;
-    }
-    const currentBatch = batches.get(novelId);
-    if (currentBatch?.isBatchCaching) {
-      return;
-    }
+    const startGlobalEpoch = globalCancelEpoch;
+    const startNovelEpoch = novelCancelEpochs.get(novelId) ?? 0;
+    const isStaleInit = (): boolean =>
+      disposed ||
+      globalCancelEpoch !== startGlobalEpoch ||
+      (novelCancelEpochs.get(novelId) ?? 0) !== startNovelEpoch;
 
-    await queueRepository.resetInterruptedToPending(novelId);
-    if (disposed) {
-      return;
-    }
-    const [allChapters, existingQueue] = await Promise.all([
-      chapterRepository.listChaptersByNovelId(novelId),
-      queueRepository.listByNovelId(novelId),
-    ]);
-    if (disposed) {
-      return;
-    }
+    const previousEnqueue = pendingEnqueues.get(novelId);
+    const currentEnqueue: Promise<void> = (async () => {
+      if (previousEnqueue) {
+        await Promise.allSettled([previousEnqueue]);
+      }
 
-    const now = Date.now();
-    const freshIndexes = allChapters
-      .filter((ch) => isChapterFresh(ch, now))
-      .map((ch) => ch.chapterIndex);
-    if (freshIndexes.length > 0) {
-      await queueRepository.deleteByNovelAndChapters(novelId, freshIndexes);
-      if (disposed) {
+      if (isStaleInit()) {
         return;
       }
-    }
+      const currentBatch = batches.get(novelId);
+      if (currentBatch?.isBatchCaching) {
+        return;
+      }
 
-    const chapterByIndex = new Map<number, ChapterSummary>(
-      allChapters.map((ch) => [ch.chapterIndex, ch]),
-    );
-    const queueByIndex = new Map(
-      existingQueue.map((item) => [item.chapterIndex, item]),
-    );
+      await queueRepository.resetInterruptedToPending(novelId);
+      if (isStaleInit()) {
+        return;
+      }
+      const [allChapters, existingQueue] = await Promise.all([
+        chapterRepository.listChaptersByNovelId(novelId),
+        queueRepository.listByNovelId(novelId),
+      ]);
+      if (isStaleInit()) {
+        return;
+      }
 
-    const uniqueSorted = Array.from(new Set(chapterIndexes)).sort(
-      (a, b) => a - b,
-    );
-    const targets = uniqueSorted
-      .map((idx) => chapterByIndex.get(idx))
-      .filter((ch): ch is ChapterSummary => {
-        if (!ch || isChapterFresh(ch, now)) {
-          return false;
-        }
-        const queueItem = queueByIndex.get(ch.chapterIndex);
-        return (queueItem?.retryCount ?? 0) < maxRetryCount;
-      });
-
-    if (targets.length === 0) {
-      const freshSet = new Set(freshIndexes);
-      const remainingFailed = existingQueue
-        .filter(
-          (item) =>
-            item.status === "failed" && !freshSet.has(item.chapterIndex),
-        )
-        .map((item) => item.chapterIndex);
-
-      if (remainingFailed.length === 0) {
-        await queueRepository.clearNovelQueue(novelId);
-        if (disposed) {
+      const now = Date.now();
+      const freshIndexes = allChapters
+        .filter((ch) => isChapterFresh(ch, now))
+        .map((ch) => ch.chapterIndex);
+      if (freshIndexes.length > 0) {
+        await queueRepository.deleteByNovelAndChapters(novelId, freshIndexes);
+        if (isStaleInit()) {
           return;
         }
       }
 
-      const completedBatch: NovelBatchState = {
+      const chapterByIndex = new Map<number, ChapterSummary>(
+        allChapters.map((ch) => [ch.chapterIndex, ch]),
+      );
+      const queueByIndex = new Map(
+        existingQueue.map((item) => [item.chapterIndex, item]),
+      );
+
+      const uniqueSorted = Array.from(new Set(chapterIndexes)).sort(
+        (a, b) => a - b,
+      );
+      const targets = uniqueSorted
+        .map((idx) => chapterByIndex.get(idx))
+        .filter((ch): ch is ChapterSummary => {
+          if (!ch || isChapterFresh(ch, now)) {
+            return false;
+          }
+          if (maxRetryCount === undefined) {
+            return true;
+          }
+          const queueItem = queueByIndex.get(ch.chapterIndex);
+          return (queueItem?.retryCount ?? 0) < maxRetryCount;
+        });
+
+      const targetIndexSet = new Set(targets.map((ch) => ch.chapterIndex));
+      const retainedFailedIndexes = existingQueue
+        .filter(
+          (item) =>
+            item.status === "failed" &&
+            !targetIndexSet.has(item.chapterIndex) &&
+            chapterByIndex.get(item.chapterIndex)?.downloadedAt === null,
+        )
+        .map((item) => item.chapterIndex);
+
+      if (targets.length === 0) {
+        await clearCompletedQueueRows(novelId);
+        if (isStaleInit()) {
+          return;
+        }
+
+        const completedBatch: NovelBatchState = {
+          novelId,
+          total: retainedFailedIndexes.length,
+          current: 0,
+          remainingChapterIndexes: [],
+          failedChapterIndexes: new Set(retainedFailedIndexes),
+          status: "completed",
+          isBatchCaching: false,
+          pausedReason: "none",
+        };
+        batches.set(novelId, completedBatch);
+        emitProgress(completedBatch);
+        return;
+      }
+
+      await queueRepository.enqueueChapters(
         novelId,
-        total: 0,
+        targets.map((ch) => ({
+          chapterIndex: ch.chapterIndex,
+          targetUrl: ch.url,
+        })),
+      );
+      if (isStaleInit()) {
+        return;
+      }
+
+      const preempted = hasHigherPriorityWork();
+      const batch: NovelBatchState = {
+        novelId,
+        total: targets.length + retainedFailedIndexes.length,
         current: 0,
-        remainingChapterIndexes: [],
-        failedChapterIndexes: new Set(remainingFailed),
-        status: "completed",
-        isBatchCaching: false,
-        pausedReason: "none",
-        needsDelayBeforeNextFetch: false,
+        remainingChapterIndexes: targets.map((ch) => ch.chapterIndex),
+        failedChapterIndexes: new Set(retainedFailedIndexes),
+        status: preempted ? "preempted" : "running",
+        isBatchCaching: true,
+        pausedReason: preempted ? "preempted" : "none",
       };
-      batches.set(novelId, completedBatch);
-      emitProgress(completedBatch);
-      return;
-    }
 
-    await queueRepository.enqueueChapters(
-      novelId,
-      targets.map((ch) => ({
-        chapterIndex: ch.chapterIndex,
-        targetUrl: ch.url,
-      })),
-    );
-    if (disposed) {
-      return;
-    }
+      batches.set(novelId, batch);
+      removeFromLowOrder(novelId);
+      lowNovelOrder.push(novelId);
+      emitProgress(batch);
+      kickWorker();
+    })().finally(() => {
+      if (pendingEnqueues.get(novelId) === currentEnqueue) {
+        pendingEnqueues.delete(novelId);
+      }
+    });
 
-    const preempted = hasHigherPriorityWork();
-    const batch: NovelBatchState = {
-      novelId,
-      total: targets.length,
-      current: 0,
-      remainingChapterIndexes: targets.map((ch) => ch.chapterIndex),
-      failedChapterIndexes: new Set<number>(),
-      status: preempted ? "preempted" : "running",
-      isBatchCaching: true,
-      pausedReason: preempted ? "preempted" : "none",
-      needsDelayBeforeNextFetch: false,
-    };
-
-    batches.set(novelId, batch);
-    removeFromLowOrder(novelId);
-    lowNovelOrder.push(novelId);
-    emitProgress(batch);
-    kickWorker();
+    pendingEnqueues.set(novelId, currentEnqueue);
+    await currentEnqueue;
   };
 
   const pauseNovelTasks: CacheScheduler["pauseNovelTasks"] = async (
     novelId,
   ) => {
+    bumpNovelCancelEpoch(novelId);
     const batch = batches.get(novelId);
     if (batch) {
       batch.remainingChapterIndexes = [];
@@ -787,6 +821,11 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
       await activeWorkPromise;
     }
 
+    const pendingEnqueue = pendingEnqueues.get(novelId);
+    if (pendingEnqueue) {
+      await Promise.allSettled([pendingEnqueue]);
+    }
+
     await queueRepository.resetInterruptedToPending(novelId);
 
     if (batch) {
@@ -798,6 +837,7 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     novelId,
     options,
   ) => {
+    bumpNovelCancelEpoch(novelId);
     cancelQueuedPrefetches(novelId);
 
     const batch = batches.get(novelId);
@@ -821,6 +861,11 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
       await activeWorkPromise;
     }
 
+    const pendingEnqueue = pendingEnqueues.get(novelId);
+    if (pendingEnqueue) {
+      await Promise.allSettled([pendingEnqueue]);
+    }
+
     const shouldClearQueue = options?.clearQueue !== false;
     if (shouldClearQueue) {
       await queueRepository.clearNovelQueue(novelId);
@@ -835,8 +880,11 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
   };
 
   const cancelAllTasks: CacheScheduler["cancelAllTasks"] = async (options) => {
+    globalCancelEpoch += 1;
     cancelQueuedPrefetches();
-    const batchNovelIds = Array.from(batches.keys());
+    const affectedNovelIds = Array.from(
+      new Set([...batches.keys(), ...pendingEnqueues.keys()]),
+    );
     for (const batch of batches.values()) {
       batch.remainingChapterIndexes = [];
       batch.status = "cancelled";
@@ -854,6 +902,10 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
       await activeWorkPromise;
     }
 
+    if (pendingEnqueues.size > 0) {
+      await Promise.allSettled(Array.from(pendingEnqueues.values()));
+    }
+
     const shouldClearQueue = options?.clearQueue !== false;
     if (shouldClearQueue) {
       await queueRepository.clearAllQueue();
@@ -861,7 +913,7 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
         batch.failedChapterIndexes.clear();
       }
     } else {
-      for (const id of batchNovelIds) {
+      for (const id of affectedNovelIds) {
         await queueRepository.resetInterruptedToPending(id);
       }
     }
@@ -969,6 +1021,7 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
       return;
     }
     disposed = true;
+    globalCancelEpoch += 1;
     cancelQueuedPrefetches();
     for (const batch of batches.values()) {
       batch.remainingChapterIndexes = [];

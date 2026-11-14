@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./BookshelfPage.stories";
 import { BookshelfPage } from "./BookshelfPage";
@@ -58,6 +58,10 @@ const sampleNovels: NovelSummary[] = [
 ];
 
 describe("BookshelfPage", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe("Storybook Stories 検証 (composeStories)", () => {
     it("WithNovels ストーリーでヘッダー・作品一覧が表示され、URL追加ボタンや空状態・ローディングが表示されないこと (AC-BS-04, AC-BS-07)", () => {
       const novelCardSpy = vi

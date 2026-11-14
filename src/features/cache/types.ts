@@ -62,6 +62,7 @@ export interface CacheSchedulerDeps {
   queueRepository: QueueRepository;
   httpClient: HttpClientBridge;
   parserRegistry: ParserRegistry;
+  /** enqueueBatchCache で除外する累計失敗回数上限（未指定時は無制限で再試行対象に含める） */
   maxRetryCount?: number;
   prefetchIntervalMs?: number;
   timeoutMs?: number;

@@ -1,6 +1,6 @@
 import { render, screen, waitFor, act } from "@testing-library/react";
 import React from "react";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./ReaderContainer.stories";
 import { ReaderContainer, type ReaderContainerProps } from "./ReaderContainer";
@@ -286,6 +286,10 @@ const TestObserver: React.FC<{
 };
 
 describe("ReaderContainer", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   beforeEach(() => {
     localStorage.clear();
     window.history.pushState(null, "", "/");
@@ -298,12 +302,13 @@ describe("ReaderContainer", () => {
       await resetTestDb();
     });
 
-    it("Default ストーリーで直接の子 ReaderPage に novel・chapter（第1話）・chapterIndex・totalChapters が渡され reader-page がマウントされること (AC-RD-01)", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+    it("Default ストーリーで直接の子 ReaderPage に novel・chapter（第1話）・chapterIndex・totalChapters の初期Propsが渡されること (AC-RD-01)", async () => {
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       render(<Default />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
             novel: expect.objectContaining({
@@ -324,11 +329,12 @@ describe("ReaderContainer", () => {
     });
 
     it("WithBookmark ストーリーで直接の子 ReaderPage に指定話数（第2話）および initialScrollProgress (0.5) が渡されること (AC-RD-08)", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       render(<WithBookmark />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
             novel: expect.objectContaining({
@@ -349,47 +355,49 @@ describe("ReaderContainer", () => {
       });
     });
 
-    it("Loading ストーリーで ReaderPage に isLoading=true が渡されローディング表示になること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+    it("Loading ストーリーで ReaderPage に isLoading=true、novel=null、chapter=null が渡されること", async () => {
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       render(<Loading />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-loading")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: true,
+            novel: null,
+            chapter: null,
+          }),
+          undefined,
+        );
       });
-      expect(pageSpy).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          isLoading: true,
-          novel: null,
-          chapter: null,
-        }),
-        undefined,
-      );
-      expect(screen.queryByTestId("reader-view")).not.toBeInTheDocument();
     });
 
-    it("Empty ストーリーで ReaderPage に novel=null・chapter=null が渡され空状態表示になること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+    it("Empty ストーリーで ReaderPage に isLoading=false、novel=null、chapter=null が渡されること", async () => {
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       render(<Empty />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-empty")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            novel: null,
+            chapter: null,
+          }),
+          undefined,
+        );
       });
-      expect(pageSpy).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          isLoading: false,
-          novel: null,
-          chapter: null,
-        }),
-        undefined,
-      );
     });
 
-    it("WithCustomCallbacks ストーリーでカスタムコールバック注入時も ReaderPage に作品・話データと遷移ハンドラが渡され正常に描画されること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+    it("WithCustomCallbacks ストーリーでカスタムコールバック注入時も ReaderPage に作品・話データと遷移ハンドラ群が伝播されること", async () => {
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       render(<WithCustomCallbacks />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
             novel: expect.objectContaining({
@@ -400,23 +408,20 @@ describe("ReaderContainer", () => {
             onSelectTab: expect.any(Function),
             onPrevChapter: expect.any(Function),
             onNextChapter: expect.any(Function),
+            onBackToToc: expect.any(Function),
           }),
           undefined,
         );
       });
-
-      expect(
-        screen.getByTestId("reader-bottom-touch-zone"),
-      ).toBeInTheDocument();
-      expect(screen.getByTestId("reader-bottom-overlay")).toBeInTheDocument();
     });
 
     it("PagedMode ストーリーでページ送りモード（paged）の設定が ReaderPage に伝播されること (AC-RD-15)", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       render(<PagedMode />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
             pagingMode: "paged",
@@ -431,7 +436,9 @@ describe("ReaderContainer", () => {
 
   describe("下部タブ遷移時のしおり保存と画面遷移の検証 (AC-RD-08, TR-01)", () => {
     it("下部オーバーレイの「本棚」タブクリック時、flushBookmark が実行されカスタムコールバックが呼び出されること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const onBackToBookshelf = vi.fn();
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
@@ -475,7 +482,9 @@ describe("ReaderContainer", () => {
     });
 
     it("下部オーバーレイの「本棚」タブクリック時、コールバック省略時にルーターの navigateToBookshelf が呼び出されること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
 
@@ -506,7 +515,9 @@ describe("ReaderContainer", () => {
     });
 
     it("下部オーバーレイの「設定」タブクリック時、flushBookmark が実行されカスタムコールバックが呼び出されること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const onNavigateSettings = vi.fn();
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
@@ -550,7 +561,9 @@ describe("ReaderContainer", () => {
     });
 
     it("下部オーバーレイの「設定」タブクリック時、コールバック省略時にルーターの navigate('/settings') が呼び出されること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
 
@@ -581,7 +594,9 @@ describe("ReaderContainer", () => {
     });
 
     it("下部オーバーレイの「検索」タブクリック時、flushBookmark が実行されルーターの navigateToSearch が呼び出されること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -625,7 +640,9 @@ describe("ReaderContainer", () => {
     });
 
     it("下部オーバーレイの「ランキング」タブクリック時、flushBookmark が実行されルーターの navigateToRanking が呼び出されること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -671,7 +688,9 @@ describe("ReaderContainer", () => {
 
   describe("OS バックキーおよび画面離脱時のしおり自動保存 (AC-RD-08, TR-06)", () => {
     it("popstate イベント（OS バックキー操作）発生時に flushBookmark が実行されること (R1-11)", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -723,7 +742,9 @@ describe("ReaderContainer", () => {
     }, 15000);
 
     it("コンポーネントのアンマウント時に未保存進捗があれば flushBookmark が実行されること (R1-11)", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -773,7 +794,9 @@ describe("ReaderContainer", () => {
     }, 15000);
 
     it("未操作のまま popstate やアンマウントが発生したとき updateBookmark が再呼び出しされないこと (Issue #342)", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const novelAtChapter1 = {
         ...sampleNovel,
         bookmarkChapterIndex: 1,
@@ -816,7 +839,9 @@ describe("ReaderContainer", () => {
 
   describe("前後エピソード遷移の検証 (TR-05, AC-RD-06)", () => {
     it("第1話でオーバーレイを展開して「次の話へ」クリック時、第2話へ遷移しカスタム onNavigateChapter が呼び出されること (TR-05)", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const onNavigateChapter = vi.fn();
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -847,7 +872,9 @@ describe("ReaderContainer", () => {
     });
 
     it("第1話でオーバーレイから「次の話へ」クリック時、コールバック省略時にルーターの navigateToReader が呼び出されること (TR-05)", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
 
@@ -878,7 +905,9 @@ describe("ReaderContainer", () => {
     });
 
     it("第2話でオーバーレイから「前の話へ」クリック時、第1話へ遷移しカスタム onNavigateChapter が呼び出されること (TR-05)", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const onNavigateChapter = vi.fn();
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -909,7 +938,9 @@ describe("ReaderContainer", () => {
     });
 
     it("第2話でオーバーレイから「前の話へ」クリック時、コールバック省略時にルーターの navigateToReader が呼び出されること (TR-05)", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
 
@@ -940,7 +971,9 @@ describe("ReaderContainer", () => {
     });
 
     it("novelId 省略時でも novel.id から targetId を解決して次話遷移できること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const onNavigateChapter = vi.fn();
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -970,7 +1003,9 @@ describe("ReaderContainer", () => {
     });
 
     it("novelId 省略時でも novel.id から targetId を解決して前話遷移できること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const onNavigateChapter = vi.fn();
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -1000,7 +1035,9 @@ describe("ReaderContainer", () => {
     });
 
     it("第1話で「前の話へ」イベントが発火しても（goToChapter が false を返却）、遷移処理が実行されないこと", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const onNavigateChapter = vi.fn();
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -1029,7 +1066,9 @@ describe("ReaderContainer", () => {
     });
 
     it("最終話で「次の話へ」イベントが発火しても（goToChapter が false を返却）、遷移処理が実行されないこと", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const onNavigateChapter = vi.fn();
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -1060,7 +1099,9 @@ describe("ReaderContainer", () => {
 
   describe("本文スクロール時の進捗率更新 (AC-RD-08)", () => {
     it("ReaderPage に渡された onScrollProgressChange が呼ばれた際、スクロール進捗率が更新され updateBookmark が実行されること (AC-RD-08, R1-01, R1-11)", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -1118,7 +1159,9 @@ describe("ReaderContainer", () => {
 
   describe("Props 未指定時のデフォルト動作", () => {
     it("Props を指定せずにマウントした際、DB の先頭作品が自動ロードされて ReaderPage に渡されること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
 
@@ -1130,7 +1173,6 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
             novel: expect.objectContaining({
@@ -1146,7 +1188,9 @@ describe("ReaderContainer", () => {
     });
 
     it("activeTab props が指定された場合、直接の子 ReaderPage へ伝搬されること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
 
@@ -1173,7 +1217,9 @@ describe("ReaderContainer", () => {
 
   describe("ページネーション状態・コールバックの ReaderPage への接続検証 (AC-RD-15, AC-RD-16, AC-RD-20)", () => {
     it("ReaderContainer は useReader の pagingMode, currentPage, totalPages, goToPage, setTotalPages を ReaderPage に接続すること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
 
@@ -1187,7 +1233,6 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
             pagingMode: "auto",
@@ -1202,7 +1247,9 @@ describe("ReaderContainer", () => {
     });
 
     it("settingsRepository の pagingMode が paged の場合、ReaderPage に pagingMode='paged' が渡されること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
       const settingsRepository = createMockSettingsRepo({
@@ -1220,7 +1267,6 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
             pagingMode: "paged",
@@ -1231,7 +1277,9 @@ describe("ReaderContainer", () => {
     });
 
     it("ReaderPage に渡された onTotalPagesChange が呼ばれた際、totalPages が更新されること (R1-11)", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
 
@@ -1245,16 +1293,14 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
         expect(pageSpy).toHaveBeenLastCalledWith(
-          expect.objectContaining({ isLoading: false }),
+          expect.objectContaining({
+            isLoading: false,
+            novel: expect.objectContaining({ id: sampleNovel.id }),
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
           undefined,
         );
-      });
-
-      // ReaderView の初期 100ms 計測タイマーが完了するのを待機して競合上書きを防止
-      await act(async () => {
-        await new Promise((r) => setTimeout(r, 120));
       });
 
       // 直近の呼び出しから onTotalPagesChange を取得して発火
@@ -1279,7 +1325,9 @@ describe("ReaderContainer", () => {
     }, 15000);
 
     it("ReaderPage に渡された onPageChange が呼ばれた際、currentPage が更新されること (R1-11)", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
 
@@ -1293,16 +1341,14 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
         expect(pageSpy).toHaveBeenLastCalledWith(
-          expect.objectContaining({ isLoading: false }),
+          expect.objectContaining({
+            isLoading: false,
+            novel: expect.objectContaining({ id: sampleNovel.id }),
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+          }),
           undefined,
         );
-      });
-
-      // ReaderView の初期 100ms 計測タイマーが完了するのを待機して競合上書きを防止
-      await act(async () => {
-        await new Promise((r) => setTimeout(r, 120));
       });
 
       // 先に totalPages を設定
@@ -1345,7 +1391,9 @@ describe("ReaderContainer", () => {
 
   describe("フォント種別・画面余白の ReaderPage へのバケツリレー検証 (AC-RD-21, SYS-REQ-09, v0.5 Issue #169, #180)", () => {
     it("settingsRepository の fontFamily と pageMarginPx が useReader を経由して ReaderPage に伝播されること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
       const settingsRepository = createMockSettingsRepo({
@@ -1364,7 +1412,6 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
             fontFamily: "biz-ud-gothic",
@@ -1378,7 +1425,9 @@ describe("ReaderContainer", () => {
 
   describe("上部オーバーレイ「← 目次」押下による目次復帰連携 (AC-RD-24, TR-06, v0.6 Issue #202)", () => {
     it("ReaderPage に onBackToToc ハンドラーが渡されていること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
 
@@ -1392,7 +1441,14 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            chapter: expect.objectContaining({ chapterIndex: 1 }),
+            onBackToToc: expect.any(Function),
+          }),
+          undefined,
+        );
       });
 
       const lastProps = pageSpy.mock.lastCall?.[0];
@@ -1401,7 +1457,9 @@ describe("ReaderContainer", () => {
     });
 
     it("カスタム onBackToToc が渡された場合、ReaderPage の onBackToToc 呼び出しで flushBookmark 実行後にカスタムコールバックが呼ばれること (R1-23)", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const onBackToToc = vi.fn();
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
@@ -1444,7 +1502,9 @@ describe("ReaderContainer", () => {
     });
 
     it("onBackToToc 省略時、ReaderPage の onBackToToc 呼び出しで flushBookmark 実行後にルーターの navigateToNovelDetail が呼ばれること (R1-23)", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository, updateBookmarkSpy } =
         createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
@@ -1487,7 +1547,9 @@ describe("ReaderContainer", () => {
     });
 
     it("novelId 省略時、novel レコードの id から navigateToNovelDetail が呼ばれること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo();
 
@@ -1500,7 +1562,13 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-view")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            novel: expect.objectContaining({ id: sampleNovel.id }),
+          }),
+          undefined,
+        );
       });
 
       const lastProps = pageSpy.mock.lastCall?.[0];
@@ -1519,7 +1587,9 @@ describe("ReaderContainer", () => {
     });
 
     it("novelId も novel も存在しない場合、クラッシュせず安全に終了すること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository } = createMockNovelRepo(null);
       const { repo: chapterRepository } = createMockChapterRepo([]);
 
@@ -1532,7 +1602,13 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            novel: null,
+          }),
+          undefined,
+        );
       });
 
       const lastProps = pageSpy.mock.lastCall?.[0];
@@ -1551,7 +1627,9 @@ describe("ReaderContainer", () => {
 
   describe("音量キーページ送り連携（enableVolumeKeyPaging / AC-RD-26, Issue #203）", () => {
     it("useReader から受け取った enableVolumeKeyPaging が ReaderPage に正しく伝播されること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const settingsRepository = createMockSettingsRepo({
         enableVolumeKeyPaging: true,
       });
@@ -1564,7 +1642,6 @@ describe("ReaderContainer", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("reader-page")).toBeInTheDocument();
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
             enableVolumeKeyPaging: true,
@@ -1577,7 +1654,9 @@ describe("ReaderContainer", () => {
 
   describe("内蔵ブラウザフォールバック連携 (onOpenWebView / AC-RD-29, TR-10)", () => {
     it("onOpenWebView が渡された場合、ReaderPage へ正しく伝播され呼び出せること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const onOpenWebViewMock = vi.fn();
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo([
@@ -1606,7 +1685,9 @@ describe("ReaderContainer", () => {
     });
 
     it("onOpenWebView が省略された場合、デフォルトで router.navigateToBrowser により /browser へ遷移すること (AC-RD-29, TR-10, R1-19)", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const { repo: chapterRepository } = createMockChapterRepo([
         sampleChapter1,
@@ -1643,7 +1724,9 @@ describe("ReaderContainer", () => {
     });
 
     it("targetId が存在しない場合（initialWorkUrl のみ）、novelId パラメータなしで /browser へ遷移すること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const emptyNovelRepo: NovelRepository = {
         listNovels: async () => [],
         getNovelById: async () => null,
@@ -1697,7 +1780,9 @@ describe("ReaderContainer", () => {
     });
 
     it("targetUrl が存在しない場合、onOpenWebView 実行時になにも実行されないこと", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const emptyNovelRepo: NovelRepository = {
         listNovels: async () => [],
         getNovelById: async () => null,
@@ -1745,7 +1830,9 @@ describe("ReaderContainer", () => {
     });
 
     it("chapter.url がなく novel.canonicalUrl が存在し、かつ novelId プロップス未指定で novel.id が存在する場合、novel 側の値で /browser へ遷移すること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository } = createMockNovelRepo(sampleNovel);
       const emptyChapterRepo: ChapterRepository = {
         listChaptersByNovelId: async () => [],
@@ -1790,7 +1877,9 @@ describe("ReaderContainer", () => {
 
   describe("しおり競合確認ダイアログ統合と戻る操作抑止 (Issue #342)", () => {
     it("競合発生時は router.blockBackNavigation が有効化され popstate 離脱・flushBookmark が抑止され、「移動する」成功時にのみ URL が同期されること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository, updateBookmarkSpy } = createMockNovelRepo({
         ...sampleNovel,
         bookmarkChapterIndex: 1,
@@ -1879,7 +1968,9 @@ describe("ReaderContainer", () => {
     });
 
     it("「第N話のまま読む」選択時は現在話と進捗が明示保存され URL が現在話のまま維持されること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository, updateBookmarkSpy } = createMockNovelRepo({
         ...sampleNovel,
         bookmarkChapterIndex: 1,
@@ -1958,7 +2049,9 @@ describe("ReaderContainer", () => {
     });
 
     it("「移動する」選択時に遷移先エピソード取得が失敗した場合は URL 遷移を行わず現在パスを維持すること", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const onNavigateChapter = vi.fn();
       const { repo: novelRepository } = createMockNovelRepo({
         ...sampleNovel,
@@ -2050,7 +2143,9 @@ describe("ReaderContainer", () => {
     });
 
     it("「移動する」解決の非同期通信中は isResolvingBookmarkConflict が true・bookmarkConflict が維持され、二重実行が抑止されること (R1-01)", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository } = createMockNovelRepo({
         ...sampleNovel,
         bookmarkChapterIndex: 1,
@@ -2176,7 +2271,9 @@ describe("ReaderContainer", () => {
     });
 
     it("bookmarkConflict 表示中のアンマウントでは flushBookmark（updateBookmark）が実行されないこと (R1-17)", async () => {
-      const pageSpy = vi.spyOn(ReaderPageModule, "ReaderPage");
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
       const { repo: novelRepository, updateBookmarkSpy } = createMockNovelRepo({
         ...sampleNovel,
         bookmarkChapterIndex: 1,
