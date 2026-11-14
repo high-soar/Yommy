@@ -3616,5 +3616,235 @@ describe("useNovelDetail", () => {
       getByIdSpy.mockRejectedValueOnce(new Error("Unmounted explicit failure"));
       await result.current.reloadDetail();
     });
+
+    it("Gate 5-1: confirmClearCache の各 await 境界および失敗時にアンマウントされていた場合、後続 DB 同期や状態更新を行わないこと", async () => {
+      // 1. deleteCachedBodies 待機中のアンマウント（deletedCount > 0）
+      const dbA = await resetTestDb();
+      const novelRepoA = new SqlNovelRepository(dbA);
+      const chapterRepoA = new SqlChapterRepository(dbA);
+      const queueRepoA = new SqlQueueRepository(dbA);
+      const seededA = await seedSampleNovel(novelRepoA, 2);
+
+      const hookA = renderHook(() => useNovelDetail(seededA.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepoA,
+          chapterRepository: chapterRepoA,
+          queueRepository: queueRepoA,
+        }),
+      });
+      await waitFor(() => expect(hookA.result.current.isLoading).toBe(false));
+
+      let resolveDeleteA: ((count: number) => void) | null = null;
+      vi.spyOn(chapterRepoA, "deleteCachedBodies").mockImplementationOnce(
+        () =>
+          new Promise<number>((resolve) => {
+            resolveDeleteA = resolve;
+          }),
+      );
+      const getNovelSpyA = vi.spyOn(novelRepoA, "getNovelById");
+      const listChaptersSpyA = vi.spyOn(chapterRepoA, "listChaptersByNovelId");
+      const listQueueSpyA = vi.spyOn(queueRepoA, "listByNovelId");
+
+      let clearPromiseA: Promise<number> | undefined;
+      act(() => {
+        clearPromiseA = hookA.result.current.confirmClearCache({
+          onlyRead: false,
+        });
+      });
+      await waitFor(() => expect(resolveDeleteA).not.toBeNull());
+
+      const novelCallsBeforeA = getNovelSpyA.mock.calls.length;
+      const chapterCallsBeforeA = listChaptersSpyA.mock.calls.length;
+      const queueCallsBeforeA = listQueueSpyA.mock.calls.length;
+
+      hookA.unmount();
+      resolveDeleteA!(2);
+      const deletedA = await clearPromiseA;
+      expect(deletedA).toBe(2);
+      expect(getNovelSpyA).toHaveBeenCalledTimes(novelCallsBeforeA);
+      expect(listChaptersSpyA).toHaveBeenCalledTimes(chapterCallsBeforeA);
+      expect(listQueueSpyA).toHaveBeenCalledTimes(queueCallsBeforeA);
+
+      // 2. Promise.all([getNovelById, listChaptersByNovelId]) 待機中のアンマウント
+      const dbB = await resetTestDb();
+      const novelRepoB = new SqlNovelRepository(dbB);
+      const chapterRepoB = new SqlChapterRepository(dbB);
+      const queueRepoB = new SqlQueueRepository(dbB);
+      const seededB = await seedSampleNovel(novelRepoB, 2);
+
+      const hookB = renderHook(() => useNovelDetail(seededB.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepoB,
+          chapterRepository: chapterRepoB,
+          queueRepository: queueRepoB,
+        }),
+      });
+      await waitFor(() => expect(hookB.result.current.isLoading).toBe(false));
+
+      vi.spyOn(chapterRepoB, "deleteCachedBodies").mockResolvedValueOnce(1);
+      let resolveRefreshNovelB: ((n: typeof seededB | null) => void) | null =
+        null;
+      vi.spyOn(novelRepoB, "getNovelById").mockImplementationOnce(
+        () =>
+          new Promise<typeof seededB | null>((resolve) => {
+            resolveRefreshNovelB = resolve;
+          }),
+      );
+      const listQueueSpyB = vi.spyOn(queueRepoB, "listByNovelId");
+
+      let clearPromiseB: Promise<number> | undefined;
+      act(() => {
+        clearPromiseB = hookB.result.current.confirmClearCache({
+          onlyRead: false,
+        });
+      });
+      await waitFor(() => expect(resolveRefreshNovelB).not.toBeNull());
+
+      const queueCallsBeforeB = listQueueSpyB.mock.calls.length;
+      hookB.unmount();
+      resolveRefreshNovelB!(seededB);
+      await clearPromiseB;
+      expect(listQueueSpyB).toHaveBeenCalledTimes(queueCallsBeforeB);
+
+      // 3. deleteCachedBodies 失敗時にアンマウント済みでも安全に 0 を返すこと
+      const dbC = await resetTestDb();
+      const novelRepoC = new SqlNovelRepository(dbC);
+      const chapterRepoC = new SqlChapterRepository(dbC);
+      const queueRepoC = new SqlQueueRepository(dbC);
+      const seededC = await seedSampleNovel(novelRepoC, 1);
+
+      const hookC = renderHook(() => useNovelDetail(seededC.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepoC,
+          chapterRepository: chapterRepoC,
+          queueRepository: queueRepoC,
+        }),
+      });
+      await waitFor(() => expect(hookC.result.current.isLoading).toBe(false));
+
+      let rejectDeleteC: ((err: Error) => void) | null = null;
+      vi.spyOn(chapterRepoC, "deleteCachedBodies").mockImplementationOnce(
+        () =>
+          new Promise<number>((_resolve, reject) => {
+            rejectDeleteC = reject;
+          }),
+      );
+      let clearPromiseC: Promise<number> | undefined;
+      act(() => {
+        clearPromiseC = hookC.result.current.confirmClearCache({
+          onlyRead: false,
+        });
+      });
+      await waitFor(() => expect(rejectDeleteC).not.toBeNull());
+      hookC.unmount();
+      rejectDeleteC!(new Error("Unmounted clear failure"));
+      expect(await clearPromiseC).toBe(0);
+    });
+
+    it("Gate 5-1: toggleFavorite の待機中に novel が null 化してもクラッシュせず null を維持し、アンマウント後の完了・失敗時にもリークしないこと", async () => {
+      // 1. 待機中に並行 reloadDetail で novel が null になった場合の null 安全性検証
+      const dbA = await resetTestDb();
+      const novelRepoA = new SqlNovelRepository(dbA);
+      const chapterRepoA = new SqlChapterRepository(dbA);
+      const seededA = await seedSampleNovel(novelRepoA, 1);
+
+      const hookA = renderHook(() => useNovelDetail(seededA.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepoA,
+          chapterRepository: chapterRepoA,
+        }),
+      });
+      await waitFor(() => expect(hookA.result.current.isLoading).toBe(false));
+
+      let resolveSetFavA: (() => void) | null = null;
+      vi.spyOn(novelRepoA, "setFavorite").mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveSetFavA = resolve;
+          }),
+      );
+
+      let favPromiseA: Promise<boolean> | undefined;
+      act(() => {
+        favPromiseA = hookA.result.current.toggleFavorite();
+      });
+      await waitFor(() => expect(resolveSetFavA).not.toBeNull());
+
+      // 並行 reloadDetail で作品が削除/未存在（null）として再読込されたケースを再現
+      vi.spyOn(novelRepoA, "getNovelById").mockResolvedValueOnce(null);
+      await act(async () => {
+        await hookA.result.current.reloadDetail({ silent: true });
+      });
+      expect(hookA.result.current.novel).toBeNull();
+
+      resolveSetFavA!();
+      let favResultA = false;
+      await act(async () => {
+        favResultA = (await favPromiseA) ?? false;
+      });
+      expect(favResultA).toBe(true);
+      expect(hookA.result.current.novel).toBeNull();
+
+      // 2. setFavorite 解決前アンマウント・失敗前アンマウント時の安全終了
+      const dbB = await resetTestDb();
+      const novelRepoB = new SqlNovelRepository(dbB);
+      const chapterRepoB = new SqlChapterRepository(dbB);
+      const seededB = await seedSampleNovel(novelRepoB, 1);
+
+      const hookB = renderHook(() => useNovelDetail(seededB.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepoB,
+          chapterRepository: chapterRepoB,
+        }),
+      });
+      await waitFor(() => expect(hookB.result.current.isLoading).toBe(false));
+
+      let resolveSetFavB: (() => void) | null = null;
+      vi.spyOn(novelRepoB, "setFavorite").mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveSetFavB = resolve;
+          }),
+      );
+
+      let favPromiseB: Promise<boolean> | undefined;
+      act(() => {
+        favPromiseB = hookB.result.current.toggleFavorite();
+      });
+      await waitFor(() => expect(resolveSetFavB).not.toBeNull());
+      hookB.unmount();
+      resolveSetFavB!();
+      expect(await favPromiseB).toBe(true);
+
+      const dbC = await resetTestDb();
+      const novelRepoC = new SqlNovelRepository(dbC);
+      const chapterRepoC = new SqlChapterRepository(dbC);
+      const seededC = await seedSampleNovel(novelRepoC, 1);
+
+      const hookC = renderHook(() => useNovelDetail(seededC.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepoC,
+          chapterRepository: chapterRepoC,
+        }),
+      });
+      await waitFor(() => expect(hookC.result.current.isLoading).toBe(false));
+
+      let rejectSetFavC: ((err: Error) => void) | null = null;
+      vi.spyOn(novelRepoC, "setFavorite").mockImplementationOnce(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            rejectSetFavC = reject;
+          }),
+      );
+
+      let favPromiseC: Promise<boolean> | undefined;
+      act(() => {
+        favPromiseC = hookC.result.current.toggleFavorite();
+      });
+      await waitFor(() => expect(rejectSetFavC).not.toBeNull());
+      hookC.unmount();
+      rejectSetFavC!(new Error("Unmounted toggle failure"));
+      expect(await favPromiseC).toBe(false);
+    });
   });
 });

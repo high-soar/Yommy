@@ -837,24 +837,38 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
           novelId,
           options,
         );
+        if (!isMountedRef.current) {
+          return deletedCount;
+        }
         setIsClearCacheDialogOpen(false);
         if (deletedCount === 0) {
           // R1-09: 削除0件時は無駄なDB再クエリを行わず早期リターン
           // R1-18: 0件早期リターン時にもキュー状態を同期
           await syncQueueState(novelId, chapters);
-          setRefreshMessage("削除対象の本文キャッシュはありませんでした");
+          runIfMounted(() => {
+            setRefreshMessage("削除対象の本文キャッシュはありませんでした");
+          });
           return 0;
         }
         const [updatedNovel, updatedChapters] = await Promise.all([
           novelRepository.getNovelById(novelId),
           chapterRepository.listChaptersByNovelId(novelId),
         ]);
+        if (!isMountedRef.current) {
+          return deletedCount;
+        }
         setNovel(updatedNovel);
         setChapters(updatedChapters);
         await syncQueueState(novelId, updatedChapters);
-        setRefreshMessage(`本文キャッシュを削除しました（${deletedCount}話）`);
+        runIfMounted(() => {
+          setRefreshMessage(
+            `本文キャッシュを削除しました（${deletedCount}話）`,
+          );
+        });
       } catch (err: unknown) {
-        setError(extractErrorMessage(err, DEFAULT_CLEAR_CACHE_ERROR_MESSAGE));
+        runIfMounted(() => {
+          setError(extractErrorMessage(err, DEFAULT_CLEAR_CACHE_ERROR_MESSAGE));
+        });
       } finally {
         isClearingCacheRef.current = false;
         runIfMounted(() => {
@@ -896,17 +910,27 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     try {
       await novelRepository.setFavorite(novelId, nextIsFavorite);
       const nowIso = new Date().toISOString();
-      setNovel((prev) => ({
-        ...prev!,
-        isFavorite: nextIsFavorite,
-        updatedAt: nowIso,
-      }));
+      runIfMounted(() => {
+        setNovel((prev) =>
+          prev
+            ? {
+                ...prev,
+                isFavorite: nextIsFavorite,
+                updatedAt: nowIso,
+              }
+            : prev,
+        );
+      });
       if (syncEngine) {
         syncEngine.notifyChanged().catch(() => {});
       }
       isSuccess = true;
     } catch (err: unknown) {
-      setError(extractErrorMessage(err, DEFAULT_TOGGLE_FAVORITE_ERROR_MESSAGE));
+      runIfMounted(() => {
+        setError(
+          extractErrorMessage(err, DEFAULT_TOGGLE_FAVORITE_ERROR_MESSAGE),
+        );
+      });
       isSuccess = false;
     } finally {
       isTogglingFavoriteRef.current = false;
@@ -918,6 +942,7 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
     novelRepository,
     novelId,
     syncEngine,
+    runIfMounted,
   ]);
 
   return {
