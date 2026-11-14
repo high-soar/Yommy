@@ -2060,11 +2060,15 @@ describe("createCacheScheduler", () => {
         });
       await scheduler.enqueueBatchCache(novel.id, [3]);
 
-      // medium 最初の 1500ms 待機だけ進めれば medium [1] 完了＋high [2] 即時完了＋low [3] 再開＆即完了する（空タスク再投入の追加 1500ms 待ち不要）
+      // medium 最初の 1500ms 待機を進めると medium [1] 完了＋high [2] 即時完了し、
+      // high [2] の HTTP 完了から 1500ms 未満のため low [3] はまだ待機中（空タスク再投入の追加待ちなし）
       await vi.advanceTimersByTimeAsync(1600);
       expect(mediumDone).toBe(true);
       await mediumPromise;
+      expect(getHtmlSpy).toHaveBeenCalledTimes(2);
 
+      // さらに 1500ms 経過後に low [3] が実行されて完了する
+      await vi.advanceTimersByTimeAsync(1500);
       expect(scheduler.getNovelProgress(novel.id)?.status).toBe("completed");
       expect(getHtmlSpy).toHaveBeenCalledTimes(3);
       scheduler.dispose();
@@ -2492,6 +2496,243 @@ describe("createCacheScheduler", () => {
 
       await runWithActivePrefetch("cancelAll");
       await runWithActivePrefetch("dispose");
+    });
+  });
+
+  describe("R1-16: スケジューラ全体 1.5 秒レート制限", () => {
+    it("high リクエスト完了直後に low バッチを開始した場合、前回 HTTP 完了時刻から 1500ms 経過するまで low リクエストを発行しないこと", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+      const novel = await seedNovel(novelRepo, chapterRepo, {
+        workId: "r1-16-high-to-low",
+        chapterCount: 2,
+      });
+
+      const httpClient = new MockHttpClient();
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-16-high-to-low/episodes/ep-1",
+        { html: episodeHtml(1) },
+      );
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-16-high-to-low/episodes/ep-2",
+        { html: episodeHtml(2) },
+      );
+      const getHtmlSpy = vi.spyOn(httpClient, "getHtml");
+
+      const scheduler = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: PREFETCH_INTERVAL_MS,
+      });
+
+      await scheduler.enqueuePrefetch({
+        novelId: novel.id,
+        chapterIndexes: [1],
+        priority: "high",
+      });
+      expect(getHtmlSpy).toHaveBeenCalledTimes(1);
+
+      await scheduler.enqueueBatchCache(novel.id, [2]);
+      await vi.advanceTimersByTimeAsync(PREFETCH_INTERVAL_MS - 100);
+      expect(getHtmlSpy).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(100);
+      expect(getHtmlSpy).toHaveBeenCalledTimes(2);
+      expect(scheduler.getNovelProgress(novel.id)?.status).toBe("completed");
+      scheduler.dispose();
+    });
+
+    it("medium リクエスト完了直後に low バッチを実行した場合も、前回 HTTP 完了時刻から 1500ms 経過するまで low リクエストを発行しないこと", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+      const novel = await seedNovel(novelRepo, chapterRepo, {
+        workId: "r1-16-medium-to-low",
+        chapterCount: 2,
+      });
+
+      const httpClient = new MockHttpClient();
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-16-medium-to-low/episodes/ep-1",
+        { html: episodeHtml(1) },
+      );
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-16-medium-to-low/episodes/ep-2",
+        { html: episodeHtml(2) },
+      );
+      const getHtmlSpy = vi.spyOn(httpClient, "getHtml");
+
+      const scheduler = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: PREFETCH_INTERVAL_MS,
+      });
+
+      const mediumPromise = scheduler.enqueuePrefetch({
+        novelId: novel.id,
+        chapterIndexes: [1],
+        priority: "medium",
+      });
+      await vi.advanceTimersByTimeAsync(PREFETCH_INTERVAL_MS);
+      await mediumPromise;
+      expect(getHtmlSpy).toHaveBeenCalledTimes(1);
+
+      await scheduler.enqueueBatchCache(novel.id, [2]);
+      await vi.advanceTimersByTimeAsync(PREFETCH_INTERVAL_MS - 100);
+      expect(getHtmlSpy).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(100);
+      expect(getHtmlSpy).toHaveBeenCalledTimes(2);
+      expect(scheduler.getNovelProgress(novel.id)?.status).toBe("completed");
+      scheduler.dispose();
+    });
+
+    it("異なる小説の low リクエスト間および pause 後の再投入でも 1500ms 間隔を維持し、1500ms 経過済みや high 失敗時も完了時刻基準で制御すること", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+      const novelA = await seedNovel(novelRepo, chapterRepo, {
+        workId: "r1-16-novel-a",
+        chapterCount: 2,
+      });
+      const novelB = await seedNovel(novelRepo, chapterRepo, {
+        workId: "r1-16-novel-b",
+        chapterCount: 3,
+      });
+
+      const httpClient = new MockHttpClient();
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-16-novel-a/episodes/ep-1",
+        { html: episodeHtml(1) },
+      );
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-16-novel-a/episodes/ep-2",
+        () => {
+          throw new Error("HTTP 500");
+        },
+      );
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-16-novel-b/episodes/ep-1",
+        { html: episodeHtml(1) },
+      );
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-16-novel-b/episodes/ep-2",
+        { html: episodeHtml(2) },
+      );
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-16-novel-b/episodes/ep-3",
+        { html: episodeHtml(3) },
+      );
+      const getHtmlSpy = vi.spyOn(httpClient, "getHtml");
+
+      const scheduler = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: PREFETCH_INTERVAL_MS,
+      });
+
+      // 1. novelA の low [1] 完了直後に novelB の low [1] を投入しても 1500ms 待機する
+      await scheduler.enqueueBatchCache(novelA.id, [1]);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(getHtmlSpy).toHaveBeenCalledTimes(1);
+
+      await scheduler.enqueueBatchCache(novelB.id, [1]);
+      await vi.advanceTimersByTimeAsync(PREFETCH_INTERVAL_MS - 100);
+      expect(getHtmlSpy).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(100);
+      expect(getHtmlSpy).toHaveBeenCalledTimes(2);
+
+      // 2. high が HTTP エラーで終了した場合も完了時刻が更新され、直後の low は 1500ms 待機する
+      await expect(
+        scheduler.enqueuePrefetch({
+          novelId: novelA.id,
+          chapterIndexes: [2],
+          priority: "high",
+        }),
+      ).rejects.toThrow("HTTP 500");
+      expect(getHtmlSpy).toHaveBeenCalledTimes(3);
+
+      // 1600ms 以上経過していれば次の low は追加待機なしで即時開始する（remainingMs <= 0）
+      await vi.advanceTimersByTimeAsync(PREFETCH_INTERVAL_MS + 100);
+      await scheduler.enqueueBatchCache(novelB.id, [2]);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(getHtmlSpy).toHaveBeenCalledTimes(4);
+      expect(scheduler.getNovelProgress(novelB.id)?.status).toBe("completed");
+
+      // 3. pause 後に即時再投入しても前回完了時刻から 1500ms 待機する
+      await scheduler.enqueueBatchCache(novelB.id, [3]);
+      await scheduler.pauseNovelTasks(novelB.id);
+      await scheduler.enqueueBatchCache(novelB.id, [3]);
+      await vi.advanceTimersByTimeAsync(PREFETCH_INTERVAL_MS - 100);
+      expect(getHtmlSpy).toHaveBeenCalledTimes(4);
+
+      await vi.advanceTimersByTimeAsync(100);
+      expect(getHtmlSpy).toHaveBeenCalledTimes(5);
+      expect(scheduler.getNovelProgress(novelB.id)?.status).toBe("completed");
+      scheduler.dispose();
+    });
+
+    it("low の 1500ms レート制限スリープ中に high が割り込んだ場合は即時割り込み実行し、high 完了後に再度 1500ms 待って low を実行すること", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+      const novel = await seedNovel(novelRepo, chapterRepo, {
+        workId: "r1-16-sleep-interrupt",
+        chapterCount: 3,
+      });
+
+      const httpClient = new MockHttpClient();
+      for (let i = 1; i <= 3; i++) {
+        httpClient.setResponse(
+          `https://kakuyomu.jp/works/r1-16-sleep-interrupt/episodes/ep-${i}`,
+          { html: episodeHtml(i) },
+        );
+      }
+      const getHtmlSpy = vi.spyOn(httpClient, "getHtml");
+
+      const scheduler = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: PREFETCH_INTERVAL_MS,
+      });
+
+      // ep-1 (high) 直後に low [2] を投入して 1500ms 待機状態にする
+      await scheduler.enqueuePrefetch({
+        novelId: novel.id,
+        chapterIndexes: [1],
+        priority: "high",
+      });
+      await scheduler.enqueueBatchCache(novel.id, [2]);
+      await vi.advanceTimersByTimeAsync(500);
+      expect(getHtmlSpy).toHaveBeenCalledTimes(1);
+
+      // low 待機中に high [3] を投入すると即座に実行される
+      await scheduler.enqueuePrefetch({
+        novelId: novel.id,
+        chapterIndexes: [3],
+        priority: "high",
+      });
+      expect(getHtmlSpy).toHaveBeenCalledTimes(2);
+      expect(getHtmlSpy.mock.calls[1]?.[0].url).toContain("ep-3");
+
+      // high [3] 完了から 1400ms ではまだ low [2] は開始せず、1500ms 到達で実行される
+      await vi.advanceTimersByTimeAsync(PREFETCH_INTERVAL_MS - 100);
+      expect(getHtmlSpy).toHaveBeenCalledTimes(2);
+
+      await vi.advanceTimersByTimeAsync(100);
+      expect(getHtmlSpy).toHaveBeenCalledTimes(3);
+      expect(scheduler.getNovelProgress(novel.id)?.status).toBe("completed");
+      scheduler.dispose();
     });
   });
 });
