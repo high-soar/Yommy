@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./NovelDetailPage.stories";
 import { NovelDetailPage } from "./NovelDetailPage";
@@ -77,6 +77,10 @@ const sampleChapters: ChapterSummary[] = [
 ];
 
 describe("NovelDetailPage", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe("Storybook Stories 検証 (composeStories)", () => {
     it("Default ストーリーで作品ヘッダーと目次一覧が表示され、ローディング・Not Found・削除ダイアログは表示されないこと", () => {
       const headerSpy = vi.spyOn(NovelDetailHeaderModule, "NovelDetailHeader");
@@ -558,8 +562,8 @@ describe("NovelDetailPage", () => {
       expect(scrollIntoViewMock).toHaveBeenCalledTimes(2);
     });
 
-    describe("未取得話一括キャッシュ関連の連携・操作ロック制御 (AC-ND-11, AC-ND-12, AC-ND-13)", () => {
-      it("BatchCaching ストーリーで一括キャッシュ状態が NovelDetailHeader へ伝達され、各話リストタップが無効化されること (AC-ND-12)", () => {
+    describe("未取得話一括キャッシュ関連の連携・非ブロッキング操作制御 (AC-ND-11, AC-ND-13, Issue #344)", () => {
+      it("BatchCaching ストーリーで一括キャッシュ状態が NovelDetailHeader へ伝達され、各話リストコンテナは操作ブロック（pointer-events-none / opacity-80）されないこと (Issue #344)", () => {
         const headerSpy = vi.spyOn(
           NovelDetailHeaderModule,
           "NovelDetailHeader",
@@ -575,7 +579,8 @@ describe("NovelDetailPage", () => {
           undefined,
         );
         const container = screen.getByTestId("episode-list-container");
-        expect(container.className).toContain("pointer-events-none");
+        expect(container.className).not.toContain("pointer-events-none");
+        expect(container.className).not.toContain("opacity-80");
 
         headerSpy.mockRestore();
       });
@@ -653,7 +658,7 @@ describe("NovelDetailPage", () => {
         headerSpy.mockRestore();
       });
 
-      it("親子分離: isBatchCaching === true のとき、EpisodeList の onSelectEpisode が呼び出されても親コールバックは実行されないこと（no-op制御）(AC-ND-12)", () => {
+      it("親子分離: isBatchCaching === true のときでも EpisodeList の onSelectEpisode 呼び出しが親コールバックへ透過伝達されること (Issue #344)", () => {
         const episodeListSpy = vi.spyOn(EpisodeListModule, "EpisodeList");
         const onSelectEpisode = vi.fn();
 
@@ -684,7 +689,7 @@ describe("NovelDetailPage", () => {
         expect(episodeListSpy).toHaveBeenCalled();
         const passedProps = episodeListSpy.mock.calls[0][0];
         passedProps.onSelectEpisode(1);
-        expect(onSelectEpisode).not.toHaveBeenCalled();
+        expect(onSelectEpisode).toHaveBeenCalledWith(1);
 
         episodeListSpy.mockRestore();
       });

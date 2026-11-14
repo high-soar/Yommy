@@ -37,10 +37,10 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
 
-  const isActionDisabled = isRefreshing || isBatchCaching;
+  const isActionDisabled = isRefreshing;
   const showMenu = isMenuOpen && !isActionDisabled;
 
-  // 更新中・一括キャッシュ中に遷移した場合はメニューを自動的に閉じ、復帰後も開かないよう同期する
+  // 目次更新中に遷移した場合はメニューを自動的に閉じ、復帰後も開かないよう同期する
   useEffect(() => {
     if (isActionDisabled) {
       setIsMenuOpen(false);
@@ -99,20 +99,23 @@ export const NovelDetailHeader: React.FC<NovelDetailHeaderProps> = ({
 
   // メタ情報のフォールバックおよび空文字判定
   const bookmarkChapterIndex = novel.bookmarkChapterIndex;
-  const isStartDisabled = novel.totalChapters === 0 || isBatchCaching;
+  const isStartDisabled = novel.totalChapters === 0;
   const authorText = novel.author?.trim() ? novel.author : "著者不明";
   const hasSynopsis = Boolean(
     novel.synopsis && novel.synopsis.trim().length > 0,
   );
   const synopsisText = hasSynopsis ? novel.synopsis : "あらすじはありません。";
 
-  // 一括キャッシュ・再開・再試行メニュー項目の動的ラベルと活性制御 (AC-ND-11, AC-ND-13, AC-ND-24, AC-ND-25)
+  // 一括キャッシュ・再開・再試行メニュー項目の動的ラベルと活性制御 (AC-ND-11, AC-ND-13, AC-ND-24, AC-ND-25, Issue #344)
   const getBatchCacheButtonInfo = (): { label: string; disabled: boolean } => {
     if (novel.totalChapters === 0) {
       return { label: "未取得話を一括キャッシュ", disabled: true };
     }
     if (isAllCached) {
       return { label: "全話キャッシュ済み", disabled: true };
+    }
+    if (isBatchCaching) {
+      return { label: "一括キャッシュ実行中...", disabled: true };
     }
     if (pendingCacheCount > 0) {
       const remainingTotal = pendingCacheCount + failedCacheCount;

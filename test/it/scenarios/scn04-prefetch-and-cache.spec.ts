@@ -70,7 +70,7 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     await batchButton.click();
     await expect(page.getByTestId("novel-detail-menu")).not.toBeVisible();
 
-    // 4. インライン進捗表示・中断ボタン表示への切り替えおよび他操作の排他ロック確認 (AC-ND-12, AC-ND-27)
+    // 4. インライン進捗表示・中断ボタン表示への切り替えおよび非ブロッキング操作確認 (AC-ND-12, AC-ND-27)
     const progressEl = page.getByTestId("batch-cache-progress");
     await expect(progressEl).toBeVisible();
     await expect(page.getByTestId("batch-cache-cancel-button")).toBeVisible();
@@ -78,11 +78,17 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
     const startFromBeginningBtn = page.getByTestId("detail-read-first-button");
     const refreshTocBtn = page.getByTestId("refresh-toc-button");
     const menuBtn = page.getByTestId("novel-detail-menu-button");
-    await expect(startFromBeginningBtn).toBeDisabled();
-    await expect(refreshTocBtn).toBeDisabled();
-    await expect(menuBtn).toBeDisabled();
+    await expect(startFromBeginningBtn).toBeEnabled();
+    await expect(refreshTocBtn).toBeEnabled();
+    await expect(menuBtn).toBeEnabled();
+    await openNovelDetailMenu(page);
+    await expect(batchButton).toBeVisible();
+    await expect(batchButton).toHaveText("一括キャッシュ実行中...");
+    await expect(batchButton).toBeDisabled();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("novel-detail-menu")).not.toBeVisible();
 
-    // 5. 直列順次取得が進み、全話キャッシュ完了（4 / 4 話取得済み）となるまで待機 (AC-ND-11, AC-ND-13)
+    // 5. バックグラウンド順次取得が進み、全話キャッシュ完了（4 / 4 話取得済み）となるまで待機 (AC-ND-11, AC-ND-13)
     await expect(progressEl).not.toBeVisible({ timeout: 20000 });
     await expect(menuBtn).toBeEnabled();
     await openNovelDetailMenu(page);

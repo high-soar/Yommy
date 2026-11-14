@@ -45,6 +45,7 @@ const {
   MenuOpen,
   MenuOpenAllCached,
   MenuOpenRetryFailed,
+  MenuOpenBatchCaching,
 } = composeStories(stories);
 
 describe("NovelDetailHeader", () => {
@@ -282,6 +283,22 @@ describe("NovelDetailHeader", () => {
       expect(screen.getByTestId("novel-detail-error")).toHaveTextContent(
         "3話の取得に失敗しました（再試行可能）",
       );
+    });
+
+    it("MenuOpenBatchCaching ストーリーで3点メニューが開き、一括キャッシュ項目が「一括キャッシュ実行中...」かつ disabled であり他操作は活性であること (Issue #344)", async () => {
+      const { container } = render(<MenuOpenBatchCaching />);
+      await act(async () => {
+        await MenuOpenBatchCaching.play?.({ canvasElement: container });
+      });
+
+      const batchButton = screen.getByTestId("batch-cache-button");
+      expect(batchButton).toHaveTextContent("一括キャッシュ実行中...");
+      expect(batchButton).toBeDisabled();
+      expect(
+        screen.getByTestId("open-clear-cache-dialog-button"),
+      ).toBeEnabled();
+      expect(screen.getByTestId("open-webview-button")).toBeEnabled();
+      expect(screen.getByTestId("open-delete-dialog-button")).toBeEnabled();
     });
   });
 
@@ -589,7 +606,7 @@ describe("NovelDetailHeader", () => {
         expect(screen.getByTestId("novel-detail-menu-button")).toHaveFocus();
       });
 
-      it("メニュー展開中に isRefreshing または isBatchCaching が true に遷移した場合、メニューが自動クローズし false 復帰後も閉じたまま維持されること", async () => {
+      it("メニュー展開中に isRefreshing が true に遷移した場合はメニューが自動クローズし false 復帰後も閉じたまま維持される一方、isBatchCaching === true 遷移時は非ブロッキングでメニュー操作可能であること", async () => {
         const user = userEvent.setup();
         const { rerender } = render(<NovelDetailHeader {...defaultProps} />);
 
@@ -609,15 +626,17 @@ describe("NovelDetailHeader", () => {
           screen.queryByTestId("novel-detail-menu"),
         ).not.toBeInTheDocument();
 
-        // isBatchCaching 遷移による自動クローズ
+        // isBatchCaching === true に遷移してもメニューボタンは活性であり展開可能
         await openMenu(user);
         expect(screen.getByTestId("novel-detail-menu")).toBeInTheDocument();
 
         rerender(<NovelDetailHeader {...defaultProps} isBatchCaching={true} />);
-        expect(
-          screen.queryByTestId("novel-detail-menu"),
-        ).not.toBeInTheDocument();
-        expect(screen.getByTestId("novel-detail-menu-button")).toBeDisabled();
+        expect(screen.getByTestId("novel-detail-menu")).toBeInTheDocument();
+        expect(screen.getByTestId("novel-detail-menu-button")).toBeEnabled();
+        expect(screen.getByTestId("batch-cache-button")).toHaveTextContent(
+          "一括キャッシュ実行中...",
+        );
+        expect(screen.getByTestId("batch-cache-button")).toBeDisabled();
       });
 
       it("作品削除メニュー項目（open-delete-dialog-button）をクリックするとメニューが閉じて onOpenDeleteDialog が呼び出されること", async () => {
@@ -644,7 +663,7 @@ describe("NovelDetailHeader", () => {
     });
 
     describe("未取得話一括キャッシュ関連の表示・活性制御 (AC-ND-11, AC-ND-12, AC-ND-13)", () => {
-      it("BatchCaching ストーリーで進行状況（3/15）と中断ボタンが表示され、読書ボタンと3アイコンボタンが disabled であること (AC-ND-11, AC-ND-12)", () => {
+      it("BatchCaching ストーリーで進行状況（3/15）と中断ボタンが表示され、読書ボタンと3アイコンボタンは非ブロッキングで活性であること (Issue #344)", () => {
         render(<BatchCaching />);
 
         expect(screen.getByTestId("batch-cache-progress")).toHaveTextContent(
@@ -657,12 +676,12 @@ describe("NovelDetailHeader", () => {
           screen.queryByTestId("novel-detail-menu"),
         ).not.toBeInTheDocument();
 
-        expect(screen.getByTestId("detail-read-first-button")).toBeDisabled();
+        expect(screen.getByTestId("detail-read-first-button")).toBeEnabled();
         expect(
           screen.getByTestId("detail-favorite-toggle-button"),
-        ).toBeDisabled();
-        expect(screen.getByTestId("refresh-toc-button")).toBeDisabled();
-        expect(screen.getByTestId("novel-detail-menu-button")).toBeDisabled();
+        ).toBeEnabled();
+        expect(screen.getByTestId("refresh-toc-button")).toBeEnabled();
+        expect(screen.getByTestId("novel-detail-menu-button")).toBeEnabled();
       });
 
       it("isBatchCaching === true かつ failedCacheCount > 0 のとき、進行表示に「[失敗 N話]」が含まれ警告色クラスが付与されること (AC-ND-25)", () => {
@@ -802,9 +821,11 @@ describe("NovelDetailHeader", () => {
         expect(onStartBatchCache).toHaveBeenCalledTimes(1);
       });
 
-      it("一括キャッシュ実行中に中断ボタンをクリックすると onCancelBatchCache が呼ばれること (AC-ND-12)", async () => {
+      it("一括キャッシュ実行中に中断ボタンをクリックすると onCancelBatchCache が呼ばれ、読書ボタンも引き続きクリック可能であること (Issue #344)", async () => {
         const user = userEvent.setup();
         const onCancelBatchCache = vi.fn();
+        const onResumeBookmark = vi.fn();
+        const onStartFromBeginning = vi.fn();
 
         render(
           <NovelDetailHeader
@@ -813,6 +834,8 @@ describe("NovelDetailHeader", () => {
             isBatchCaching={true}
             batchCacheProgress={{ current: 1, total: 5 }}
             onCancelBatchCache={onCancelBatchCache}
+            onResumeBookmark={onResumeBookmark}
+            onStartFromBeginning={onStartFromBeginning}
           />,
         );
 
@@ -820,8 +843,15 @@ describe("NovelDetailHeader", () => {
         await user.click(cancelButton);
         expect(onCancelBatchCache).toHaveBeenCalledTimes(1);
 
-        expect(screen.getByTestId("detail-resume-button")).toBeDisabled();
-        expect(screen.getByTestId("detail-read-first-button")).toBeDisabled();
+        const resumeButton = screen.getByTestId("detail-resume-button");
+        const readFirstButton = screen.getByTestId("detail-read-first-button");
+        expect(resumeButton).toBeEnabled();
+        expect(readFirstButton).toBeEnabled();
+
+        await user.click(resumeButton);
+        await user.click(readFirstButton);
+        expect(onResumeBookmark).toHaveBeenCalledTimes(1);
+        expect(onStartFromBeginning).toHaveBeenCalledTimes(1);
       });
 
       it("一括キャッシュ実行中で batchCacheProgress が null の場合、「キャッシュ中...」と表示されること", () => {
@@ -963,11 +993,22 @@ describe("NovelDetailHeader", () => {
         expect(favButton).toBeDisabled();
       });
 
-      it("一括キャッシュ中（isBatchCaching === true）のときお気に入りボタンが disabled であること (Issue #266)", () => {
-        render(<NovelDetailHeader {...defaultProps} isBatchCaching={true} />);
+      it("一括キャッシュ中（isBatchCaching === true）でもお気に入りボタンが活性でありクリックできること (Issue #344)", async () => {
+        const user = userEvent.setup();
+        const onToggleFavorite = vi.fn();
+
+        render(
+          <NovelDetailHeader
+            {...defaultProps}
+            isBatchCaching={true}
+            onToggleFavorite={onToggleFavorite}
+          />,
+        );
 
         const favButton = screen.getByTestId("detail-favorite-toggle-button");
-        expect(favButton).toBeDisabled();
+        expect(favButton).toBeEnabled();
+        await user.click(favButton);
+        expect(onToggleFavorite).toHaveBeenCalledTimes(1);
       });
 
       it("onToggleFavorite が省略された場合でもボタンクリックでエラーにならないこと (Issue #266)", async () => {
