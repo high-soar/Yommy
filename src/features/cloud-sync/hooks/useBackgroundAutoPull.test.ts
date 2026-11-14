@@ -60,7 +60,7 @@ describe("useBackgroundAutoPull", () => {
     expect(BACKGROUND_SYNC_THRESHOLD_MS).toBe(5 * 60 * 1000);
   });
 
-  it("hidden から5分以上経過後に visible 復帰したとき、連携済みなら pullAndMerge が実行されること (AC-BS-13, AC-RD-32, AC-ND-28)", async () => {
+  it("hidden から5分以上経過後に visible 復帰したとき、連携済みなら pullAndMerge が実行されること (AC-BS-13, AC-RD-30, AC-ND-28)", async () => {
     const mockSyncEngine = {
       pullAndMerge: vi
         .fn()

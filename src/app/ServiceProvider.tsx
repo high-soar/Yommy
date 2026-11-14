@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Capacitor } from "@capacitor/core";
 import { CapacitorSQLite, SQLiteConnection } from "@capacitor-community/sqlite";
 import type { HttpClientBridge } from "../bridges/http/types";
@@ -98,6 +104,45 @@ export interface ServiceProviderProps {
   children?: React.ReactNode;
   services?: Partial<Omit<ServiceContextValue, "isReady" | "error">>;
   fallback?: React.ReactNode | ((error: Error | null) => React.ReactNode);
+}
+
+interface FallbackDefaults {
+  httpClient: HttpClientBridge;
+  parserRegistry: ParserRegistry;
+  appBridge: AppBridge;
+  cloudSyncBridge: CloudSyncBridge;
+  volumeKeyBridge: VolumeKeyBridge;
+  webViewDomBridge: WebViewDomBridge;
+}
+
+function getOrCreateFallbackDefaults(
+  ref: React.MutableRefObject<FallbackDefaults | null>,
+): FallbackDefaults {
+  if (!ref.current) {
+    ref.current = {
+      httpClient: createDefaultMockHttpClient(),
+      parserRegistry: createDefaultParserRegistry(),
+      appBridge: new MockAppBridge(),
+      cloudSyncBridge: new MockCloudSyncBridge(),
+      volumeKeyBridge: new MockVolumeKeyBridge(),
+      webViewDomBridge: new MockWebViewDomBridge(),
+    };
+  }
+  return ref.current;
+}
+
+function resolveFallbackBridges(
+  services: ServiceProviderProps["services"],
+  defaults: FallbackDefaults,
+): FallbackDefaults {
+  return {
+    httpClient: services?.httpClient ?? defaults.httpClient,
+    parserRegistry: services?.parserRegistry ?? defaults.parserRegistry,
+    appBridge: services?.appBridge ?? defaults.appBridge,
+    cloudSyncBridge: services?.cloudSyncBridge ?? defaults.cloudSyncBridge,
+    volumeKeyBridge: services?.volumeKeyBridge ?? defaults.volumeKeyBridge,
+    webViewDomBridge: services?.webViewDomBridge ?? defaults.webViewDomBridge,
+  };
 }
 
 export function getStoredDatabaseBinary(
@@ -279,6 +324,8 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
   const [contextValue, setContextValue] = useState<ServiceContextValue | null>(
     null,
   );
+  // 非ネイティブのデフォルト生成物を初回レンダリング時のみ遅延生成し、isReady 遷移前後で参照を安定させる (R1-24)
+  const fallbackDefaultsRef = useRef<FallbackDefaults | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -286,15 +333,14 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
     async function init() {
       try {
         const isNative = Capacitor.isNativePlatform();
+        const defaults = getOrCreateFallbackDefaults(fallbackDefaultsRef);
 
         const httpClient =
           services?.httpClient ??
-          (isNative
-            ? new CapacitorHttpClient()
-            : createDefaultMockHttpClient());
+          (isNative ? new CapacitorHttpClient() : defaults.httpClient);
 
         const parserRegistry =
-          services?.parserRegistry ?? createDefaultParserRegistry();
+          services?.parserRegistry ?? defaults.parserRegistry;
 
         let databaseAdapter = services?.databaseAdapter;
         if (!databaseAdapter) {
@@ -330,25 +376,25 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
 
         const appBridge =
           services?.appBridge ??
-          (isNative ? new CapacitorAppBridge() : new MockAppBridge());
+          (isNative ? new CapacitorAppBridge() : defaults.appBridge);
 
         const cloudSyncBridge =
           services?.cloudSyncBridge ??
           (isNative
             ? new CapacitorCloudSyncBridge()
-            : new MockCloudSyncBridge());
+            : defaults.cloudSyncBridge);
 
         const volumeKeyBridge =
           services?.volumeKeyBridge ??
           (isNative
             ? new CapacitorVolumeKeyBridge()
-            : new MockVolumeKeyBridge());
+            : defaults.volumeKeyBridge);
 
         const webViewDomBridge =
           services?.webViewDomBridge ??
           (isNative
             ? new CapacitorWebViewDomBridge()
-            : new MockWebViewDomBridge());
+            : defaults.webViewDomBridge);
 
         const syncEngine =
           services?.syncEngine ??
@@ -391,9 +437,10 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
       } catch (err) {
         if (isMounted) {
           const error = err instanceof Error ? err : new Error(String(err));
+          const defaults = getOrCreateFallbackDefaults(fallbackDefaultsRef);
+          const fallbackBridges = resolveFallbackBridges(services, defaults);
           const errorContext: ServiceContextValue = {
-            httpClient: createDefaultMockHttpClient(),
-            parserRegistry: createDefaultParserRegistry(),
+            ...fallbackBridges,
             databaseAdapter: null as unknown as DatabaseAdapter,
             novelRepository: null as unknown as NovelRepository,
             chapterRepository: null as unknown as ChapterRepository,
@@ -401,13 +448,6 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
             settingsRepository: null as unknown as SettingsRepository,
             appSettingsRepository:
               services?.appSettingsRepository as AppSettingsRepository,
-            appBridge: services?.appBridge ?? new MockAppBridge(),
-            cloudSyncBridge:
-              services?.cloudSyncBridge ?? new MockCloudSyncBridge(),
-            volumeKeyBridge:
-              services?.volumeKeyBridge ?? new MockVolumeKeyBridge(),
-            webViewDomBridge:
-              services?.webViewDomBridge ?? new MockWebViewDomBridge(),
             syncEngine: undefined,
             fetchFullNovelIndex:
               services?.fetchFullNovelIndex ?? fetchFullNovelIndex,
@@ -442,9 +482,10 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
     <ServiceContext.Provider
       value={
         contextValue ?? {
-          httpClient: services?.httpClient ?? createDefaultMockHttpClient(),
-          parserRegistry:
-            services?.parserRegistry ?? createDefaultParserRegistry(),
+          ...resolveFallbackBridges(
+            services,
+            getOrCreateFallbackDefaults(fallbackDefaultsRef),
+          ),
           databaseAdapter: services?.databaseAdapter as DatabaseAdapter,
           novelRepository: services?.novelRepository as NovelRepository,
           chapterRepository: services?.chapterRepository as ChapterRepository,
@@ -453,13 +494,6 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
             services?.settingsRepository as SettingsRepository,
           appSettingsRepository:
             services?.appSettingsRepository as AppSettingsRepository,
-          appBridge: services?.appBridge ?? new MockAppBridge(),
-          cloudSyncBridge:
-            services?.cloudSyncBridge ?? new MockCloudSyncBridge(),
-          volumeKeyBridge:
-            services?.volumeKeyBridge ?? new MockVolumeKeyBridge(),
-          webViewDomBridge:
-            services?.webViewDomBridge ?? new MockWebViewDomBridge(),
           syncEngine: services?.syncEngine,
           fetchFullNovelIndex:
             services?.fetchFullNovelIndex ?? fetchFullNovelIndex,

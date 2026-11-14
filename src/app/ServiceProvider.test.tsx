@@ -15,6 +15,7 @@ import type { DatabaseAdapter } from "../storage/adapter/types";
 import type { SQLiteDBConnection } from "@capacitor-community/sqlite";
 import { Capacitor } from "@capacitor/core";
 import { SQLiteConnection } from "@capacitor-community/sqlite";
+import * as inMemoryDbModule from "../storage/adapter/inMemoryDb";
 import { resetTestDb } from "../storage/adapter/inMemoryDb";
 import initSqlJs from "sql.js/dist/sql-wasm-inline.js";
 import { DDL_STATEMENTS } from "../storage/schema";
@@ -1153,6 +1154,91 @@ describe("ServiceProvider", () => {
       });
 
       expect(queueRepoInstance).toBe(mockQueueRepo);
+    });
+  });
+
+  describe("非ネイティブデフォルトインスタンスの参照安定性 (R1-24)", () => {
+    it("isReady が false から true へ遷移しても非ネイティブのデフォルトサービス参照が維持されること", async () => {
+      const snapshots: ServiceContextValue[] = [];
+
+      const TestConsumer: React.FC = () => {
+        const services = useServices();
+        snapshots.push(services);
+        return (
+          <div data-testid="ref-stability-status">
+            {services.isReady ? "ready" : "pending"}
+          </div>
+        );
+      };
+
+      render(
+        <ServiceProvider>
+          <TestConsumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("ref-stability-status")).toHaveTextContent(
+          "ready",
+        );
+      });
+
+      const initial = snapshots.find((s) => !s.isReady);
+      const ready = snapshots.find((s) => s.isReady);
+      expect(initial).toBeDefined();
+      expect(ready).toBeDefined();
+
+      expect(ready!.httpClient).toBe(initial!.httpClient);
+      expect(ready!.parserRegistry).toBe(initial!.parserRegistry);
+      expect(ready!.appBridge).toBe(initial!.appBridge);
+      expect(ready!.cloudSyncBridge).toBe(initial!.cloudSyncBridge);
+      expect(ready!.volumeKeyBridge).toBe(initial!.volumeKeyBridge);
+      expect(ready!.webViewDomBridge).toBe(initial!.webViewDomBridge);
+    });
+
+    it("初期化エラー時の errorContext でも非ネイティブのデフォルトサービス参照が維持されること", async () => {
+      const createDbSpy = vi
+        .spyOn(inMemoryDbModule, "createInMemoryDb")
+        .mockRejectedValueOnce(new Error("DB初期化失敗"));
+
+      const snapshots: ServiceContextValue[] = [];
+      const TestConsumer: React.FC = () => {
+        const services = useServices();
+        snapshots.push(services);
+        return (
+          <div data-testid="ref-error-status">
+            {services.error ? "error" : "pending"}
+          </div>
+        );
+      };
+
+      try {
+        render(
+          <ServiceProvider>
+            <TestConsumer />
+          </ServiceProvider>,
+        );
+
+        await waitFor(() => {
+          expect(screen.getByTestId("ref-error-status")).toHaveTextContent(
+            "error",
+          );
+        });
+
+        const initial = snapshots.find((s) => !s.error);
+        const errored = snapshots.find((s) => s.error !== null);
+        expect(initial).toBeDefined();
+        expect(errored).toBeDefined();
+
+        expect(errored!.httpClient).toBe(initial!.httpClient);
+        expect(errored!.parserRegistry).toBe(initial!.parserRegistry);
+        expect(errored!.appBridge).toBe(initial!.appBridge);
+        expect(errored!.cloudSyncBridge).toBe(initial!.cloudSyncBridge);
+        expect(errored!.volumeKeyBridge).toBe(initial!.volumeKeyBridge);
+        expect(errored!.webViewDomBridge).toBe(initial!.webViewDomBridge);
+      } finally {
+        createDbSpy.mockRestore();
+      }
     });
   });
 });

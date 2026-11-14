@@ -18,7 +18,7 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "test:vrt": "npm run build-storybook && playwright test -c playwright.vrt.config.ts",
-    "test:vrt:update": "npm run build-storybook && playwright test -c playwright.vrt.config.ts --update-snapshots",
+    "test:vrt:update": "npm run build-storybook && playwright test -c playwright.vrt.config.ts --update-snapshots=all",
     "test:it": "npm run build && playwright test -c playwright.it.config.ts",
     "prepare": "git config --local core.hooksPath .githooks || true; node scripts/sync-env.mjs || true"
   },

@@ -60,39 +60,87 @@ const sampleNovels: NovelSummary[] = [
 describe("BookshelfPage", () => {
   describe("Storybook Stories 検証 (composeStories)", () => {
     it("WithNovels ストーリーでヘッダー・作品一覧が表示され、URL追加ボタンや空状態・ローディングが表示されないこと (AC-BS-04, AC-BS-07)", () => {
-      render(<WithNovels />);
-      expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
-      expect(screen.getByTestId("novel-list")).toBeInTheDocument();
-      expect(screen.getAllByTestId("novel-card")).toHaveLength(2);
-      expect(screen.queryByTestId("bookshelf-loading")).not.toBeInTheDocument();
-      expect(screen.queryByTestId("bookshelf-empty")).not.toBeInTheDocument();
+      const novelCardSpy = vi
+        .spyOn(NovelCardModule, "NovelCard")
+        .mockImplementation(() => null);
+      const emptyStateSpy = vi
+        .spyOn(BookshelfEmptyStateModule, "BookshelfEmptyState")
+        .mockImplementation(() => null);
+      try {
+        render(<WithNovels />);
+        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+        expect(screen.getByTestId("novel-list")).toBeInTheDocument();
+        expect(novelCardSpy).toHaveBeenCalledTimes(2);
+        expect(
+          screen.queryByTestId("bookshelf-loading"),
+        ).not.toBeInTheDocument();
+        expect(emptyStateSpy).not.toHaveBeenCalled();
 
-      // URL追加ボタンおよび AddNovelDialog は廃止されていること (AC-BS-02, AC-BS-03)
-      expect(
-        screen.queryByTestId("open-add-novel-button"),
-      ).not.toBeInTheDocument();
-      expect(screen.queryByTestId("add-novel-dialog")).not.toBeInTheDocument();
+        // URL追加ボタンおよび AddNovelDialog は廃止されていること (AC-BS-02, AC-BS-03)
+        expect(
+          screen.queryByTestId("open-add-novel-button"),
+        ).not.toBeInTheDocument();
+        expect(
+          screen.queryByTestId("add-novel-dialog"),
+        ).not.toBeInTheDocument();
+      } finally {
+        novelCardSpy.mockRestore();
+        emptyStateSpy.mockRestore();
+      }
     });
 
-    it("Empty ストーリーで空状態コンポーネントが表示され、検索・ランキング誘導ボタンが含まれること (AC-BS-01, TR-15)", () => {
-      render(<Empty />);
-      expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
-      expect(screen.getByTestId("bookshelf-empty")).toBeInTheDocument();
-      expect(screen.getByTestId("empty-search-button")).toBeInTheDocument();
-      expect(screen.getByTestId("empty-ranking-button")).toBeInTheDocument();
-      expect(screen.queryByTestId("novel-list")).not.toBeInTheDocument();
-      expect(screen.queryByTestId("bookshelf-loading")).not.toBeInTheDocument();
-      expect(
-        screen.queryByTestId("open-add-novel-button"),
-      ).not.toBeInTheDocument();
+    it("Empty ストーリーで空状態コンポーネントへ誘導 props が渡されること (AC-BS-01, TR-15)", () => {
+      const emptyStateSpy = vi
+        .spyOn(BookshelfEmptyStateModule, "BookshelfEmptyState")
+        .mockImplementation(() => null);
+      const novelCardSpy = vi
+        .spyOn(NovelCardModule, "NovelCard")
+        .mockImplementation(() => null);
+      try {
+        render(<Empty />);
+        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+        expect(emptyStateSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            onNavigateSearch: expect.any(Function),
+            onNavigateRanking: expect.any(Function),
+          }),
+          undefined,
+        );
+        expect(
+          emptyStateSpy.mock.calls.at(-1)?.[0].isFavoriteFilterActive,
+        ).toBeUndefined();
+        expect(novelCardSpy).not.toHaveBeenCalled();
+        expect(screen.queryByTestId("novel-list")).not.toBeInTheDocument();
+        expect(
+          screen.queryByTestId("bookshelf-loading"),
+        ).not.toBeInTheDocument();
+        expect(
+          screen.queryByTestId("open-add-novel-button"),
+        ).not.toBeInTheDocument();
+      } finally {
+        emptyStateSpy.mockRestore();
+        novelCardSpy.mockRestore();
+      }
     });
 
     it("Loading ストーリーでローディング表示になり、作品一覧や空状態が表示されないこと", () => {
-      render(<Loading />);
-      expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
-      expect(screen.getByTestId("bookshelf-loading")).toBeInTheDocument();
-      expect(screen.queryByTestId("novel-list")).not.toBeInTheDocument();
-      expect(screen.queryByTestId("bookshelf-empty")).not.toBeInTheDocument();
+      const emptyStateSpy = vi
+        .spyOn(BookshelfEmptyStateModule, "BookshelfEmptyState")
+        .mockImplementation(() => null);
+      const novelCardSpy = vi
+        .spyOn(NovelCardModule, "NovelCard")
+        .mockImplementation(() => null);
+      try {
+        render(<Loading />);
+        expect(screen.getByTestId("bookshelf-page")).toBeInTheDocument();
+        expect(screen.getByTestId("bookshelf-loading")).toBeInTheDocument();
+        expect(screen.queryByTestId("novel-list")).not.toBeInTheDocument();
+        expect(emptyStateSpy).not.toHaveBeenCalled();
+        expect(novelCardSpy).not.toHaveBeenCalled();
+      } finally {
+        emptyStateSpy.mockRestore();
+        novelCardSpy.mockRestore();
+      }
     });
 
     it("CheckingUpdates ストーリーで更新中進捗表示および更新ボタンのdisabled状態が反映されること (AC-BS-10)", () => {
@@ -112,33 +160,51 @@ describe("BookshelfPage", () => {
     });
 
     it("FavoriteFilterActive ストーリーでお気に入りフィルタボタンが aria-pressed=true かつ ★ アイコンのみで強調表示され、絞り込まれた作品のみ描画されること (Issue #266, R2-20)", () => {
-      render(<FavoriteFilterActive />);
-      const filterButton = screen.getByTestId(
-        "bookshelf-favorite-filter-button",
-      );
-      expect(filterButton).toBeInTheDocument();
-      expect(filterButton).toHaveAttribute("aria-pressed", "true");
-      expect(filterButton).toHaveAttribute("aria-label", "お気に入りのみ表示");
-      expect(filterButton.textContent?.trim()).toBe("★");
-      expect(filterButton).toHaveClass(
-        "shrink-0",
-        "whitespace-nowrap",
-        "border-amber-300",
-      );
-      expect(screen.getByTestId("novel-list")).toBeInTheDocument();
-      expect(screen.getAllByTestId("novel-card")).toHaveLength(1);
+      const novelCardSpy = vi
+        .spyOn(NovelCardModule, "NovelCard")
+        .mockImplementation(() => null);
+      try {
+        render(<FavoriteFilterActive />);
+        const filterButton = screen.getByTestId(
+          "bookshelf-favorite-filter-button",
+        );
+        expect(filterButton).toBeInTheDocument();
+        expect(filterButton).toHaveAttribute("aria-pressed", "true");
+        expect(filterButton).toHaveAttribute(
+          "aria-label",
+          "お気に入りのみ表示",
+        );
+        expect(filterButton.textContent?.trim()).toBe("★");
+        expect(filterButton).toHaveClass(
+          "shrink-0",
+          "whitespace-nowrap",
+          "border-amber-300",
+        );
+        expect(screen.getByTestId("novel-list")).toBeInTheDocument();
+        expect(novelCardSpy).toHaveBeenCalledTimes(1);
+        expect(novelCardSpy.mock.calls[0]?.[0].novel.isFavorite).toBe(true);
+      } finally {
+        novelCardSpy.mockRestore();
+      }
     });
 
-    it("FavoriteFilterEmpty ストーリーでお気に入りフィルタ0件時の BookshelfEmptyState が描画されること (Issue #266)", () => {
-      render(<FavoriteFilterEmpty />);
-      expect(
-        screen.getByTestId("bookshelf-favorite-empty"),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByTestId("empty-clear-favorite-filter-button"),
-      ).toBeInTheDocument();
-      expect(screen.queryByTestId("bookshelf-empty")).not.toBeInTheDocument();
-      expect(screen.queryByTestId("novel-list")).not.toBeInTheDocument();
+    it("FavoriteFilterEmpty ストーリーでお気に入りフィルタ0件時用の props で BookshelfEmptyState が呼び出されること (Issue #266)", () => {
+      const emptyStateSpy = vi
+        .spyOn(BookshelfEmptyStateModule, "BookshelfEmptyState")
+        .mockImplementation(() => null);
+      try {
+        render(<FavoriteFilterEmpty />);
+        expect(emptyStateSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            isFavoriteFilterActive: true,
+            onClearFavoriteFilter: expect.any(Function),
+          }),
+          undefined,
+        );
+        expect(screen.queryByTestId("novel-list")).not.toBeInTheDocument();
+      } finally {
+        emptyStateSpy.mockRestore();
+      }
     });
   });
 

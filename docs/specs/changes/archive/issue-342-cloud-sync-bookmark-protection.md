@@ -31,9 +31,11 @@ related_specs:
 related_tests:
   - src/App.test.tsx
   - src/app/router.test.tsx
+  - src/features/cloud-sync/hooks/useBackgroundAutoPull.test.ts
   - src/features/cloud-sync/services/syncEngine.test.ts
   - src/features/bookshelf/hooks/useBookshelf.test.ts
   - src/features/novel-detail/hooks/useNovelDetail.test.ts
+  - src/features/reader/components/BookmarkConflictDialog.test.tsx
   - src/features/reader/components/ReaderView.test.tsx
   - src/features/reader/components/ReaderPage.test.tsx
   - src/features/reader/components/ReaderContainer.test.tsx
@@ -93,7 +95,7 @@ Step 1 で確定した要件・合意事項に基づき、以下のアーキテ�
      - `document.visibilityState === "visible"` 復帰時、`lastHiddenAt !== null` かつ `Date.now() - lastHiddenAt >= 300_000` の場合に `lastHiddenAt = null` にリセットした上で処理を起動する（5 分未満の場合は `lastHiddenAt = null` のみ行いスキップ）。
      - `cloudSyncBridge?.getAuthState` が存在する場合は認証状態を確認し、`authState.status !== "connected"`（`unlinked` 等）のときは `pullAndMerge()` を呼び出さない（R1-14）。
      - 同一復帰処理の多重実行ガード（`isPullingRef`）および例外吸収（`.catch(() => {})`）を備え、アプリが通信失敗でクラッシュしないこと。
-     - ※`useBookshelf.ts` からは重複する `visibilitychange` リスナーを撤去し、代わりに `useBookshelf` マウント中の `syncEngine.subscribePullCompleted` 購読（`if (result.pulled) void reloadNovels()`）に統一する（初回マウント時の `pullAndMerge()` は従来通り維持）。
+     - ※`useBookshelf.ts` からは重複する `visibilitychange` リスナーを撤去し、代わりに `useBookshelf` マウント中の `syncEngine.subscribePullCompleted` 購読（`if (result.pulled) void reloadNovels({ silent: true })`）および `pullHandledBySubscriptionRef` による初回起動 Pull の重複リロード抑止に統一する（初回マウント時の `pullAndMerge()` 自体は従来通り維持）。
 
 ### 2.2 Application Router・App シェルの OS バックキー抑止ガード
 
@@ -116,7 +118,7 @@ Step 1 で確定した要件・合意事項に基づき、以下のアーキテ�
 - **`useNovelDetail` における Pull 完了時サイレント自動更新（`reloadDetail({ silent: true })`）**:
   - `UseNovelDetailResult.reloadDetail` を `reloadDetail: (options?: { silent?: boolean }) => Promise<void>` へ拡張する。
   - `useNovelDetail` マウント中に `syncEngine?.subscribePullCompleted` を購読し、`result.pulled === true` かつ `novelId` が設定されている場合に `void reloadDetail({ silent: true })` を呼び出す。
-  - `options?.silent === true` の場合は `setIsLoading(true)` / `setIsLoading(false)` を実行せず（`NovelDetailPage` の一覧 DOM をアンマウントして先頭へ巻き戻さないため）、`isMountedRef` ガードのもとで `novelRepository.getNovelById`・`chapterRepository.listChaptersByNovelId`・`syncQueueState` のみを静かに再取得・State 反映する（エラー時も一覧を破棄せず `error` 更新のみ、または既存表示を維持する）。
+  - `options?.silent === true` の場合は `setIsLoading(true)` / `setIsLoading(false)` を実行せず（`NovelDetailPage` の一覧 DOM をアンマウントして先頭へ巻き戻さないため）、`isMountedRef` ガードのもとで `novelRepository.getNovelById`・`chapterRepository.listChaptersByNovelId`・`syncQueueState` のみを静かに再取得・State 反映する（エラー時も `setError` を設定せず既存表示を維持する。`AC-ND-28` / `R1-31`）。
   - これにより、`SCR-02` を開いたまま画面ロック（5分以上）→ロック解除した際、他端末で更新された「しおり（`しおり` バッジおよび `続きから読む（第N話）` ボタン）」と「既読バッジ（`既読`）」がユーザーの目次スクロール位置を保持したまま最新状態へ自動更新される。
   - なお、`NovelDetailPage` 側のしおり位置自動スクロール制御 `scrolledNovelIdRef` は `novel.id` 単位で初回スクロール済みかを管理しているため、同一 `novel.id` でのサイレント更新時にスクロールジャンプが誤って再発火することはない。
 
@@ -165,13 +167,12 @@ Step 1 で確定した要件・合意事項に基づき、以下のアーキテ�
      - 競合なし（同一話数）。もし `bookmarkConflict` が開いていた場合は `null` にクリアしてもよい。
 3. **競合解決アクション（`resolveBookmarkConflict(action)`）と `ReaderContainer` URL 同期契約**:
    - **`action === "move"`（「第{remoteChapterIndex}話へ移動する」選択時）**:
-     - `bookmarkConflict` が `null` の場合は `false` を返す。対象話数 `target = bookmarkConflict.remoteChapterIndex` を取得し、`setBookmarkConflict(null)` でダイアログを閉じる。
-     - `const moved = await goToChapter(target)` を実行し、その成否 `moved`（`boolean`）を返却する。
+     - 再入ガード（`isResolvingConflictRef`）で二重実行を抑止し、`bookmarkConflictRef.current` が `null` の場合は `false` を返す。解決処理中は `bookmarkConflict` / `bookmarkConflictRef` を非 `null`（ダイアログ開状態）のまま維持し、対象話数 `target = bookmarkConflictRef.current.remoteChapterIndex` に対して `const moved = await goToChapter(target, { preserveChapterOnError: true })` を実行する。
+     - `moved === true`（成功）の場合のみ `bookmarkConflictRef.current = null` および `setBookmarkConflict(null)` でダイアログを閉じて `true` を返し、失敗時（`moved === false`）はダイアログ（再試行可能状態）と現在話表示を維持したまま `false` を返す（`R1-01`）。
      - `ReaderContainer` 側では `onResolveBookmarkConflictMove` で `isResolvingBookmarkConflict` を `true`（`finally` で `false`）に制御しつつ `const ok = await resolveBookmarkConflict("move")` を呼び出し、`ok === true` の場合のみ既存 `navigateToTargetChapter` と同一導線（`onNavigateChapter(targetId, target)` または `router.navigateToReader(targetId, target, { replace: true })`）で URL を第 `target` 話へ同期する（`ok === false` の場合は URL 遷移を行わずエラー画面・WebView フォールバック導線を維持する）。
    - **`action === "keep"`（「第{currentChapterIndex}話のまま読む」選択時）**:
-     - `setBookmarkConflict(null)` でダイアログを閉じる。
-     - 現在の表示話（`currentChapterIndexRef.current`）および現在進捗率（`scrollProgressRef.current`）で **`novelRepository.updateBookmark(currentNovel.id, currentChapterIndexRef.current, scrollProgressRef.current)` を明示実行** し、`last_read_at = now` へ更新する。
-     - `novel` State / `novelRef` を最新化し、`hasPendingBookmarkRef.current = false` を維持した上で、`syncEngine?.notifyChanged().catch(() => {})` を呼び出してクラウドへ現在話維持を同期通知し、`true`（例外時 `false`）を返す。
+     - 再入ガード（`isResolvingConflictRef`）下かつダイアログ開状態（`bookmarkConflict` 非 `null` 維持）のまま、現在の表示話（`currentChapterIndexRef.current`）および現在進捗率（`scrollProgressRef.current`）で **`novelRepository.updateBookmark(currentNovel.id, currentChapterIndexRef.current, scrollProgressRef.current)` を明示実行** し、`last_read_at = now` へ更新する。
+     - 更新成功後のみ `novel` State / `novelRef` を最新化（`hasPendingBookmarkRef.current = false` 維持）し、`syncEngine?.notifyChanged().catch(() => {})` を呼び出してクラウドへ現在話維持を同期通知した上で `bookmarkConflictRef.current = null` および `setBookmarkConflict(null)` でダイアログを閉じて `true` を返す（例外発生時はダイアログを開いたまま維持し `false` を返す、`R1-01`）。
      - `ReaderContainer` 側では `onResolveBookmarkConflictKeep` で `isResolvingBookmarkConflict` を `true`（`finally` で `false`）に制御しつつ `await resolveBookmarkConflict("keep")` を呼び出す（URL は現在話のまま維持）。
 
 #### 2.4.3 `BookmarkConflictDialog`（新規 Presentational コンポーネント）と誤操作防止ガード
@@ -184,16 +185,16 @@ Step 1 で確定した要件・合意事項に基づき、以下のアーキテ�
     currentChapterIndex: number;
     remoteChapterIndex: number;
     isResolving?: boolean;
-    onMoveToRemote: () => void;
-    onKeepCurrent: () => void;
+    onMoveToRemote?: () => void;
+    onKeepCurrent?: () => void;
   }
   ```
 - **UI 仕様・セマンティック属性**:
   - `isOpen === false` の場合は `null` を返し何も描画しない。
-  - ルートオーバーレイ（`fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4`）: **背景クリック（Backdrop タップ）には `onClick` クローズ処理を一切設定しない**。
-  - ダイアログ本体: `role="dialog"`, `aria-modal="true"`, `aria-labelledby="bookmark-conflict-title"`, `data-testid="bookmark-conflict-dialog"`。
+  - ルートオーバーレイ（`data-testid="bookmark-conflict-backdrop"`, `fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50`）: **背景クリック（Backdrop タップ）には `onClick` クローズ処理を一切設定しない**。
+  - ダイアログ本体: `role="dialog"`, `aria-modal="true"`, `aria-labelledby="bookmark-conflict-title"`, `aria-describedby="bookmark-conflict-message"`, `data-testid="bookmark-conflict-dialog"`, `tabIndex={-1}`（表示開始時に先頭有効ボタンへ初期フォーカス移動、および `Tab` / `Shift+Tab` 循環フォーカストラップ、`R1-21`）。
   - タイトル（`id="bookmark-conflict-title"`）: `他の端末で読書位置が更新されました`
-  - 本文メッセージ（`data-testid="bookmark-conflict-message"`）: `別の端末で第${remoteChapterIndex}話まで読み進められています（現在は第${currentChapterIndex}話を表示中）。どちらの話から読みますか？`
+  - 本文メッセージ（`id="bookmark-conflict-message"`, `data-testid="bookmark-conflict-message"`）: `別の端末で第${remoteChapterIndex}話まで読み進められています（現在は第${currentChapterIndex}話を表示中）。どちらの話から読みますか？`
   - アクションボタン（2択、縦並びまたは横並びで押しやすく明確な表示）:
     1. **移動ボタン（プライマリ）**: `data-testid="bookmark-conflict-move-button"`、ラベル `第${remoteChapterIndex}話へ移動する`、`onClick={onMoveToRemote}`、`disabled={isResolving}`。
     2. **維持ボタン（セカンダリ）**: `data-testid="bookmark-conflict-keep-button"`、ラベル `第${currentChapterIndex}話のまま読む`、`onClick={onKeepCurrent}`、`disabled={isResolving}`。
@@ -202,7 +203,7 @@ Step 1 で確定した要件・合意事項に基づき、以下のアーキテ�
   - `ReaderContainer` において `bookmarkConflict !== null` の間は：
     1. `router.blockBackNavigation?.()` を有効化し、Android OS バックキー（`AppBridge.addBackButtonListener`）およびブラウザ `popstate` による目次離脱をブロックする。
     2. `handlePopState` による自動 `flushBookmark()` 実行も抑止する（画面離脱させないため）。
-    3. `ReaderPage` に `bookmarkConflict`, `onResolveBookmarkConflictMove`, `onResolveBookmarkConflictKeep` を渡し、オーバーレイ背後の操作を遮断するモーダルとして描画する。
+    3. `ReaderPage` に `bookmarkConflict`, `onResolveBookmarkConflictMove`, `onResolveBookmarkConflictKeep` を渡し、オーバーレイ背後の本体領域へ `inert` を設定して背後の操作・フォーカス移動を遮断する（`R1-21`）。
 - **Storybook / VRT 規約（`docs/guidelines/testing.md` 準拠）**:
   - `BookmarkConflictDialog.stories.tsx` で `isOpen: true`（例: `currentChapterIndex: 10, remoteChapterIndex: 15`）および `isResolving: true` のストーリーを定義して VRT（1280px / 375px）で中央モーダル表示とボタン視認性を検証する。
   - `isOpen: false`（`null` 返却）の非表示ストーリーには **`tags: ["skip-vrt"]`** を必ず付与する（ポータブルストーリー UT では 100% カバレッジのため検証し、VRT 0px スクリーンショットエラーを防止する）。
@@ -226,7 +227,7 @@ Step 1 で確定した要件・合意事項に基づき、以下のアーキテ�
 ### 3.2 機能別 Hooks・UI コンポーネント単体テスト ＆ VRT（Vitest / Storybook / Playwright VRT）
 
 - `src/features/bookshelf/hooks/useBookshelf.test.ts`:
-  - 従来の `useBookshelf` 内 `visibilitychange` テストを `subscribePullCompleted` 連携テスト（`pulled: true` 通知で `reloadNovels()` が実行されること、`pulled: false` では不要リロードしないこと）へ整理・更新（アプリ全体の `visibilitychange` 5分検証は `useBackgroundAutoPull.test.ts` / `App.test.tsx` へ移管）。
+  - 従来の `useBookshelf` 内 `visibilitychange` テストを `subscribePullCompleted` 連携テスト（`pulled: true` 通知で `reloadNovels({ silent: true })` が `isLoading` を変えずに実行されること、`pulled: false` では不要リロードしないこと、および `pullHandledBySubscriptionRef` による初回重複リロード抑止）へ整理・更新（アプリ全体の `visibilitychange` 5分検証は `useBackgroundAutoPull.test.ts` / `App.test.tsx` へ移管）。
 - `src/features/novel-detail/hooks/useNovelDetail.test.ts`:
   - `syncEngine.subscribePullCompleted` で `{ pulled: true, mergedNovels: 1 }` が通知された際、`reloadDetail({ silent: true })` が `isLoading` を `true` に変えずに自動実行され、`novel.bookmarkChapterIndex` や既読状態が最新化されること。
 - `src/features/reader/components/BookmarkConflictDialog.stories.tsx` / `BookmarkConflictDialog.test.tsx`:
@@ -237,8 +238,8 @@ Step 1 で確定した要件・合意事項に基づき、以下のアーキテ�
   - **未操作離脱時 `flushBookmark` スキップ**: ロード完了後・ページ移動/スクロール変更なしで `flushBookmark()` を呼んだ場合、`novelRepository.updateBookmark` および `syncEngine.notifyChanged` が呼び出されないこと（※従来の無条件 `flushBookmark` テストを本新仕様に更新）。
   - **変更あり時 300ms デバウンス ＋ `hidden` 即時フラッシュ**: `updateScrollProgress` 呼び出し後 300ms 未満で `visibilityState === "hidden"` になった場合、直ちに `updateBookmark` が完了すること。300ms デバウンス完了後に `syncEngine.notifyChanged` が呼ばれ、その後に未操作で `flushBookmark()` を呼んでも重複書き込みされないこと。
   - **競合検知と解決**: Pull 完了通知（`subscribePullCompleted`）で DB の `bookmarkChapterIndex` が現在話と異なる（例: 10 → 15）場合に `bookmarkConflict = { currentChapterIndex: 10, remoteChapterIndex: 15 }` がセットされること。同一話の場合は `null` のまま。
-  - `resolveBookmarkConflict("move")` で `bookmarkConflict` がクリアされ `goToChapter(15)` が実行され、`true`（本文取得失敗時は `false`）を返すこと。
-  - `resolveBookmarkConflict("keep")` で `bookmarkConflict` がクリアされ、`novelRepository.updateBookmark(..., 10, scrollProgress)` と `syncEngine.notifyChanged()` が実行され `true` を返すこと。
+  - `resolveBookmarkConflict("move")` は解決処理中 `bookmarkConflict` を維持（再入ガード有効）し、`goToChapter(15, { preserveChapterOnError: true })` 成功時に `bookmarkConflict` をクリアして `true` を返し、本文取得失敗時はダイアログを開いたまま保持して `false` を返すこと（`R1-01`）。
+  - `resolveBookmarkConflict("keep")` は解決処理中 `bookmarkConflict` を維持し、`novelRepository.updateBookmark(..., 10, scrollProgress)` と `syncEngine.notifyChanged()` 成功時に `bookmarkConflict` をクリアして `true` を返し、更新失敗時はダイアログを保持したまま `false` を返すこと（`R1-01`）。
 - `src/features/reader/components/ReaderPage.stories.tsx` / `ReaderPage.test.tsx`:
   - `bookmarkConflict` 非 null 時に `BookmarkConflictDialog` が描画され、移動・維持ボタンからコールバックが伝播すること（VRT スナップショット含む）。
 - `src/features/reader/components/ReaderContainer.test.tsx`:

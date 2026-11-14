@@ -913,12 +913,16 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1/,
     );
 
-    // 縦書きモードにおいて負の scrollLeft（scrollLeft < 0）が設定されていることを確認（R1-01）
-    const currentScrollLeft = await page.evaluate(() => {
-      const el = document.querySelector('[data-testid="reader-view"]');
-      return el ? el.scrollLeft : 0;
-    });
-    expect(currentScrollLeft).toBeLessThan(0);
+    // 縦書きモードにおいて負の scrollLeft（scrollLeft < 0）が設定されていることを確認（R1-01, R1-25）
+    await expect(readerView).toBeVisible();
+    await expect
+      .poll(async () =>
+        page.evaluate(() => {
+          const el = document.querySelector('[data-testid="reader-view"]');
+          return el ? el.scrollLeft : 0;
+        }),
+      )
+      .toBeLessThan(0);
 
     // ブラウザ戻る操作（TR-06: popstate）で作品詳細（SCR-02）へ戻り、「続きから読む（第1話）」で再開（TR-04）した際に縦書きスクロール位置が復元されることを確認
     await page.goBack();

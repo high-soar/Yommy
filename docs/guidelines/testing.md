@@ -3,7 +3,7 @@ type: guideline
 title: テスト・実装規律の正本（SSOT）
 description: Yommyの3層テスト体系（Parser/Storage/Viewer）、TDDコミット規約、1対1 Story/UT、親子分離、C0/C1 100%、縦書きVRT、および原因D設計同期ルールの正本。
 status: "Approved"
-updated: "2026-11-09"
+updated: "2026-11-14"
 tags: [testing, tdd, vrt, storybook, vitest, playwright, coverage]
 related_specs:
   - docs/index.md
@@ -199,8 +199,8 @@ Git Worktree を用いた並行開発やフォーク環境において、環境�
    - カスタム Hook 内で非同期通信（目次補完や本文保存）を行う際は、`isMountedRef` による画面離脱時の State 更新遮断を徹底し、アンマウント時にはネイティブ Bridge のクリーンアップ（`bridge.close()`）を呼び出すこと。また `httpClient` 等の依存オブジェクト未渡下時にも non-null アサーション（`!`）を用いず、防御的なフォールバックを設けること。
 2. **Android ネイティブプラグインのセキュリティ強化とライフサイクル連動破棄（No. 293, 303: `R1-10`, `R1-20` 再発防止）**:
    - Android ネイティブの WebView 拡張プラグイン（`WebViewDomPlugin.java` 等）では、アプリ内部リソースやローカルファイルへの不正アクセスを防ぐため、`setAllowFileAccess(false)` および `setAllowContentAccess(false)` を明示的に設定すること。
-   - 読み込み URL の検証では、`HTTP:` / `HTTPS:` などの大文字スキーム入力でも安全に許可できるよう大文字小文字非依存の判定（`toLowerCase()` 等）を行い、`file:` や `content:` などの危険なスキームを確実に遮断すること。
-   - 全画面 Dialog 閉鎖時や Activity 破棄時には、WebView インスタンスを確実に解放（`destroy()`）し、JavaScript インジェクション用リスナー（`domCaptured`）の確実なバインド・破棄を行うこと。
+   - 読み込み URL の検証では、`isAllowedScheme()` で `"https".equalsIgnoreCase(scheme)` 等による大文字小文字非依存の `https:` / `HTTPS:` のみを許可し、平文 `http:` や `file:`、`content:`、`javascript:`、`data:`、`intent:` などの安全でないスキームを確実に遮断すること。
+   - ダイアログ閉鎖と WebView 破棄を 2 段階ライフサイクルで管理すること：`btnClose` / `btnCapture` / `Dialog.onDismiss` によるダイアログ単体閉鎖時（`dismissDialogOnly()`）は後続の JavaScript 側 `captureDom()` 呼び出しを成立させるため `webView` および直近 DOM キャッシュ（`lastCaptured*`）を保持し、セッション終了の `close()`、再 `open()`、および Activity/プラグイン破棄 `handleOnDestroy()` 時（`dismissAndDestroyDialog()`）に `webView.destroy()` と直近 DOM キャッシュ破棄を確実に実行すること。また JavaScript インジェクション用リスナー（`domCaptured`）の確実なバインド・破棄を行うこと。
 3. **一括キャッシュ進行中の失敗件数リアルタイム表示と前回の失敗状態クリア（No. 287, 306: `R1-04` 再発防止）**:
    - 一括キャッシュ実行中に通信エラー等で各話取得失敗が発生した場合、画面ヘッダーの進捗表示（`NovelDetailHeader`）において `キャッシュ中 (${current}/${total}) [失敗 ${failedCacheCount}話]...` とリアルタイムに警告色（アンバー）で強調表示し、裏で全話失敗しているにもかかわらず正常進行しているように見える UX 誤認を防止すること。
    - `startBatchCache` 実行開始時には、前回の失敗状態（`setFailedCacheCount(0)`, `setFailedChapterIndexes([])`）を確実にリセットし、再試行時に誤った過去の失敗数が残存しない状態管理規律を確立すること。

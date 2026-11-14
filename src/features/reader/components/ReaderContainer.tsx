@@ -82,6 +82,7 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
 
   const [isResolvingBookmarkConflict, setIsResolvingBookmarkConflict] =
     useState(false);
+  const isResolvingConflictRef = useRef(false);
   const isConflictOpenRef = useRef(Boolean(bookmarkConflict));
   useEffect(() => {
     isConflictOpenRef.current = Boolean(bookmarkConflict);
@@ -108,7 +109,9 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
     window.addEventListener("popstate", handlePopState);
     return () => {
       window.removeEventListener("popstate", handlePopState);
-      void flushBookmark();
+      if (!isConflictOpenRef.current) {
+        void flushBookmark();
+      }
     };
   }, [flushBookmark, isBackNavigationBlocked]);
 
@@ -221,6 +224,10 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
   // しおり競合解決（"move": 他端末話へ移動＋URL同期、"keep": 現在話を明示保存）
   const resolveConflictAction = useCallback(
     async (action: "move" | "keep", targetChapter?: number) => {
+      if (isResolvingConflictRef.current) {
+        return;
+      }
+      isResolvingConflictRef.current = true;
       setIsResolvingBookmarkConflict(true);
       try {
         const ok = await resolveBookmarkConflict(action);
@@ -228,6 +235,7 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
           syncReaderUrl(targetChapter);
         }
       } finally {
+        isResolvingConflictRef.current = false;
         setIsResolvingBookmarkConflict(false);
       }
     },

@@ -28,14 +28,14 @@ export interface UseStorageCacheResult {
   /** 全体本文キャッシュ一括削除ハンドラー */
   clearCache: (options: { onlyRead: boolean }) => Promise<number>;
   /** キャッシュサマリー再取得ハンドラー */
-  refreshSummary: () => Promise<void>;
+  refreshSummary: (options?: { silent?: boolean }) => Promise<void>;
 }
 
 /**
  * 設定画面（SCR-05）におけるアプリ全体キャッシュ集計・一括削除フック
  */
 export function useStorageCache(): UseStorageCacheResult {
-  const { chapterRepository, isReady } = useServices();
+  const { chapterRepository, syncEngine, isReady } = useServices();
   const isMountedRef = useRef<boolean>(true);
   const isClearingRef = useRef<boolean>(false);
 
@@ -55,39 +55,45 @@ export function useStorageCache(): UseStorageCacheResult {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const refreshSummary = useCallback(async (): Promise<void> => {
-    if (!isMountedRef.current) return;
-    setIsLoading(true);
-    // R1-02: 再取得開始時に前回のエラーをクリア
-    setError(null);
-    try {
-      if (!chapterRepository) {
-        if (isMountedRef.current) {
-          setSummary({ totalCachedChapters: 0, totalByteSize: 0 });
+  const refreshSummary = useCallback(
+    async (options?: { silent?: boolean }): Promise<void> => {
+      if (!isMountedRef.current) return;
+      const silent = options?.silent ?? false;
+      if (!silent) {
+        setIsLoading(true);
+        // R1-02: 再取得開始時に前回のエラーをクリア
+        setError(null);
+      }
+      try {
+        if (!chapterRepository) {
+          if (isMountedRef.current) {
+            setSummary({ totalCachedChapters: 0, totalByteSize: 0 });
+          }
+          return;
         }
-        return;
+        // R1-08: 不要な typeof === "function" の防御分岐を整理
+        const result = await chapterRepository.getStorageCacheSummary();
+        if (isMountedRef.current) {
+          setSummary(result);
+        }
+      } catch (err) {
+        if (!silent && isMountedRef.current) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "キャッシュ情報の取得に失敗しました",
+          );
+          // R1-02: 取得失敗時は前回の summary を維持し 0 B 誤表示を防止
+        }
+        throw err;
+      } finally {
+        if (!silent && isMountedRef.current) {
+          setIsLoading(false);
+        }
       }
-      // R1-08: 不要な typeof === "function" の防御分岐を整理
-      const result = await chapterRepository.getStorageCacheSummary();
-      if (isMountedRef.current) {
-        setSummary(result);
-      }
-    } catch (err) {
-      if (isMountedRef.current) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : "キャッシュ情報の取得に失敗しました",
-        );
-        // R1-02: 取得失敗時は前回の summary を維持し 0 B 誤表示を防止
-      }
-      throw err;
-    } finally {
-      if (isMountedRef.current) {
-        setIsLoading(false);
-      }
-    }
-  }, [chapterRepository]);
+    },
+    [chapterRepository],
+  );
 
   useEffect(() => {
     if (!isReady) {
@@ -97,6 +103,20 @@ export function useStorageCache(): UseStorageCacheResult {
       // 初期ロード時のエラーは setError 済みのため unhandled rejection を防ぐ
     });
   }, [isReady, refreshSummary]);
+
+  // バックグラウンド自動 Pull 完了時にサイレント再集計を実行 (R1-23)
+  useEffect(() => {
+    if (!isReady || !syncEngine?.subscribePullCompleted) {
+      return;
+    }
+    const unsubscribe = syncEngine.subscribePullCompleted((result) => {
+      if (!result.pulled) return;
+      void refreshSummary({ silent: true }).catch(() => {
+        // サイレント再集計失敗時は既存サマリー・UIを維持
+      });
+    });
+    return unsubscribe;
+  }, [isReady, refreshSummary, syncEngine]);
 
   const clearCache = useCallback(
     async (options: { onlyRead: boolean }): Promise<number> => {
