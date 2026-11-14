@@ -21,9 +21,11 @@ export const WebViewImportContainer: React.FC<WebViewImportContainerProps> = ({
     webViewDomBridge,
     novelRepository,
     chapterRepository,
+    queueRepository,
     parserRegistry,
     httpClient,
     syncEngine,
+    cacheScheduler,
     fetchFullNovelIndex,
   } = useServices();
 
@@ -71,9 +73,11 @@ export const WebViewImportContainer: React.FC<WebViewImportContainerProps> = ({
     webViewDomBridge,
     novelRepository,
     chapterRepository,
+    queueRepository,
     parserRegistry,
     httpClient,
     syncEngine,
+    cacheScheduler,
     fetchFullNovelIndex,
     onImportComplete: handleImportComplete,
     onNavigateBack: handleBack,

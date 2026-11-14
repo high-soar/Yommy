@@ -170,6 +170,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     chapterRepository,
     settingsRepository,
     syncEngine,
+    cacheScheduler,
     isReady,
   } = useServices();
 
@@ -358,6 +359,37 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       initialChapter: ChapterRecord,
     ): Promise<ChapterRecord | null> => {
       let resolved: ChapterRecord | null = initialChapter;
+      if (cacheScheduler) {
+        const isFresh = resolved.bodyHtml !== null && isChapterFresh(resolved);
+        if (!isFresh) {
+          const isStaleExisting = resolved.bodyHtml !== null;
+          try {
+            await cacheScheduler.enqueuePrefetch({
+              novelId: targetNovelId,
+              chapterIndexes: [targetChapterIndex],
+              priority: "high",
+            });
+            const refreshed = await chapterRepository.getChapter(
+              targetNovelId,
+              targetChapterIndex,
+            );
+            if (refreshed) {
+              resolved = refreshed;
+            }
+          } catch (err: unknown) {
+            if (isStaleExisting) {
+              console.warn(
+                `[useReader] Stale chapter refresh failed for index ${targetChapterIndex}, falling back to existing cache`,
+                err,
+              );
+            } else {
+              throw err;
+            }
+          }
+        }
+        return resolved;
+      }
+
       if (resolved.bodyHtml !== null) {
         if (!isChapterFresh(resolved)) {
           try {
@@ -387,7 +419,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       }
       return resolved;
     },
-    [fetchAndSaveChapterBody],
+    [cacheScheduler, chapterRepository, fetchAndSaveChapterBody],
   );
 
   /**
@@ -414,6 +446,40 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       const abortController = new AbortController();
       prefetchAbortControllerRef.current = abortController;
       const signal = abortController.signal;
+
+      if (cacheScheduler) {
+        const maxTargetIdx = Math.min(
+          currentChapterIdx + PREFETCH_COUNT,
+          totalChapterCount,
+        );
+        const chapterIndexes: number[] = [];
+        for (let idx = currentChapterIdx + 1; idx <= maxTargetIdx; idx++) {
+          chapterIndexes.push(idx);
+        }
+
+        const currentPromise = cacheScheduler
+          .enqueuePrefetch({
+            novelId: targetNovelId,
+            chapterIndexes,
+            priority: "medium",
+            signal,
+          })
+          .catch((err: unknown) => {
+            if (signal.aborted) return;
+            console.warn(
+              "[useReader] Prefetch loop terminated unexpectedly",
+              err,
+            );
+          })
+          .finally(() => {
+            if (activePrefetchPromiseRef.current === currentPromise) {
+              activePrefetchPromiseRef.current = null;
+            }
+          });
+
+        activePrefetchPromiseRef.current = currentPromise;
+        return;
+      }
 
       const runPrefetch = async () => {
         try {
@@ -487,7 +553,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       const currentPromise = runPrefetch();
       activePrefetchPromiseRef.current = currentPromise;
     },
-    [chapterRepository, fetchAndSaveChapterBody, stopPrefetch],
+    [cacheScheduler, chapterRepository, fetchAndSaveChapterBody, stopPrefetch],
   );
 
   // 初期ロードおよび options 変更時のデータ同期

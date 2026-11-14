@@ -1,6 +1,6 @@
 import { renderHook, act, waitFor } from "@testing-library/react";
 import React from "react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   ServiceContext,
   ServiceContextValue,
@@ -23,6 +23,7 @@ import type {
   PullMergeResult,
   SyncEngine,
 } from "../../cloud-sync/services/syncEngine";
+import type { CacheScheduler } from "../../cache/types";
 import { useStorageCache } from "./useStorageCache";
 
 function createMockServices(
@@ -66,6 +67,10 @@ function createMockServices(
 describe("useStorageCache", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("初期化時に chapterRepository.getStorageCacheSummary を呼び出してサマリーを取得すること (AC-ST-14)", async () => {
@@ -780,6 +785,144 @@ describe("useStorageCache", () => {
 
       unmount();
       expect(unsubscribeMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("CacheScheduler 連携による削除前停止制御 (Issue #344)", () => {
+    const createMockCacheScheduler = (): CacheScheduler => ({
+      enqueuePrefetch: vi.fn().mockResolvedValue(undefined),
+      enqueueBatchCache: vi.fn().mockResolvedValue(undefined),
+      pauseNovelTasks: vi.fn().mockResolvedValue(undefined),
+      cancelNovelTasks: vi.fn().mockResolvedValue(undefined),
+      cancelAllTasks: vi.fn().mockResolvedValue(undefined),
+      syncNovelProgress: vi.fn().mockResolvedValue(null),
+      getNovelProgress: vi.fn().mockReturnValue(null),
+      isNovelBatchCaching: vi.fn().mockReturnValue(false),
+      subscribeProgress: vi.fn().mockReturnValue(() => {}),
+      dispose: vi.fn(),
+    });
+
+    it("onlyRead: false 時は deleteAllCachedBodies より前に cancelAllTasks({ clearQueue: true }) を待機実行すること", async () => {
+      const callOrder: string[] = [];
+      const mockScheduler = createMockCacheScheduler();
+      vi.mocked(mockScheduler.cancelAllTasks).mockImplementation(async () => {
+        callOrder.push("cancelAllTasks");
+      });
+      const deleteMock = vi.fn(async () => {
+        callOrder.push("deleteAllCachedBodies");
+        return 7;
+      });
+
+      const services = createMockServices({
+        cacheScheduler: mockScheduler,
+        chapterRepoOverrides: {
+          deleteAllCachedBodies: deleteMock,
+        },
+      });
+
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <ServiceContext.Provider value={services}>
+          {children}
+        </ServiceContext.Provider>
+      );
+
+      const { result } = renderHook(() => useStorageCache(), { wrapper });
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      let deleted = 0;
+      await act(async () => {
+        deleted = await result.current.clearCache({ onlyRead: false });
+      });
+
+      expect(deleted).toBe(7);
+      expect(mockScheduler.cancelAllTasks).toHaveBeenCalledWith({
+        clearQueue: true,
+      });
+      expect(callOrder).toEqual(["cancelAllTasks", "deleteAllCachedBodies"]);
+    });
+
+    it("onlyRead: true 時は cancelAllTasks({ clearQueue: false }) を実行してから deleteAllCachedBodies を呼ぶこと", async () => {
+      const mockScheduler = createMockCacheScheduler();
+      const deleteMock = vi.fn(async () => 3);
+
+      const services = createMockServices({
+        cacheScheduler: mockScheduler,
+        chapterRepoOverrides: {
+          deleteAllCachedBodies: deleteMock,
+        },
+      });
+
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <ServiceContext.Provider value={services}>
+          {children}
+        </ServiceContext.Provider>
+      );
+
+      const { result } = renderHook(() => useStorageCache(), { wrapper });
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      let deleted = 0;
+      await act(async () => {
+        deleted = await result.current.clearCache({ onlyRead: true });
+      });
+
+      expect(deleted).toBe(3);
+      expect(mockScheduler.cancelAllTasks).toHaveBeenCalledWith({
+        clearQueue: false,
+      });
+      expect(deleteMock).toHaveBeenCalledWith({ onlyRead: true });
+    });
+
+    it("cancelAllTasks の完了待機中にアンマウントされた場合、deleteAllCachedBodies を呼ばず 0 を返して安全終了すること", async () => {
+      const gate: { resolve: (() => void) | null } = { resolve: null };
+      const mockScheduler = createMockCacheScheduler();
+      vi.mocked(mockScheduler.cancelAllTasks).mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            gate.resolve = resolve;
+          }),
+      );
+      const deleteMock = vi.fn(async () => 5);
+
+      const services = createMockServices({
+        cacheScheduler: mockScheduler,
+        chapterRepoOverrides: {
+          deleteAllCachedBodies: deleteMock,
+        },
+      });
+
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <ServiceContext.Provider value={services}>
+          {children}
+        </ServiceContext.Provider>
+      );
+
+      const { result, unmount } = renderHook(() => useStorageCache(), {
+        wrapper,
+      });
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      let clearPromise: Promise<number> | null = null;
+      act(() => {
+        clearPromise = result.current.clearCache({ onlyRead: false });
+      });
+
+      unmount();
+
+      let deleted = -1;
+      await act(async () => {
+        gate.resolve?.();
+        deleted = await clearPromise!;
+      });
+
+      expect(deleted).toBe(0);
+      expect(deleteMock).not.toHaveBeenCalled();
     });
   });
 });

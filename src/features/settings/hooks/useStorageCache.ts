@@ -35,7 +35,8 @@ export interface UseStorageCacheResult {
  * 設定画面（SCR-05）におけるアプリ全体キャッシュ集計・一括削除フック
  */
 export function useStorageCache(): UseStorageCacheResult {
-  const { chapterRepository, syncEngine, isReady } = useServices();
+  const { chapterRepository, syncEngine, cacheScheduler, isReady } =
+    useServices();
   const isMountedRef = useRef<boolean>(true);
   const isClearingRef = useRef<boolean>(false);
 
@@ -131,6 +132,12 @@ export function useStorageCache(): UseStorageCacheResult {
         if (!chapterRepository) {
           throw new Error("キャッシュ削除機能が利用できません");
         }
+        if (cacheScheduler) {
+          await cacheScheduler.cancelAllTasks({
+            clearQueue: !options.onlyRead,
+          });
+          if (!isMountedRef.current) return 0;
+        }
         // R1-08: 不要な typeof === "function" の防御分岐を整理
         deletedCount = await chapterRepository.deleteAllCachedBodies(options);
         // R1-02: 再取得が成功した場合のみ完了通知を設定（失敗時は catch 側で error 設定・通知非表示）
@@ -155,7 +162,7 @@ export function useStorageCache(): UseStorageCacheResult {
       }
       return deletedCount;
     },
-    [chapterRepository, refreshSummary],
+    [cacheScheduler, chapterRepository, refreshSummary],
   );
 
   return {

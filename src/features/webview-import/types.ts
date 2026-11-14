@@ -1,9 +1,14 @@
 import type { BottomTab } from "../../shared/ui/BottomTabBar";
 import type { HttpClientBridge } from "../../bridges/http/types";
 import type { WebViewDomBridge } from "../../bridges/webview/types";
-import type { NovelRepository, ChapterRepository } from "../../storage/types";
+import type {
+  NovelRepository,
+  ChapterRepository,
+  QueueRepository,
+} from "../../storage/types";
 import type { ParserRegistry } from "../../parsers/parserRegistry";
 import type { SyncEngine } from "../cloud-sync/services/syncEngine";
+import type { CacheScheduler } from "../cache/types";
 import type { fetchFullNovelIndex } from "../../parsers/fetchFullNovelIndex";
 
 /**
@@ -23,9 +28,11 @@ export interface UseWebViewImportOptions {
   webViewDomBridge: WebViewDomBridge;
   novelRepository: NovelRepository;
   chapterRepository: ChapterRepository;
+  queueRepository?: QueueRepository;
   parserRegistry: ParserRegistry;
   httpClient?: HttpClientBridge;
   syncEngine?: SyncEngine | null;
+  cacheScheduler?: CacheScheduler;
   fetchFullNovelIndex?: typeof fetchFullNovelIndex;
   onImportComplete?: (result: ImportSuccessResult) => void;
   onNavigateBack?: () => void;
