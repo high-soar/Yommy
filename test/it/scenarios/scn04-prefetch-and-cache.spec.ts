@@ -1393,4 +1393,397 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
       }
     }
   });
+
+  test("一括キャッシュ実行中に設定画面（SCR-05）から『既読話の本文キャッシュのみ削除（onlyRead: true）』を実行すると既読キャッシュのみ破棄され未取得キューが保持され、SCR-02 復帰後に再開ボタンから完了まで再開できること (Issue #367, R1-04, R1-18, TR-19, AC-ST-16)", async ({
+    page,
+  }) => {
+    await seedKakuyomuNovelAndOpenDetail(page, 4);
+    await installChapterLatches(page, { heldChapters: [2] });
+
+    try {
+      // 1. 第1話をリーダーで開いてキャッシュ済み＋既読（isRead: true）にする（第2話はラッチで先読みブロック）
+      await page.getByTestId("detail-read-first-button").click();
+      await expect(page.getByTestId("reader-view")).toBeVisible();
+      await expect
+        .poll(
+          async () => {
+            return await page.evaluate(async (novelId) => {
+              const services = window.__yommyServices;
+              if (!services) return false;
+              const chapters =
+                await services.chapterRepository.listChaptersByNovelId(novelId);
+              const ch1Summary = chapters.find((c) => c.chapterIndex === 1);
+              const ch1 = await services.chapterRepository.getChapter(
+                novelId,
+                1,
+              );
+              return Boolean(
+                ch1Summary?.isRead &&
+                ch1?.downloadedAt !== null &&
+                ch1?.bodyHtml,
+              );
+            }, SAMPLE_KAKUYOMU_NOVEL_ID);
+          },
+          { timeout: 10000 },
+        )
+        .toBe(true);
+
+      // SCR-02 へ戻り、reader 側の medium 先読みが停止した状態で第2話ラッチを再初期化
+      await page.getByTestId("reader-bottom-touch-zone").click();
+      await expect(page.getByTestId("reader-top-back-to-toc")).toBeVisible();
+      await page.getByTestId("reader-top-back-to-toc").click();
+      await expect(page.getByTestId("novel-detail-page")).toBeVisible();
+      await expect(page.getByTestId("novel-detail-stats")).toContainText(
+        "全 4 話（取得済み 1 話",
+      );
+
+      await releaseChapterLatches(page, [2]);
+      await installChapterLatches(page, { heldChapters: [2] });
+
+      // 2. 一括キャッシュを開始し、第2話が downloading で第2話ラッチ到達・第3〜4話が pending の状態を作る
+      await openNovelDetailMenu(page);
+      const batchButton = page.getByTestId("batch-cache-button");
+      await batchButton.click();
+      await expect(page.getByTestId("novel-detail-menu")).not.toBeVisible();
+
+      await expect
+        .poll(
+          async () => {
+            return await page.evaluate(async (novelId) => {
+              const services = window.__yommyServices;
+              if (!services) return false;
+              const queue =
+                await services.queueRepository.listByNovelId(novelId);
+              const ch2 = queue.find((item) => item.chapterIndex === 2);
+              const ch3 = queue.find((item) => item.chapterIndex === 3);
+              const ch4 = queue.find((item) => item.chapterIndex === 4);
+              const started =
+                (window as LatchWindow).__testCacheLatches?.isStarted(2) ??
+                false;
+              return (
+                ch2?.status === "downloading" &&
+                ch3?.status === "pending" &&
+                ch4?.status === "pending" &&
+                started &&
+                Boolean(services.cacheScheduler?.isNovelBatchCaching(novelId))
+              );
+            }, SAMPLE_KAKUYOMU_NOVEL_ID);
+          },
+          { timeout: 15000 },
+        )
+        .toBe(true);
+
+      // 3. SCR-05 設定画面へ移動し、「既読話の本文キャッシュのみ削除」を実行（TR-19, AC-ST-16）
+      await page.getByTestId("tab-settings").click();
+      await expect(page).toHaveURL("/settings");
+      await expect(page.getByTestId("settings-page")).toBeVisible();
+
+      const storageCacheSummary = page.getByTestId("storage-cache-summary");
+      await expect(storageCacheSummary).toContainText(
+        "キャッシュ済み: 全 1 話",
+      );
+      await page.getByTestId("open-global-clear-cache-dialog-button").click();
+      const globalDialog = page.getByTestId("global-clear-cache-dialog");
+      await expect(globalDialog).toBeVisible();
+      await page.getByTestId("confirm-global-clear-read-cache-button").click();
+      await expect(globalDialog).not.toBeVisible();
+
+      await expect(page.getByTestId("storage-cache-notice")).toContainText(
+        "本文キャッシュを一括削除しました（1話）",
+      );
+      await expect(storageCacheSummary).toContainText(
+        "キャッシュ済み: 全 0 話（合計 0 B）",
+      );
+
+      // モック側ラッチを解放（cleanup）
+      await releaseChapterLatches(page, [2]);
+
+      // 4. 第1話の本文のみ削除され（既読フラグは維持）、未取得キュー（第2〜4話）が 'pending' のまま保持されていること
+      const afterReadClearState = await page.evaluate(async (novelId) => {
+        const services = window.__yommyServices!;
+        const summaries =
+          await services.chapterRepository.listChaptersByNovelId(novelId);
+        const ch1Summary = summaries.find((c) => c.chapterIndex === 1);
+        const ch1 = await services.chapterRepository.getChapter(novelId, 1);
+        const queue = await services.queueRepository.listByNovelId(novelId);
+        return {
+          ch1IsRead: ch1Summary?.isRead ?? false,
+          ch1DownloadedAt: ch1 ? ch1.downloadedAt : "missing",
+          ch1BodyHtml: ch1 ? ch1.bodyHtml : "missing",
+          queueStatuses: queue
+            .slice()
+            .sort((a, b) => a.chapterIndex - b.chapterIndex)
+            .map((q) => ({ chapterIndex: q.chapterIndex, status: q.status })),
+          isBatchCaching:
+            services.cacheScheduler?.isNovelBatchCaching(novelId) ?? null,
+        };
+      }, SAMPLE_KAKUYOMU_NOVEL_ID);
+
+      expect(afterReadClearState).toEqual({
+        ch1IsRead: true,
+        ch1DownloadedAt: null,
+        ch1BodyHtml: null,
+        queueStatuses: [
+          { chapterIndex: 2, status: "pending" },
+          { chapterIndex: 3, status: "pending" },
+          { chapterIndex: 4, status: "pending" },
+        ],
+        isBatchCaching: false,
+      });
+
+      // 5. 本棚経由で SCR-02 へ復帰し、再開ボタン（「キャッシュを再開（残り3話）」）から完了まで再開できること
+      await page.getByTestId("tab-bookshelf").click();
+      await expect(page).toHaveURL("/");
+      await page.getByTestId("novel-card-select").click();
+      await expect(page.getByTestId("novel-detail-page")).toBeVisible();
+      await expect(page.getByTestId("novel-detail-stats")).toContainText(
+        "全 4 話（取得済み 0 話",
+      );
+
+      await openNovelDetailMenu(page);
+      await expect(batchButton).toContainText("キャッシュを再開（残り3話）");
+      await batchButton.click();
+      await expect(page.getByTestId("novel-detail-menu")).not.toBeVisible();
+
+      await expect(page.getByTestId("batch-cache-progress")).not.toBeVisible({
+        timeout: 20000,
+      });
+      await expect(page.getByTestId("novel-detail-stats")).toContainText(
+        "全 4 話（取得済み 4 話",
+      );
+
+      const finalQueueCount = await page.evaluate(async (novelId) => {
+        const services = window.__yommyServices!;
+        const queue = await services.queueRepository.listByNovelId(novelId);
+        return queue.length;
+      }, SAMPLE_KAKUYOMU_NOVEL_ID);
+      expect(finalQueueCount).toBe(0);
+    } finally {
+      if (!page.isClosed()) {
+        await releaseChapterLatches(page, [2]);
+      }
+    }
+  });
+
+  test("一括キャッシュ実行中に『目次を更新』ボタン（refresh-toc-button）を押下すると進行中バッチを一時停止して目次差分を取り込み、追加話を含めて一括キャッシュが自動再開・完了すること (Issue #367, R1-04, AC-ND-29)", async ({
+    page,
+  }) => {
+    await seedKakuyomuNovelAndOpenDetail(page, 4);
+    await installChapterLatches(page, { heldChapters: [2] });
+
+    try {
+      // 既存の4話構成に第5話を追加した更新後目次 HTML をモック設定
+      await page.evaluate(
+        async ({ workUrl, novelId }) => {
+          const services = window.__yommyServices!;
+          const chapters =
+            await services.chapterRepository.listChaptersByNovelId(novelId);
+          const episodeBlocks = [
+            ...chapters.map(
+              (ch) => `<div class="widget-toc-episode">
+              <a href="/works/16817330658027210412/episodes/${ch.remoteChapterId}">
+                <span>${ch.title}</span>
+              </a>
+              <time datetime="2026-01-01T10:00:00Z">2026年1月1日 10:00</time>
+            </div>`,
+            ),
+            `<div class="widget-toc-episode">
+              <a href="/works/16817330658027210412/episodes/16817330658027210499">
+                <span>第5話 追加エピソード</span>
+              </a>
+              <time datetime="2026-01-05T10:00:00Z">2026年1月5日 10:00</time>
+            </div>`,
+          ].join("\n");
+
+          const updatedWorkHtml = `<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>境界迷宮と異界の魔術師 - カクヨム</title>
+    <link rel="canonical" href="${workUrl}" />
+  </head>
+  <body>
+    <header id="workHeader">
+      <h1 id="workTitle"><a href="/works/16817330658027210412">境界迷宮と異界の魔術師</a></h1>
+      <h2 id="workAuthor-activityName"><a href="/users/onozaki">小野崎</a></h2>
+    </header>
+    <div id="introduction">異世界に召喚された少年の冒険譚。</div>
+    <div class="widget-toc-main">
+      <div class="widget-toc-items">
+        ${episodeBlocks}
+      </div>
+    </div>
+  </body>
+</html>`;
+
+          const client = services.httpClient as unknown as MockHttpClientHandle;
+          client.setResponse(workUrl, {
+            status: 200,
+            url: workUrl,
+            headers: {},
+            html: updatedWorkHtml,
+          });
+        },
+        {
+          workUrl: SAMPLE_KAKUYOMU_WORK_URL,
+          novelId: SAMPLE_KAKUYOMU_NOVEL_ID,
+        },
+      );
+
+      // 1. 一括キャッシュを開始し、第1話完了・第2話ラッチ待機（downloading）になるまで待機
+      await openNovelDetailMenu(page);
+      const batchButton = page.getByTestId("batch-cache-button");
+      await batchButton.click();
+      await expect(page.getByTestId("novel-detail-menu")).not.toBeVisible();
+
+      await expect
+        .poll(
+          async () => {
+            return await page.evaluate(async (novelId) => {
+              const services = window.__yommyServices;
+              if (!services) return false;
+              const ch1 = await services.chapterRepository.getChapter(
+                novelId,
+                1,
+              );
+              const queue =
+                await services.queueRepository.listByNovelId(novelId);
+              const ch2 = queue.find((item) => item.chapterIndex === 2);
+              const started =
+                (window as LatchWindow).__testCacheLatches?.isStarted(2) ??
+                false;
+              return (
+                ch1 !== null &&
+                ch1.bodyHtml !== null &&
+                ch2?.status === "downloading" &&
+                started
+              );
+            }, SAMPLE_KAKUYOMU_NOVEL_ID);
+          },
+          { timeout: 15000 },
+        )
+        .toBe(true);
+
+      // 2. 一括キャッシュ進行中に『目次を更新』ボタンを押下
+      await page.getByTestId("refresh-toc-button").click();
+
+      // 3. 目次差分（+1話）が反映され、一時停止したバッチが追加話（第5話）を含めて自動再開すること
+      await expect(page.getByTestId("novel-detail-notice")).toContainText(
+        "目次を更新しました（+1話）",
+      );
+      await expect(page.getByTestId("novel-detail-stats")).toContainText(
+        "全 5 話",
+      );
+      await expect(page.getByTestId("novel-detail-page")).toContainText(
+        "第5話 追加エピソード",
+      );
+      await expect(page.getByTestId("batch-cache-progress")).toBeVisible();
+
+      // 4. 第2話ラッチを解放すると、追加された第5話を含む全5話が完了すること
+      await releaseChapterLatches(page, [2]);
+
+      await expect(page.getByTestId("batch-cache-progress")).not.toBeVisible({
+        timeout: 20000,
+      });
+      await expect(page.getByTestId("novel-detail-stats")).toContainText(
+        "全 5 話（取得済み 5 話",
+      );
+
+      const finalState = await page.evaluate(async (novelId) => {
+        const services = window.__yommyServices!;
+        const queue = await services.queueRepository.listByNovelId(novelId);
+        const ch5 = await services.chapterRepository.getChapter(novelId, 5);
+        return {
+          queueLength: queue.length,
+          ch5Cached: Boolean(ch5?.downloadedAt && ch5.bodyHtml),
+          isBatchCaching:
+            services.cacheScheduler?.isNovelBatchCaching(novelId) ?? null,
+        };
+      }, SAMPLE_KAKUYOMU_NOVEL_ID);
+
+      expect(finalState).toEqual({
+        queueLength: 0,
+        ch5Cached: true,
+        isBatchCaching: false,
+      });
+    } finally {
+      if (!page.isClosed()) {
+        await releaseChapterLatches(page, [2]);
+      }
+    }
+  });
+
+  test("一括キャッシュ実行中に一部話の取得が失敗した場合、完了を待たずに進捗バー（batch-cache-progress）へリアルタイムに『[失敗 1話]』が表示され、完了後に再試行導線へ遷移すること (Issue #367, R1-04, AC-ND-25)", async ({
+    page,
+  }) => {
+    await seedKakuyomuNovelAndOpenDetail(page, 4);
+    await installChapterLatches(page, { heldChapters: [3] });
+
+    try {
+      // 第2話のみ HTTP 500 失敗を返し、第3話はラッチで保留した状態を構成
+      await page.evaluate(async (novelId) => {
+        const services = window.__yommyServices!;
+        const chapters =
+          await services.chapterRepository.listChaptersByNovelId(novelId);
+        const ch2 = chapters.find((c) => c.chapterIndex === 2);
+        if (!ch2) {
+          throw new Error("Chapter 2 not found");
+        }
+        const client = services.httpClient as unknown as MockHttpClientHandle;
+        client.setResponse(ch2.url, {
+          status: 500,
+          url: ch2.url,
+          headers: {},
+          html: "Server Error",
+        });
+      }, SAMPLE_KAKUYOMU_NOVEL_ID);
+
+      // 1. 一括キャッシュを開始
+      await openNovelDetailMenu(page);
+      const batchButton = page.getByTestId("batch-cache-button");
+      await batchButton.click();
+      await expect(page.getByTestId("novel-detail-menu")).not.toBeVisible();
+
+      // 2. 第3話ラッチ保留中で一括キャッシュ完了前の段階でも batch-cache-progress に『[失敗 1話]』がリアルタイム表示されること
+      await expect
+        .poll(
+          async () => {
+            return await page.evaluate(async (novelId) => {
+              const services = window.__yommyServices;
+              if (!services) return null;
+              const started3 =
+                (window as LatchWindow).__testCacheLatches?.isStarted(3) ??
+                false;
+              const isBatchActive =
+                services.cacheScheduler?.isNovelBatchCaching(novelId) ?? false;
+              return { started3, isBatchActive };
+            }, SAMPLE_KAKUYOMU_NOVEL_ID);
+          },
+          { timeout: 15000 },
+        )
+        .toEqual({
+          started3: true,
+          isBatchActive: true,
+        });
+
+      const progressEl = page.getByTestId("batch-cache-progress");
+      await expect(progressEl).toBeVisible();
+      await expect(progressEl).toContainText("[失敗 1話]");
+
+      // 3. 第3話ラッチを解放してバッチ完了させ、通知および再試行ボタンが表示されること
+      await releaseChapterLatches(page, [3]);
+
+      await expect(progressEl).not.toBeVisible({ timeout: 15000 });
+      await expect(page.getByTestId("novel-detail-error")).toContainText(
+        "1話の取得に失敗しました（再試行可能）",
+      );
+
+      await openNovelDetailMenu(page);
+      await expect(batchButton).toHaveText("失敗した話を再試行（1話）");
+    } finally {
+      if (!page.isClosed()) {
+        await releaseChapterLatches(page, [3]);
+      }
+    }
+  });
 });
