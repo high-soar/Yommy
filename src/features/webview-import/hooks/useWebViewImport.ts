@@ -31,9 +31,11 @@ export function useWebViewImport({
   webViewDomBridge,
   novelRepository,
   chapterRepository,
+  queueRepository,
   parserRegistry,
   httpClient,
   syncEngine,
+  cacheScheduler,
   fetchFullNovelIndex,
   onImportComplete,
   onNavigateBack,
@@ -51,6 +53,20 @@ export function useWebViewImport({
 
   const initialUrlLoadedRef = useRef(false);
   const isMountedRef = useRef(true);
+
+  const syncSavedChapterWithScheduler = useCallback(
+    async (targetNovelId: string, savedChapterIndex: number): Promise<void> => {
+      if (queueRepository) {
+        await queueRepository.deleteByNovelAndChapters(targetNovelId, [
+          savedChapterIndex,
+        ]);
+      }
+      if (cacheScheduler) {
+        await cacheScheduler.syncNovelProgress(targetNovelId);
+      }
+    },
+    [queueRepository, cacheScheduler],
+  );
 
   // 画面マウント・アンマウント管理および Bridge クリーンアップ（R1-11）
   useEffect(() => {
@@ -220,6 +236,7 @@ export function useWebViewImport({
                 parsedChapter,
                 now,
               );
+              await syncSavedChapterWithScheduler(savedNovel.id, 1);
             }
 
             if (syncEngine) {
@@ -336,6 +353,7 @@ export function useWebViewImport({
               parsedChapter,
               now,
             );
+            await syncSavedChapterWithScheduler(targetNovel.id, chapterIndex);
 
             if (syncEngine) {
               await syncEngine.notifyChanged();
@@ -375,6 +393,7 @@ export function useWebViewImport({
       novelRepository,
       chapterRepository,
       syncEngine,
+      syncSavedChapterWithScheduler,
       initialNovelId,
       fetchFullNovelIndex,
       httpClient,
