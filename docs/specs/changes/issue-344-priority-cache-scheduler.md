@@ -111,12 +111,12 @@ related_tests:
   - 破壊的・競合操作の協調制御:
     - `confirmDeleteNovel`: 削除前に `await cacheScheduler.cancelNovelTasks(novelId, { clearQueue: true })` を先行実行。
     - `confirmClearCache(options)`: 削除前に `await cacheScheduler.cancelNovelTasks(novelId, { clearQueue: !options.onlyRead })` を先行実行（既読のみ削除時は未読キューを保持 `R1-18`）。
-    - `refreshToc`: 実行前に `wasBatchCaching = cacheScheduler?.isNovelBatchCaching(novelId) === true` を記録し、`pauseNovelTasks(novelId)` で一旦安全にポーズする。目次更新（`upsertNovelWithToc`）成功後、`wasBatchCaching === true` かつ未キャッシュ・期限切れ対象話が残存する場合は残対象インデックスで `await cacheScheduler.enqueueBatchCache(novelId, remainingTargetIndexes)` を呼び出し、キュー再登録後に即時 resolve して自動再開する。
+    - `refreshToc`: 先頭で `isAnyExclusiveOperationActive()` ガードを通過し、`isRefreshingRef.current = true` / `isRefreshing = true` を設定した直後（`await` 前）の `try` 内で `wasBatchCaching = cacheScheduler?.isNovelBatchCaching(novelId) === true` を記録し、`await cacheScheduler?.pauseNovelTasks(novelId)` で一旦安全にポーズする。目次更新（`upsertNovelWithToc`）成功後、`wasBatchCaching === true` かつ未キャッシュ・期限切れ対象話が残存する場合は残対象インデックスで `await cacheScheduler.enqueueBatchCache(novelId, remainingTargetIndexes)` を呼び出し、キュー再登録後に即時 resolve して自動再開する。
 - **`useNovelDetail` の排他制御分離（`isAnyExclusiveOperationActive`）・自動 Pull 連携・派生 State 整合（`v1.1` 協調）**:
   - `v1.1` で導入された `isAnyExclusiveOperationActive()`（現在 `isRefreshing` / `isBatchCaching` / `isDeleting` / `isClearingCache` を内包）から **`isBatchCaching` を分離**し、DB・TOC 構造を書き換える操作（`isRefreshingRef` / `isDeletingRef` / `isClearingCacheRef`）のみを排他対象とする。これにより一括キャッシュ実行中も `refreshToc`・`confirmDeleteNovel`・`confirmClearCache`・`toggleFavorite` がブロックされず即時に協調実行でき、また `syncEngine?.subscribePullCompleted` の `reloadDetail({ silent: true })`（`AC-ND-28`）も **`pendingSilentReloadRef`（`R1-22`）による遅延対象から `isBatchCaching` を除外**して即時サイレント最新化（Tombstone 削除による `novel === null` 安全処理含む）を実行する。
   - 失敗話数カウントは `v1.1` `No. 438` 準拠のまま単一派生値 `const failedCacheCount = failedChapterIndexes.length` を維持し、重複 State を設けない。
 - **`useNovelDetail` アンマウント時の挙動変更**:
-  - 旧仕様では `useEffect` クリーンアップで一括キャッシュ用 `AbortController.abort()` を呼んでいたが、新仕様ではアンマウント時に `CacheScheduler` へキャンセルを送らない。購読（`subscribeProgress`）の解除のみ行い、バックグラウンド一括キャッシュはそのまま継続させる（全非同期コールバック内では `isMountedRef.current` を確認してアンマウント後 State 更新を防止）。
+  - 旧仕様では `useEffect` クリーンアップで一括キャッシュ用 `AbortController.abort()` および無条件の `queueRepository.resetInterruptedToPending(novelId)` を呼んでいたが、`cacheScheduler` 注入時は **アンマウント時に `abort()` / `pauseNovelTasks()` も `queueRepository.resetInterruptedToPending(novelId)` も実行しない**（`resetInterruptedToPending` のアンマウント呼び出しは `!cacheScheduler` のフォールバック経路のみに限定）。購読（`subscribeProgress`）の解除のみ行い、実行中 `'downloading'` 話を巻き戻さずバックグラウンド一括キャッシュを継続させる（全非同期コールバック内では `isMountedRef.current` を確認してアンマウント後 State 更新を防止）。
 
 ### 2.3 `SCR-03`（リーダー画面）・`SCR-05`（設定）・`SCR-04`（WebView）との連携
 

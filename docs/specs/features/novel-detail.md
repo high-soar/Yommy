@@ -495,9 +495,8 @@ export interface UseNovelDetailResult {
      - これにより、一括キャッシュ実行中であっても `refreshToc`・`confirmDeleteNovel`・`confirmClearCache`・`toggleFavorite` および自動 Pull による最新化は即座に受け付けられる（`refreshToc`・`confirmDeleteNovel`・`confirmClearCache` は冒頭で `pauseNovelTasks` / `cancelNovelTasks` による協調停止を実行する）。
      - マウント中に `syncEngine?.subscribePullCompleted` を購読し、`result.pulled === true` が通知された際：`isAnyExclusiveOperationActive() === true`（`refreshToc` / `confirmDeleteNovel` / `confirmClearCache` 実行中）の間のみ `pendingSilentReloadRef.current = true` として遅延し、完了時の `finally` で `flushPendingSilentReload()`（`!isDeletedRef.current && isMountedRef.current` ガード付き）を実行する。それ以外（**`isBatchCaching === true` 中を含む**）は直ちに `void reloadDetail({ silent: true })` を実行し、他端末からのしおり・既読・削除（`novel === null` 時は空状態安全表示）をリロード・一覧 DOM アンマウントなしで自動反映する（既存の目次スクロール位置を維持し、`NovelDetailPage` の `scrolledNovelIdRef` により同一 `novel.id` でのしおり自動スクロール再発火を防止する）。
 2. **目次再取得・差分更新（`refreshToc`、`v1.2` Issue #344 協調制御）**:
-   - `novel === null` の場合は何もせず `false` を返す。
-   - 対象作品のバックグラウンド一括キャッシュが動作中の場合は、`const wasBatchCaching = cacheScheduler?.isNovelBatchCaching(novelId) === true` を記録し、目次構造変更と書き込み競合を防ぐため `await cacheScheduler?.pauseNovelTasks(novelId)` で一旦安全にポーズする。
-   - `isRefreshing = true`, `error = null`, `refreshMessage = null` にセットする。
+   - **排他ガードとフラグ先行設定**: `novel === null` または `isAnyExclusiveOperationActive() === true`（`isRefreshingRef` / `isDeletingRef` / `isClearingCacheRef` いずれか実行中。なお `isBatchCaching` は排他対象に含めない）の場合は何もせず `false` を返す。通過後直ちに **`isRefreshingRef.current = true`・`isRefreshing = true`**、`error = null`, `refreshMessage = null` を先行設定する（`try / finally` にて確実に `isRefreshingRef.current = false`・`isRefreshing = false`・`flushPendingSilentReload()` を実行）。
+   - **一括キャッシュの協調ポーズ**: `try` ブロック先頭（排他フラグ取得後）にて `const wasBatchCaching = cacheScheduler?.isNovelBatchCaching(novelId) === true` を記録し、目次構造変更と書き込み競合を防ぐため `await cacheScheduler?.pauseNovelTasks(novelId)` で一旦安全にポーズする（`await` 後 `isMountedRef.current` を確認）。
    - **通信前パーサー解決と正規化**: `parserRegistry.requireParser(novel.canonicalUrl)` および `parser.normalizeWorkUrl(novel.canonicalUrl)` を実行する。
    - **目次 HTML 取得・解析・DB Upsert**:
      - `fetchFullNovelIndex(httpClient, parser, normalizedWorkUrl)` を用いて作品トップ（および `nextTocPageUrl` が存在する複数ページ目次全ページ、Issue #239）を取得・結合し、最新メタデータ・全話目次一覧を抽出する。
@@ -509,7 +508,7 @@ export interface UseNovelDetailResult {
    - **通信・パース失敗時**:
      - 例外発生時は既存の `novel` / `chapters` 表示を維持したまま、`error` に日本語エラーメッセージをセットして `false` を返す。
 3. **作品削除とカスケード削除（`confirmDeleteNovel`）**:
-   - `isDeleting = true`, `error = null` にセットし、実行中タスクとの競合を防ぐため `await cacheScheduler?.cancelNovelTasks(novelId, { clearQueue: true })` を先に実行した上で、`novelRepository.deleteNovel(novelId)` を実行する。
+   - `isAnyExclusiveOperationActive() === true` の場合は `false` を返し、通過後直ちに **`isDeletingRef.current = true`・`isDeleting = true`**, `error = null` を先行設定した上で、実行中タスクとの競合を防ぐため `await cacheScheduler?.cancelNovelTasks(novelId, { clearQueue: true })` を実行し、続いて `novelRepository.deleteNovel(novelId)` を実行する（`finally` で `isDeletingRef.current = false`・`flushPendingSilentReload()` を保証）。
    - `syncEngine` が注入されている場合は `syncEngine.notifyChanged()` を非同期実行してクラウド同期（Tombstone Push）をスケジュールする。
    - SQLite の外部キー制約（`PRAGMA foreign_keys = ON` ＆ `FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE`）により、当該作品に紐づく `chapters`（および `download_queue`）の全レコードが一括カスケード削除される。
    - 削除成功時はダイアログを閉じ（`isDeleteDialogOpen = false`）、`true` を返す。呼び出し元の `NovelDetailContainer` は `true` を受け取って即座に `onBackToBookshelf()`（直前の探索元画面への復帰 `TR-07`、履歴なし時は本棚 `/` へ復帰）を実行する。
@@ -538,7 +537,7 @@ export interface UseNovelDetailResult {
        - 未キャッシュ話の失敗時は、**ループを中断せず** `queueRepository.updateStatus(novelId, chapter.chapterIndex, 'failed', { lastError: errorMessage, incrementRetry: true })` を記録し、`failedChapterIndexes` State に該当 `chapterIndex` を即時追加した上で、後続の対象話がある場合は 1.5秒ウェイト後に次の `'pending'` 話の取得を継続する。
      - 1話処理完了ごとに進捗 `batchCacheProgress = { current: i + 1, total: N }` を更新する。
    - **明示的手動中断（`cancelBatchCache`）とアンマウント時継続（`v1.2` Issue #344）**:
-     - `SCR-02` のアンマウント（`SCR-03` リーダー画面や `SCR-01` 本棚画面への遷移）では **`cancelBatchCache` や `abort()` を実行しない**（進捗購読の解除のみ行い、アプリが起動している限りバックグラウンド一括キャッシュは継続する）。
+     - `SCR-02` のアンマウント（`SCR-03` リーダー画面や `SCR-01` 本棚画面への遷移）では **`cancelBatchCache` や `abort()` を実行せず、また `cacheScheduler` 注入時は `useEffect` クリーンアップ内の `queueRepository.resetInterruptedToPending(novelId)` も抑止する**（`resetInterruptedToPending` のアンマウント呼び出しは `!cacheScheduler` のフォールバック経路のみに限定し、`cacheScheduler` 実行中の `'downloading'` 行を離脱瞬間に `'pending'` へ巻き戻さない）。購読（`subscribeProgress`）の解除のみ行い、アプリが起動している限りバックグラウンド一括キャッシュを継続させる。
      - ユーザーがヘッダーの「中断」ボタン（`cancelBatchCache`）を押下した場合のみ `cacheScheduler.pauseNovelTasks(novelId)` により即座に停止し、実行中だった `'downloading'` 話を `'pending'` に戻して既存 `'pending'`/`'failed'` キューを保持する（取得済み話数は SQLite 内に保持され、再開ボタンに `キャッシュを再開（残りN話）` が表示される）。
    - **終了・中断・キャンセル時の `subscribeProgress` 識別ルール（`CacheNovelProgress.status`）**:
      - **`status === "completed"` かつ `failedCount === 0`（失敗 0 件で完走）の場合**: `queueRepository.clearNovelQueue(novelId)` によりクリーンアップされた状態で `novelRepository.getNovelById(novelId)` で作品最新情報を同期した上で、`pendingCacheCount = 0`, `failedCacheCount = 0`, `failedChapterIndexes = []`, `refreshMessage = "全話のキャッシュを取得しました"`, `isBatchCaching = false`, `batchCacheProgress = null` とする。
@@ -546,7 +545,7 @@ export interface UseNovelDetailResult {
      - **`status === "paused"`（手動「中断」または `refreshToc` 一時停止）の場合**: 完了メッセージ（`refreshMessage = "全話のキャッシュを取得しました"`）は設定せず、`queueRepository` から最新の `pendingCacheCount`・`failedCacheCount`・`failedChapterIndexes` を再同期し、`isBatchCaching = false`, `batchCacheProgress = null` とする（取得済み話数は SQLite に保持され、`キャッシュを再開（残りN話）` が表示される）。
      - **`status === "cancelled"`（`confirmClearCache` / `confirmDeleteNovel` / 設定画面キャッシュ削除等による `cancelNovelTasks` / `cancelAllTasks`）の場合**: 完了メッセージを誤設定せず、`isBatchCaching = false`, `batchCacheProgress = null` にリセットし、削除パイプライン側の後続メッセージ制御に委ねる。
 6. **本文キャッシュ削除パイプライン（`TR-19`、`v0.5` Issue #170 / `v0.9` Issue #268 / `v1.2` Issue #344 協調制御）**:
-   - `isClearingCache = true`, `error = null` にセットし、進行中の対象作品一括キャッシュ・先読みタスクによる削除直後の書き戻し競合を防ぐため、`await cacheScheduler?.cancelNovelTasks(novelId, { clearQueue: !options.onlyRead })` を先行実行する（`onlyRead: true` 時は未読 `'pending'`/`'failed'` キュー行を保持する `R1-18`）。
+   - `isAnyExclusiveOperationActive() === true` の場合は `0` を返し、通過後直ちに **`isClearingCacheRef.current = true`・`isClearingCache = true`**, `error = null` を先行設定した上で、進行中の対象作品一括キャッシュ・先読みタスクによる削除直後の書き戻し競合を防ぐため、`await cacheScheduler?.cancelNovelTasks(novelId, { clearQueue: !options.onlyRead })` を先行実行する（`onlyRead: true` 時は未読 `'pending'`/`'failed'` キュー行を保持する `R1-18`、`finally` で `isClearingCacheRef.current = false`・`flushPendingSilentReload()` を保証）。
    - `deletedCount = await chapterRepository.deleteCachedBodies(novelId, options)` を実行する。
      - `options.onlyRead === true`: 既読話（`is_read = 1`）のみ本文キャッシュ（`body_html = NULL`, `byte_size = 0`, `downloaded_at = NULL`）および対応する `download_queue` レコードを破棄。
      - `options.onlyRead === false`: 全話の本文キャッシュおよび当該作品の全 `download_queue` レコードを破棄。
