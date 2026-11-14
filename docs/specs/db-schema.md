@@ -2,8 +2,8 @@
 type: spec-db-schema
 title: ローカル DB スキーマ定義（App 全体正本）
 description: SQLite（novels, chapters, download_queue, reader_settings, app_settings, deleted_novels）のER図、テーブル構造、およびDDL定義の正本。
-status: "Approved"
-updated: "2026-11-14"
+status: "Review (#368)"
+updated: "2026-11-15"
 tags:
   [
     database,
@@ -34,6 +34,7 @@ tags:
     ho-34,
   ]
 related_specs:
+  - docs/specs/changes/archive/issue-344-priority-cache-scheduler.md
   - docs/specs/changes/archive/issue-268-persistent-download-queue.md
   - docs/specs/changes/archive/issue-266-bookshelf-favorite-and-sync.md
   - docs/specs/changes/archive/issue-169-font-and-margin-customization.md
@@ -48,6 +49,7 @@ related_specs:
   - docs/specs/features/bookshelf.md
   - docs/specs/features/novel-detail.md
   - docs/specs/features/reader-view.md
+  - docs/specs/features/webview-import.md
   - docs/specs/features/settings.md
   - docs/specs/changes/archive/issue-80-bookshelf-update-check-and-sort.md
   - docs/specs/changes/archive/issue-81-prefetch-and-cache-rules.md
@@ -229,19 +231,21 @@ CREATE TABLE IF NOT EXISTS chapters (
 CREATE INDEX IF NOT EXISTS idx_chapters_novel_index ON chapters(novel_id, chapter_index ASC);
 ```
 
-### 3.3 `download_queue` テーブル（永続ダウンロードキュー：`v0.3` スキーマ定義 / `v0.9` Issue #268 統合）
+### 3.3 `download_queue` テーブル（永続ダウンロードキュー：`v0.3` スキーマ定義 / `v0.9` Issue #268 統合 / `v1.2` Issue #344 優先度スケジューラ統合）
 
-作品詳細画面（`SCR-02`）における複数話一括取得時のレートリミット制御（1.5秒ウェイト）、途中話エラー時のスキップ継続、および中断・画面離脱・アプリ再起動後の再開・失敗話再試行を永続管理します（`QueueRepository` 経由でアクセス）。
+作品詳細画面（`SCR-02`）を起点とする複数話一括取得時のレートリミット制御（1.5秒ウェイト）、途中話エラー時のスキップ継続、上位優先度（`'high'`/`'medium'`）割り込み退避・再開、`SCR-02` 画面離脱後のバックグラウンド継続、および中断・アプリ再起動後の再開・失敗話再試行を永続管理します（`QueueRepository` 経由でアクセス）。
 
 - **ステータス遷移（`status`）**:
-  - `'pending'`: キュー登録直後、または中断・画面離脱・再起動時に未完了（旧 `'downloading'` 含む）として待機中の状態。
-  - `'downloading'`: 現在 HTTP 取得・パース実行中の状態。画面再表示・一括キャッシュ開始時には `resetInterruptedToPending` により残存 `'downloading'` 行が自動的に `'pending'` へ戻される。
-  - `'completed'`: 本文取得および `chapters` への保存が完了した状態。
-  - `'failed'`: 通信エラー・タイムアウト・パース失敗等により取得失敗した状態（`retry_count` が `+1` 加算され、`last_error` にエラーメッセージが記録される）。再試行（`enqueueChapters`）時には `retry_count` を保持したまま `status = 'pending'`, `last_error = NULL` にリセットされる。
+  - `'pending'`: キュー登録直後、明示的中断（`pauseNovelTasks`）、上位優先度割り込み退避（`'high'`/`'medium'` による中断）、またはアプリ再起動時に未完了（旧 `'downloading'` 含む）として待機中の状態（割り込み退避・中断時は `retry_count` を増加させない）。
+  - `'downloading'`: 現在 `CacheScheduler`（またはフォールバック直列ループ）が HTTP 取得・パース実行中の状態。`SCR-02` アンマウント時は `'low'` バッチをアプリ起動中バックグラウンド継続するため `resetInterruptedToPending` を呼ばず `'downloading'` を維持し、`SCR-02` マウント時は **`cacheScheduler.isNovelBatchCaching(novelId) === false` の場合のみ**（および一括キャッシュ開始・再起動復帰時）に `resetInterruptedToPending` により残存 `'downloading'` 行が自動的に `'pending'` へ戻される（`AC-ND-30`）。
+  - `'completed'`: 旧仕様互換の型値。現行実装（`v1.2`）では本文保存時に `saveChapterBody` トランザクション内で対象話レコードを即時 `DELETE` 削除するため、通常運用で `'completed'` 行はDB上に残留しない。
+  - `'failed'`: 通信エラー・タイムアウト・パース失敗等により取得失敗した状態（`retry_count` が `+1` 加算され、`last_error` にエラーメッセージが記録される）。再試行（`enqueueChapters`）時には `retry_count` を保持したまま `status = 'pending'`, `last_error = NULL` にリセットされる（既定では再試行回数上限による除外を行わず、手動再試行時に `retryCount >= 3` も対象化）。
 - **クリーンアップ（削除）契機**:
-  - 一括キャッシュが失敗 0 件で全話完了した時点（`clearNovelQueue`）。
+  - **`saveChapterBody` トランザクション内でのアトミック削除**: リーダー即時取得（`'high'`）・5話先読み（`'medium'`）・一括キャッシュ（`'low'`）・DOM インポートの経路を問わず、本文保存時に同一 SQLite トランザクション内で対象 `(novel_id, chapter_index)` 行を即時 `DELETE` 削除する。
+  - **内蔵ブラウザ DOM インポート完了時（`SCR-04`）**: `useWebViewImport` が各話エピソードまたはなろう短編本文を取り込み保存した際、`queueRepository.deleteByNovelAndChapters(novelId, [chapterIndex])` により明示的にキュー行を削除した上で `cacheScheduler.syncNovelProgress(novelId)` で重複取得を抑止・同期する。
+  - **バッチ完了・再投入時の非 `'failed'` 行整理（`clearCompletedQueueRows`）**: 一括キャッシュ完了時・対象 0 件時（失敗話残存時含む）に `CacheScheduler` 内の非失敗行整理により `status !== 'failed'` 行を `deleteByNovelAndChapters`（全行非失敗時は `clearNovelQueue`）で削除しつつ `'failed'` 行を保持する（失敗 0 件時は作品キュー完全削除）。7 日経過キャッシュの再取得タイムアウトフォールバック（既存本文維持時）でも `deleteByNovelAndChapters` で対象行を削除する。
   - 画面ロード時や一括キャッシュ開始時に、リーダー閲覧・先読み等により既に有効キャッシュ済み（`isChapterFresh === true`）と判定された話数（`deleteByNovelAndChapters`）。
-  - 作品単位またはアプリ全体の本文キャッシュ削除（`deleteCachedBodies` / `deleteAllCachedBodies`）実行時、および作品削除（`ON DELETE CASCADE`）時。
+  - 作品単位またはアプリ全体の本文キャッシュ削除（`deleteCachedBodies` / `deleteAllCachedBodies` — なお `onlyRead: true` 時は `clearQueue: false` により未読 `'pending'`/`'failed'` キューを保持）実行時、および作品削除（`ON DELETE CASCADE`）時。
 
 ```sql
 CREATE TABLE IF NOT EXISTS download_queue (
