@@ -5506,11 +5506,24 @@ describe("useNovelDetail", () => {
           headers: {},
           html: "Server Error",
         });
-        httpClient.setResponse(new RegExp(KAKUYOMU_EPISODE_IDS[1]), {
-          status: 500,
-          headers: {},
-          html: "Server Error",
-        });
+        httpClient.setResponse(
+          new RegExp(KAKUYOMU_EPISODE_IDS[1]),
+          async () => {
+            // バッチ実行中に完了済み行が残存したケースも再現し、完了時に削除されることを検証する
+            await queueRepo.enqueueChapters(seeded.id, [
+              {
+                chapterIndex: 4,
+                targetUrl: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[3]}`,
+              },
+            ]);
+            await queueRepo.updateStatus(seeded.id, 4, "completed");
+            return {
+              status: 500,
+              headers: {},
+              html: "Server Error",
+            };
+          },
+        );
         httpClient.setResponse(new RegExp(KAKUYOMU_EPISODE_IDS[2]), {
           status: 200,
           headers: {},
@@ -5529,15 +5542,6 @@ describe("useNovelDetail", () => {
           }),
         });
         await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-        // 開始前に第4話の古い completed 行がキューに残っている状態を再現
-        await queueRepo.enqueueChapters(seeded.id, [
-          {
-            chapterIndex: 4,
-            targetUrl: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[3]}`,
-          },
-        ]);
-        await queueRepo.updateStatus(seeded.id, 4, "completed");
 
         let batchPromise: Promise<void> | undefined;
         act(() => {
@@ -5564,6 +5568,7 @@ describe("useNovelDetail", () => {
         );
         expect(deleteSpy).toHaveBeenCalledWith(seeded.id, [1]);
         expect(deleteSpy).toHaveBeenCalledWith(seeded.id, [3]);
+        expect(deleteSpy).toHaveBeenCalledWith(seeded.id, [4]);
 
         const remaining = await queueRepo.listByNovelId(seeded.id);
         expect(remaining.map((item) => item.chapterIndex)).toEqual([2]);

@@ -190,9 +190,7 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     batch.status = "completed";
     batch.isBatchCaching = false;
     batch.pausedReason = "none";
-    if (batch.failedChapterIndexes.size === 0) {
-      await clearCompletedQueueRows(batch.novelId);
-    }
+    await clearCompletedQueueRows(batch.novelId);
   };
 
   const markChapterCompletedInBatch = async (
@@ -513,11 +511,9 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
         }
 
         if (hasStaleCache) {
-          await queueRepository.updateStatus(
-            batch.novelId,
+          await queueRepository.deleteByNovelAndChapters(batch.novelId, [
             chapterIndex,
-            "completed",
-          );
+          ]);
           batch.failedChapterIndexes.delete(chapterIndex);
         } else {
           const errorMessage = toErrorMessage(err, "通信エラー");
@@ -723,11 +719,9 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
         )
         .map((item) => item.chapterIndex);
 
-      if (remainingFailed.length === 0) {
-        await queueRepository.clearNovelQueue(novelId);
-        if (disposed) {
-          return;
-        }
+      await clearCompletedQueueRows(novelId);
+      if (disposed) {
+        return;
       }
 
       const completedBatch: NovelBatchState = {

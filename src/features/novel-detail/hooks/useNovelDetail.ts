@@ -802,12 +802,10 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
           }
 
           if (hasStaleCache) {
-            // 7日経過キャッシュ存在時の短タイムアウト失敗は既存キャッシュへフォールバックして completed とし次話へ
-            await queueRepository.updateStatus(
-              novelId,
+            // 7日経過キャッシュ存在時の短タイムアウト失敗は既存キャッシュへフォールバックして完了扱いとし、不要なキュー行を削除する
+            await queueRepository.deleteByNovelAndChapters(novelId, [
               target.chapterIndex,
-              "completed",
-            );
+            ]);
           } else {
             // 未キャッシュ話の失敗時はループを中断せず failed 記録し後続話を継続
             const errMsg = extractErrorMessage(fetchErr, "通信エラー");
@@ -842,11 +840,9 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
               downloadedAt,
             );
 
-            await queueRepository.updateStatus(
-              novelId,
+            await queueRepository.deleteByNovelAndChapters(novelId, [
               target.chapterIndex,
-              "completed",
-            );
+            ]);
 
             runIfMounted(() => {
               setChapters((prev) =>
@@ -946,6 +942,9 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
         const failedItems = remainingItems.filter(
           (item) => item.status === "failed",
         );
+        const nonFailedIndexes = remainingItems
+          .filter((item) => item.status !== "failed")
+          .map((item) => item.chapterIndex);
 
         if (failedItems.length === 0) {
           await queueRepository.clearNovelQueue(novelId);
@@ -960,6 +959,12 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
             }
           });
         } else {
+          if (nonFailedIndexes.length > 0) {
+            await queueRepository.deleteByNovelAndChapters(
+              novelId,
+              nonFailedIndexes,
+            );
+          }
           const sortedFailed = failedItems
             .map((item) => item.chapterIndex)
             .sort((a, b) => a - b);
