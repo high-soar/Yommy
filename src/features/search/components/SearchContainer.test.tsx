@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act } from "@testing-library/react";
+import { render, waitFor, act } from "@testing-library/react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./SearchContainer.stories";
@@ -66,12 +66,13 @@ describe("SearchContainer コンポーネント", () => {
     );
   };
 
-  it("Default ストーリー: 検索画面の初期未検索状態がレンダリングされ、子コンポーネント（SearchPage）に初期Propsが正しく伝搬されること (R1-21)", async () => {
-    const pageSpy = vi.spyOn(SearchPageModule, "SearchPage");
+  it("Default ストーリー: 子コンポーネント（SearchPage）に初期未検索状態のPropsが正しく伝播されること (R1-21)", async () => {
+    const pageSpy = vi
+      .spyOn(SearchPageModule, "SearchPage")
+      .mockImplementation(() => null);
     render(<Default />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("search-page")).toBeInTheDocument();
       expect(pageSpy).toHaveBeenLastCalledWith(
         expect.objectContaining({
           selectedSite: "kakuyomu",
@@ -79,18 +80,20 @@ describe("SearchContainer コンポーネント", () => {
           selectedOrder: "weekly_ranking",
           selectedSerialStatus: "all",
           selectedGenre: undefined,
+          hasSearched: false,
           isLoading: false,
           items: [],
         }),
         undefined,
       );
     });
-    expect(screen.getByTestId("search-initial-state")).toBeInTheDocument();
     pageSpy.mockRestore();
   });
 
   it("検索実行前に入力欄へキーワードを入力しても初期状態表示が維持されること", async () => {
-    const pageSpy = vi.spyOn(SearchPageModule, "SearchPage");
+    const pageSpy = vi
+      .spyOn(SearchPageModule, "SearchPage")
+      .mockImplementation(() => null);
     renderWithProviders();
 
     await waitFor(() => {
@@ -122,7 +125,9 @@ describe("SearchContainer コンポーネント", () => {
   });
 
   it("キーワードを入力して検索を実行し、カード一覧が表示されること (AC-SE-02)", async () => {
-    const pageSpy = vi.spyOn(SearchPageModule, "SearchPage");
+    const pageSpy = vi
+      .spyOn(SearchPageModule, "SearchPage")
+      .mockImplementation(() => null);
     renderWithProviders();
 
     await waitFor(() => {
@@ -145,7 +150,9 @@ describe("SearchContainer コンポーネント", () => {
   });
 
   it("カードの onAddNovel 呼び出しで本棚に登録され registeredWorkIds に追加されること (AC-SE-06)", async () => {
-    const pageSpy = vi.spyOn(SearchPageModule, "SearchPage");
+    const pageSpy = vi
+      .spyOn(SearchPageModule, "SearchPage")
+      .mockImplementation(() => null);
     renderWithProviders();
 
     await waitFor(() => {
@@ -180,7 +187,9 @@ describe("SearchContainer コンポーネント", () => {
   });
 
   it("カスタム onSelectNovel が提供されている場合、未登録カードの onSelectCard 呼び出しで本棚追加の上で onSelectNovel が呼ばれること", async () => {
-    const pageSpy = vi.spyOn(SearchPageModule, "SearchPage");
+    const pageSpy = vi
+      .spyOn(SearchPageModule, "SearchPage")
+      .mockImplementation(() => null);
     const handleSelectNovel = vi.fn();
 
     renderWithProviders({ onSelectNovel: handleSelectNovel });
@@ -214,7 +223,9 @@ describe("SearchContainer コンポーネント", () => {
   });
 
   it("登録済み作品カードをカスタム onSelectNovel 存在時に onSelectCard 呼び出しすると直接コールバックが呼ばれること", async () => {
-    const pageSpy = vi.spyOn(SearchPageModule, "SearchPage");
+    const pageSpy = vi
+      .spyOn(SearchPageModule, "SearchPage")
+      .mockImplementation(() => null);
     const handleSelectNovel = vi.fn();
 
     renderWithProviders({ onSelectNovel: handleSelectNovel });
@@ -262,7 +273,9 @@ describe("SearchContainer コンポーネント", () => {
   });
 
   it("カスタム onSelectNovel が未指定（デフォルト）の場合、カードの onSelectCard 呼び出しで router の詳細画面へ遷移すること", async () => {
-    const pageSpy = vi.spyOn(SearchPageModule, "SearchPage");
+    const pageSpy = vi
+      .spyOn(SearchPageModule, "SearchPage")
+      .mockImplementation(() => null);
     renderWithProviders();
 
     await waitFor(() => {
@@ -300,7 +313,9 @@ describe("SearchContainer コンポーネント", () => {
       throw new Error("作品取得エラー");
     });
 
-    const pageSpy = vi.spyOn(SearchPageModule, "SearchPage");
+    const pageSpy = vi
+      .spyOn(SearchPageModule, "SearchPage")
+      .mockImplementation(() => null);
     renderWithProviders({ onSelectNovel: handleSelectNovel });
 
     await waitFor(() => {
@@ -334,7 +349,9 @@ describe("SearchContainer コンポーネント", () => {
   });
 
   it("SiteSelector によるサイト切替コールバック（onSelectSite）呼び出し時に、子コンポーネント（SearchPage）へ selectedSite が伝搬すること (AC-SE-10, R1-21)", async () => {
-    const pageSpy = vi.spyOn(SearchPageModule, "SearchPage");
+    const pageSpy = vi
+      .spyOn(SearchPageModule, "SearchPage")
+      .mockImplementation(() => null);
     renderWithProviders();
 
     await waitFor(() => {
@@ -365,7 +382,9 @@ describe("SearchContainer コンポーネント", () => {
   });
 
   it("SearchPage に excludeKeyword, onChangeExcludeKeyword, selectedGenres が正しくバインドされること (v0.8 Issue #264)", async () => {
-    const pageSpy = vi.spyOn(SearchPageModule, "SearchPage");
+    const pageSpy = vi
+      .spyOn(SearchPageModule, "SearchPage")
+      .mockImplementation(() => null);
     renderWithProviders();
 
     await waitFor(() => {
