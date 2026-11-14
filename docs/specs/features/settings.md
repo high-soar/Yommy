@@ -472,15 +472,15 @@ export interface UseStorageCacheResult {
    - `getStorageCacheSummary` が未定義の環境では `{ totalCachedChapters: 0, totalByteSize: 0 }` に安全にフォールバックする。
    - `syncEngine?.subscribePullCompleted` を購読し、自動 Pull / 手動同期で `result.pulled === true`（Tombstone 作品削除・差分取り込み等）となった際に `refreshSummary({ silent: true })`（`isLoading` を `true` に切り替えず既存表示を維持）を実行してキャッシュ容量サマリーを自動再集計する。
 2. **全体一括キャッシュ削除（`clearCache`、`v1.2` Issue #344 `CacheScheduler` 停止連携）**:
-   - `isClearing = true`, `error = null`, `notice = null` を設定する。
-   - **バックグラウンドタスクの先行停止**: `ServiceProvider` から `cacheScheduler` が注入されている場合、本文削除実行直前に `await cacheScheduler.cancelAllTasks({ clearQueue: !options.onlyRead })` を呼び出し、バックグラウンドで動作中のすべての作品の一括キャッシュ（`low`）・先読み（`medium`）タスクを安全に中断・書き込み完了待機する（削除直後に実行中タスクが `saveChapterBody` を書き戻すレースコンディションを防止。なお `options.onlyRead === true` 時は `clearQueue: false` により未読 `'pending'`/`'failed'` キュー行を保持する `R1-18`）。
-   - `deletedCount = await chapterRepository.deleteAllCachedBodies(options)` を実行する。
+   - `isClearing = true`, `error = null`, `notice = null` を設定する（多重実行防止ガード `isClearingRef` ＋ アンマウント時状態更新抑止 `isMountedRef`）。
+   - **バックグラウンドタスクの先行停止**: `ServiceProvider` から `cacheScheduler` が注入されている場合、本文削除実行直前に `await cacheScheduler.cancelAllTasks({ clearQueue: !options.onlyRead })` を呼び出し、バックグラウンドで動作中のすべての作品の一括キャッシュ（`low`）・先読み（`medium`）タスクを安全に中断・書き込み完了待機する（削除直後に実行中タスクが `saveChapterBody` を書き戻すレースコンディションを防止。なお `options.onlyRead === true` 時は `clearQueue: false` により未読 `'pending'`/`'failed'` キュー行を保持する `R1-18`）。**`await` 完了後に `isMountedRef.current` を確認し、アンマウント済みの場合は後続 State 更新を行わず終了する（`v1.1 Kaizen` 準拠）。**
+   - `deletedCount = await chapterRepository.deleteAllCachedBodies(options)` を実行する（終了後も `isMountedRef.current` 確認のもとで後続処理へ進む）。
      - `options.onlyRead === true`: 全作品を対象に既読話（`is_read = 1`）のみ本文キャッシュおよび対応する `download_queue` レコードを破棄（`v0.9` Issue #268）。
      - `options.onlyRead === false`: 全作品の全エピソード本文キャッシュおよび全 `download_queue` レコードを一括破棄（`v0.9` Issue #268）。
      - いずれの場合も作品レコード（`novels`）、目次情報（`chapters`）、既読状態（`is_read`）、しおり位置は完全に保持される。
    - 削除完了後、`refreshSummary()` を実行して合計キャッシュ話数・合計容量を即時再集計して更新する。
-   - `notice = "本文キャッシュを一括削除しました（${deletedCount}話）"` をセットし、`isClearing = false` として削除話数を返却する。
-   - 削除失敗時は `error` をセットし、`isClearing = false` に戻す。
+   - 正常完了かつ `isMountedRef.current === true` の場合のみ `notice = "本文キャッシュを一括削除しました（${deletedCount}話）"` をセットし、`finally` にて `isClearingRef.current = false` かつ `isMountedRef.current === true` 時に `isClearing = false` として削除話数を返却する。
+   - 削除・再集計失敗時は `isMountedRef.current === true` 時に `error` をセットし、`finally` にて `isClearing = false` に戻す。
 
 ---
 

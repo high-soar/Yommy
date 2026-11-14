@@ -882,10 +882,11 @@ export const PREFETCH_COUNT = 5;
    - 1話取得開始時にステータスを `'downloading'`、保存成功時に `'completed'` へ更新し、進捗購読（`subscribeProgress`）経由で `SCR-02` 表示中または再訪問時にヘッダーの取得済み話数（`cachedChapters`）・容量および各話リストのキャッシュバッジをリアルタイムに更新する（`novels.updated_at` は更新せず保持する、R2-16）。`SCR-02` 再訪問時に `cacheScheduler.isNovelBatchCaching(novelId) === true` の場合は `resetInterruptedToPending` を呼び出さない。
    - 特定話の取得に失敗（通信エラー・タイムアウトかつ既存キャッシュなし）した場合は、ループ全体を中断せず `download_queue` に `status = 'failed'`（`retry_count = retry_count + 1`、`last_error` 記録）として保存し、1.5秒ウェイト後に後続の `'pending'` 話の取得を継続する。ループ完了後に失敗話が存在する場合は該当エピソード行に `取得失敗` バッジ（`episode-failed-badge`）、ヘッダーにエラー通知と `失敗した話を再試行（N話）` ボタンを表示する。
    - ユーザー手動中断（「中断」ボタン）時は `pauseNovelTasks` で安全に処理を停止して未完了 `'downloading'` 話を `'pending'` に戻して保持する（`キャッシュを再開（残りN話）` へ遷移）。作品削除・本文キャッシュ削除時は `cancelNovelTasks(novelId, { clearQueue })` / `cancelAllTasks({ clearQueue })` で書き込み完了を待機した上で、全削除（`onlyRead: false`）時のみキューをクリアし、既読のみ削除（`onlyRead: true`）時は未読 `'pending'`/`'failed'` キューを保持する（`R1-18`）。またリーダー閲覧・先読み・DOM インポートで既に有効キャッシュ済みとなった話は自動的にキューから除外され、全話取得完了時および全削除時にはキューレコードが自動クリーンアップされる。
+   - **全画面自動 Pull（Tombstone 削除 ＆ 差分目次補完）とのバックグラウンド競合保護（`v1.1` `useBackgroundAutoPull` 協調）**: `useBackgroundAutoPull` は全画面で動作するため、`CacheScheduler` が `'low'`/`'medium'` タスクを実行中に他端末からの Tombstone 削除（`novelRepository.deleteNovel(novelId)` カスケード削除）が発生し得る。このレースコンディションによる `FOREIGN KEY` 例外・削除済み作品への幽霊書き込み・誤失敗記録を防ぐため、`CacheScheduler` は各話の **HTTP 通信直前** および **`httpClient.getHtml` 完了直後（`chapterRepository.saveChapterBody` / `queueRepository.updateStatus` 実行直前）** に `signal.aborted` に加えて **`await chapterRepository.getChapter(novelId, chapterIndex) !== null`** を検証する。`null`（作品または対象話が削除済み）が返った場合、`'low'` タスクであれば残存する同一 `novelId` のメモリ上未処理タスクを破棄し `status: "cancelled"` で安全終了（`saveChapterBody` / `updateStatus` / 失敗加算を実行しない）し、`'high'`/`'medium'` タスクも書き込みを行わず安全中断する。また `SyncEngine` の `mergeExistingNovel` による差分目次自動補完（`upsertNovelWithToc(..., { updateOnly: true })`、`R1-19`）、`saveChapterBody` のアトミックな `download_queue` 削除（`R1-44`）、および `saveChapterBody` / `recalculateNovelStats` の `novels.updated_at` 保持規律（`R1-01`）とも競合なく安全に共存する。
 
 #### 3.7.1 `CacheScheduler` 契約（`src/features/cache/types.ts`、`v1.2` Issue #344 新設）
 
-アプリ全体で単一インスタンスとして `ServiceProvider` が保持・提供（`cacheScheduler?: CacheScheduler`）し、リーダー即時取得（`high`）・5話先読み（`medium`）・バックグラウンド一括キャッシュ（`low`）の優先順位調停および 1.5 秒レート制限を一元管理します：
+アプリ全体で単一インスタンスとして `ServiceProvider` が **`fallbackDefaultsRef`（`R1-24`）同様の `useRef` 等による安定参照**（再レンダリング時に再生成せずマウント期間中同一参照を保持し、アンマウント時のみ `dispose()` で解放）として保持・提供（`cacheScheduler?: CacheScheduler`）し、リーダー即時取得（`high`）・5話先読み（`medium`）・バックグラウンド一括キャッシュ（`low`）の優先順位調停および 1.5 秒レート制限を一元管理します：
 
 ```ts
 export type CachePriority = "high" | "medium" | "low";
@@ -1187,7 +1188,7 @@ export interface WebViewDomBridge {
 
 ## 4. テスト環境での DI（依存性注入）と決定論的初期化
 
-- `src/app/ServiceProvider.tsx` を介して `HttpClientBridge`、`AppBridge`、`CloudSyncBridge`、`VolumeKeyBridge`、`WebViewDomBridge`、各 `Repository`（および基底の `DatabaseAdapter`）、およびアプリ共有 `cacheScheduler?: CacheScheduler`（プロバイダアンマウント時に `dispose()` 解放）を React Context 経由で提供する。
+- `src/app/ServiceProvider.tsx` を介して `HttpClientBridge`、`AppBridge`、`CloudSyncBridge`、`VolumeKeyBridge`、`WebViewDomBridge`、各 `Repository`（および基底の `DatabaseAdapter`）、およびアプリ共有 `cacheScheduler?: CacheScheduler`（`fallbackDefaultsRef` 同等の `useRef` による再レンダリング時参照安定化 `R1-24`・プロバイダアンマウント時 `dispose()` 解放）を React Context 経由で提供する。
 - **Android / iOS ネイティブ実行時**: `Capacitor.isNativePlatform()` によりネイティブ環境を自動検知し、`CapacitorHttpClient`、`CapacitorAppBridge`、`CapacitorCloudSyncBridge`、`CapacitorVolumeKeyBridge`、`CapacitorWebViewDomBridge`、および `createDefaultNativeSqliteAdapter`（`CapacitorSqliteAdapter` ＋ `src/storage/schema.ts` の DDL 初期化）を注入する。
 - **Web ブラウザ / Dev 実行時**: `createInMemoryDb`（`sql.js`）および `localStorage` への Base64 バイナリバックアップ（`yommy_sqlite_db_backup`）によるハイブリッド永続化を提供し、`createDefaultMockHttpClient`、`MockAppBridge`、`MockCloudSyncBridge`、`MockVolumeKeyBridge`、および `MockWebViewDomBridge` を使用する。既存 DB バイナリからの復元時にも `initializeDatabaseSchema` によるスキーママイグレーションを確実に実行する。
 - **UT（Vitest）/ Storybook / Playwright IT 実行時**: `MockHttpClient` ＋ `MockAppBridge` ＋ `MockCloudSyncBridge` ＋ `MockVolumeKeyBridge` ＋ `MockWebViewDomBridge` ＋ `InMemoryDatabaseAdapter` を注入し、各テストの開始前に `resetTestDb()` を呼び出して 100% 決定論的な状態で検証する。
