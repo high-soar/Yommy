@@ -2,8 +2,8 @@
 type: spec-feature
 title: "内蔵ブラウザ・DOMインポート画面仕様書（SCR-04: WebView Fallback & DOM Import）"
 description: "対象小説ページを内蔵 WebView で直接閲覧し、表示中 DOM を手動インポートして作品目次または各話本文をローカルキャッシュ DB に保存・閲覧再開する内蔵ブラウザ・DOMインポート画面（SCR-04）の正本仕様。"
-status: "Approved"
-updated: "2026-11-14"
+status: "Review (#368)"
+updated: "2026-11-15"
 tags:
   [
     webview-import,
@@ -96,7 +96,7 @@ flowchart TD
 ### 2.1 コンポーネントツリーと Props / TestID 規約
 
 1. **`WebViewImportContainer` (`src/features/webview-import/components/WebViewImportContainer.tsx`)**:
-   - ルータークエリ（`url`, `novelId`, `chapterIndex`）および遷移履歴コンテキスト（`browserOrigin`）を受け取り、`ServiceProvider` から注入された `webViewDomBridge`, `novelRepository`, `chapterRepository`, `parserRegistry`, `syncEngine` を `useWebViewImport` へ接続する。
+   - ルータークエリ（`url`, `novelId`, `chapterIndex`）および遷移履歴コンテキスト（`browserOrigin`）を受け取り、`ServiceProvider` から注入された `webViewDomBridge`, `novelRepository`, `chapterRepository`, `queueRepository`, `parserRegistry`, `httpClient`, `syncEngine`, `cacheScheduler`, `fetchFullNovelIndex` を `useWebViewImport` へ接続する。
    - インポート成功時（`onImportSuccess`）に `TR-11`（作品詳細 `/novels/:novelId` またはリーダー `/novels/:novelId/chapters/:chapterIndex`）へルーティングする。
    - 「← 戻る」押下時（`onBack`）に `TR-12`（直前画面または本棚 `/`）へルーティングする。
 
@@ -164,9 +164,11 @@ export interface UseWebViewImportOptions {
   webViewDomBridge: WebViewDomBridge;
   novelRepository: NovelRepository;
   chapterRepository: ChapterRepository;
+  queueRepository?: QueueRepository;
   parserRegistry: ParserRegistry;
   httpClient?: HttpClientBridge;
   syncEngine?: SyncEngine | null;
+  cacheScheduler?: CacheScheduler;
   fetchFullNovelIndex?: typeof fetchFullNovelIndex;
   onImportComplete?: (result: ImportSuccessResult) => void;
   onNavigateBack?: () => void;
@@ -192,6 +194,8 @@ export interface UseWebViewImportReturn {
   goBack: () => void;
 }
 ```
+
+- **アンマウント時完了コールバック抑止ガード（`isMountedRef.current`、`R1-01`）**: 作品トップ（`type: "novel"`）または各話エピソード（`type: "chapter"`）の非同期 DOM インポート完了前にユーザーが戻る操作等で `SCR-04` を離脱した場合でも、DB 保存（`upsertNovelWithToc` / `saveChapterBody`）・`queueRepository.deleteByNovelAndChapters`・`cacheScheduler.syncNovelProgress`・`syncEngine.notifyChanged` は最後まで実行し、完了後の遅延遷移を引き起こす `onImportComplete?.(result)` および React State 更新は **`if (isMountedRef.current)` が真の場合のみ**呼び出す。
 
 ### 3.2 内蔵ブラウザ Bridge 契約（`WebViewDomBridge`）
 
@@ -238,6 +242,8 @@ sequenceDiagram
     participant Parser as NovelParser (kakuyomu / narou)
     participant NovelRepo as NovelRepository
     participant ChapterRepo as ChapterRepository
+    participant QueueRepo as QueueRepository
+    participant Scheduler as CacheScheduler
     participant Sync as SyncEngine
 
     User->>UI: 「表示中ページを取り込む」押下
@@ -259,22 +265,46 @@ sequenceDiagram
             opt なろう短編で本文を含む場合
                 Hook->>Parser: parseChapterContent(html, url)
                 Hook->>ChapterRepo: saveChapterBody(novelId, 1, parsed, now)
+                opt QueueRepository / CacheScheduler 利用可能時
+                    Hook->>QueueRepo: deleteByNovelAndChapters(novelId, [1])
+                    Hook->>Scheduler: syncNovelProgress(novelId)
+                end
             end
             opt SyncEngine 有効時
                 Hook->>Sync: notifyChanged()
             end
-            Hook-->>UI: TR-11: 作品詳細 (/novels/:novelId) へ自動遷移
+            opt isMountedRef.current === true (未離脱時)
+                Hook-->>UI: TR-11: 作品詳細 (/novels/:novelId) へ自動遷移
+            end
         else 各話エピソード（本文）ページの場合
             Hook->>Parser: parseChapterContent(html, url)
             Parser-->>Hook: ParsedChapter
             alt 対象作品・目次が登録済みの場合
                 Hook->>ChapterRepo: saveChapterBody(novelId, chapterIndex, parsed, now)
-                Hook-->>UI: TR-11: リーダー (/novels/:novelId/chapters/:chapterIndex) へ自動遷移
+                opt QueueRepository / CacheScheduler 利用可能時
+                    Hook->>QueueRepo: deleteByNovelAndChapters(novelId, [chapterIndex])
+                    Hook->>Scheduler: syncNovelProgress(novelId)
+                end
+                opt SyncEngine 有効時
+                    Hook->>Sync: notifyChanged()
+                end
+                opt isMountedRef.current === true (未離脱時)
+                    Hook-->>UI: TR-11: リーダー (/novels/:novelId/chapters/:chapterIndex) へ自動遷移
+                end
             else 未登録作品の場合
                 Hook->>Hook: 目次自動補完試行 (fetchFullNovelIndex)
                 alt 目次補完成功
                     Hook->>ChapterRepo: saveChapterBody(...)
-                    Hook-->>UI: TR-11: リーダーへ自動遷移
+                    opt QueueRepository / CacheScheduler 利用可能時
+                        Hook->>QueueRepo: deleteByNovelAndChapters(novelId, [chapterIndex])
+                        Hook->>Scheduler: syncNovelProgress(novelId)
+                    end
+                    opt SyncEngine 有効時
+                        Hook->>Sync: notifyChanged()
+                    end
+                    opt isMountedRef.current === true (未離脱時)
+                        Hook-->>UI: TR-11: リーダーへ自動遷移
+                    end
                 else 目次補完失敗（認証必須等）
                     Hook-->>UI: error: "先に作品トップ（目次）ページを取り込んでください"
                 end
