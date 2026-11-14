@@ -4,12 +4,13 @@ title: 品質記録・バグ記録票 ＆ 申し送り管理シート（Bug & Ha
 description: 製品コードと支援成果物を分離したバグ記録（原因5分類 L/S/D/B/A）および後続タスクへの申し送り事項（HO-xx）を追跡する正本シート。
 status: "Approved"
 updated: "2026-11-14"
-tags: [quality, bug-log, handover, dre, kaizen]
+tags: [quality, bug-log, handover, dre, kaizen, ho-39]
 related_specs:
   - docs/quality/archive/v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md
   - docs/quality/reports/v1.1-cloud-sync-bookmark-and-detail-header-ux.md
   - docs/specs/changes/archive/issue-342-cloud-sync-bookmark-protection.md
   - docs/specs/changes/archive/issue-343-novel-detail-header-menu.md
+  - docs/specs/changes/issue-344-priority-cache-scheduler.md
   - docs/quality/archive/v1.0-release-audit-log.md
   - docs/quality/reports/v1.0-full-system-quality-audit.md
   - docs/specs/changes/archive/issue-304-v1-release-readiness.md
@@ -100,9 +101,13 @@ related_tests: []
 
 次期作業中の **Milestone `v1.2`** で検出されたバグ記録は、本表へ No. 447 より連番で記入します。
 
-| No. | Issue / PR | 検出フェーズ・手段 | 成果物区分 (`製品コード` / `支援成果物`) | 対象箇所 | 原因 (`L`/`S`/`D`/`B`/`A`) | 不備の概要と是正内容（原因 `D` は設計書同期コミット併記） |
-| :-: | :--------: | :----------------- | :--------------------------------------: | :------- | :------------------------: | :-------------------------------------------------------- |
-| 447 |     -      | -                  |                    -                     | -        |             -              | （Milestone `v1.2` 以降の不備を No. 447 より連番で記入）  |
+| No. |   Issue / PR   | 検出フェーズ・手段                       | 成果物区分 (`製品コード` / `支援成果物`) | 対象箇所                                                                                                                        | 原因 (`L`/`S`/`D`/`B`/`A`) | 不備の概要と是正内容（原因 `D` は設計書同期コミット併記）                                                                                                                                                                                                                                                                                                            |
+| :-: | :------------: | :--------------------------------------- | :--------------------------------------: | :------------------------------------------------------------------------------------------------------------------------------ | :------------------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 447 | #344 / PR #357 | 独立 AI レビュー (`pr-reviewer` Round 1) |               `支援成果物`               | `docs/specs/architecture.md`, `docs/specs/features/novel-detail.md`                                                             |            `D`             | `[P2]` `CacheNovelProgress` に終了・中断状態（`status`）と `failedChapterIndexes` の契約定義が不足しており `cancelled` と `completed` の誤識別リスクがあったため、`CacheBatchStatus`（`idle`/`running`/`preempted`/`paused`/`completed`/`cancelled`）と `failedChapterIndexes` を追加し、通知分岐契約を同期是正（設計同期コミット：`4a04def`）                       |
+| 448 | #344 / PR #357 | 独立 AI レビュー (`pr-reviewer` Round 1) |               `支援成果物`               | `docs/specs/architecture.md`, `docs/specs/changes/issue-344-priority-cache-scheduler.md`, `docs/specs/features/novel-detail.md` |            `D`             | `[P2]` `enqueueBatchCache` の `enqueueChapters` 実行主体と Promise 解決タイミングが仕様間で不整合・未定義だったため、`CacheScheduler` 注入時は `enqueueBatchCache` 側が `download_queue` 登録を担い投入完了時に即時 resolve（`refreshToc` 非ブロック・二重登録防止）するよう統一是正（設計同期コミット：`4a04def`）                                                  |
+| 449 | #344 / PR #357 | 独立 AI レビュー (`pr-reviewer` Round 1) |               `支援成果物`               | `docs/specs/changes/issue-344-priority-cache-scheduler.md`                                                                      |            `L`             | `[P3]` 差分仕様 §2.2 の非ブロッキング対象ボタン列挙に「続きから読む（`detail-resume-button`）」、および `related_tests` / §3 テスト計画に `src/app/ServiceProvider.test.tsx` が漏れていたため追記是正                                                                                                                                                                |
+| 450 | #344 / PR #357 | 独立 AI レビュー (`pr-reviewer` Round 3) |               `支援成果物`               | `docs/specs/features/novel-detail.md`                                                                                           |            `D`             | `[P2]` `refreshToc` で `isAnyExclusiveOperationActive()` ガード・`isRefreshingRef.current = true` 先行設定より前に `await pauseNovelTasks` が記述されており排他ロックの空き・`finally` 不整合リスクがあったため、排他フラグ先行設定後に `pauseNovelTasks` を実行する順序へ是正（`confirmDeleteNovel` / `confirmClearCache` 順序も明記、設計同期コミット：`ca7942a`） |
+| 451 | #344 / PR #357 | 独立 AI レビュー (`pr-reviewer` Round 3) |               `支援成果物`               | `docs/specs/features/novel-detail.md`, `docs/specs/changes/issue-344-priority-cache-scheduler.md`                               |            `D`             | `[P2]` `useNovelDetail` のアンマウント `useEffect` クリーンアップに残存する無条件 `queueRepository.resetInterruptedToPending(novelId)` を `cacheScheduler` 注入時に抑止する規定（`!cacheScheduler` フォールバック専用化）が不足しており離脱瞬間の `'downloading'` 巻き戻しリスクがあったため明記是正（設計同期コミット：`ca7942a`）                                  |
 
 ---
 
@@ -125,11 +130,11 @@ related_tests: []
 > - Milestone `v1.0` で解決済みの申し送り（`HO-36`）: [docs/quality/archive/v1.0-release-audit-log.md](archive/v1.0-release-audit-log.md)
 > - Milestone `v1.1` で解決済みの申し送り（`HO-37`, `HO-38`）: [docs/quality/archive/v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md](archive/v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md)
 
-現在、未解決（`Open`）の申し送り事項は **0 件** です（すべての既存 `HO-xx` は上記アーカイブにて完了精算済み）。
+現在、未解決（`Open`）の申し送り事項は **1 件**（`HO-39`）です。
 
-| ID  | 起票元 Issue / PR | 申し送り事項の内容                       | 解決先（対象 Issue / 成果物） | 完了ゲート | 状態 (`Open` / `Resolved`) |
-| :-: | :---------------: | :--------------------------------------- | :---------------------------- | :--------: | :------------------------: |
-|  -  |         -         | （現在 Open の申し送り事項はありません） | -                             |     -      |             -              |
+|     ID      | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                                | 解決先（対象 Issue / 成果物）                                                                  |       完了ゲート        | 状態 (`Open` / `Resolved`) |
+| :---------: | :---------------: | :------------------------------------------------------------------------------------------------------------------------------------------------ | :--------------------------------------------------------------------------------------------- | :---------------------: | :------------------------: |
+| **`HO-39`** |    Issue #344     | Android 実機における長編一括キャッシュ実行中の即時リーダー遷移・先読み統合動作、手動中断・再開および作品別/全体キャッシュ整理時の安全停止整合確認 | 親 Issue #344 の Step 2 判定（カテゴリ B）に基づき Milestone `v1.2` 最終レビューで実機検証予定 | Milestone `v1.2` 完了前 |           `Open`           |
 
 ---
 
