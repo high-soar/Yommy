@@ -106,40 +106,87 @@ describe("BookshelfContainer", () => {
   });
 
   describe("Storybook Stories 検証 (composeStories)", () => {
-    it("Default ストーリーで登録済み作品一覧が表示されること (AC-BS-04)", async () => {
-      render(<Default />);
-      await waitFor(() => {
-        expect(screen.getByTestId("novel-list")).toBeInTheDocument();
-      });
-      expect(screen.getAllByTestId("novel-card")).toHaveLength(2);
+    it("Default ストーリーで登録済み作品一覧 Props が BookshelfPage へ渡されること (AC-BS-04)", async () => {
+      const pageSpy = vi
+        .spyOn(BookshelfPageModule, "BookshelfPage")
+        .mockImplementation(() => null);
+      try {
+        render(<Default />);
+        await waitFor(() => {
+          expect(pageSpy).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+              isLoading: false,
+              totalNovelsCount: 2,
+              novels: [
+                expect.objectContaining({
+                  id: "kakuyomu:16817330658027210412",
+                  title: "境界迷宮と異界の魔術師",
+                }),
+                expect.objectContaining({
+                  id: "kakuyomu:1177354054881162325",
+                  title: "魔王軍の最強魔術師は人間だった",
+                }),
+              ],
+            }),
+            undefined,
+          );
+        });
+      } finally {
+        pageSpy.mockRestore();
+      }
     });
 
-    it("Empty ストーリーで空状態コンポーネントが表示され、検索・ランキング誘導ボタンが含まれること (AC-BS-01, TR-15)", async () => {
-      render(<Empty />);
-      await waitFor(() => {
-        expect(screen.getByTestId("bookshelf-empty")).toBeInTheDocument();
-      });
-      expect(screen.getByTestId("empty-search-button")).toBeInTheDocument();
-      expect(screen.getByTestId("empty-ranking-button")).toBeInTheDocument();
-      expect(
-        screen.queryByTestId("open-add-novel-button"),
-      ).not.toBeInTheDocument();
-      expect(
-        screen.queryByTestId("empty-add-novel-button"),
-      ).not.toBeInTheDocument();
+    it("Empty ストーリーで空配列と検索・ランキング誘導コールバックが BookshelfPage へ渡されること (AC-BS-01, TR-15)", async () => {
+      const pageSpy = vi
+        .spyOn(BookshelfPageModule, "BookshelfPage")
+        .mockImplementation(() => null);
+      try {
+        render(<Empty />);
+        await waitFor(() => {
+          expect(pageSpy).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+              isLoading: false,
+              totalNovelsCount: 0,
+              novels: [],
+              onNavigateSearch: expect.any(Function),
+              onNavigateRanking: expect.any(Function),
+            }),
+            undefined,
+          );
+        });
+      } finally {
+        pageSpy.mockRestore();
+      }
     });
 
-    it("WithCustomCallbacks ストーリーで作品カードが表示されること", async () => {
-      render(<WithCustomCallbacks />);
-      await waitFor(() => {
-        expect(screen.getByTestId("novel-list")).toBeInTheDocument();
-      });
+    it("WithCustomCallbacks ストーリーで登録済み作品一覧と各種コールバックが BookshelfPage へ渡されること", async () => {
+      const pageSpy = vi
+        .spyOn(BookshelfPageModule, "BookshelfPage")
+        .mockImplementation(() => null);
+      try {
+        render(<WithCustomCallbacks />);
+        await waitFor(() => {
+          expect(pageSpy).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+              isLoading: false,
+              totalNovelsCount: 2,
+              onSelectNovel: expect.any(Function),
+              onResumeNovel: expect.any(Function),
+            }),
+            undefined,
+          );
+        });
+      } finally {
+        pageSpy.mockRestore();
+      }
     });
   });
 
   describe("ルーティング連携とコールバックの検証（TR-02, TR-03）", () => {
     it("onSelectNovel 省略時はカード選択で router.navigateToNovelDetail が実行されること (TR-02, AC-BS-05)", async () => {
-      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
+      const pageSpy = vi
+        .spyOn(BookshelfPageModule, "BookshelfPage")
+        .mockImplementation(() => null);
       const novelRepo = createMockNovelRepo(sampleNovels);
 
       render(
@@ -168,7 +215,9 @@ describe("BookshelfContainer", () => {
     });
 
     it("onSelectNovel 注入時はカード選択で注入されたコールバックが呼び出され、ルーター遷移しないこと (AC-BS-05)", async () => {
-      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
+      const pageSpy = vi
+        .spyOn(BookshelfPageModule, "BookshelfPage")
+        .mockImplementation(() => null);
       const novelRepo = createMockNovelRepo(sampleNovels);
       const customSelect = vi.fn();
 
@@ -197,7 +246,9 @@ describe("BookshelfContainer", () => {
     });
 
     it("onResumeNovel 省略時は「続きから読む」で router.navigateToReader が実行されること (TR-03, AC-BS-06)", async () => {
-      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
+      const pageSpy = vi
+        .spyOn(BookshelfPageModule, "BookshelfPage")
+        .mockImplementation(() => null);
       const novelRepo = createMockNovelRepo(sampleNovels);
 
       render(
@@ -226,7 +277,9 @@ describe("BookshelfContainer", () => {
     });
 
     it("onResumeNovel 注入時は「続きから読む」で注入されたコールバックが呼び出され、ルーター遷移しないこと (AC-BS-06)", async () => {
-      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
+      const pageSpy = vi
+        .spyOn(BookshelfPageModule, "BookshelfPage")
+        .mockImplementation(() => null);
       const novelRepo = createMockNovelRepo(sampleNovels);
       const customResume = vi.fn();
 
@@ -257,7 +310,9 @@ describe("BookshelfContainer", () => {
 
   describe("空状態からの検索・ランキング誘導ナビゲーション検証（TR-15, AC-BS-01）", () => {
     it("空状態で「小説を検索する」ボタン押下時に router.navigateToSearch が実行され /search へ遷移すること (TR-15)", async () => {
-      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
+      const pageSpy = vi
+        .spyOn(BookshelfPageModule, "BookshelfPage")
+        .mockImplementation(() => null);
       const novelRepo = createMockNovelRepo([]);
 
       render(
@@ -286,7 +341,9 @@ describe("BookshelfContainer", () => {
     });
 
     it("空状態で「ランキングを見る」ボタン押下時に router.navigateToRanking が実行され /ranking へ遷移すること (TR-15)", async () => {
-      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
+      const pageSpy = vi
+        .spyOn(BookshelfPageModule, "BookshelfPage")
+        .mockImplementation(() => null);
       const novelRepo = createMockNovelRepo([]);
 
       render(
@@ -315,7 +372,9 @@ describe("BookshelfContainer", () => {
     });
 
     it("onNavigateSearch 注入時は「小説を検索する」ボタン押下で注入されたコールバックが呼び出され、ルーター遷移しないこと", async () => {
-      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
+      const pageSpy = vi
+        .spyOn(BookshelfPageModule, "BookshelfPage")
+        .mockImplementation(() => null);
       const novelRepo = createMockNovelRepo([]);
       const customSearch = vi.fn();
 
@@ -344,7 +403,9 @@ describe("BookshelfContainer", () => {
     });
 
     it("onNavigateRanking 注入時は「ランキングを見る」ボタン押下で注入されたコールバックが呼び出され、ルーター遷移しないこと", async () => {
-      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
+      const pageSpy = vi
+        .spyOn(BookshelfPageModule, "BookshelfPage")
+        .mockImplementation(() => null);
       const novelRepo = createMockNovelRepo([]);
       const customRanking = vi.fn();
 
@@ -375,7 +436,9 @@ describe("BookshelfContainer", () => {
 
   describe("作品閲覧時のNEW自動解除連携（AC-BS-09, TR-02, TR-03）", () => {
     it("hasNewUpdate === true の作品カードクリック時に clearNovelUpdate が呼ばれて作品詳細へ遷移すること (AC-BS-09, TR-02)", async () => {
-      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
+      const pageSpy = vi
+        .spyOn(BookshelfPageModule, "BookshelfPage")
+        .mockImplementation(() => null);
       const clearNewUpdateSpy = vi.fn().mockResolvedValue(undefined);
       const sampleWithNew: NovelSummary = {
         ...sampleNovels[0],
@@ -419,7 +482,9 @@ describe("BookshelfContainer", () => {
     });
 
     it("hasNewUpdate === true の作品の「続きから読む」クリック時に clearNovelUpdate が呼ばれてリーダーへ遷移すること (AC-BS-09, TR-03)", async () => {
-      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
+      const pageSpy = vi
+        .spyOn(BookshelfPageModule, "BookshelfPage")
+        .mockImplementation(() => null);
       const clearNewUpdateSpy = vi.fn().mockResolvedValue(undefined);
       const sampleWithNew: NovelSummary = {
         ...sampleNovels[0],
@@ -464,7 +529,9 @@ describe("BookshelfContainer", () => {
     });
 
     it("子コンポーネント（BookshelfPage）の onToggleFavoriteFilter コールバック呼び出し時にお気に入りフィルタが切り替わり、BookshelfPage の favoriteOnly プロパティが更新されること (Issue #266, R1-04)", async () => {
-      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
+      const pageSpy = vi
+        .spyOn(BookshelfPageModule, "BookshelfPage")
+        .mockImplementation(() => null);
       const now = new Date().toISOString();
       const favNovel: NovelSummary = {
         ...sampleNovels[0],
@@ -524,7 +591,9 @@ describe("BookshelfContainer", () => {
     });
 
     it("子コンポーネント（BookshelfPage）の onToggleFavoriteNovel コールバック呼び出し時にお気に入り状態がトグルされること (Issue #266, R1-04)", async () => {
-      const pageSpy = vi.spyOn(BookshelfPageModule, "BookshelfPage");
+      const pageSpy = vi
+        .spyOn(BookshelfPageModule, "BookshelfPage")
+        .mockImplementation(() => null);
       const normalNovel: NovelSummary = {
         ...sampleNovels[0],
         id: "kakuyomu:16817330658027210412",

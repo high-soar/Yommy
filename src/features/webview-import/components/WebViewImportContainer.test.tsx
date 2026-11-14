@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./WebViewImportContainer.stories";
@@ -28,23 +28,74 @@ describe("WebViewImportContainer", () => {
     vi.restoreAllMocks();
   });
 
-  it("Default ストーリーが正常にレンダリングされること", () => {
+  it("Default ストーリーで WebViewImportPage へ対応作品URLとインポート可能状態が渡されること", async () => {
+    const pageSpy = vi
+      .spyOn(WebViewImportPageModule, "WebViewImportPage")
+      .mockImplementation(() => null);
     render(<Default />);
-    expect(screen.getByTestId("webview-import-page")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(pageSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          url: "https://kakuyomu.jp/works/16817330658027210412",
+          canImport: true,
+          isLoading: false,
+          error: null,
+        }),
+        undefined,
+      );
+    });
   });
 
-  it("UnsupportedUrl ストーリーが正常にレンダリングされること", () => {
+  it("UnsupportedUrl ストーリーで WebViewImportPage へ非対応URLと canImport=false が渡されること", async () => {
+    const pageSpy = vi
+      .spyOn(WebViewImportPageModule, "WebViewImportPage")
+      .mockImplementation(() => null);
     render(<UnsupportedUrl />);
-    expect(screen.getByTestId("webview-import-page")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(pageSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          url: "https://example.com/unsupported",
+          canImport: false,
+          isLoading: false,
+          error: null,
+        }),
+        undefined,
+      );
+    });
   });
 
-  it("Loading ストーリーが正常にレンダリングされること", () => {
+  it("Loading ストーリーで WebViewImportPage へ読み込み用URLと標準Propsが渡されること", async () => {
+    const pageSpy = vi
+      .spyOn(WebViewImportPageModule, "WebViewImportPage")
+      .mockImplementation(() => null);
     render(<Loading />);
-    expect(screen.getByTestId("webview-import-page")).toBeInTheDocument();
+    expect(pageSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: "https://kakuyomu.jp/works/loading",
+        canImport: false,
+        activeTab: "bookshelf",
+        error: null,
+      }),
+      undefined,
+    );
+    await waitFor(() => {
+      expect(pageSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          url: "https://kakuyomu.jp/works/loading",
+          canImport: true,
+          isLoading: false,
+          activeTab: "bookshelf",
+          error: null,
+        }),
+        undefined,
+      );
+    });
   });
 
-  it("親子分離: WebViewImportPage に正しい Props とコールバックが渡されること", () => {
-    const pageSpy = vi.spyOn(WebViewImportPageModule, "WebViewImportPage");
+  it("親子分離: WebViewImportPage に正しい Props とコールバックが渡されること", async () => {
+    const pageSpy = vi
+      .spyOn(WebViewImportPageModule, "WebViewImportPage")
+      .mockImplementation(() => null);
     const onBackMock = vi.fn();
     const onImportSuccessMock = vi.fn();
 
@@ -64,16 +115,18 @@ describe("WebViewImportContainer", () => {
     );
 
     expect(pageSpy).toHaveBeenCalled();
-    const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
-    expect(lastProps.url).toBe(
-      "https://kakuyomu.jp/works/16817330658027210412",
-    );
-    expect(lastProps.activeTab).toBe("bookshelf");
-    expect(typeof lastProps.onUrlChange).toBe("function");
-    expect(typeof lastProps.onNavigateUrl).toBe("function");
-    expect(typeof lastProps.onOpenNativeBrowser).toBe("function");
-    expect(typeof lastProps.onImportCurrentDom).toBe("function");
-    expect(typeof lastProps.onBack).toBe("function");
+    await waitFor(() => {
+      const lastProps = pageSpy.mock.calls[pageSpy.mock.calls.length - 1][0];
+      expect(lastProps.url).toBe(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      expect(lastProps.activeTab).toBe("bookshelf");
+      expect(typeof lastProps.onUrlChange).toBe("function");
+      expect(typeof lastProps.onNavigateUrl).toBe("function");
+      expect(typeof lastProps.onOpenNativeBrowser).toBe("function");
+      expect(typeof lastProps.onImportCurrentDom).toBe("function");
+      expect(typeof lastProps.onBack).toBe("function");
+    });
   });
 
   it("onImportSuccess 未指定時: 作品目次インポート成功で navigateToNovelDetail に遷移すること", () => {
@@ -247,7 +300,7 @@ describe("WebViewImportContainer", () => {
     vi.spyOn(WebViewImportPageModule, "WebViewImportPage").mockImplementation(
       (props) => {
         capturedProps = props;
-        return <div data-testid="webview-import-page" />;
+        return null;
       },
     );
 
@@ -327,7 +380,7 @@ describe("WebViewImportContainer", () => {
     vi.spyOn(WebViewImportPageModule, "WebViewImportPage").mockImplementation(
       (props) => {
         capturedProps = props;
-        return <div data-testid="webview-import-page" />;
+        return null;
       },
     );
 
