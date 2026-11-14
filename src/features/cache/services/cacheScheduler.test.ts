@@ -3240,7 +3240,7 @@ describe("createCacheScheduler", () => {
       releaseReset();
       await Promise.all([p1, p2]);
 
-      expect(resetSpy).toHaveBeenCalledTimes(2);
+      expect(resetSpy).toHaveBeenCalledTimes(1);
       expect(enqueueSpy).toHaveBeenCalledTimes(1);
       await vi.waitFor(() => {
         expect(scheduler.getNovelProgress(novel.id)?.status).toBe("completed");

@@ -682,11 +682,17 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
         if (!isMountedRef.current) {
           return;
         }
+        const progressAfterEnqueue = cacheScheduler.getNovelProgress(novelId);
+        const isStillCaching =
+          progressAfterEnqueue !== null
+            ? isBatchProgressActive(progressAfterEnqueue)
+            : cacheScheduler.isNovelBatchCaching(novelId);
         if (
           batchCancelRequestedRef.current ||
           isAnyExclusiveOperationActive() ||
           isDeletedRef.current ||
-          startExclusiveOpSeq !== exclusiveOpSeqRef.current
+          startExclusiveOpSeq !== exclusiveOpSeqRef.current ||
+          !isStillCaching
         ) {
           isBatchCachingRef.current = false;
           setIsBatchCaching(false);
