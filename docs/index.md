@@ -80,7 +80,7 @@ docs/
     │   ├── v0.8-discovery-filter-and-bookshelf-favorite-ux-log.md # Milestone v0.8 探索フィルタ高度化/本棚お気に入り管理 バグ記録（No. 234〜279）＆ 申し送りアーカイブ
     │   ├── v0.9-persistent-queue-and-webview-fallback-log.md # Milestone v0.9 永続DLキュー/内蔵WebView バグ記録（No. 280〜306）＆ 申し送りアーカイブ
     │   ├── v1.0-release-audit-log.md          # Milestone v1.0 リリース準備/システム全体横断品質監査 バグ記録（No. 307〜388）＆ 申し送りアーカイブ
-    │   └── v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md # Milestone v1.1 クラウド同期しおり保護/作品詳細ヘッダーUX バグ記録（No. 389〜442）＆ 申し送りアーカイブ
+    │   └── v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md # Milestone v1.1 クラウド同期しおり保護/作品詳細ヘッダーUX バグ記録（No. 389〜445）＆ 申し送りアーカイブ
     └── reports/                       # ミニリリース Milestone ごとの品質分析・改善（Kaizen）レポート格納先
         ├── phase3-poc.md              # Phase 3 PoC 品質分析・改善レポート
         ├── v0.1-mvp.md                # Milestone v0.1（カクヨム MVP）品質分析・改善レポート
