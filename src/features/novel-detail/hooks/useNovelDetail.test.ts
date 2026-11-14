@@ -5843,4 +5843,110 @@ describe("useNovelDetail", () => {
       scheduler.dispose();
     });
   });
+
+  describe("R1-12: startBatchCache 初期化中の pause/cancel 割り込み時 UI 固着防止", () => {
+    it("CacheScheduler 実体使用時、enqueueBatchCache 待機中に pauseNovelTasks が割り込んでも isBatchCaching が true に固着せず false へ復帰すること", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const queueRepo = new SqlQueueRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 2);
+
+      let releaseEnqueue!: () => void;
+      const enqueueGate = new Promise<void>((r) => {
+        releaseEnqueue = r;
+      });
+      let enqueueEntered = false;
+      vi.spyOn(queueRepo, "enqueueChapters").mockImplementationOnce(
+        async (id, items) => {
+          enqueueEntered = true;
+          await enqueueGate;
+          await SqlQueueRepository.prototype.enqueueChapters.call(
+            queueRepo,
+            id,
+            items,
+          );
+        },
+      );
+
+      const httpClient = new MockHttpClient();
+      const fetchSpy = vi.spyOn(httpClient, "getHtml");
+      httpClient.setResponse(/kakuyomu\.jp/, async () => new Promise(() => {}));
+
+      const scheduler = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: 0,
+      });
+
+      const { result } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          queueRepository: queueRepo,
+          cacheScheduler: scheduler,
+        }),
+      });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      let startPromise: Promise<void> | undefined;
+      act(() => {
+        startPromise = result.current.startBatchCache();
+      });
+      await vi.waitFor(() => expect(enqueueEntered).toBe(true));
+
+      // hook の cancelBatchCache 経由ではなく直接 scheduler.pauseNovelTasks が割り込んだケース
+      const pausePromise = scheduler.pauseNovelTasks(seeded.id);
+      releaseEnqueue();
+
+      await act(async () => {
+        await Promise.all([startPromise, pausePromise]);
+      });
+
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(result.current.isBatchCaching).toBe(false);
+      expect(result.current.batchCacheProgress).toBeNull();
+      scheduler.dispose();
+    });
+
+    it("enqueueBatchCache 完了直後の getNovelProgress が非アクティブ状態（paused）を返した場合も isBatchCaching が false に戻ること", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const queueRepo = new SqlQueueRepository(db);
+      const seeded = await seedSampleNovel(novelRepo, 2);
+
+      const { scheduler } = createMockCacheScheduler();
+      vi.mocked(scheduler.getNovelProgress).mockReturnValue({
+        novelId: seeded.id,
+        isBatchCaching: false,
+        status: "paused",
+        current: 0,
+        total: 2,
+        failedCount: 0,
+        failedChapterIndexes: [],
+        pausedReason: "none",
+      });
+
+      const { result } = renderHook(() => useNovelDetail(seeded.id), {
+        wrapper: createWrapper({
+          novelRepository: novelRepo,
+          chapterRepository: chapterRepo,
+          queueRepository: queueRepo,
+          cacheScheduler: scheduler,
+        }),
+      });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      await act(async () => {
+        await result.current.startBatchCache();
+      });
+
+      expect(result.current.isBatchCaching).toBe(false);
+      expect(result.current.batchCacheProgress).toBeNull();
+    });
+  });
 });

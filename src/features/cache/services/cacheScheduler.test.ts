@@ -3192,4 +3192,331 @@ describe("createCacheScheduler", () => {
       scheduler.dispose();
     });
   });
+
+  describe("R1-12: enqueueBatchCache 直列化と世代管理による中断後遅延確定防止", () => {
+    it("同一 novelId への重複 enqueueBatchCache 呼び出しが直列化され、先行失敗後でも後続が正常に開始すること", async () => {
+      const novel = await seedNovel(novelRepo, chapterRepo, {
+        workId: "r1-12-serialize",
+        chapterCount: 2,
+      });
+
+      const httpClient = new MockHttpClient();
+      httpClient.setResponse(/r1-12-serialize\/episodes\/ep-/, {
+        html: episodeHtml(1),
+      });
+
+      let releaseReset!: () => void;
+      const resetGate = new Promise<void>((r) => {
+        releaseReset = r;
+      });
+      let resetCalls = 0;
+      const resetSpy = vi
+        .spyOn(queueRepo, "resetInterruptedToPending")
+        .mockImplementation(async (id) => {
+          resetCalls += 1;
+          if (resetCalls === 1) {
+            await resetGate;
+          }
+          return SqlQueueRepository.prototype.resetInterruptedToPending.call(
+            queueRepo,
+            id,
+          );
+        });
+      const enqueueSpy = vi.spyOn(queueRepo, "enqueueChapters");
+
+      const scheduler = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: 0,
+      });
+
+      // 先行・後続を同時呼び出し -> 先行のみ enqueueChapters して後続は直列化後に isBatchCaching で抜ける
+      const p1 = scheduler.enqueueBatchCache(novel.id, [1]);
+      await vi.waitFor(() => expect(resetCalls).toBe(1));
+      const p2 = scheduler.enqueueBatchCache(novel.id, [1, 2]);
+      releaseReset();
+      await Promise.all([p1, p2]);
+
+      expect(resetSpy).toHaveBeenCalledTimes(2);
+      expect(enqueueSpy).toHaveBeenCalledTimes(1);
+      await vi.waitFor(() => {
+        expect(scheduler.getNovelProgress(novel.id)?.status).toBe("completed");
+      });
+
+      // 先行失敗時も Promise.allSettled で後続が停止せず継続すること
+      const novel2 = await seedNovel(novelRepo, chapterRepo, {
+        workId: "r1-12-serialize-reject",
+        chapterCount: 1,
+      });
+      httpClient.setResponse(/r1-12-serialize-reject\/episodes\/ep-/, {
+        html: episodeHtml(1),
+      });
+      let releaseFailList!: () => void;
+      const failListGate = new Promise<void>((r) => {
+        releaseFailList = r;
+      });
+      let listStarted = false;
+      vi.spyOn(chapterRepo, "listChaptersByNovelId").mockImplementationOnce(
+        async () => {
+          listStarted = true;
+          await failListGate;
+          throw new Error("一時DBエラー");
+        },
+      );
+      const q1 = scheduler.enqueueBatchCache(novel2.id, [1]);
+      await vi.waitFor(() => expect(listStarted).toBe(true));
+      const q2 = scheduler.enqueueBatchCache(novel2.id, [1]);
+      releaseFailList();
+
+      await expect(q1).rejects.toThrow("一時DBエラー");
+      await expect(q2).resolves.toBeUndefined();
+      await vi.waitFor(() => {
+        expect(scheduler.getNovelProgress(novel2.id)?.status).toBe("completed");
+      });
+      scheduler.dispose();
+    });
+
+    it("resetInterruptedToPending / enqueueChapters 待機中に pauseNovelTasks / cancelNovelTasks が割り込んだ場合、pendingEnqueues 待機後に中断し batches へ登録しないこと", async () => {
+      const novel = await seedNovel(novelRepo, chapterRepo, {
+        workId: "r1-12-pause-cancel-init",
+        chapterCount: 2,
+      });
+      const httpClient = new MockHttpClient();
+      const fetchSpy = vi.spyOn(httpClient, "getHtml");
+
+      const scheduler = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: 0,
+      });
+      const events: CacheNovelProgress[] = [];
+      scheduler.subscribeProgress(novel.id, (p) => events.push(p));
+
+      // Case 1: resetInterruptedToPending 待機中に重複 enqueue + pauseNovelTasks
+      let releaseReset!: () => void;
+      const resetGate = new Promise<void>((r) => {
+        releaseReset = r;
+      });
+      vi.spyOn(queueRepo, "resetInterruptedToPending").mockImplementationOnce(
+        async () => {
+          await resetGate;
+        },
+      );
+      const listSpy = vi.spyOn(chapterRepo, "listChaptersByNovelId");
+      const order: string[] = [];
+
+      const init1 = scheduler.enqueueBatchCache(novel.id, [1]);
+      const init2 = scheduler.enqueueBatchCache(novel.id, [2]);
+      const pausePromise = scheduler.pauseNovelTasks(novel.id).then(() => {
+        order.push("pauseResolved");
+      });
+
+      // pauseNovelTasks は pendingEnqueue 完了を待ってから resetInterruptedToPending を呼ぶ
+      await Promise.resolve();
+      expect(listSpy).not.toHaveBeenCalled();
+
+      order.push("releaseInit");
+      releaseReset();
+      await Promise.all([init1, init2, pausePromise]);
+
+      expect(order).toEqual(["releaseInit", "pauseResolved"]);
+      expect(listSpy).not.toHaveBeenCalled();
+      expect(scheduler.isNovelBatchCaching(novel.id)).toBe(false);
+      expect(scheduler.getNovelProgress(novel.id)).toBeNull();
+      expect(events).toEqual([]);
+      expect(fetchSpy).not.toHaveBeenCalled();
+
+      // Case 2: enqueueChapters 待機中に cancelNovelTasks -> DB 挿入完了後に clearNovelQueue が走り batches 未登録
+      let releaseEnqueue!: () => void;
+      const enqueueGate = new Promise<void>((r) => {
+        releaseEnqueue = r;
+      });
+      let enqueueEntered = false;
+      vi.spyOn(queueRepo, "enqueueChapters").mockImplementationOnce(
+        async (id, items) => {
+          enqueueEntered = true;
+          await enqueueGate;
+          await SqlQueueRepository.prototype.enqueueChapters.call(
+            queueRepo,
+            id,
+            items,
+          );
+        },
+      );
+
+      const init3 = scheduler.enqueueBatchCache(novel.id, [1, 2]);
+      await vi.waitFor(() => expect(enqueueEntered).toBe(true));
+      const cancelPromise = scheduler.cancelNovelTasks(novel.id);
+      releaseEnqueue();
+      await Promise.all([init3, cancelPromise]);
+
+      expect(scheduler.isNovelBatchCaching(novel.id)).toBe(false);
+      expect(scheduler.getNovelProgress(novel.id)).toBeNull();
+      expect(await queueRepo.listByNovelId(novel.id)).toEqual([]);
+      expect(fetchSpy).not.toHaveBeenCalled();
+      scheduler.dispose();
+    });
+
+    it("各 await 境界（list・deleteFresh・clearCompleted・dispose・cancelAll・tombstone）で世代無効化を検知して早期中断すること", async () => {
+      const httpClient = new MockHttpClient();
+      const fetchSpy = vi.spyOn(httpClient, "getHtml");
+
+      // Case 1: Promise.all([listChapters, listQueue]) 境界 + dispose()
+      const novel1 = await seedNovel(novelRepo, chapterRepo, {
+        workId: "r1-12-list-dispose",
+        chapterCount: 2,
+      });
+      const scheduler1 = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: 0,
+      });
+      let releaseList1!: () => void;
+      const listGate1 = new Promise<void>((r) => {
+        releaseList1 = r;
+      });
+      let list1Started = false;
+      vi.spyOn(chapterRepo, "listChaptersByNovelId").mockImplementationOnce(
+        async (id) => {
+          list1Started = true;
+          await listGate1;
+          return SqlChapterRepository.prototype.listChaptersByNovelId.call(
+            chapterRepo,
+            id,
+          );
+        },
+      );
+      const p1 = scheduler1.enqueueBatchCache(novel1.id, [1]);
+      await vi.waitFor(() => expect(list1Started).toBe(true));
+      scheduler1.dispose();
+      releaseList1();
+      await p1;
+      expect(scheduler1.getNovelProgress(novel1.id)).toBeNull();
+      expect(fetchSpy).not.toHaveBeenCalled();
+
+      // Case 2: deleteByNovelAndChapters（fresh 削除）境界 + handleTombstoneDeletion
+      const novel2 = await seedNovel(novelRepo, chapterRepo, {
+        workId: "r1-12-fresh-tombstone",
+        chapterCount: 2,
+        cachedIndexes: [1],
+      });
+      const scheduler2 = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: 0,
+      });
+      httpClient.setResponse(/r1-12-fresh-tombstone\/episodes\/ep-2/, {
+        html: episodeHtml(2),
+      });
+      let releaseFreshDelete!: () => void;
+      const freshDeleteGate = new Promise<void>((r) => {
+        releaseFreshDelete = r;
+      });
+      let freshDeleteEntered = false;
+      vi.spyOn(queueRepo, "deleteByNovelAndChapters").mockImplementationOnce(
+        async () => {
+          freshDeleteEntered = true;
+          await freshDeleteGate;
+        },
+      );
+      const p2 = scheduler2.enqueueBatchCache(novel2.id, [2]);
+      await vi.waitFor(() => expect(freshDeleteEntered).toBe(true));
+
+      // prefetch 実行中に作品が削除され handleTombstoneDeletion が発火
+      vi.spyOn(chapterRepo, "getChapter").mockResolvedValueOnce(null);
+      await scheduler2.enqueuePrefetch({
+        priority: "high",
+        novelId: novel2.id,
+        chapterIndexes: [2],
+      });
+      releaseFreshDelete();
+      await p2;
+      expect(scheduler2.isNovelBatchCaching(novel2.id)).toBe(false);
+      expect(scheduler2.getNovelProgress(novel2.id)).toBeNull();
+      scheduler2.dispose();
+
+      // Case 3: targets === 0 の clearCompletedQueueRows 境界 + cancelAllTasks({ clearQueue: true })
+      const novel3 = await seedNovel(novelRepo, chapterRepo, {
+        workId: "r1-12-empty-cancelall",
+        chapterCount: 1,
+        cachedIndexes: [1],
+      });
+      const scheduler3 = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: 0,
+      });
+      let releaseClearCompleted!: () => void;
+      const clearCompletedGate = new Promise<void>((r) => {
+        releaseClearCompleted = r;
+      });
+      let clearCompletedEntered = false;
+      vi.spyOn(queueRepo, "clearNovelQueue").mockImplementationOnce(
+        async () => {
+          clearCompletedEntered = true;
+          await clearCompletedGate;
+        },
+      );
+      const p3 = scheduler3.enqueueBatchCache(novel3.id, [1]);
+      await vi.waitFor(() => expect(clearCompletedEntered).toBe(true));
+      const cancelAll3 = scheduler3.cancelAllTasks({ clearQueue: true });
+      releaseClearCompleted();
+      await Promise.all([p3, cancelAll3]);
+      expect(scheduler3.getNovelProgress(novel3.id)).toBeNull();
+      scheduler3.dispose();
+
+      // Case 4: cancelAllTasks({ clearQueue: false }) が初期化中 novelId も resetInterruptedToPending 対象に含めること
+      const novel4 = await seedNovel(novelRepo, chapterRepo, {
+        workId: "r1-12-cancelall-keepqueue",
+        chapterCount: 1,
+      });
+      const scheduler4 = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: 0,
+      });
+      let releaseEnqueue4!: () => void;
+      const enqueueGate4 = new Promise<void>((r) => {
+        releaseEnqueue4 = r;
+      });
+      let enqueue4Entered = false;
+      vi.spyOn(queueRepo, "enqueueChapters").mockImplementationOnce(
+        async (id, items) => {
+          enqueue4Entered = true;
+          await enqueueGate4;
+          await SqlQueueRepository.prototype.enqueueChapters.call(
+            queueRepo,
+            id,
+            items,
+          );
+        },
+      );
+      const p4 = scheduler4.enqueueBatchCache(novel4.id, [1]);
+      await vi.waitFor(() => expect(enqueue4Entered).toBe(true));
+      const cancelAllKeep = scheduler4.cancelAllTasks({ clearQueue: false });
+      releaseEnqueue4();
+      await Promise.all([p4, cancelAllKeep]);
+      expect(scheduler4.getNovelProgress(novel4.id)).toBeNull();
+      expect(await queueRepo.listByNovelId(novel4.id)).toHaveLength(1);
+      scheduler4.dispose();
+    });
+  });
 });
