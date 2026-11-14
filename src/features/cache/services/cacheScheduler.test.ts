@@ -433,12 +433,13 @@ describe("createCacheScheduler", () => {
       });
       const getHtmlSpy = vi.spyOn(httpClient, "getHtml");
 
+      const parserRegistry = createDefaultParserRegistry();
       const scheduler = createCacheScheduler({
         novelRepository: novelRepo,
         chapterRepository: chapterRepo,
         queueRepository: queueRepo,
         httpClient,
-        parserRegistry: createDefaultParserRegistry(),
+        parserRegistry,
       });
 
       await expect(
@@ -460,13 +461,17 @@ describe("createCacheScheduler", () => {
         }),
       ).rejects.toThrow("HTTP 404");
 
+      const parser = parserRegistry.requireParser(episodeUrl(3));
+      vi.spyOn(parser, "parseChapterContent").mockImplementationOnce(() => {
+        throw new Error("parse error");
+      });
       await expect(
         scheduler.enqueuePrefetch({
           novelId: novel.id,
           chapterIndexes: [3],
           priority: "high",
         }),
-      ).rejects.toThrow();
+      ).rejects.toThrow("parse error");
 
       scheduler.dispose();
     });
