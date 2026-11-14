@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import React from "react";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./ServiceProvider.stories";
 import {
@@ -32,6 +32,8 @@ import {
 } from "../bridges/webview";
 import type { QueueRepository } from "../storage/types";
 import { SqlQueueRepository } from "../storage/repositories/queueRepository";
+import * as cacheSchedulerModule from "../features/cache/services/cacheScheduler";
+import type { CacheScheduler } from "../features/cache/types";
 
 const { Default, CustomMockServices } = composeStories(stories);
 
@@ -40,6 +42,10 @@ describe("ServiceProvider", () => {
     await resetTestDb();
     localStorage.clear();
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe("Storybook Stories 検証 (composeStories)", () => {
@@ -1239,6 +1245,123 @@ describe("ServiceProvider", () => {
       } finally {
         createDbSpy.mockRestore();
       }
+    });
+  });
+
+  describe("CacheScheduler 統合・安定参照・アンマウント破棄", () => {
+    it("デフォルトの cacheScheduler が生成・提供され、services 参照更新を伴う再レンダリングでも再生成・dispose されず、アンマウント時のみ dispose されること", async () => {
+      const disposeSpy = vi.fn();
+      const fakeScheduler: CacheScheduler = {
+        enqueuePrefetch: vi.fn(),
+        enqueueBatchCache: vi.fn(),
+        pauseNovelTasks: vi.fn(),
+        cancelNovelTasks: vi.fn(),
+        cancelAllTasks: vi.fn(),
+        isNovelBatchCaching: vi.fn(() => false),
+        getNovelProgress: vi.fn(() => null),
+        subscribeProgress: vi.fn(() => () => {}),
+        syncNovelProgress: vi.fn(),
+        dispose: disposeSpy,
+      };
+      const createSpy = vi
+        .spyOn(cacheSchedulerModule, "createCacheScheduler")
+        .mockReturnValue(fakeScheduler);
+
+      let latestContext: ServiceContextValue | null = null;
+      const Consumer: React.FC = () => {
+        const services = useServices();
+        latestContext = services;
+        return (
+          <div data-testid="scheduler-status">
+            {services.isReady ? "ready" : "pending"}
+          </div>
+        );
+      };
+
+      const { rerender, unmount } = render(
+        <ServiceProvider services={{}}>
+          <Consumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("scheduler-status")).toHaveTextContent(
+          "ready",
+        );
+      });
+
+      expect(createSpy).toHaveBeenCalledTimes(1);
+      expect(
+        (latestContext as ServiceContextValue | null)?.cacheScheduler,
+      ).toBe(fakeScheduler);
+      expect(disposeSpy).not.toHaveBeenCalled();
+
+      // 親の再レンダリングで新しい services オブジェクトが渡されても再生成・dispose されないこと
+      rerender(
+        <ServiceProvider services={{}}>
+          <Consumer />
+        </ServiceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(
+          (latestContext as ServiceContextValue | null)?.cacheScheduler,
+        ).toBe(fakeScheduler);
+      });
+      expect(createSpy).toHaveBeenCalledTimes(1);
+      expect(disposeSpy).not.toHaveBeenCalled();
+
+      // アンマウント時のみ dispose() が呼ばれること
+      unmount();
+      expect(disposeSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("services.cacheScheduler を外部注入した場合はそのインスタンスがそのまま提供され、デフォルト生成やアンマウント時 dispose は行われないこと", async () => {
+      const createSpy = vi.spyOn(cacheSchedulerModule, "createCacheScheduler");
+      const externalDispose = vi.fn();
+      const externalScheduler: CacheScheduler = {
+        enqueuePrefetch: vi.fn(),
+        enqueueBatchCache: vi.fn(),
+        pauseNovelTasks: vi.fn(),
+        cancelNovelTasks: vi.fn(),
+        cancelAllTasks: vi.fn(),
+        isNovelBatchCaching: vi.fn(() => false),
+        getNovelProgress: vi.fn(() => null),
+        subscribeProgress: vi.fn(() => () => {}),
+        syncNovelProgress: vi.fn(),
+        dispose: externalDispose,
+      };
+
+      let capturedScheduler: CacheScheduler | undefined;
+      const Consumer: React.FC = () => {
+        const services = useServices();
+        capturedScheduler = services.cacheScheduler;
+        return (
+          <div data-testid="custom-scheduler-status">
+            {services.isReady ? "ready" : "pending"}
+          </div>
+        );
+      };
+
+      const { unmount } = render(
+        <ServiceProvider services={{ cacheScheduler: externalScheduler }}>
+          <Consumer />
+        </ServiceProvider>,
+      );
+
+      expect(capturedScheduler).toBe(externalScheduler);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("custom-scheduler-status")).toHaveTextContent(
+          "ready",
+        );
+      });
+
+      expect(capturedScheduler).toBe(externalScheduler);
+      expect(createSpy).not.toHaveBeenCalled();
+
+      unmount();
+      expect(externalDispose).not.toHaveBeenCalled();
     });
   });
 });

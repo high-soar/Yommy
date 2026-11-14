@@ -44,6 +44,7 @@ import type { WebViewDomBridge } from "../bridges/webview/types";
 import { MockWebViewDomBridge } from "../bridges/webview/mockWebViewDomBridge";
 import { CapacitorWebViewDomBridge } from "../bridges/webview/capacitorWebViewDomBridge";
 import { SyncEngine } from "../features/cloud-sync/services/syncEngine";
+import type { CacheScheduler } from "../features/cache/types";
 import { fetchFullNovelIndex } from "../parsers/fetchFullNovelIndex";
 import workIndexHtml from "../parsers/kakuyomu/__fixtures__/work_index.html?raw";
 import episodeContentHtml from "../parsers/kakuyomu/__fixtures__/episode_content.html?raw";
@@ -74,6 +75,7 @@ export interface ServiceContextValue {
   volumeKeyBridge: VolumeKeyBridge;
   webViewDomBridge: WebViewDomBridge;
   syncEngine?: SyncEngine;
+  cacheScheduler?: CacheScheduler;
   fetchFullNovelIndex?: typeof fetchFullNovelIndex;
   isReady: boolean;
   error: Error | null;
