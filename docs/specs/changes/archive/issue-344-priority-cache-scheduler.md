@@ -3,7 +3,7 @@ type: spec-delta
 title: "バックグラウンド一括キャッシュの非ブロッキング化とリーダー5話先読み優先度キュー統合"
 description: "Issue #344 に対する差分仕様、影響する全体正本、UT/VRT/ITテスト計画、実装Sub-issue分割計画、および実機検証計画（HO-39）。"
 issue: "#344"
-status: "Review (#344)"
+status: "Completed (Archived)"
 updated: "2026-11-14"
 tags:
   [

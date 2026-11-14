@@ -2,7 +2,7 @@
 type: spec-feature
 title: "内蔵ブラウザ・DOMインポート画面仕様書（SCR-04: WebView Fallback & DOM Import）"
 description: "対象小説ページを内蔵 WebView で直接閲覧し、表示中 DOM を手動インポートして作品目次または各話本文をローカルキャッシュ DB に保存・閲覧再開する内蔵ブラウザ・DOMインポート画面（SCR-04）の正本仕様。"
-status: "Review (#344)"
+status: "Approved"
 updated: "2026-11-14"
 tags:
   [
@@ -25,7 +25,7 @@ tags:
     ho-39,
   ]
 related_specs:
-  - docs/specs/changes/issue-344-priority-cache-scheduler.md
+  - docs/specs/changes/archive/issue-344-priority-cache-scheduler.md
   - docs/specs/changes/archive/issue-269-webview-fallback-and-dom-import.md
   - docs/specs/requirements.md
   - docs/specs/architecture.md

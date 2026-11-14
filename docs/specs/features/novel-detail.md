@@ -2,7 +2,7 @@
 type: spec-feature
 title: "作品詳細・目次画面仕様書（SCR-02: Novel Detail & TOC）"
 description: 登録済み作品のヘッダー情報・あらすじ表示、お気に入り（★）登録・解除、章見出し付きエピソード一覧（キャッシュ済み・既読・しおり状態）、目次更新（再取得）、作品削除、およびリーダー画面への閲覧遷移を提供する作品詳細・目次画面（SCR-02）の正本仕様。
-status: "Review (#344)"
+status: "Approved"
 updated: "2026-11-14"
 tags:
   [
@@ -42,7 +42,7 @@ tags:
     ho-39,
   ]
 related_specs:
-  - docs/specs/changes/issue-344-priority-cache-scheduler.md
+  - docs/specs/changes/archive/issue-344-priority-cache-scheduler.md
   - docs/specs/changes/archive/issue-342-cloud-sync-bookmark-protection.md
   - docs/specs/changes/archive/issue-343-novel-detail-header-menu.md
   - docs/specs/changes/archive/issue-269-webview-fallback-and-dom-import.md
