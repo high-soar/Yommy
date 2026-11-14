@@ -44,6 +44,7 @@ import type { WebViewDomBridge } from "../bridges/webview/types";
 import { MockWebViewDomBridge } from "../bridges/webview/mockWebViewDomBridge";
 import { CapacitorWebViewDomBridge } from "../bridges/webview/capacitorWebViewDomBridge";
 import { SyncEngine } from "../features/cloud-sync/services/syncEngine";
+import { createCacheScheduler } from "../features/cache/services/cacheScheduler";
 import type { CacheScheduler } from "../features/cache/types";
 import { fetchFullNovelIndex } from "../parsers/fetchFullNovelIndex";
 import workIndexHtml from "../parsers/kakuyomu/__fixtures__/work_index.html?raw";
@@ -328,6 +329,14 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
   );
   // 非ネイティブのデフォルト生成物を初回レンダリング時のみ遅延生成し、isReady 遷移前後で参照を安定させる (R1-24)
   const fallbackDefaultsRef = useRef<FallbackDefaults | null>(null);
+  const ownedCacheSchedulerRef = useRef<CacheScheduler | null>(null);
+
+  useEffect(() => {
+    return () => {
+      ownedCacheSchedulerRef.current?.dispose();
+      ownedCacheSchedulerRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -409,6 +418,20 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
             httpClient,
           });
 
+        let cacheScheduler = services?.cacheScheduler;
+        if (!cacheScheduler) {
+          if (!ownedCacheSchedulerRef.current) {
+            ownedCacheSchedulerRef.current = createCacheScheduler({
+              novelRepository,
+              chapterRepository,
+              queueRepository,
+              httpClient,
+              parserRegistry,
+            });
+          }
+          cacheScheduler = ownedCacheSchedulerRef.current;
+        }
+
         const newContext: ServiceContextValue = {
           httpClient,
           parserRegistry,
@@ -423,6 +446,7 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           volumeKeyBridge,
           webViewDomBridge,
           syncEngine,
+          cacheScheduler,
           fetchFullNovelIndex:
             services?.fetchFullNovelIndex ?? fetchFullNovelIndex,
           isReady: true,
@@ -451,6 +475,7 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
             appSettingsRepository:
               services?.appSettingsRepository as AppSettingsRepository,
             syncEngine: undefined,
+            cacheScheduler: undefined,
             fetchFullNovelIndex:
               services?.fetchFullNovelIndex ?? fetchFullNovelIndex,
             isReady: false,
@@ -497,6 +522,7 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({
           appSettingsRepository:
             services?.appSettingsRepository as AppSettingsRepository,
           syncEngine: services?.syncEngine,
+          cacheScheduler: services?.cacheScheduler,
           fetchFullNovelIndex:
             services?.fetchFullNovelIndex ?? fetchFullNovelIndex,
           isReady: false,
