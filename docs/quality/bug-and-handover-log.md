@@ -10,7 +10,7 @@ related_specs:
   - docs/quality/reports/v1.1-cloud-sync-bookmark-and-detail-header-ux.md
   - docs/specs/changes/archive/issue-342-cloud-sync-bookmark-protection.md
   - docs/specs/changes/archive/issue-343-novel-detail-header-menu.md
-  - docs/specs/changes/issue-344-priority-cache-scheduler.md
+  - docs/specs/changes/archive/issue-344-priority-cache-scheduler.md
   - docs/quality/archive/v1.0-release-audit-log.md
   - docs/quality/reports/v1.0-full-system-quality-audit.md
   - docs/specs/changes/archive/issue-304-v1-release-readiness.md
