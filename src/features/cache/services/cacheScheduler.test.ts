@@ -2940,4 +2940,113 @@ describe("createCacheScheduler", () => {
       scheduler.dispose();
     });
   });
+
+  describe("R1-15: 失敗あり完了時の完了済み・非failedキュー行クリーンアップ", () => {
+    it("failedChapterIndexes が残るバッチ完了時でも古いキャッシュ失敗行や既存の完了/待機行が削除され、failed 行のみ残ること", async () => {
+      const eightDaysAgo = new Date(
+        Date.now() - (CACHE_TTL_MS + 86400000),
+      ).toISOString();
+      const novel = await seedNovel(novelRepo, chapterRepo, {
+        workId: "r1-15-finalize-cleanup",
+        chapterCount: 4,
+        cachedIndexes: [3, 4],
+        downloadedAtByIndex: (idx) =>
+          idx === 3 ? eightDaysAgo : new Date().toISOString(),
+      });
+
+      // ch 4 は新鮮キャッシュ済みだが古い completed 行がキューに残っている状態を再現
+      await queueRepo.enqueueChapters(novel.id, [
+        { chapterIndex: 4, targetUrl: episodeUrl(4) },
+      ]);
+      await queueRepo.updateStatus(novel.id, 4, "completed");
+
+      const httpClient = new MockHttpClient();
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-15-finalize-cleanup/episodes/ep-1",
+        () => {
+          throw new Error("未キャッシュ取得失敗");
+        },
+      );
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-15-finalize-cleanup/episodes/ep-2",
+        { html: episodeHtml(2) },
+      );
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-15-finalize-cleanup/episodes/ep-3",
+        () => {
+          throw new Error("古いキャッシュ再取得失敗");
+        },
+      );
+
+      const updateStatusSpy = vi.spyOn(queueRepo, "updateStatus");
+      const deleteSpy = vi.spyOn(queueRepo, "deleteByNovelAndChapters");
+
+      const scheduler = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: 0,
+      });
+
+      // ch 4 を対象外にした状態で [1, 2, 3] を実行 -> ch 1 failed (failedChapterIndexes.size > 0), ch 2 saved, ch 3 stale fallback
+      await scheduler.enqueueBatchCache(novel.id, [1, 2, 3]);
+      await vi.waitFor(() => {
+        expect(scheduler.getNovelProgress(novel.id)?.status).toBe("completed");
+      });
+
+      expect(updateStatusSpy).not.toHaveBeenCalledWith(
+        novel.id,
+        3,
+        "completed",
+      );
+      expect(deleteSpy).toHaveBeenCalledWith(novel.id, [3]);
+
+      const remaining = await queueRepo.listByNovelId(novel.id);
+      expect(remaining.map((r) => r.chapterIndex)).toEqual([1]);
+      expect(remaining[0].status).toBe("failed");
+      scheduler.dispose();
+    });
+
+    it("enqueueBatchCache の targets.length === 0 高速パスでも remainingFailed がある場合に非 failed 行が削除され failed 行のみ保持されること", async () => {
+      const novel = await seedNovel(novelRepo, chapterRepo, {
+        workId: "r1-15-empty-targets-cleanup",
+        chapterCount: 3,
+        cachedIndexes: [2],
+      });
+
+      // ch 1 は retryCount=1 の failed（maxRetryCount: 1 で除外対象）、ch 3 は対象外の完了済み行として残存
+      await queueRepo.enqueueChapters(novel.id, [
+        { chapterIndex: 1, targetUrl: episodeUrl(1) },
+        { chapterIndex: 3, targetUrl: episodeUrl(3) },
+      ]);
+      await queueRepo.updateStatus(novel.id, 1, "failed", {
+        lastError: "前回失敗",
+        incrementRetry: true,
+      });
+      await queueRepo.updateStatus(novel.id, 3, "completed");
+
+      const scheduler = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient: new MockHttpClient(),
+        parserRegistry: createDefaultParserRegistry(),
+        maxRetryCount: 1,
+        prefetchIntervalMs: 0,
+      });
+
+      await scheduler.enqueueBatchCache(novel.id, [1, 2]);
+      expect(scheduler.getNovelProgress(novel.id)?.status).toBe("completed");
+      expect(
+        scheduler.getNovelProgress(novel.id)?.failedChapterIndexes,
+      ).toEqual([1]);
+
+      const remaining = await queueRepo.listByNovelId(novel.id);
+      expect(remaining.map((r) => r.chapterIndex)).toEqual([1]);
+      expect(remaining[0].status).toBe("failed");
+      scheduler.dispose();
+    });
+  });
 });

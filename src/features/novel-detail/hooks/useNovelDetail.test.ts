@@ -5458,4 +5458,135 @@ describe("useNovelDetail", () => {
       }
     });
   });
+
+  describe("R1-15: !cacheScheduler フォールバック時の失敗あり完了キュークリーンアップ", () => {
+    it("失敗話が残る場合でも古いキャッシュフォールバック行・完了済み行・対象外非failed行が削除され、failed行のみ残ること", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        // Case A: 古いキャッシュ失敗(ch1) + 新規失敗(ch2) + 成功(ch3) + 既存対象外completed行(ch4)
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const queueRepo = new SqlQueueRepository(db);
+        const seeded = await seedSampleNovel(novelRepo, 4);
+
+        const staleTime = new Date(
+          Date.now() - CACHE_TTL_MS - 5000,
+        ).toISOString();
+        await chapterRepo.saveChapterBody(
+          seeded.id,
+          1,
+          {
+            remoteChapterId: KAKUYOMU_EPISODE_IDS[0],
+            title: "第1話",
+            bodyHtml: "<p>古い第1話</p>",
+            byteSize: 100,
+            prevChapterUrl: null,
+            nextChapterUrl: null,
+          },
+          staleTime,
+        );
+        await chapterRepo.saveChapterBody(
+          seeded.id,
+          4,
+          {
+            remoteChapterId: KAKUYOMU_EPISODE_IDS[3],
+            title: "第4話",
+            bodyHtml: "<p>新鮮第4話</p>",
+            byteSize: 100,
+            prevChapterUrl: null,
+            nextChapterUrl: null,
+          },
+          new Date().toISOString(),
+        );
+
+        const httpClient = new MockHttpClient();
+        httpClient.setResponse(new RegExp(KAKUYOMU_EPISODE_IDS[0]), {
+          status: 500,
+          headers: {},
+          html: "Server Error",
+        });
+        httpClient.setResponse(new RegExp(KAKUYOMU_EPISODE_IDS[1]), {
+          status: 500,
+          headers: {},
+          html: "Server Error",
+        });
+        httpClient.setResponse(new RegExp(KAKUYOMU_EPISODE_IDS[2]), {
+          status: 200,
+          headers: {},
+          html: episodeContentHtml,
+        });
+
+        const updateStatusSpy = vi.spyOn(queueRepo, "updateStatus");
+        const deleteSpy = vi.spyOn(queueRepo, "deleteByNovelAndChapters");
+
+        const { result } = renderHook(() => useNovelDetail(seeded.id), {
+          wrapper: createWithoutSchedulerWrapper({
+            novelRepository: novelRepo,
+            chapterRepository: chapterRepo,
+            queueRepository: queueRepo,
+            httpClient,
+          }),
+        });
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        // 開始前に第4話の古い completed 行がキューに残っている状態を再現
+        await queueRepo.enqueueChapters(seeded.id, [
+          {
+            chapterIndex: 4,
+            targetUrl: `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[3]}`,
+          },
+        ]);
+        await queueRepo.updateStatus(seeded.id, 4, "completed");
+
+        let batchPromise: Promise<void> | undefined;
+        act(() => {
+          batchPromise = result.current.startBatchCache();
+        });
+        for (let step = 0; step < 3; step++) {
+          await act(async () => {
+            await vi.advanceTimersByTimeAsync(1600);
+          });
+        }
+        await act(async () => {
+          await batchPromise;
+        });
+
+        expect(updateStatusSpy).not.toHaveBeenCalledWith(
+          seeded.id,
+          1,
+          "completed",
+        );
+        expect(updateStatusSpy).not.toHaveBeenCalledWith(
+          seeded.id,
+          3,
+          "completed",
+        );
+        expect(deleteSpy).toHaveBeenCalledWith(seeded.id, [1]);
+        expect(deleteSpy).toHaveBeenCalledWith(seeded.id, [3]);
+
+        const remaining = await queueRepo.listByNovelId(seeded.id);
+        expect(remaining.map((item) => item.chapterIndex)).toEqual([2]);
+        expect(remaining[0].status).toBe("failed");
+
+        // Case B: failed 行のみ残存する状態（nonFailedIndexes.length === 0）で再失敗しても正常完了すること
+        let retryPromise: Promise<void> | undefined;
+        act(() => {
+          retryPromise = result.current.startBatchCache();
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1600);
+        });
+        await act(async () => {
+          await retryPromise;
+        });
+        const remainingAfterRetry = await queueRepo.listByNovelId(seeded.id);
+        expect(remainingAfterRetry.map((item) => item.chapterIndex)).toEqual([
+          2,
+        ]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });
