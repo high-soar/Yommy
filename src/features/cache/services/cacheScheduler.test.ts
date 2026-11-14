@@ -1659,7 +1659,7 @@ describe("createCacheScheduler", () => {
       saveSpy1.mockRestore();
       scheduler1.dispose();
 
-      // 2. downloadAndPersistChapter の saveChapterBody 中の abort -> deleteByNovelAndChapters / completed 発火なし
+      // 2. downloadAndPersistChapter の saveChapterBody 中の abort -> 保存完了後は queue 削除を実行（R1-22）
       const httpClient2 = new MockHttpClient();
       httpClient2.setResponse(
         `https://kakuyomu.jp/works/await-abort-guards/episodes/ep-1`,
@@ -1703,7 +1703,7 @@ describe("createCacheScheduler", () => {
       controller2.abort();
       releaseSave2();
       await p2;
-      expect(deleteQueueSpy2).not.toHaveBeenCalled();
+      expect(deleteQueueSpy2).toHaveBeenCalledWith(novel.id, [1]);
       saveSpy2.mockRestore();
       deleteQueueSpy2.mockRestore();
       scheduler2.dispose();
@@ -2732,6 +2732,211 @@ describe("createCacheScheduler", () => {
       await vi.advanceTimersByTimeAsync(100);
       expect(getHtmlSpy).toHaveBeenCalledTimes(3);
       expect(scheduler.getNovelProgress(novel.id)?.status).toBe("completed");
+      scheduler.dispose();
+    });
+  });
+
+  describe("R1-22: saveChapterBody 成功後のキュー削除・バッチ進捗確定と非アクティブ時失敗解除", () => {
+    it("low 最終話の saveChapterBody 実行中に high が割り込んで signal が abort されても queue 削除と completed 遷移が完了すること", async () => {
+      const novel = await seedNovel(novelRepo, chapterRepo, {
+        workId: "r1-22-abort-during-save",
+        chapterCount: 2,
+      });
+
+      const httpClient = new MockHttpClient();
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-22-abort-during-save/episodes/ep-1",
+        { html: episodeHtml(1) },
+      );
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-22-abort-during-save/episodes/ep-2",
+        { html: episodeHtml(2) },
+      );
+      const getHtmlSpy = vi.spyOn(httpClient, "getHtml");
+
+      const scheduler = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: 0,
+      });
+
+      let notifySaveStarted!: () => void;
+      const onSaveStarted = new Promise<void>((r) => {
+        notifySaveStarted = r;
+      });
+      let releaseSave!: () => void;
+      const saveGate = new Promise<void>((r) => {
+        releaseSave = r;
+      });
+      const origSave = chapterRepo.saveChapterBody.bind(chapterRepo);
+      vi.spyOn(chapterRepo, "saveChapterBody").mockImplementationOnce(
+        async (...args) => {
+          notifySaveStarted();
+          await saveGate;
+          return await origSave(...args);
+        },
+      );
+      const deleteQueueSpy = vi.spyOn(queueRepo, "deleteByNovelAndChapters");
+
+      const progressEvents: CacheNovelProgress[] = [];
+      scheduler.subscribeProgress(novel.id, (p) => progressEvents.push(p));
+
+      await scheduler.enqueueBatchCache(novel.id, [1]);
+      await onSaveStarted;
+
+      // saveChapterBody 中に high [2] が割り込み、low の signal を abort する
+      const highPromise = scheduler.enqueuePrefetch({
+        novelId: novel.id,
+        chapterIndexes: [2],
+        priority: "high",
+      });
+      releaseSave();
+      await highPromise;
+
+      expect(deleteQueueSpy).toHaveBeenCalledWith(novel.id, [1]);
+      expect(await queueRepo.listByNovelId(novel.id)).toEqual([]);
+      const progress = scheduler.getNovelProgress(novel.id);
+      expect(progress?.status).toBe("completed");
+      expect(progress?.current).toBe(1);
+      expect(progress?.total).toBe(1);
+      expect(progressEvents.some((p) => p.status === "completed")).toBe(true);
+      // ep-1 の再取得が走っていないこと（ep-1 と ep-2 の計 2 回のみ）
+      expect(getHtmlSpy).toHaveBeenCalledTimes(2);
+      scheduler.dispose();
+    });
+
+    it("paused または失敗付き completed 状態のバッチでも high/medium で失敗話を保存したら failedChapterIndexes が解除・通知され、非失敗話では不要通知しないこと", async () => {
+      const novel = await seedNovel(novelRepo, chapterRepo, {
+        workId: "r1-22-clear-failed-when-inactive",
+        chapterCount: 3,
+      });
+
+      const httpClient = new MockHttpClient();
+      let failEp1 = true;
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-22-clear-failed-when-inactive/episodes/ep-1",
+        () => {
+          if (failEp1) {
+            throw new Error("一時エラー");
+          }
+          return { html: episodeHtml(1) };
+        },
+      );
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-22-clear-failed-when-inactive/episodes/ep-2",
+        { html: episodeHtml(2) },
+      );
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-22-clear-failed-when-inactive/episodes/ep-3",
+        { html: episodeHtml(3) },
+      );
+
+      const scheduler = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: 0,
+      });
+
+      const events: CacheNovelProgress[] = [];
+      scheduler.subscribeProgress(novel.id, (p) => events.push(p));
+
+      // まず ep-1 のみバッチ実行して failed 付きの completed 状態（isBatchCaching=false）にする
+      await scheduler.enqueueBatchCache(novel.id, [1]);
+      await vi.waitFor(() => {
+        expect(scheduler.getNovelProgress(novel.id)?.status).toBe("completed");
+      });
+      expect(
+        scheduler.getNovelProgress(novel.id)?.failedChapterIndexes,
+      ).toEqual([1]);
+
+      // 非失敗話 ep-2 を high で取得しても failedChapterIndexes は変化せず不要な通知もしない
+      const eventCountBeforeNonFailed = events.length;
+      await scheduler.enqueuePrefetch({
+        novelId: novel.id,
+        chapterIndexes: [2],
+        priority: "high",
+      });
+      expect(events.length).toBe(eventCountBeforeNonFailed);
+      expect(
+        scheduler.getNovelProgress(novel.id)?.failedChapterIndexes,
+      ).toEqual([1]);
+
+      // high で失敗話 ep-1 を保存すると failedChapterIndexes から削除され通知される
+      failEp1 = false;
+      await scheduler.enqueuePrefetch({
+        novelId: novel.id,
+        chapterIndexes: [1],
+        priority: "high",
+      });
+      expect(events.length).toBe(eventCountBeforeNonFailed + 1);
+      expect(
+        scheduler.getNovelProgress(novel.id)?.failedChapterIndexes,
+      ).toEqual([]);
+
+      // paused 状態でも同様に別作品で ep-1 失敗後に pause し、failed 付き paused 状態で medium 保存する
+      const novel2 = await seedNovel(novelRepo, chapterRepo, {
+        workId: "r1-22-paused-failed",
+        chapterCount: 2,
+      });
+      let failN2Ep1 = true;
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-22-paused-failed/episodes/ep-1",
+        () => {
+          if (failN2Ep1) {
+            throw new Error("失敗1");
+          }
+          return { html: episodeHtml(1) };
+        },
+      );
+      let notifyEp2Http!: () => void;
+      const onEp2Http = new Promise<void>((r) => {
+        notifyEp2Http = r;
+      });
+      let releaseEp2Http!: () => void;
+      const ep2HttpGate = new Promise<void>((r) => {
+        releaseEp2Http = r;
+      });
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-22-paused-failed/episodes/ep-2",
+        async () => {
+          notifyEp2Http();
+          await ep2HttpGate;
+          return { html: episodeHtml(2) };
+        },
+      );
+
+      const pausedEvents: CacheNovelProgress[] = [];
+      scheduler.subscribeProgress(novel2.id, (p) => pausedEvents.push(p));
+
+      await scheduler.enqueueBatchCache(novel2.id, [1, 2]);
+      await onEp2Http;
+      const pausePromise = scheduler.pauseNovelTasks(novel2.id);
+      releaseEp2Http();
+      await pausePromise;
+
+      expect(scheduler.getNovelProgress(novel2.id)?.status).toBe("paused");
+      expect(
+        scheduler.getNovelProgress(novel2.id)?.failedChapterIndexes,
+      ).toEqual([1]);
+
+      failN2Ep1 = false;
+      const countBeforeMedium = pausedEvents.length;
+      await scheduler.enqueuePrefetch({
+        novelId: novel2.id,
+        chapterIndexes: [1],
+        priority: "medium",
+      });
+      expect(pausedEvents.length).toBe(countBeforeMedium + 1);
+      expect(
+        scheduler.getNovelProgress(novel2.id)?.failedChapterIndexes,
+      ).toEqual([]);
+      expect(scheduler.getNovelProgress(novel2.id)?.status).toBe("paused");
       scheduler.dispose();
     });
   });
