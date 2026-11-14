@@ -5980,15 +5980,23 @@ describe("useNovelDetail", () => {
       const ep1Started = new Promise<void>((r) => {
         ep1Entered = r;
       });
+      let releaseEp2!: () => void;
+      const ep2Gate1 = new Promise<void>((r) => {
+        releaseEp2 = r;
+      });
+      let ep2Entered1!: () => void;
+      const ep2Started1 = new Promise<void>((r) => {
+        ep2Entered1 = r;
+      });
       httpClient1.setResponse(new RegExp(KAKUYOMU_EPISODE_IDS[0]), async () => {
         ep1Entered();
         await ep1Gate;
         return { status: 200, headers: {}, html: episodeContentHtml };
       });
-      httpClient1.setResponse(new RegExp(KAKUYOMU_EPISODE_IDS[1]), {
-        status: 200,
-        headers: {},
-        html: episodeContentHtml,
+      httpClient1.setResponse(new RegExp(KAKUYOMU_EPISODE_IDS[1]), async () => {
+        ep2Entered1();
+        await ep2Gate1;
+        return { status: 200, headers: {}, html: episodeContentHtml };
       });
       httpClient1.setResponse(
         new RegExp(`kakuyomu\\.jp/works/${KAKUYOMU_WORK_ID}$`),
@@ -6032,6 +6040,9 @@ describe("useNovelDetail", () => {
         expect(await refreshPromise1).toBe(false);
       });
       expect(hook1.result.current.error).toBe("TOC Error 503");
+      await ep2Started1;
+      expect(hook1.result.current.isBatchCaching).toBe(true);
+      releaseEp2();
 
       await waitFor(() => {
         expect(scheduler1.getNovelProgress(seeded1.id)?.status).toBe(
