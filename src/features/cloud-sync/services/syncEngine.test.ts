@@ -935,7 +935,14 @@ describe("syncEngine", () => {
       ).not.toBeNull();
     });
 
-    it("pullAndMerge: リモートの deletedNovels に含まれる作品でも remoteState.novels に存在し updatedAt >= deletedAt である場合はリモート再登録作品と判定してローカル削除伝播をスキップすること", async () => {
+    it("pullAndMerge: リモートの deletedNovels に含まれる作品でも remoteState.novels に存在し createdAt > deletedAt である場合はリモート再登録作品と判定してローカル削除伝播をスキップすること", async () => {
+      const now = Date.now();
+      const localCreatedAt = new Date(now - 3 * 3600_000).toISOString();
+      const deletedAt = new Date(now - 2 * 3600_000).toISOString();
+      const createdAt = new Date(now - 3600_000).toISOString();
+      const updatedAt = new Date(now - 1800_000).toISOString();
+      const lastSyncedAt = new Date(now - 900_000).toISOString();
+
       const parser = parserRegistry.requireParser(
         "https://kakuyomu.jp/works/16817330658027210412",
       );
@@ -943,12 +950,12 @@ describe("syncEngine", () => {
         workIndexHtml,
         "https://kakuyomu.jp/works/16817330658027210412",
       );
-      await novelRepo.upsertNovelWithToc(index, "2026-10-10T00:00:00.000Z");
+      await novelRepo.upsertNovelWithToc(index, localCreatedAt);
 
-      // リモート側で過去に削除されたが、その後再登録・更新されたケース
+      // リモート側で過去に削除されたが、その後再登録（createdAt > deletedAt）されたケース
       const remoteState: YommySyncState = {
         version: 1,
-        lastSyncedAt: "2026-10-31T12:00:00.000Z",
+        lastSyncedAt,
         novels: {
           "kakuyomu:16817330658027210412": {
             id: "kakuyomu:16817330658027210412",
@@ -961,16 +968,16 @@ describe("syncEngine", () => {
             totalChapters: 3,
             isFavorite: 1,
             hasNewUpdate: 0,
-            latestEpisodePublishedAt: "2026-10-25T10:00:00.000Z",
+            latestEpisodePublishedAt: createdAt,
             bookmarkChapterIndex: 1,
-            lastReadAt: "2026-10-26T10:00:00.000Z",
+            lastReadAt: updatedAt,
             readChapterIds: [],
-            createdAt: "2026-10-25T00:00:00.000Z",
-            updatedAt: "2026-10-26T10:00:00.000Z", // updatedAt > deletedAt
+            createdAt,
+            updatedAt, // createdAt > deletedAt
           },
         },
         deletedNovels: {
-          "kakuyomu:other-deleted": "2026-10-20T00:00:00.000Z",
+          "kakuyomu:16817330658027210412": deletedAt,
         },
       };
       await bridge.pushFile(JSON.stringify(remoteState));
