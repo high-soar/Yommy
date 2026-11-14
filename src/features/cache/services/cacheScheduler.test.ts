@@ -599,7 +599,7 @@ describe("createCacheScheduler", () => {
   });
 
   describe("low 一括キャッシュ（キュー登録・リトライ上限・失敗保持・制御API）", () => {
-    it("enqueueBatchCache が interrupted 回復・新鮮除外・maxRetryCount 除外・enqueueChapters 登録完了時点で即時 resolve し、重複起動を抑止すること", async () => {
+    it("enqueueBatchCache が interrupted 回復・新鮮除外・明示的 maxRetryCount 除外・enqueueChapters 登録完了時点で即時 resolve し、重複起動を抑止すること", async () => {
       const novel = await seedNovel(novelRepo, chapterRepo, {
         chapterCount: 4,
         cachedIndexes: [1],
@@ -632,15 +632,17 @@ describe("createCacheScheduler", () => {
         queueRepository: queueRepo,
         httpClient,
         parserRegistry: createDefaultParserRegistry(),
+        maxRetryCount: 3,
         prefetchIntervalMs: 5,
       });
 
-      // 全話取得を待つ前に即時 resolve すること
+      // 全話取得を待つ前に即時 resolve すること（対象外 failed ch 4 も total / failedCount に保持）
       await scheduler.enqueueBatchCache(novel.id, [1, 2, 3, 4]);
       expect(scheduler.isNovelBatchCaching(novel.id)).toBe(true);
       expect(scheduler.getNovelProgress(novel.id)).toMatchObject({
-        total: 2,
-        failedCount: 0,
+        total: 3,
+        failedCount: 1,
+        failedChapterIndexes: [4],
       });
 
       // 重複起動時は追加キュー登録されないこと
@@ -652,14 +654,14 @@ describe("createCacheScheduler", () => {
         expect(scheduler.getNovelProgress(novel.id)?.status).toBe("completed");
       });
 
-      // ch 3 失敗が failedChapterIndexes に記録され、ch 4 は maxRetryCount 到達で対象外のまま残ること
+      // ch 3 失敗が failedChapterIndexes に追加記録され、ch 4 は maxRetryCount 到達で対象外のまま保持されること
       expect(scheduler.getNovelProgress(novel.id)).toMatchObject({
         status: "completed",
         isBatchCaching: false,
         current: 2,
-        total: 2,
-        failedCount: 1,
-        failedChapterIndexes: [3],
+        total: 3,
+        failedCount: 2,
+        failedChapterIndexes: [3, 4],
       });
       const items = await queueRepo.listByNovelId(novel.id);
       const q3 = items.find((q) => q.chapterIndex === 3);
@@ -1206,6 +1208,7 @@ describe("createCacheScheduler", () => {
         queueRepository: queueRepo,
         httpClient,
         parserRegistry: createDefaultParserRegistry(),
+        maxRetryCount: 3,
         prefetchIntervalMs: 10,
       });
 
@@ -1592,6 +1595,7 @@ describe("createCacheScheduler", () => {
         queueRepository: queueRepo,
         httpClient,
         parserRegistry: createDefaultParserRegistry(),
+        maxRetryCount: 3,
         prefetchIntervalMs: 0,
       });
 
@@ -3046,6 +3050,145 @@ describe("createCacheScheduler", () => {
       const remaining = await queueRepo.listByNovelId(novel.id);
       expect(remaining.map((r) => r.chapterIndex)).toEqual([1]);
       expect(remaining[0].status).toBe("failed");
+      scheduler.dispose();
+    });
+  });
+
+  describe("R1-11: デフォルト再試行上限撤廃と対象外未取得 failed 保持", () => {
+    it("maxRetryCount 未指定のデフォルトスケジューラでは retryCount >= 3 の failed 話も再試行対象となり保存・キュー削除されること", async () => {
+      const novel = await seedNovel(novelRepo, chapterRepo, {
+        workId: "r1-11-no-default-retry-cap",
+        chapterCount: 2,
+      });
+
+      await queueRepo.enqueueChapters(novel.id, [
+        { chapterIndex: 1, targetUrl: episodeUrl(1) },
+        { chapterIndex: 2, targetUrl: episodeUrl(2) },
+      ]);
+      for (let i = 0; i < 4; i++) {
+        await queueRepo.updateStatus(novel.id, 1, "failed", {
+          lastError: "前回エラー",
+          incrementRetry: true,
+        });
+      }
+
+      const httpClient = new MockHttpClient();
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-11-no-default-retry-cap/episodes/ep-1",
+        { html: episodeHtml(1) },
+      );
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-11-no-default-retry-cap/episodes/ep-2",
+        { html: episodeHtml(2) },
+      );
+
+      const scheduler = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: 0,
+      });
+
+      await scheduler.enqueueBatchCache(novel.id, [1, 2]);
+      await vi.waitFor(() => {
+        expect(scheduler.getNovelProgress(novel.id)?.status).toBe("completed");
+      });
+
+      const progress = scheduler.getNovelProgress(novel.id);
+      expect(progress?.total).toBe(2);
+      expect(progress?.current).toBe(2);
+      expect(progress?.failedCount).toBe(0);
+      expect(progress?.failedChapterIndexes).toEqual([]);
+      expect(await queueRepo.listByNovelId(novel.id)).toEqual([]);
+      expect(
+        (await chapterRepo.getChapter(novel.id, 1))?.downloadedAt,
+      ).not.toBeNull();
+      scheduler.dispose();
+    });
+
+    it("enqueueBatchCache の対象外に未取得の failed 行が残存する場合（targets > 0 / targets === 0）は total と failedChapterIndexes に保持して完了時 failedCount=0 を誤通知せず、既キャッシュ済み failed 行は保持対象から除外すること", async () => {
+      const eightDaysAgo = new Date(
+        Date.now() - (CACHE_TTL_MS + 86400000),
+      ).toISOString();
+      const novel = await seedNovel(novelRepo, chapterRepo, {
+        workId: "r1-11-retain-uncached-failed",
+        chapterCount: 4,
+        cachedIndexes: [2],
+        downloadedAtByIndex: () => eightDaysAgo,
+      });
+
+      // ch 1: 未取得 failed（refreshToc 自動再開時のように対象外）、ch 2: 既キャッシュだが古い failed 行あり（downloadedAt !== null のため保持対象外）
+      await queueRepo.enqueueChapters(novel.id, [
+        { chapterIndex: 1, targetUrl: episodeUrl(1) },
+        { chapterIndex: 2, targetUrl: episodeUrl(2) },
+      ]);
+      await queueRepo.updateStatus(novel.id, 1, "failed", {
+        lastError: "通信失敗",
+        incrementRetry: true,
+      });
+      await queueRepo.updateStatus(novel.id, 2, "failed", {
+        lastError: "旧失敗",
+        incrementRetry: true,
+      });
+
+      const httpClient = new MockHttpClient();
+      httpClient.setResponse(
+        "https://kakuyomu.jp/works/r1-11-retain-uncached-failed/episodes/ep-3",
+        { html: episodeHtml(3) },
+      );
+
+      const scheduler = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: 0,
+      });
+
+      const events: CacheNovelProgress[] = [];
+      scheduler.subscribeProgress(novel.id, (p) => events.push(p));
+
+      // Case A: targets > 0（ch 3 のみ投入し ch 1 は対象外）
+      await scheduler.enqueueBatchCache(novel.id, [3]);
+      await vi.waitFor(() => {
+        expect(scheduler.getNovelProgress(novel.id)?.status).toBe("completed");
+      });
+
+      const completedEventA = events[events.length - 1];
+      expect(completedEventA).toMatchObject({
+        status: "completed",
+        total: 2,
+        current: 1,
+        failedCount: 1,
+        failedChapterIndexes: [1],
+      });
+
+      // Case B: targets === 0（既キャッシュ ch 4 を対象にした空バッチでも ch 1 failed を保持）
+      await chapterRepo.saveChapterBody(
+        novel.id,
+        4,
+        {
+          remoteChapterId: "ep-4",
+          title: "第4話",
+          bodyHtml: "<p>4</p>",
+          byteSize: 10,
+          prevChapterUrl: null,
+          nextChapterUrl: null,
+        },
+        new Date().toISOString(),
+      );
+      await scheduler.enqueueBatchCache(novel.id, [4]);
+      const completedEventB = events[events.length - 1];
+      expect(completedEventB).toMatchObject({
+        status: "completed",
+        total: 1,
+        current: 0,
+        failedCount: 1,
+        failedChapterIndexes: [1],
+      });
       scheduler.dispose();
     });
   });
