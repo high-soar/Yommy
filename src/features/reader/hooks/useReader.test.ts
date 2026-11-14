@@ -6215,6 +6215,7 @@ describe("useReader", () => {
         novelId: seeded.id,
         chapterIndexes: [1],
         priority: "high",
+        signal: expect.any(AbortSignal),
       });
       expect(mockScheduler.enqueuePrefetch).toHaveBeenNthCalledWith(2, {
         novelId: seeded.id,
@@ -6810,6 +6811,744 @@ describe("useReader", () => {
         });
       } finally {
         vi.useRealTimers();
+      }
+    });
+  });
+
+  describe("オンデマンド取得 AbortSignal 伝播・中断保護 (R1-13)", () => {
+    const createSchedulerMock = (): CacheScheduler => ({
+      enqueuePrefetch: vi.fn().mockResolvedValue(undefined),
+      enqueueBatchCache: vi.fn().mockResolvedValue(undefined),
+      pauseNovelTasks: vi.fn().mockResolvedValue(undefined),
+      cancelNovelTasks: vi.fn().mockResolvedValue(undefined),
+      cancelAllTasks: vi.fn().mockResolvedValue(undefined),
+      syncNovelProgress: vi.fn().mockResolvedValue(null),
+      getNovelProgress: vi.fn().mockReturnValue(null),
+      isNovelBatchCaching: vi.fn().mockReturnValue(false),
+      subscribeProgress: vi.fn().mockReturnValue(() => {}),
+      dispose: vi.fn(),
+    });
+
+    interface DeferredControl<T = void> {
+      promise: Promise<T>;
+      resolve: (value: T) => void;
+      reject: (reason: unknown) => void;
+    }
+
+    function createDeferred<T = void>(): DeferredControl<T> {
+      let resolve!: (value: T) => void;
+      let reject!: (reason: unknown) => void;
+      const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise, resolve, reject };
+    }
+
+    const makeParsedChapterContent = (idx: number, bodyHtml: string) => ({
+      remoteChapterId: KAKUYOMU_EPISODE_IDS[idx - 1] ?? `ep-${idx}`,
+      title: `第${idx}話`,
+      bodyHtml,
+      byteSize: 128,
+      prevChapterUrl: null,
+      nextChapterUrl: null,
+    });
+
+    it("未キャッシュ話の初期表示（priority: 'high'）通信中にアンマウントされた場合、即座に AbortSignal が中断され後続の DB・State 更新や先読みが抑止されること (AC-RD-28, R1-13)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 3,
+        cachedCount: 0,
+      });
+
+      const ch1Gate = createDeferred();
+      let capturedSignal: AbortSignal | undefined;
+      const mockScheduler = createSchedulerMock();
+      vi.mocked(mockScheduler.enqueuePrefetch).mockImplementation(
+        async (req) => {
+          if (req.priority === "high") {
+            capturedSignal = req.signal;
+            await ch1Gate.promise;
+          }
+        },
+      );
+
+      const markReadSpy = vi.spyOn(chapterRepo, "markChapterRead");
+      const updateBookmarkSpy = vi.spyOn(novelRepo, "updateBookmark");
+
+      try {
+        const { unmount } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              cacheScheduler: mockScheduler,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(mockScheduler.enqueuePrefetch).toHaveBeenCalledTimes(1);
+        });
+        expect(capturedSignal).toBeInstanceOf(AbortSignal);
+        expect(capturedSignal?.aborted).toBe(false);
+
+        // アンマウント直後に high リクエストの AbortSignal が即座に中断されること（0ms）
+        unmount();
+        expect(capturedSignal?.aborted).toBe(true);
+
+        // 中断後に enqueuePrefetch が通常完了しても DB 更新や medium 先読みを行わないこと
+        await chapterRepo.saveChapterBody(
+          seeded.id,
+          1,
+          makeParsedChapterContent(1, "<p>中断後に保存完了した本文</p>"),
+          new Date().toISOString(),
+        );
+        await act(async () => {
+          ch1Gate.resolve();
+          await Promise.resolve();
+        });
+
+        expect(markReadSpy).not.toHaveBeenCalled();
+        expect(updateBookmarkSpy).not.toHaveBeenCalled();
+        expect(mockScheduler.enqueuePrefetch).toHaveBeenCalledTimes(1);
+      } finally {
+        ch1Gate.resolve();
+      }
+    });
+
+    it("未キャッシュ話の初期表示（priority: 'high'）通信中に chapterIndex が変更された場合、前話の AbortSignal を即座に中断し遅延解決してもローディング解除フリッカーを起こさないこと (R1-13)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 3,
+        cachedCount: 0,
+      });
+
+      const gates = new Map<number, DeferredControl>([
+        [1, createDeferred()],
+        [2, createDeferred()],
+      ]);
+      const signals = new Map<number, AbortSignal | undefined>();
+      const mockScheduler = createSchedulerMock();
+      vi.mocked(mockScheduler.enqueuePrefetch).mockImplementation(
+        async (req) => {
+          if (req.priority === "high") {
+            const idx = req.chapterIndexes[0];
+            signals.set(idx, req.signal);
+            await gates.get(idx)?.promise;
+          }
+        },
+      );
+
+      try {
+        const { result, rerender } = renderHook(
+          ({ chapterIndex }: { chapterIndex: number }) =>
+            useReader({ novelId: seeded.id, chapterIndex }),
+          {
+            initialProps: { chapterIndex: 1 },
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              cacheScheduler: mockScheduler,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(signals.has(1)).toBe(true);
+        });
+        expect(signals.get(1)).toBeInstanceOf(AbortSignal);
+        expect(signals.get(1)?.aborted).toBe(false);
+        expect(result.current.isLoading).toBe(true);
+
+        // 第2話へ切り替えると第1話の high シグナルが即座に中断されること
+        rerender({ chapterIndex: 2 });
+
+        await waitFor(() => {
+          expect(signals.has(2)).toBe(true);
+        });
+        expect(signals.get(1)?.aborted).toBe(true);
+        expect(signals.get(2)).toBeInstanceOf(AbortSignal);
+        expect(signals.get(2)?.aborted).toBe(false);
+
+        // 第2話通信中に中断済みの第1話が解決しても isLoading を false へ戻さず第1話更新もしないこと
+        await chapterRepo.saveChapterBody(
+          seeded.id,
+          1,
+          makeParsedChapterContent(1, "<p>古い第1話本文</p>"),
+          new Date().toISOString(),
+        );
+        await act(async () => {
+          gates.get(1)?.resolve();
+          await Promise.resolve();
+        });
+        expect(result.current.isLoading).toBe(true);
+        const ch1InDb = await chapterRepo.getChapter(seeded.id, 1);
+        expect(ch1InDb?.isRead).toBe(false);
+
+        // 第2話を完了させると正常に描画されローディング解除されること
+        await chapterRepo.saveChapterBody(
+          seeded.id,
+          2,
+          makeParsedChapterContent(2, "<p>新しい第2話本文</p>"),
+          new Date().toISOString(),
+        );
+        await act(async () => {
+          gates.get(2)?.resolve();
+          await Promise.resolve();
+        });
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+        expect(result.current.error).toBeNull();
+        expect(result.current.chapterIndex).toBe(2);
+        expect(result.current.chapter?.bodyHtml).toContain("新しい第2話本文");
+      } finally {
+        gates.get(1)?.resolve();
+        gates.get(2)?.resolve();
+      }
+    });
+
+    it("初期表示（priority: 'high'）の通信中に goToChapter が呼ばれた場合、初期ロード側の AbortSignal を中断し解決・失敗のいずれで終了しても後続の遷移を妨害しないこと (R1-13)", async () => {
+      for (const settleWithError of [false, true]) {
+        const db = await resetTestDb();
+        const novelRepo = new SqlNovelRepository(db);
+        const chapterRepo = new SqlChapterRepository(db);
+        const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+          chapterCount: 4,
+          cachedCount: 1,
+        });
+
+        const gates = new Map<number, DeferredControl>([
+          [2, createDeferred()],
+          [3, createDeferred()],
+        ]);
+        const signals = new Map<number, AbortSignal | undefined>();
+        const mockScheduler = createSchedulerMock();
+        vi.mocked(mockScheduler.enqueuePrefetch).mockImplementation(
+          async (req) => {
+            if (req.priority === "high") {
+              const idx = req.chapterIndexes[0];
+              signals.set(idx, req.signal);
+              await gates.get(idx)?.promise;
+            }
+          },
+        );
+
+        try {
+          const { result, rerender } = renderHook(
+            ({ chapterIndex }: { chapterIndex: number }) =>
+              useReader({ novelId: seeded.id, chapterIndex }),
+            {
+              initialProps: { chapterIndex: 1 },
+              wrapper: createWrapper({
+                novelRepository: novelRepo,
+                chapterRepository: chapterRepo,
+                cacheScheduler: mockScheduler,
+              }),
+            },
+          );
+
+          await waitFor(() => {
+            expect(result.current.isLoading).toBe(false);
+          });
+
+          // 第2話（未キャッシュ）初期表示を開始して停止
+          rerender({ chapterIndex: 2 });
+          await waitFor(() => {
+            expect(signals.has(2)).toBe(true);
+          });
+          expect(signals.get(2)).toBeInstanceOf(AbortSignal);
+          expect(signals.get(2)?.aborted).toBe(false);
+
+          // 第2話取得中に goToChapter(3) を呼び出すと第2話の high シグナルが即座に中断されること
+          let goPromise: Promise<boolean> | null = null;
+          act(() => {
+            goPromise = result.current.goToChapter(3);
+          });
+
+          await waitFor(() => {
+            expect(signals.has(3)).toBe(true);
+          });
+          expect(signals.get(2)?.aborted).toBe(true);
+          expect(signals.get(3)?.aborted).toBe(false);
+          expect(result.current.isLoading).toBe(true);
+
+          // 第3話待機中に第2話が遅延解決または拒否されても、第2話による error や isLoading 解除は発生しないこと
+          await act(async () => {
+            if (settleWithError) {
+              gates.get(2)?.reject(new DOMException("Aborted", "AbortError"));
+            } else {
+              gates.get(2)?.resolve();
+            }
+            await Promise.resolve();
+          });
+
+          expect(result.current.isLoading).toBe(true);
+          expect(result.current.error).toBeNull();
+          const ch2InDb = await chapterRepo.getChapter(seeded.id, 2);
+          expect(ch2InDb?.isRead).toBe(false);
+
+          // 第3話を完了させると正常に第3話へ遷移できること
+          await chapterRepo.saveChapterBody(
+            seeded.id,
+            3,
+            makeParsedChapterContent(3, "<p>遷移先第3話本文</p>"),
+            new Date().toISOString(),
+          );
+          let goSuccess = false;
+          await act(async () => {
+            gates.get(3)?.resolve();
+            goSuccess = await (goPromise as Promise<boolean>);
+          });
+
+          expect(goSuccess).toBe(true);
+          expect(result.current.isLoading).toBe(false);
+          expect(result.current.error).toBeNull();
+          expect(result.current.chapterIndex).toBe(3);
+          expect(result.current.chapter?.bodyHtml).toContain("遷移先第3話本文");
+        } finally {
+          gates.get(2)?.resolve();
+          gates.get(3)?.resolve();
+        }
+      }
+    });
+
+    it("goToChapter で未キャッシュ話（priority: 'high'）を取得中にアンマウントされた場合、即座に AbortSignal が中断され拒否されてもエラー・DB 更新を抑止して false を返すこと (R1-13)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 3,
+        cachedCount: 1,
+      });
+
+      const ch2Gate = createDeferred();
+      let capturedSignal: AbortSignal | undefined;
+      const mockScheduler = createSchedulerMock();
+      vi.mocked(mockScheduler.enqueuePrefetch).mockImplementation(
+        async (req) => {
+          if (req.priority === "high") {
+            capturedSignal = req.signal;
+            await ch2Gate.promise;
+          }
+        },
+      );
+
+      try {
+        const { result, unmount } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              cacheScheduler: mockScheduler,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        const markReadSpy = vi.spyOn(chapterRepo, "markChapterRead");
+        const updateBookmarkSpy = vi.spyOn(novelRepo, "updateBookmark");
+        markReadSpy.mockClear();
+        updateBookmarkSpy.mockClear();
+
+        let goPromise: Promise<boolean> | null = null;
+        act(() => {
+          goPromise = result.current.goToChapter(2);
+        });
+
+        await waitFor(() => {
+          expect(mockScheduler.enqueuePrefetch).toHaveBeenCalledTimes(2);
+        });
+        expect(capturedSignal).toBeInstanceOf(AbortSignal);
+        expect(capturedSignal?.aborted).toBe(false);
+
+        unmount();
+        expect(capturedSignal?.aborted).toBe(true);
+
+        let goSuccess = true;
+        await act(async () => {
+          ch2Gate.reject(new DOMException("Aborted", "AbortError"));
+          goSuccess = await (goPromise as Promise<boolean>);
+        });
+
+        expect(goSuccess).toBe(false);
+        expect(markReadSpy).toHaveBeenCalledTimes(1);
+        expect(markReadSpy).toHaveBeenCalledWith(seeded.id, 1, true);
+        expect(updateBookmarkSpy).not.toHaveBeenCalled();
+        expect(mockScheduler.enqueuePrefetch).toHaveBeenCalledTimes(2);
+      } finally {
+        ch2Gate.resolve();
+      }
+    });
+
+    it("goToChapter で未キャッシュ話（priority: 'high'）を取得中に chapterIndex プロパティが更新された場合、遷移の AbortSignal を中断しローディング・エラー・既読更新を抑止すること (R1-13)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 3,
+        cachedCount: 1,
+      });
+
+      const gates = new Map<number, DeferredControl>([
+        [2, createDeferred()],
+        [3, createDeferred()],
+      ]);
+      const signals = new Map<number, AbortSignal | undefined>();
+      const mockScheduler = createSchedulerMock();
+      vi.mocked(mockScheduler.enqueuePrefetch).mockImplementation(
+        async (req) => {
+          if (req.priority === "high") {
+            const idx = req.chapterIndexes[0];
+            signals.set(idx, req.signal);
+            await gates.get(idx)?.promise;
+          }
+        },
+      );
+
+      try {
+        const { result, rerender } = renderHook(
+          ({ chapterIndex }: { chapterIndex: number }) =>
+            useReader({ novelId: seeded.id, chapterIndex }),
+          {
+            initialProps: { chapterIndex: 1 },
+            wrapper: createWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              cacheScheduler: mockScheduler,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        let goPromise: Promise<boolean> | null = null;
+        act(() => {
+          goPromise = result.current.goToChapter(2);
+        });
+
+        await waitFor(() => {
+          expect(signals.has(2)).toBe(true);
+        });
+        expect(signals.get(2)).toBeInstanceOf(AbortSignal);
+        expect(signals.get(2)?.aborted).toBe(false);
+
+        // chapterIndex 更新で第3話初期ロードへ切り替わると、進行中 goToChapter(2) の signal が即座に中断されること
+        rerender({ chapterIndex: 3 });
+
+        await waitFor(() => {
+          expect(signals.has(3)).toBe(true);
+        });
+        expect(signals.get(2)?.aborted).toBe(true);
+        expect(signals.get(3)?.aborted).toBe(false);
+
+        // 第3話待機中に goToChapter(2) が解決しても false を返し isLoading を解除しないこと
+        let goSuccess = true;
+        await act(async () => {
+          gates.get(2)?.resolve();
+          goSuccess = await (goPromise as Promise<boolean>);
+        });
+
+        expect(goSuccess).toBe(false);
+        expect(result.current.isLoading).toBe(true);
+        const ch2InDb = await chapterRepo.getChapter(seeded.id, 2);
+        expect(ch2InDb?.isRead).toBe(false);
+
+        await chapterRepo.saveChapterBody(
+          seeded.id,
+          3,
+          makeParsedChapterContent(3, "<p>切替先第3話本文</p>"),
+          new Date().toISOString(),
+        );
+        await act(async () => {
+          gates.get(3)?.resolve();
+          await Promise.resolve();
+        });
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+        expect(result.current.chapterIndex).toBe(3);
+
+        // 中断後は isNavigatingChapterRef が解除されており再度 goToChapter が実行できること
+        let backSuccess = false;
+        await act(async () => {
+          backSuccess = await result.current.goToChapter(1);
+        });
+        expect(backSuccess).toBe(true);
+        expect(result.current.chapterIndex).toBe(1);
+      } finally {
+        gates.get(2)?.resolve();
+        gates.get(3)?.resolve();
+      }
+    });
+
+    it("cacheScheduler 未指定時の goToChapter 通信中に chapterIndex が更新されて httpClient が中断エラーを返した場合、エラー画面へ切り替えず新話ロードを完了すること (R1-13)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const settingsRepo = new SqlSettingsRepository(db);
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 3,
+        cachedCount: 1,
+      });
+
+      const gates = new Map<number, DeferredControl>([
+        [2, createDeferred()],
+        [3, createDeferred()],
+      ]);
+      const signals = new Map<number, AbortSignal | undefined>();
+      const httpClient = new MockHttpClient();
+      vi.spyOn(httpClient, "getHtml").mockImplementation(async (req) => {
+        const chapterNum = req.url.endsWith(KAKUYOMU_EPISODE_IDS[1]) ? 2 : 3;
+        signals.set(chapterNum, req.signal);
+        req.signal?.addEventListener(
+          "abort",
+          () => {
+            gates.get(chapterNum)?.reject(req.signal?.reason);
+          },
+          { once: true },
+        );
+        await gates.get(chapterNum)?.promise;
+        return {
+          url: req.url,
+          status: 200,
+          headers: {},
+          html: episodeContentHtml,
+        };
+      });
+
+      try {
+        const { result, rerender } = renderHook(
+          ({ chapterIndex }: { chapterIndex: number }) =>
+            useReader({ novelId: seeded.id, chapterIndex }),
+          {
+            initialProps: { chapterIndex: 1 },
+            wrapper: createWithoutSchedulerWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              settingsRepository: settingsRepo,
+              httpClient,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+
+        let goPromise: Promise<boolean> | null = null;
+        act(() => {
+          goPromise = result.current.goToChapter(2);
+        });
+
+        await waitFor(() => {
+          expect(signals.has(2)).toBe(true);
+        });
+        expect(signals.get(2)).toBeInstanceOf(AbortSignal);
+        expect(signals.get(2)?.aborted).toBe(false);
+
+        rerender({ chapterIndex: 3 });
+
+        await waitFor(() => {
+          expect(signals.has(3)).toBe(true);
+        });
+        expect(signals.get(2)?.aborted).toBe(true);
+
+        let goSuccess = true;
+        await act(async () => {
+          goSuccess = await (goPromise as Promise<boolean>);
+        });
+        expect(goSuccess).toBe(false);
+        expect(result.current.error).toBeNull();
+        expect(result.current.isLoading).toBe(true);
+
+        await act(async () => {
+          gates.get(3)?.resolve();
+          await Promise.resolve();
+        });
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+        expect(result.current.error).toBeNull();
+        expect(result.current.chapterIndex).toBe(3);
+      } finally {
+        gates.get(2)?.resolve();
+        gates.get(3)?.resolve();
+      }
+    });
+
+    it("cacheScheduler 未指定時の未キャッシュ取得（STANDARD_TIMEOUT_MS）で httpClient.getHtml へ AbortSignal が伝播し、アンマウント時に即座に中断されること (R1-13)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const settingsRepo = new SqlSettingsRepository(db);
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 2,
+        cachedCount: 0,
+      });
+
+      const gate = createDeferred();
+      let capturedSignal: AbortSignal | undefined;
+      let capturedTimeoutMs: number | undefined;
+      const httpClient = new MockHttpClient();
+      vi.spyOn(httpClient, "getHtml").mockImplementation(async (req) => {
+        capturedSignal = req.signal;
+        capturedTimeoutMs = req.timeoutMs;
+        req.signal?.addEventListener(
+          "abort",
+          () => {
+            gate.reject(req.signal?.reason);
+          },
+          { once: true },
+        );
+        await gate.promise;
+        return {
+          url: req.url,
+          status: 200,
+          headers: {},
+          html: episodeContentHtml,
+        };
+      });
+
+      const saveBodySpy = vi.spyOn(chapterRepo, "saveChapterBody");
+
+      try {
+        const { unmount } = renderHook(
+          () => useReader({ novelId: seeded.id, chapterIndex: 1 }),
+          {
+            wrapper: createWithoutSchedulerWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              settingsRepository: settingsRepo,
+              httpClient,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(httpClient.getHtml).toHaveBeenCalledTimes(1);
+        });
+        expect(capturedTimeoutMs).toBe(STANDARD_TIMEOUT_MS);
+        expect(capturedSignal).toBeInstanceOf(AbortSignal);
+        expect(capturedSignal?.aborted).toBe(false);
+
+        unmount();
+        expect(capturedSignal?.aborted).toBe(true);
+
+        await act(async () => {
+          await Promise.resolve();
+        });
+        expect(saveBodySpy).not.toHaveBeenCalled();
+      } finally {
+        gate.resolve();
+      }
+    });
+
+    it("cacheScheduler 未指定時の7日経過キャッシュ再取得（3秒短タイムアウト）でも SHORT_TIMEOUT_MS と同時に AbortSignal が伝播し、中断時は warn やフォールバック更新を抑止すること (AC-RD-13, R1-13)", async () => {
+      const db = await resetTestDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const settingsRepo = new SqlSettingsRepository(db);
+      const eightDaysAgo = new Date(
+        Date.now() - (CACHE_TTL_MS + 24 * 60 * 60 * 1000),
+      ).toISOString();
+      const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
+        chapterCount: 2,
+        cachedCount: 2,
+        cachedDownloadedAt: eightDaysAgo,
+      });
+
+      const gates = new Map<number, DeferredControl>([
+        [1, createDeferred()],
+        [2, createDeferred()],
+      ]);
+      const signals = new Map<number, AbortSignal | undefined>();
+      const timeouts = new Map<number, number | undefined>();
+      const httpClient = new MockHttpClient();
+      vi.spyOn(httpClient, "getHtml").mockImplementation(async (req) => {
+        const chapterNum = req.url.endsWith(KAKUYOMU_EPISODE_IDS[0]) ? 1 : 2;
+        signals.set(chapterNum, req.signal);
+        timeouts.set(chapterNum, req.timeoutMs);
+        req.signal?.addEventListener(
+          "abort",
+          () => {
+            gates.get(chapterNum)?.reject(req.signal?.reason);
+          },
+          { once: true },
+        );
+        await gates.get(chapterNum)?.promise;
+        return {
+          url: req.url,
+          status: 200,
+          headers: {},
+          html: episodeContentHtml,
+        };
+      });
+
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      try {
+        const { result, rerender } = renderHook(
+          ({ chapterIndex }: { chapterIndex: number }) =>
+            useReader({ novelId: seeded.id, chapterIndex }),
+          {
+            initialProps: { chapterIndex: 1 },
+            wrapper: createWithoutSchedulerWrapper({
+              novelRepository: novelRepo,
+              chapterRepository: chapterRepo,
+              settingsRepository: settingsRepo,
+              httpClient,
+            }),
+          },
+        );
+
+        await waitFor(() => {
+          expect(signals.has(1)).toBe(true);
+        });
+        expect(timeouts.get(1)).toBe(SHORT_TIMEOUT_MS);
+        expect(signals.get(1)).toBeInstanceOf(AbortSignal);
+        expect(signals.get(1)?.aborted).toBe(false);
+
+        rerender({ chapterIndex: 2 });
+
+        await waitFor(() => {
+          expect(signals.has(2)).toBe(true);
+        });
+        expect(signals.get(1)?.aborted).toBe(true);
+        expect(timeouts.get(2)).toBe(SHORT_TIMEOUT_MS);
+
+        await act(async () => {
+          gates.get(2)?.resolve();
+          await Promise.resolve();
+        });
+
+        await waitFor(() => {
+          expect(result.current.isLoading).toBe(false);
+        });
+        expect(result.current.error).toBeNull();
+        expect(result.current.chapterIndex).toBe(2);
+        expect(warnSpy).not.toHaveBeenCalledWith(
+          "[useReader] Stale chapter refresh failed for index 1, falling back to existing cache",
+          expect.anything(),
+        );
+      } finally {
+        gates.get(1)?.resolve();
+        gates.get(2)?.resolve();
       }
     });
   });
