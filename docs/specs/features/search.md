@@ -2,8 +2,8 @@
 type: spec-feature
 title: "検索画面仕様書（SCR-06: Novel Search）"
 description: "複数小説サイト（カクヨム・小説家になろう）のサイト切替、キーワード・除外キーワード検索、並び順・連載状態（すべて/連載中/完結済/短編）・サイト別複数ジャンル（OR）フィルタ、作品カード一覧およびその場での本棚追加を提供する検索画面（SCR-06）の正本仕様。"
-status: "Approved"
-updated: "2026-11-14"
+status: "Review (#368)"
+updated: "2026-11-15"
 tags:
   - search
   - scr-06
@@ -33,6 +33,8 @@ related_specs:
   - docs/specs/features/bookshelf.md
   - docs/specs/features/ranking.md
   - docs/specs/features/novel-detail.md
+  - docs/specs/features/reader-view.md
+  - docs/specs/features/settings.md
   - docs/specs/parsers/kakuyomu.md
   - docs/specs/changes/archive/issue-238-loading-ux-clarification.md
   - docs/specs/changes/archive/issue-79-four-tabs-search-ranking.md

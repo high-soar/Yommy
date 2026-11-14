@@ -499,7 +499,7 @@ export interface UseNovelDetailResult {
    - **通信前パーサー解決と正規化**: `parserRegistry.requireParser(novel.canonicalUrl)` および `parser.normalizeWorkUrl(novel.canonicalUrl)` を実行する。
    - **目次 HTML 取得・解析・DB Upsert**:
      - `fetchFullNovelIndex(httpClient, parser, normalizedWorkUrl)` を用いて作品トップ（および `nextTocPageUrl` が存在する複数ページ目次全ページ、Issue #239）を取得・結合し、最新メタデータ・全話目次一覧を抽出する。
-     - 更新前の話数 `prevCount = chapters.length` を保持した上で、`novelRepository.upsertNovelWithToc(novelIndex, new Date().toISOString())` を実行する（`chapters` テーブルの `ON CONFLICT(novel_id, remote_chapter_id) DO UPDATE` により、既存の `body_html` / `byte_size` / `is_read` / `downloaded_at` は破壊されず保持される）。
+     - 更新前の話数 `prevCount = chapters.length` を保持した上で、`novelRepository.upsertNovelWithToc(novelIndex, new Date().toISOString(), { updateOnly: true })` を実行する（`chapters` テーブルの `ON CONFLICT(novel_id, remote_chapter_id) DO UPDATE` により、既存の `body_html` / `byte_size` / `is_read` / `downloaded_at` は破壊されず保持される）。
    - **状態再取得と完了フィードバック**:
      - DB から最新の `novel` と `chapters` を再取得して State を更新する。
      - 追加話数 `addedCount = Math.max(0, updatedChapters.length - prevCount)` を算出し、`addedCount > 0` の場合は `目次を更新しました（+${addedCount}話）`、`addedCount === 0` の場合は `最新の状態です` を `refreshMessage` にセットする。

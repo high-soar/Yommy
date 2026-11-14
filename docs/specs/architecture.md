@@ -147,6 +147,8 @@ related_tests:
   - src/features/webview-import/hooks/useWebViewImport.test.ts
   - src/features/webview-import/components/WebViewImportContainer.test.tsx
   - src/features/webview-import/components/WebViewImportPage.test.tsx
+  - test/it/scenarios/scn04-prefetch-and-cache.spec.ts
+  - test/it/scenarios/scn05-cloud-sync.spec.ts
   - test/it/scenarios/scn07-webview-import-fallback.spec.ts
   - src/shared/utils/cache.test.ts
   - src/shared/utils/formatByteSize.test.ts
@@ -279,7 +281,7 @@ Yommy/
     │   ├── ranking/                   # SCR-07: ランキング画面（カクヨム・小説家になろうサイト切替・期間/ジャンル別ランキング・カードから本棚追加・SCR-02遷移）
     │   ├── settings/                  # SCR-05: 設定画面（組版・テーマ・フォント・余白・音量キー送り設定・サンプル文章プレビュー・クラウド同期・キャッシュ管理）
     │   ├── cache/                     # 優先度付きバックグラウンドキャッシュスケジューラ（high > medium > low）（Issue #344）
-    │   │   ├── types.ts               # CachePriority, CacheFetchTask, CacheNovelProgress, CacheScheduler 契約定義
+    │   │   ├── types.ts               # CachePriority, CacheBatchStatus, CacheNovelProgress, CacheScheduler, CacheSchedulerDeps 契約定義
     │   │   └── services/
     │   │       └── cacheScheduler.ts  # 0ms割り込み・1.5sレート制限・download_queue同期・自動再開スケジューラ実装
     │   └── cloud-sync/                # クラウド同期（Google Drive appDataFolder・SyncEngine）（Issue #120, #342）
@@ -881,7 +883,7 @@ export const PREFETCH_COUNT = 5;
    - 作品詳細ヘッダーの3点メニュー内「未取得話を一括キャッシュ」（または中断後の「キャッシュを再開（残りN話）」、失敗後の「失敗した話を再試行（N話）」）操作（`TR-18`、`v1.1` Issue #343）により、未キャッシュエピソード（および TTL 7日経過した古いキャッシュ）を `CacheScheduler.enqueueBatchCache`（優先度 `'low'`）へ委譲し、`CacheScheduler` 内で `QueueRepository`（`download_queue` テーブル）へ `'pending'` 登録（キュー投入完了時に即時 resolve）した上で `PREFETCH_INTERVAL_MS`（1.5秒）間隔で順次直列取得する。
    - **スケジューラ横断レート制限（`lastNetworkRequestCompletedAt`、`R1-16`）**: `CacheScheduler` は優先度（`'high'` / `'medium'` / `'low'`）を横断して直近の `httpClient.getHtml` 完了時刻 `lastNetworkRequestCompletedAt` を一元管理する。`'low'` タスク開始直前（`'high'` 即時取得や `'medium'` 先読みの HTTP 完了直後に `'low'` を開始・再開する場合を含む）に `elapsed = Date.now() - lastNetworkRequestCompletedAt < PREFETCH_INTERVAL_MS` であれば、残り時間 `remainingMs = PREFETCH_INTERVAL_MS - elapsed`（`1500ms - elapsed`）をウェイトしてから次の HTTP リクエストを送出し、優先度切替を跨いだバースト通信（503 誘発）を防止する（待機中も `activeLowSleeping = true` として新規 `'high'`/`'medium'` による 0ms 再割り込みを許可）。
    - **`SCR-02` 非ブロッキング ＆ 画面離脱継続**: 一括キャッシュ実行中も `SCR-02` の閲覧操作・リーダー遷移（`TR-04`）をブロックせず、`SCR-02` を離脱（アンマウント）しても `CacheScheduler` 上の `'low'` タスクは中断せずアプリ起動中バックグラウンド継続する。リーダー遷移で `'high'`（即時取得）や `'medium'`（5話先読み）が投入された場合は `'low'` を自動退避（実行中の `'downloading'` 行は `retryCount` を増加させず `'pending'` へ巻き戻し）し、上位優先度キューが空になった時点で残 `'pending'` 話から自動再開する。
-   - 1話取得開始時にステータスを `'downloading'`、保存成功時に `'completed'` へ更新し、進捗購読（`subscribeProgress`）経由で `SCR-02` 表示中または再訪問時にヘッダーの取得済み話数（`cachedChapters`）・容量および各話リストのキャッシュバッジをリアルタイムに更新する（`novels.updated_at` は更新せず保持する、R2-16）。`SCR-02` 再訪問時に `cacheScheduler.isNovelBatchCaching(novelId) === true` の場合は `resetInterruptedToPending` を呼び出さない。
+   - 1話取得開始時にステータスを `'downloading'` へ更新し、保存成功時は `chapterRepository.saveChapterBody` の同一トランザクション内で対象 `download_queue` 行を即時 `DELETE` 削除した上で、進捗購読（`subscribeProgress`）経由で `SCR-02` 表示中または再訪問時にヘッダーの取得済み話数（`cachedChapters`）・容量および各話リストのキャッシュバッジをリアルタイムに更新する（`novels.updated_at` は更新せず保持する、R2-16）。`SCR-02` 再訪問時に `cacheScheduler.isNovelBatchCaching(novelId) === true` の場合は `resetInterruptedToPending` を呼び出さない。
    - 特定話の取得に失敗（通信エラー・タイムアウトかつ既存キャッシュなし）した場合は、ループ全体を中断せず `download_queue` に `status = 'failed'`（`retry_count = retry_count + 1`、`last_error` 記録）として保存し、1.5秒ウェイト後に後続の `'pending'` 話の取得を継続する。ループ完了後に失敗話が存在する場合は該当エピソード行に `取得失敗` バッジ（`episode-failed-badge`）、ヘッダーにエラー通知と `失敗した話を再試行（N話）` ボタンを表示する。
    - ユーザー手動中断（「中断」ボタン）時は `pauseNovelTasks` で安全に処理を停止して未完了 `'downloading'` 話を `'pending'` に戻して保持する（`キャッシュを再開（残りN話）` へ遷移）。作品削除・本文キャッシュ削除時は `cancelNovelTasks(novelId, { clearQueue })` / `cancelAllTasks({ clearQueue })` で書き込み完了を待機した上で、全削除（`onlyRead: false`）時のみキューをクリアし、既読のみ削除（`onlyRead: true`）時は未読 `'pending'`/`'failed'` キューを保持する（`R1-18`）。またリーダー閲覧・先読み・DOM インポートで既に有効キャッシュ済みとなった話は自動的にキューから除外され、全話取得完了時および全削除時にはキューレコードが自動クリーンアップされる。
    - **全画面自動 Pull（Tombstone 削除 ＆ 差分目次補完）とのバックグラウンド競合保護（`v1.1` `useBackgroundAutoPull` 協調）**: `useBackgroundAutoPull` は全画面で動作するため、`CacheScheduler` が `'low'`/`'medium'` タスクを実行中に他端末からの Tombstone 削除（`novelRepository.deleteNovel(novelId)` カスケード削除）が発生し得る。このレースコンディションによる `FOREIGN KEY` 例外・削除済み作品への幽霊書き込み・誤失敗記録を防ぐため、`CacheScheduler` は各話の **HTTP 通信直前** および **`httpClient.getHtml` 完了直後（`chapterRepository.saveChapterBody` / `queueRepository.updateStatus` 実行直前）** に `signal.aborted` に加えて **`await chapterRepository.getChapter(novelId, chapterIndex) !== null`** を検証する。`null`（作品または対象話が削除済み）が返った場合、`'low'` タスクであれば残存する同一 `novelId` のメモリ上未処理タスクを破棄し `status: "cancelled"` で安全終了（`saveChapterBody` / `updateStatus` / 失敗加算を実行しない）し、`'high'`/`'medium'` タスクも書き込みを行わず安全中断する。また `SyncEngine` の `mergeExistingNovel` による差分目次自動補完（`upsertNovelWithToc(..., { updateOnly: true })`、`R1-19`）、`saveChapterBody` のアトミックな `download_queue` 削除（`R1-44`）、および `saveChapterBody` / `recalculateNovelStats` の `novels.updated_at` 保持規律（`R1-01`）とも競合なく安全に共存する。
