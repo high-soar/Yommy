@@ -70,6 +70,7 @@ async function seedKakuyomuNovelAndOpenDetail(
           chapters.push({
             chapterIndex: i,
             remoteChapterId: episodeId,
+            partTitle: null,
             title: `第${i}話 テスト`,
             url: `${sampleUrl}/episodes/${episodeId}`,
             publishedAt: "2026-01-01T10:00:00Z",
@@ -78,7 +79,6 @@ async function seedKakuyomuNovelAndOpenDetail(
         await services.novelRepository.upsertNovelWithToc(
           {
             ...parsedIndex,
-            totalChapters: customChapterCount,
             chapters,
           },
           new Date().toISOString(),
@@ -547,6 +547,7 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
         chapters7.push({
           chapterIndex: i,
           remoteChapterId: episodeId,
+          partTitle: null,
           title: `第${i}話 テスト`,
           url: `https://kakuyomu.jp/works/16817330658027210412/episodes/${episodeId}`,
           publishedAt: "2026-01-01T10:00:00Z",
@@ -556,7 +557,6 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
       await services.novelRepository.upsertNovelWithToc(
         {
           ...parsedIndex,
-          totalChapters: 7,
           chapters: chapters7,
         },
         new Date().toISOString(),
@@ -1164,9 +1164,20 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
               if (!services) return null;
               const chapters =
                 await services.chapterRepository.listChaptersByNovelId(novelId);
-              const cachedIndexes = chapters
-                .filter((c) => c.downloadedAt !== null && c.bodyHtml !== null)
+              const cachedSummaryIndexes = chapters
+                .filter((c) => c.downloadedAt !== null && c.byteSize > 0)
                 .map((c) => c.chapterIndex)
+                .sort((a, b) => a - b);
+              const loadedChapters = await Promise.all(
+                [1, 2, 3, 4, 5, 6].map((idx) =>
+                  services.chapterRepository.getChapter(novelId, idx),
+                ),
+              );
+              const cachedIndexes = loadedChapters
+                .filter((ch): ch is NonNullable<typeof ch> =>
+                  Boolean(ch && ch.bodyHtml && ch.bodyHtml.length > 0),
+                )
+                .map((ch) => ch.chapterIndex)
                 .sort((a, b) => a - b);
               const queue =
                 await services.queueRepository.listByNovelId(novelId);
@@ -1175,12 +1186,18 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
                 .sort((a, b) => a - b);
               const isBatchActive =
                 services.cacheScheduler?.isNovelBatchCaching(novelId) ?? false;
-              return { cachedIndexes, queueIndexes, isBatchActive };
+              return {
+                cachedSummaryIndexes,
+                cachedIndexes,
+                queueIndexes,
+                isBatchActive,
+              };
             }, SAMPLE_KAKUYOMU_NOVEL_ID);
           },
           { timeout: 25000 },
         )
         .toEqual({
+          cachedSummaryIndexes: [1, 2, 3, 4, 5, 6],
           cachedIndexes: [1, 2, 3, 4, 5, 6],
           queueIndexes: [7, 8],
           isBatchActive: true,

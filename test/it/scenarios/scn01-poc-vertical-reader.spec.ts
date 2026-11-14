@@ -1388,9 +1388,10 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
         {
           remoteChapterId: "16817330658027210414",
           title: "第1話 見知らぬ空",
-          url: "https://kakuyomu.jp/works/16817330658027210412/episodes/16817330658027210414",
           bodyHtml: longBodyHtml,
           byteSize: longBodyHtml.length,
+          prevChapterUrl: null,
+          nextChapterUrl: null,
         },
         new Date().toISOString(),
       );

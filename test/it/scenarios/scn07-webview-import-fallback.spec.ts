@@ -1,4 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
+import type { MockHttpClient } from "../../../src/bridges/http/mockHttpClient";
+import type { MockWebViewDomBridge } from "../../../src/bridges/webview/mockWebViewDomBridge";
 
 /**
  * OS バックキー押下イベントをシミュレートするヘルパー
@@ -157,7 +159,10 @@ test.describe("SCN-07: 内蔵ブラウザ画面（SCR-04）による目次・本
 
     await page.evaluate(
       ({ sampleWorkUrl, updatedHtml }) => {
-        window.__yommyServices?.webViewDomBridge.setMockPage({
+        (
+          window.__yommyServices?.webViewDomBridge as
+            MockWebViewDomBridge | undefined
+        )?.setMockPage({
           url: sampleWorkUrl,
           title: "境界迷宮と異界の魔術師（新版） - カクヨム",
           html: updatedHtml,
@@ -265,7 +270,7 @@ test.describe("SCN-07: 内蔵ブラウザ画面（SCR-04）による目次・本
     await page.evaluate(
       ({ episodeUrl }) => {
         const services = window.__yommyServices!;
-        services.httpClient.setResponse(episodeUrl, {
+        (services.httpClient as MockHttpClient).setResponse(episodeUrl, {
           status: 403,
           headers: {},
           html: "<html><head><title>Just a moment...</title></head><body>Cloudflare turnstile block</body></html>",
@@ -339,7 +344,10 @@ test.describe("SCN-07: 内蔵ブラウザ画面（SCR-04）による目次・本
 
     await page.evaluate(
       ({ episodeUrl, episodeHtml }) => {
-        window.__yommyServices?.webViewDomBridge.setMockPage({
+        (
+          window.__yommyServices?.webViewDomBridge as
+            MockWebViewDomBridge | undefined
+        )?.setMockPage({
           url: episodeUrl,
           title: "プロローグ：目覚め - カクヨム",
           html: episodeHtml,
@@ -560,7 +568,7 @@ test.describe("SCN-07: 内蔵ブラウザ画面（SCR-04）による目次・本
     await page.evaluate(
       ({ episodeUrl }) => {
         const services = window.__yommyServices!;
-        services.httpClient.setResponse(episodeUrl, {
+        (services.httpClient as MockHttpClient).setResponse(episodeUrl, {
           status: 500,
           headers: {},
           html: "Internal Server Error",
@@ -654,7 +662,10 @@ test.describe("SCN-07: 内蔵ブラウザ画面（SCR-04）による目次・本
     // MockWebViewDomBridge にページをセット
     await page.evaluate(
       ({ unseededEpisodeUrl, unseededEpisodeHtml }) => {
-        window.__yommyServices?.webViewDomBridge.setMockPage({
+        (
+          window.__yommyServices?.webViewDomBridge as
+            MockWebViewDomBridge | undefined
+        )?.setMockPage({
           url: unseededEpisodeUrl,
           title: "第1話 - カクヨム",
           html: unseededEpisodeHtml,
