@@ -132,36 +132,47 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     }
   };
 
-  const handleTombstoneDeletion = async (novelId: string): Promise<void> => {
+  const settlePrefetchTask = (task: PrefetchTask): void => {
+    task.detachCallerSignal();
+    task.resolve();
+  };
+
+  const rejectPrefetchTask = (task: PrefetchTask, err: unknown): void => {
+    task.detachCallerSignal();
+    task.reject(err);
+  };
+
+  const cancelQueuedPrefetches = (novelId?: string): void => {
     for (const queue of [highQueue, mediumQueue]) {
       for (let i = queue.length - 1; i >= 0; i--) {
-        if (queue[i].novelId === novelId) {
+        if (novelId === undefined || queue[i].novelId === novelId) {
           const [removed] = queue.splice(i, 1);
           removed.aborted = true;
-          removed.detachCallerSignal();
-          removed.resolve();
+          settlePrefetchTask(removed);
         }
       }
     }
+  };
+
+  const handleTombstoneDeletion = (novelId: string): void => {
+    cancelQueuedPrefetches(novelId);
 
     const batch = batches.get(novelId);
     if (batch) {
       batch.remainingChapterIndexes = [];
       removeFromLowOrder(novelId);
-      if (batch.status !== "cancelled") {
-        batch.status = "cancelled";
-        batch.isBatchCaching = false;
-        batch.pausedReason = "none";
-        emitProgress(batch);
-      }
+      batch.status = "cancelled";
+      batch.isBatchCaching = false;
+      batch.pausedReason = "none";
+      emitProgress(batch);
     }
   };
 
   const finalizeBatchCompletedIfDone = async (
     batch: NovelBatchState,
-  ): Promise<boolean> => {
+  ): Promise<void> => {
     if (batch.remainingChapterIndexes.length > 0) {
-      return false;
+      return;
     }
     removeFromLowOrder(batch.novelId);
     batch.status = "completed";
@@ -170,7 +181,6 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     if (batch.failedChapterIndexes.size === 0) {
       await queueRepository.clearNovelQueue(batch.novelId);
     }
-    return true;
   };
 
   const markChapterCompletedInBatch = async (
@@ -214,12 +224,8 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
       chapter.chapterIndex,
     );
     if (postChapter === null) {
-      await handleTombstoneDeletion(novelId);
+      handleTombstoneDeletion(novelId);
       return "tombstone";
-    }
-
-    if (signal.aborted) {
-      return "aborted";
     }
 
     if (response.status >= 400) {
@@ -241,16 +247,6 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     return "saved";
   };
 
-  const settlePrefetchTask = (task: PrefetchTask): void => {
-    task.detachCallerSignal();
-    task.resolve();
-  };
-
-  const rejectPrefetchTask = (task: PrefetchTask, err: unknown): void => {
-    task.detachCallerSignal();
-    task.reject(err);
-  };
-
   const abortActiveIf = (
     reason: InternalAbortReason,
     predicate: () => boolean,
@@ -262,11 +258,6 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
   };
 
   const runPrefetchTask = async (task: PrefetchTask): Promise<void> => {
-    if (task.aborted || disposed) {
-      settlePrefetchTask(task);
-      return;
-    }
-
     const controller = new AbortController();
     activePrefetchTask = task;
     activeAbortController = controller;
@@ -282,132 +273,110 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
 
     let hasFetchedAny = false;
     let currentIndexPosition = 0;
+    let handledTerminalOutcome = false;
 
     try {
-      if (task.priority === "medium") {
-        await delay(prefetchIntervalMs, controller.signal);
-      }
-
-      for (
-        ;
-        currentIndexPosition < task.chapterIndexes.length;
-        currentIndexPosition++
-      ) {
-        if (controller.signal.aborted || task.aborted || disposed) {
-          break;
-        }
-
-        const chapterIndex = task.chapterIndexes[currentIndexPosition];
-        let chapter = await chapterRepository.getChapter(
-          task.novelId,
-          chapterIndex,
-        );
-        if (chapter === null) {
-          await handleTombstoneDeletion(task.novelId);
-          settlePrefetchTask(task);
-          return;
-        }
-        if (isChapterFresh(chapter)) {
-          continue;
-        }
-
-        if (task.priority === "medium" && hasFetchedAny) {
+      try {
+        if (task.priority === "medium") {
           await delay(prefetchIntervalMs, controller.signal);
-          if (controller.signal.aborted || task.aborted || disposed) {
-            break;
+        }
+
+        for (
+          ;
+          currentIndexPosition < task.chapterIndexes.length;
+          currentIndexPosition++
+        ) {
+          const chapterIndex = task.chapterIndexes[currentIndexPosition];
+
+          if (task.priority === "medium" && hasFetchedAny) {
+            await delay(prefetchIntervalMs, controller.signal);
           }
-          chapter = await chapterRepository.getChapter(
+
+          const chapter = await chapterRepository.getChapter(
             task.novelId,
             chapterIndex,
           );
           if (chapter === null) {
-            await handleTombstoneDeletion(task.novelId);
+            handleTombstoneDeletion(task.novelId);
             settlePrefetchTask(task);
-            return;
+            handledTerminalOutcome = true;
+            break;
           }
           if (isChapterFresh(chapter)) {
             continue;
           }
-        }
 
-        const hasExistingCache = chapter.bodyHtml !== null;
-        if (task.priority === "medium") {
-          hasFetchedAny = true;
-        }
-
-        try {
-          const outcome = await downloadAndPersistChapter(
-            task.novelId,
-            chapter,
-            controller.signal,
-          );
-          if (outcome === "tombstone") {
-            settlePrefetchTask(task);
-            return;
-          }
-          if (outcome === "aborted") {
-            break;
-          }
-        } catch (err: unknown) {
-          if (controller.signal.aborted || task.aborted || disposed) {
-            break;
+          const hasExistingCache = chapter.bodyHtml !== null;
+          if (task.priority === "medium") {
+            hasFetchedAny = true;
           }
 
-          const latestOnErr = await chapterRepository.getChapter(
-            task.novelId,
-            chapterIndex,
-          );
-          if (latestOnErr === null) {
-            await handleTombstoneDeletion(task.novelId);
-            settlePrefetchTask(task);
-            return;
-          }
+          try {
+            const outcome = await downloadAndPersistChapter(
+              task.novelId,
+              chapter,
+              controller.signal,
+            );
+            if (outcome === "tombstone") {
+              settlePrefetchTask(task);
+              handledTerminalOutcome = true;
+              break;
+            }
+            if (outcome === "aborted") {
+              break;
+            }
+          } catch (err: unknown) {
+            if (controller.signal.aborted) {
+              break;
+            }
 
-          if (task.priority === "high") {
-            if (hasExistingCache) {
+            const latestOnErr = await chapterRepository.getChapter(
+              task.novelId,
+              chapterIndex,
+            );
+            if (latestOnErr === null) {
+              handleTombstoneDeletion(task.novelId);
+              settlePrefetchTask(task);
+              handledTerminalOutcome = true;
+              break;
+            }
+
+            if (task.priority === "high") {
+              if (hasExistingCache) {
+                console.warn(
+                  `[CacheScheduler] Stale chapter refresh failed for ${task.novelId}#${chapterIndex}, falling back to existing cache`,
+                  err,
+                );
+              } else {
+                rejectPrefetchTask(task, err);
+                handledTerminalOutcome = true;
+                break;
+              }
+            } else {
               console.warn(
-                `[CacheScheduler] Stale chapter refresh failed for ${task.novelId}#${chapterIndex}, falling back to existing cache`,
+                `[CacheScheduler] Medium prefetch failed for ${task.novelId}#${chapterIndex}`,
                 err,
               );
-            } else {
-              rejectPrefetchTask(task, err);
-              return;
             }
-          } else {
-            console.warn(
-              `[CacheScheduler] Medium prefetch failed for ${task.novelId}#${chapterIndex}`,
-              err,
-            );
           }
         }
+      } catch {
+        // delay() rejects when aborted by preemption or cancellation
       }
 
-      if (
-        task.priority === "medium" &&
-        activeAbortReason === "preempted" &&
-        !task.aborted &&
-        !disposed &&
-        currentIndexPosition < task.chapterIndexes.length
-      ) {
-        task.chapterIndexes = task.chapterIndexes.slice(currentIndexPosition);
-        mediumQueue.unshift(task);
-        return;
+      if (!handledTerminalOutcome) {
+        if (
+          task.priority === "medium" &&
+          activeAbortReason === "preempted" &&
+          !task.aborted &&
+          !disposed
+        ) {
+          task.chapterIndexes = task.chapterIndexes.slice(currentIndexPosition);
+          mediumQueue.unshift(task);
+        } else {
+          settlePrefetchTask(task);
+        }
       }
-
-      settlePrefetchTask(task);
-    } catch {
-      if (
-        task.priority === "medium" &&
-        activeAbortReason === "preempted" &&
-        !task.aborted &&
-        !disposed &&
-        currentIndexPosition < task.chapterIndexes.length
-      ) {
-        task.chapterIndexes = task.chapterIndexes.slice(currentIndexPosition);
-        mediumQueue.unshift(task);
-        return;
-      }
-      settlePrefetchTask(task);
     } finally {
       task.callerSignal?.removeEventListener("abort", onTaskCallerAbort);
       activePrefetchTask = null;
@@ -418,28 +387,22 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
 
   const runLowStep = async (batch: NovelBatchState): Promise<void> => {
     const chapterIndex = batch.remainingChapterIndexes[0];
-    if (chapterIndex === undefined) {
-      await finalizeBatchCompletedIfDone(batch);
-      emitProgress(batch);
-      return;
-    }
-
     const controller = new AbortController();
     activeLowNovelId = batch.novelId;
     activeAbortController = controller;
     activeAbortReason = null;
-    let markedDownloading = false;
 
     try {
       if (batch.needsDelayBeforeNextFetch) {
         activeLowSleeping = true;
-        await delay(prefetchIntervalMs, controller.signal);
-        activeLowSleeping = false;
+        try {
+          await delay(prefetchIntervalMs, controller.signal);
+        } catch {
+          return;
+        } finally {
+          activeLowSleeping = false;
+        }
         batch.needsDelayBeforeNextFetch = false;
-      }
-
-      if (hasHigherPriorityWork() || controller.signal.aborted || disposed) {
-        return;
       }
 
       const chapter = await chapterRepository.getChapter(
@@ -447,7 +410,7 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
         chapterIndex,
       );
       if (chapter === null) {
-        await handleTombstoneDeletion(batch.novelId);
+        handleTombstoneDeletion(batch.novelId);
         return;
       }
 
@@ -464,9 +427,8 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
         chapterIndex,
         "downloading",
       );
-      markedDownloading = true;
 
-      if (controller.signal.aborted || disposed) {
+      if (controller.signal.aborted) {
         await queueRepository.resetInterruptedToPending(batch.novelId);
         return;
       }
@@ -489,7 +451,7 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
         batch.needsDelayBeforeNextFetch =
           batch.remainingChapterIndexes.length > 0;
       } catch (err: unknown) {
-        if (controller.signal.aborted || disposed) {
+        if (controller.signal.aborted) {
           await queueRepository.resetInterruptedToPending(batch.novelId);
           return;
         }
@@ -499,7 +461,7 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
           chapterIndex,
         );
         if (latestOnErr === null) {
-          await handleTombstoneDeletion(batch.novelId);
+          handleTombstoneDeletion(batch.novelId);
           return;
         }
 
@@ -531,12 +493,7 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
         await finalizeBatchCompletedIfDone(batch);
         emitProgress(batch);
       }
-    } catch {
-      if (markedDownloading) {
-        await queueRepository.resetInterruptedToPending(batch.novelId);
-      }
     } finally {
-      activeLowSleeping = false;
       activeLowNovelId = null;
       activeAbortController = null;
       activeAbortReason = null;
@@ -544,53 +501,21 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
   };
 
   const pickNextWork = (): WorkUnit | null => {
-    while (highQueue.length > 0) {
-      const task = highQueue.shift()!;
-      if (!task.aborted) {
-        return { kind: "prefetch", task };
-      }
-      settlePrefetchTask(task);
+    if (highQueue.length > 0) {
+      return { kind: "prefetch", task: highQueue.shift()! };
     }
-
-    while (mediumQueue.length > 0) {
-      const task = mediumQueue.shift()!;
-      if (!task.aborted) {
-        return { kind: "prefetch", task };
-      }
-      settlePrefetchTask(task);
+    if (mediumQueue.length > 0) {
+      return { kind: "prefetch", task: mediumQueue.shift()! };
     }
-
-    while (lowNovelOrder.length > 0) {
-      const novelId = lowNovelOrder[0];
-      const batch = batches.get(novelId);
-      if (
-        !batch ||
-        !batch.isBatchCaching ||
-        batch.remainingChapterIndexes.length === 0
-      ) {
-        lowNovelOrder.shift();
-        continue;
-      }
+    if (lowNovelOrder.length > 0) {
+      const batch = batches.get(lowNovelOrder[0])!;
       return { kind: "low", batch };
     }
-
     return null;
   };
 
-  const hasPendingWork = (): boolean =>
-    highQueue.length > 0 ||
-    mediumQueue.length > 0 ||
-    lowNovelOrder.some((id) => {
-      const batch = batches.get(id);
-      return Boolean(
-        batch &&
-        batch.isBatchCaching &&
-        batch.remainingChapterIndexes.length > 0,
-      );
-    });
-
   const kickWorker = (): void => {
-    if (disposed || workerRunning) {
+    if (workerRunning) {
       return;
     }
     workerRunning = true;
@@ -618,23 +543,8 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
       } finally {
         activeWorkPromise = null;
         workerRunning = false;
-        if (!disposed && hasPendingWork()) {
-          kickWorker();
-        }
       }
     })();
-  };
-
-  const cancelQueuedPrefetches = (novelId?: string): void => {
-    for (const queue of [highQueue, mediumQueue]) {
-      for (let i = queue.length - 1; i >= 0; i--) {
-        if (novelId === undefined || queue[i].novelId === novelId) {
-          const [removed] = queue.splice(i, 1);
-          removed.aborted = true;
-          settlePrefetchTask(removed);
-        }
-      }
-    }
   };
 
   const enqueuePrefetch: CacheScheduler["enqueuePrefetch"] = async (
@@ -672,9 +582,7 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
         }
         const targetQueue = priority === "high" ? highQueue : mediumQueue;
         const idx = targetQueue.indexOf(task);
-        if (idx >= 0) {
-          targetQueue.splice(idx, 1);
-        }
+        targetQueue.splice(idx, 1);
         settlePrefetchTask(task);
       };
 
@@ -839,17 +747,11 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
       removeFromLowOrder(novelId);
     }
 
-    if (
-      (activeLowNovelId === novelId ||
-        activePrefetchTask?.novelId === novelId) &&
-      activeWorkPromise
-    ) {
-      abortActiveIf(
-        "cancelled",
-        () =>
-          activeLowNovelId === novelId ||
-          activePrefetchTask?.novelId === novelId,
-      );
+    const isMatchingActive = (): boolean =>
+      activeLowNovelId === novelId || activePrefetchTask?.novelId === novelId;
+
+    if (isMatchingActive() && activeWorkPromise) {
+      abortActiveIf("cancelled", isMatchingActive);
       await activeWorkPromise;
     }
 
@@ -945,15 +847,14 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     } else if (batch.status === "paused") {
       const activeQueueCount = queueItems.filter(
         (item) =>
-          (item.status === "pending" || item.status === "downloading") &&
-          !freshIndexes.has(item.chapterIndex),
+          item.status !== "failed" && !freshIndexes.has(item.chapterIndex),
       ).length;
       const failedCount = batch.failedChapterIndexes.size;
       batch.current = Math.max(
         batch.current,
         Math.min(batch.total, batch.total - activeQueueCount - failedCount),
       );
-      if (activeQueueCount === 0 && failedCount === 0 && batch.total > 0) {
+      if (activeQueueCount === 0 && failedCount === 0) {
         batch.status = "completed";
         await queueRepository.clearNovelQueue(novelId);
       }

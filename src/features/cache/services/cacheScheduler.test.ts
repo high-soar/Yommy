@@ -914,5 +914,639 @@ describe("createCacheScheduler", () => {
 
       scheduler.dispose();
     });
+
+    it("low の通信前・失敗時 Tombstone および high/medium の通信後・失敗時 Tombstone でも安全中断し書き込みを行わないこと", async () => {
+      const novelLowPre = await seedNovel(novelRepo, chapterRepo, {
+        workId: "tomb-low-pre",
+        chapterCount: 2,
+      });
+      const novelLowErr = await seedNovel(novelRepo, chapterRepo, {
+        workId: "tomb-low-err",
+        chapterCount: 1,
+      });
+      const novelHighPost = await seedNovel(novelRepo, chapterRepo, {
+        workId: "tomb-high-post",
+        chapterCount: 1,
+      });
+      const novelHighErr = await seedNovel(novelRepo, chapterRepo, {
+        workId: "tomb-high-err",
+        chapterCount: 1,
+      });
+
+      const saveSpy = vi.spyOn(chapterRepo, "saveChapterBody");
+      const updateStatusSpy = vi.spyOn(queueRepo, "updateStatus");
+
+      const httpClient: HttpClientBridge = {
+        getHtml: async (opts) => {
+          if (opts.url.includes("tomb-low-err")) {
+            await novelRepo.deleteNovel(novelLowErr.id);
+            throw new Error("net fail after delete");
+          }
+          if (opts.url.includes("tomb-high-post")) {
+            await novelRepo.deleteNovel(novelHighPost.id);
+            return {
+              status: 200,
+              url: opts.url,
+              headers: {},
+              html: episodeHtml(1),
+            };
+          }
+          if (opts.url.includes("tomb-high-err")) {
+            await novelRepo.deleteNovel(novelHighErr.id);
+            throw new Error("high fail after delete");
+          }
+          return {
+            status: 200,
+            url: opts.url,
+            headers: {},
+            html: episodeHtml(1),
+          };
+        },
+      };
+
+      const scheduler = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: 5,
+      });
+
+      // low pre-HTTP Tombstone: enqueueBatchCache 後に DB 削除された状態でステップ開始
+      await scheduler.enqueueBatchCache(novelLowPre.id, [1, 2]);
+      await novelRepo.deleteNovel(novelLowPre.id);
+      await vi.waitFor(() => {
+        expect(scheduler.getNovelProgress(novelLowPre.id)?.status).toBe(
+          "cancelled",
+        );
+      });
+
+      // low error-path Tombstone
+      await scheduler.enqueueBatchCache(novelLowErr.id, [1]);
+      await vi.waitFor(() => {
+        expect(scheduler.getNovelProgress(novelLowErr.id)?.status).toBe(
+          "cancelled",
+        );
+      });
+
+      // high post-HTTP & error-path Tombstone (reject せず書き込みも行わず終了)
+      await expect(
+        scheduler.enqueuePrefetch({
+          novelId: novelHighPost.id,
+          chapterIndexes: [1],
+          priority: "high",
+        }),
+      ).resolves.toBeUndefined();
+      await expect(
+        scheduler.enqueuePrefetch({
+          novelId: novelHighErr.id,
+          chapterIndexes: [1],
+          priority: "high",
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(saveSpy).not.toHaveBeenCalled();
+      expect(
+        updateStatusSpy.mock.calls.some(([, , st]) => st === "failed"),
+      ).toBe(false);
+
+      scheduler.dispose();
+    });
+  });
+
+  describe("追加境界分岐（再同期・maxRetry上限・abort保護・dispose後防御）", () => {
+    it("アクティブ/一時停止バッチに対する syncNovelProgress が外部保存を検知し、失敗解除・完了遷移（およびクリア）を行うこと", async () => {
+      const novel = await seedNovel(novelRepo, chapterRepo, {
+        workId: "sync-active",
+        chapterCount: 3,
+      });
+
+      let releaseCh1!: () => void;
+      const ch1Gate = new Promise<void>((r) => {
+        releaseCh1 = r;
+      });
+      let notifyCh1Started!: () => void;
+      const ch1Started = new Promise<void>((r) => {
+        notifyCh1Started = r;
+      });
+
+      const httpClient: HttpClientBridge = {
+        getHtml: async (opts) => {
+          if (opts.url.endsWith("ep-1")) {
+            notifyCh1Started();
+            await ch1Gate;
+          }
+          if (opts.url.endsWith("ep-2")) {
+            throw new Error("temp fail");
+          }
+          return {
+            status: 200,
+            url: opts.url,
+            headers: {},
+            html: episodeHtml(3),
+          };
+        },
+      };
+
+      const scheduler = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: 5,
+      });
+
+      await scheduler.enqueueBatchCache(novel.id, [1, 2, 3]);
+      await ch1Started;
+
+      // ch1 待機中に ch3 が外部（WebView等）でキャッシュ保存 & キュー削除されたと仮定
+      await chapterRepo.saveChapterBody(
+        novel.id,
+        3,
+        {
+          remoteChapterId: "ep-3",
+          title: "第3話",
+          bodyHtml: "<p>外部取得</p>",
+          byteSize: 12,
+          prevChapterUrl: null,
+          nextChapterUrl: null,
+        },
+        new Date().toISOString(),
+      );
+      await queueRepo.deleteByNovelAndChapters(novel.id, [3]);
+      await scheduler.syncNovelProgress(novel.id);
+      expect(scheduler.getNovelProgress(novel.id)?.current).toBe(1);
+
+      releaseCh1();
+      await vi.waitFor(() => {
+        expect(scheduler.getNovelProgress(novel.id)?.status).toBe("completed");
+      });
+      // ep-2 が失敗として残っていること
+      expect(
+        scheduler.getNovelProgress(novel.id)?.failedChapterIndexes,
+      ).toEqual([2]);
+
+      // 失敗話 ep-2 を外部取得で救済し syncNovelProgress -> failedChapterIndexes から消えること
+      await chapterRepo.saveChapterBody(
+        novel.id,
+        2,
+        {
+          remoteChapterId: "ep-2",
+          title: "第2話",
+          bodyHtml: "<p>外部救済</p>",
+          byteSize: 12,
+          prevChapterUrl: null,
+          nextChapterUrl: null,
+        },
+        new Date().toISOString(),
+      );
+      await queueRepo.deleteByNovelAndChapters(novel.id, [2]);
+      await scheduler.syncNovelProgress(novel.id);
+      expect(
+        scheduler.getNovelProgress(novel.id)?.failedChapterIndexes,
+      ).toEqual([]);
+
+      // paused 状態から全残話を外部保存して syncNovelProgress -> completed 遷移すること
+      const novelPaused = await seedNovel(novelRepo, chapterRepo, {
+        workId: "sync-paused",
+        chapterCount: 2,
+      });
+      await scheduler.enqueueBatchCache(novelPaused.id, [1, 2]);
+      await scheduler.pauseNovelTasks(novelPaused.id);
+      await chapterRepo.saveChapterBody(
+        novelPaused.id,
+        1,
+        {
+          remoteChapterId: "ep-1",
+          title: "第1話",
+          bodyHtml: "<p>ext1</p>",
+          byteSize: 10,
+          prevChapterUrl: null,
+          nextChapterUrl: null,
+        },
+        new Date().toISOString(),
+      );
+      await chapterRepo.saveChapterBody(
+        novelPaused.id,
+        2,
+        {
+          remoteChapterId: "ep-2",
+          title: "第2話",
+          bodyHtml: "<p>ext2</p>",
+          byteSize: 10,
+          prevChapterUrl: null,
+          nextChapterUrl: null,
+        },
+        new Date().toISOString(),
+      );
+      await queueRepo.deleteByNovelAndChapters(novelPaused.id, [1, 2]);
+      await scheduler.syncNovelProgress(novelPaused.id);
+      expect(scheduler.getNovelProgress(novelPaused.id)?.status).toBe(
+        "completed",
+      );
+
+      scheduler.dispose();
+    });
+
+    it("signal を無視して解決する通信中の中断・cancelNovelTasks の高/中優先度中断・待機キュー内 signal abort・maxRetryCount 到達 0件・dispose 後ガードが安全に動作すること", async () => {
+      const novel = await seedNovel(novelRepo, chapterRepo, {
+        workId: "edge-all",
+        chapterCount: 4,
+      });
+      const novelQueued = await seedNovel(novelRepo, chapterRepo, {
+        workId: "edge-queued",
+        chapterCount: 2,
+      });
+
+      // retryCount = maxRetryCount (3) 到達済みキューを作成し 0 targets 時の failed 保持を確認
+      await queueRepo.enqueueChapters(novelQueued.id, [
+        {
+          chapterIndex: 1,
+          targetUrl: `https://kakuyomu.jp/works/edge-queued/episodes/ep-1`,
+        },
+      ]);
+      for (let i = 0; i < 3; i++) {
+        await queueRepo.updateStatus(novelQueued.id, 1, "failed", {
+          lastError: "fail",
+          incrementRetry: true,
+        });
+      }
+
+      let releaseIgnoredHttp!: () => void;
+      const ignoredHttpGate = new Promise<void>((r) => {
+        releaseIgnoredHttp = r;
+      });
+      let notifyIgnoredStarted!: () => void;
+      const ignoredStarted = new Promise<void>((r) => {
+        notifyIgnoredStarted = r;
+      });
+
+      const httpClient: HttpClientBridge = {
+        getHtml: async (opts) => {
+          if (opts.url.includes("edge-all") && opts.url.endsWith("ep-1")) {
+            notifyIgnoredStarted();
+            // signal.aborted を無視して遅れて resolve するモック（abort後書き込み防止確認）
+            await ignoredHttpGate;
+          }
+          return {
+            status: 200,
+            url: opts.url,
+            headers: {},
+            html: episodeHtml(1),
+          };
+        },
+      };
+
+      const saveSpy = vi.spyOn(chapterRepo, "saveChapterBody");
+      const scheduler = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: 10,
+      });
+
+      // unsubscribe 二重呼び出し安全確認
+      const unsub = scheduler.subscribeProgress(novel.id, () => {});
+      unsub();
+      unsub();
+
+      // targets=0 でも maxRetryCount 到達 failed 行があれば clearNovelQueue されず failedChapterIndexes に残ること
+      await scheduler.enqueueBatchCache(novelQueued.id, [1]);
+      expect(
+        scheduler.getNovelProgress(novelQueued.id)?.failedChapterIndexes,
+      ).toEqual([1]);
+
+      // high 実行中（signal 無視して遅れて解決）にキュー積み込み -> queued signal abort + cancelNovelTasks 検証
+      const highActivePromise = scheduler.enqueuePrefetch({
+        novelId: novel.id,
+        chapterIndexes: [1],
+        priority: "high",
+      });
+      await ignoredStarted;
+
+      const queuedController = new AbortController();
+      const queuedMediumPromise = scheduler.enqueuePrefetch({
+        novelId: novel.id,
+        chapterIndexes: [2],
+        priority: "medium",
+        signal: queuedController.signal,
+      });
+      // キュー待機中に caller signal を abort -> キューから除去され即 resolve
+      queuedController.abort();
+      await expect(queuedMediumPromise).resolves.toBeUndefined();
+
+      // 待機中の別タスクを積んで cancelNovelTasks でアクティブ+待機を両方キャンセル
+      const cancelPending = scheduler.cancelNovelTasks(novel.id);
+      releaseIgnoredHttp();
+      await highActivePromise;
+      await cancelPending;
+      expect(saveSpy).not.toHaveBeenCalled();
+
+      // low 実行中（signal 無視して解決）に pauseNovelTasks -> downloadAndPersistChapter の aborted 戻り確認
+      let releaseLowIgnored!: () => void;
+      const lowIgnoredGate = new Promise<void>((r) => {
+        releaseLowIgnored = r;
+      });
+      let notifyLowIgnoredStarted!: () => void;
+      const lowIgnoredStarted = new Promise<void>((r) => {
+        notifyLowIgnoredStarted = r;
+      });
+      vi.spyOn(httpClient, "getHtml").mockImplementationOnce(async (opts) => {
+        notifyLowIgnoredStarted();
+        await lowIgnoredGate;
+        return {
+          status: 200,
+          url: opts.url,
+          headers: {},
+          html: episodeHtml(2),
+        };
+      });
+
+      await scheduler.enqueueBatchCache(novel.id, [2]);
+      await lowIgnoredStarted;
+      const pausePromise = scheduler.pauseNovelTasks(novel.id);
+      releaseLowIgnored();
+      await pausePromise;
+
+      // dispose 後の enqueuePrefetch / enqueueBatchCache は何もしないこと
+      scheduler.dispose();
+      await scheduler.enqueuePrefetch({
+        novelId: novel.id,
+        chapterIndexes: [3],
+        priority: "high",
+      });
+      await scheduler.enqueueBatchCache(novel.id, [3]);
+      expect(saveSpy).not.toHaveBeenCalled();
+    });
+
+    it("medium が通信中に high で割り込まれた場合、残りの話数を保持して high 完了後に再開すること", async () => {
+      const novel = await seedNovel(novelRepo, chapterRepo, {
+        workId: "med-preempt-http",
+        chapterCount: 3,
+      });
+
+      let notifyCh2Started!: () => void;
+      const ch2Started = new Promise<void>((r) => {
+        notifyCh2Started = r;
+      });
+      let ch2Attempt = 0;
+
+      const httpClient: HttpClientBridge = {
+        getHtml: async (opts) => {
+          if (opts.url.endsWith("ep-2") && ch2Attempt === 0) {
+            ch2Attempt += 1;
+            notifyCh2Started();
+            return await new Promise((_, reject) => {
+              opts.signal?.addEventListener(
+                "abort",
+                () => reject(new DOMException("Preempted", "AbortError")),
+                { once: true },
+              );
+            });
+          }
+          const epNum = /ep-(\d+)/.exec(opts.url)?.[1] ?? "1";
+          return {
+            status: 200,
+            url: opts.url,
+            headers: {},
+            html: episodeHtml(Number(epNum)),
+          };
+        },
+      };
+
+      const scheduler = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: 5,
+      });
+
+      const mediumPromise = scheduler.enqueuePrefetch({
+        novelId: novel.id,
+        chapterIndexes: [2, 3],
+        priority: "medium",
+      });
+      await ch2Started;
+
+      // medium の ep-2 通信中に high(ep-1) で割り込み
+      await scheduler.enqueuePrefetch({
+        novelId: novel.id,
+        chapterIndexes: [1],
+        priority: "high",
+      });
+      await mediumPromise;
+
+      const ch1 = await chapterRepo.getChapter(novel.id, 1);
+      const ch2 = await chapterRepo.getChapter(novel.id, 2);
+      const ch3 = await chapterRepo.getChapter(novel.id, 3);
+      expect(ch1?.bodyHtml).toContain("第1話の本文");
+      expect(ch2?.bodyHtml).toContain("第2話の本文");
+      expect(ch3?.bodyHtml).toContain("第3話の本文");
+      scheduler.dispose();
+    });
+
+    it("待機中 high の caller signal 中断・cancelQueuedPrefetches の他作品除外・low 実行直前の Tombstone / 既新鮮スキップが正しく動作すること", async () => {
+      const novelBlocker = await seedNovel(novelRepo, chapterRepo, {
+        workId: "blocker",
+        chapterCount: 2,
+      });
+      const novelPreDel = await seedNovel(novelRepo, chapterRepo, {
+        workId: "pre-del-low",
+        chapterCount: 2,
+      });
+      const novelFreshSkip = await seedNovel(novelRepo, chapterRepo, {
+        workId: "fresh-skip-low",
+        chapterCount: 2,
+      });
+
+      let releaseBlocker!: () => void;
+      const blockerGate = new Promise<void>((r) => {
+        releaseBlocker = r;
+      });
+      let notifyBlockerStarted!: () => void;
+      const blockerStarted = new Promise<void>((r) => {
+        notifyBlockerStarted = r;
+      });
+
+      const httpClient: HttpClientBridge = {
+        getHtml: async (opts) => {
+          if (opts.url.includes("blocker") && opts.url.endsWith("ep-1")) {
+            notifyBlockerStarted();
+            await blockerGate;
+          }
+          return {
+            status: 200,
+            url: opts.url,
+            headers: {},
+            html: episodeHtml(1),
+          };
+        },
+      };
+
+      const scheduler = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+        prefetchIntervalMs: 5,
+      });
+
+      // 1. ブロッカー high(ep-1) を起動して後続をキュー待機させる
+      const blockerPromise = scheduler.enqueuePrefetch({
+        novelId: novelBlocker.id,
+        chapterIndexes: [1],
+        priority: "high",
+      });
+      await blockerStarted;
+
+      // 2. 待機中 high の caller signal abort
+      const queuedHighCtrl = new AbortController();
+      const queuedHighPromise = scheduler.enqueuePrefetch({
+        novelId: novelBlocker.id,
+        chapterIndexes: [2],
+        priority: "high",
+        signal: queuedHighCtrl.signal,
+      });
+      queuedHighCtrl.abort();
+      await expect(queuedHighPromise).resolves.toBeUndefined();
+
+      // 3. 待機キューに他作品タスクと対象作品タスクを両方積み、novelPreDel のみ cancelNovelTasks で除去
+      const otherMediumPromise = scheduler.enqueuePrefetch({
+        novelId: novelFreshSkip.id,
+        chapterIndexes: [2],
+        priority: "medium",
+      });
+      const targetMediumPromise = scheduler.enqueuePrefetch({
+        novelId: novelPreDel.id,
+        chapterIndexes: [2],
+        priority: "medium",
+      });
+
+      // 4. high/medium 待機中に low バッチを登録（preempted で開始）し、low 実行前に DB 更新・削除を行う
+      await scheduler.enqueueBatchCache(novelPreDel.id, [1]);
+      await scheduler.enqueueBatchCache(novelFreshSkip.id, [1]);
+      await novelRepo.deleteNovel(novelPreDel.id);
+      await chapterRepo.saveChapterBody(
+        novelFreshSkip.id,
+        1,
+        {
+          remoteChapterId: "ep-1",
+          title: "第1話",
+          bodyHtml: "<p>既キャッシュ</p>",
+          byteSize: 10,
+          prevChapterUrl: null,
+          nextChapterUrl: null,
+        },
+        new Date().toISOString(),
+      );
+
+      // novelPreDel のみキャンセル（novelFreshSkip の medium はキューに残る）
+      await scheduler.cancelNovelTasks(novelPreDel.id);
+      await expect(targetMediumPromise).resolves.toBeUndefined();
+
+      // ブロッカー解除 -> pre-del(Tombstoneスキップ済み) / fresh-skip(既新鮮でHTTPなし完了) / otherMedium が完了
+      releaseBlocker();
+      await blockerPromise;
+      await otherMediumPromise;
+
+      await vi.waitFor(() => {
+        expect(scheduler.getNovelProgress(novelFreshSkip.id)?.status).toBe(
+          "completed",
+        );
+      });
+
+      // high 実行前の low 事前 Tombstone (runLowStep 内の chapter === null) を個別検証
+      const novelPreStep = await seedNovel(novelRepo, chapterRepo, {
+        workId: "pre-step-tomb",
+        chapterCount: 1,
+      });
+      let releaseHold!: () => void;
+      const holdGate = new Promise<void>((r) => {
+        releaseHold = r;
+      });
+      let notifyHoldStarted!: () => void;
+      const holdStarted = new Promise<void>((r) => {
+        notifyHoldStarted = r;
+      });
+      vi.spyOn(httpClient, "getHtml").mockImplementationOnce(async (opts) => {
+        notifyHoldStarted();
+        await holdGate;
+        return {
+          status: 200,
+          url: opts.url,
+          headers: {},
+          html: episodeHtml(2),
+        };
+      });
+      const holdPromise = scheduler.enqueuePrefetch({
+        novelId: novelBlocker.id,
+        chapterIndexes: [2],
+        priority: "high",
+      });
+      await holdStarted;
+      await scheduler.enqueueBatchCache(novelPreStep.id, [1]);
+      await novelRepo.deleteNovel(novelPreStep.id);
+      releaseHold();
+      await holdPromise;
+      await vi.waitFor(() => {
+        expect(scheduler.getNovelProgress(novelPreStep.id)?.status).toBe(
+          "cancelled",
+        );
+      });
+
+      scheduler.dispose();
+    });
+
+    it("low が 1.5s スリープ中に medium または high が割り込むとスリープが即時中断され上位優先度が先に実行されること", async () => {
+      vi.useFakeTimers();
+      const novel = await seedNovel(novelRepo, chapterRepo, {
+        workId: "low-sleep-preempt",
+        chapterCount: 3,
+      });
+
+      const httpClient = new MockHttpClient();
+      for (let i = 1; i <= 3; i++) {
+        httpClient.setResponse(
+          `https://kakuyomu.jp/works/low-sleep-preempt/episodes/ep-${i}`,
+          { html: episodeHtml(i) },
+        );
+      }
+
+      const scheduler = createCacheScheduler({
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        queueRepository: queueRepo,
+        httpClient,
+        parserRegistry: createDefaultParserRegistry(),
+      });
+
+      await scheduler.enqueueBatchCache(novel.id, [1, 2]);
+      // ep-1 完了後、ep-2 の前の 1500ms スリープに入った状態まで少し進める
+      await vi.advanceTimersByTimeAsync(100);
+      expect(scheduler.getNovelProgress(novel.id)?.current).toBe(1);
+
+      // low スリープ中に medium を投入 -> low スリープを即中断し preempted に遷移
+      const mediumPromise = scheduler.enqueuePrefetch({
+        novelId: novel.id,
+        chapterIndexes: [3],
+        priority: "medium",
+      });
+      expect(scheduler.getNovelProgress(novel.id)?.status).toBe("preempted");
+
+      await vi.advanceTimersByTimeAsync(PREFETCH_INTERVAL_MS * 2);
+      await mediumPromise;
+
+      // medium 完了後、low が ep-2 を取得して完了すること
+      await vi.advanceTimersByTimeAsync(PREFETCH_INTERVAL_MS * 2);
+      expect(scheduler.getNovelProgress(novel.id)?.status).toBe("completed");
+      scheduler.dispose();
+    });
   });
 });
