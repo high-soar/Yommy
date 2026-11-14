@@ -16,8 +16,6 @@ import type {
   CacheSchedulerDeps,
 } from "../types";
 
-export const DEFAULT_MAX_RETRY_COUNT = 3;
-
 type InternalAbortReason = "preempted" | "cancelled";
 
 interface PrefetchTask {
@@ -68,7 +66,7 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     queueRepository,
     httpClient,
     parserRegistry,
-    maxRetryCount = DEFAULT_MAX_RETRY_COUNT,
+    maxRetryCount,
     prefetchIntervalMs = PREFETCH_INTERVAL_MS,
     timeoutMs = STANDARD_TIMEOUT_MS,
     shortTimeoutMs = SHORT_TIMEOUT_MS,
@@ -706,19 +704,24 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
         if (!ch || isChapterFresh(ch, now)) {
           return false;
         }
+        if (maxRetryCount === undefined) {
+          return true;
+        }
         const queueItem = queueByIndex.get(ch.chapterIndex);
         return (queueItem?.retryCount ?? 0) < maxRetryCount;
       });
 
-    if (targets.length === 0) {
-      const freshSet = new Set(freshIndexes);
-      const remainingFailed = existingQueue
-        .filter(
-          (item) =>
-            item.status === "failed" && !freshSet.has(item.chapterIndex),
-        )
-        .map((item) => item.chapterIndex);
+    const targetIndexSet = new Set(targets.map((ch) => ch.chapterIndex));
+    const retainedFailedIndexes = existingQueue
+      .filter(
+        (item) =>
+          item.status === "failed" &&
+          !targetIndexSet.has(item.chapterIndex) &&
+          chapterByIndex.get(item.chapterIndex)?.downloadedAt === null,
+      )
+      .map((item) => item.chapterIndex);
 
+    if (targets.length === 0) {
       await clearCompletedQueueRows(novelId);
       if (disposed) {
         return;
@@ -726,10 +729,10 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
 
       const completedBatch: NovelBatchState = {
         novelId,
-        total: 0,
+        total: retainedFailedIndexes.length,
         current: 0,
         remainingChapterIndexes: [],
-        failedChapterIndexes: new Set(remainingFailed),
+        failedChapterIndexes: new Set(retainedFailedIndexes),
         status: "completed",
         isBatchCaching: false,
         pausedReason: "none",
@@ -753,10 +756,10 @@ export function createCacheScheduler(deps: CacheSchedulerDeps): CacheScheduler {
     const preempted = hasHigherPriorityWork();
     const batch: NovelBatchState = {
       novelId,
-      total: targets.length,
+      total: targets.length + retainedFailedIndexes.length,
       current: 0,
       remainingChapterIndexes: targets.map((ch) => ch.chapterIndex),
-      failedChapterIndexes: new Set<number>(),
+      failedChapterIndexes: new Set(retainedFailedIndexes),
       status: preempted ? "preempted" : "running",
       isBatchCaching: true,
       pausedReason: preempted ? "preempted" : "none",

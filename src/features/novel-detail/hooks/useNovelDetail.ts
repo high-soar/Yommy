@@ -13,7 +13,6 @@ import {
 } from "../../../shared/constants/cache";
 import { isChapterFresh, delay } from "../../../shared/utils/cache";
 import { fetchFullNovelIndex } from "../../../parsers/fetchFullNovelIndex";
-import { DEFAULT_MAX_RETRY_COUNT } from "../../cache/services/cacheScheduler";
 import type { CacheNovelProgress } from "../../cache/types";
 
 export type { UseNovelDetailResult } from "../types";
@@ -65,24 +64,6 @@ function getUncachedOrStaleChapters(
   return chapters
     .filter((ch) => !isChapterFresh(ch, now))
     .sort((a, b) => a.chapterIndex - b.chapterIndex);
-}
-
-/**
- * 対象エピソードから最大再試行回数（DEFAULT_MAX_RETRY_COUNT）未満の chapterIndex 一覧を抽出する。
- */
-function selectRetryableChapterIndexes(
-  targetChapters: ChapterSummary[],
-  queueItems: DownloadQueueItem[],
-): number[] {
-  const retryCountByIndex = new Map(
-    queueItems.map((item) => [item.chapterIndex, item.retryCount]),
-  );
-  return targetChapters
-    .filter(
-      (ch) =>
-        (retryCountByIndex.get(ch.chapterIndex) ?? 0) < DEFAULT_MAX_RETRY_COUNT,
-    )
-    .map((ch) => ch.chapterIndex);
 }
 
 /**
@@ -613,10 +594,14 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
           updatedChapters,
           Date.now(),
         );
-        const remainingIndexes = selectRetryableChapterIndexes(
-          remainingTargets,
-          queueAfterRefresh,
+        const failedIndexSet = new Set(
+          queueAfterRefresh
+            .filter((item) => item.status === "failed")
+            .map((item) => item.chapterIndex),
         );
+        const remainingIndexes = remainingTargets
+          .filter((ch) => !failedIndexSet.has(ch.chapterIndex))
+          .map((ch) => ch.chapterIndex);
         if (remainingIndexes.length > 0) {
           await cacheScheduler.enqueueBatchCache(novelId, remainingIndexes);
         }
@@ -692,7 +677,8 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
 
     if (cacheScheduler) {
       try {
-        const queueItems = await queueRepository.listByNovelId(novelId);
+        const targetIndexes = targetChapters.map((ch) => ch.chapterIndex);
+        await cacheScheduler.enqueueBatchCache(novelId, targetIndexes);
         if (!isMountedRef.current) {
           return;
         }
@@ -710,11 +696,6 @@ export function useNovelDetail(novelId: string): UseNovelDetailResult {
           }
           return;
         }
-        const targetIndexes = selectRetryableChapterIndexes(
-          targetChapters,
-          queueItems,
-        );
-        await cacheScheduler.enqueueBatchCache(novelId, targetIndexes);
       } catch (err: unknown) {
         isBatchCachingRef.current = false;
         runIfMounted(() => {

@@ -4842,7 +4842,7 @@ describe("useNovelDetail", () => {
       });
       expect(mock3.scheduler.cancelNovelTasks).toHaveBeenCalledWith(
         seeded3.id,
-        { clearQueue: true },
+        { clearQueue: false },
       );
       expect(hook3.result.current.isBatchCaching).toBe(false);
       expect(hook3.result.current.batchCacheProgress).toBeNull();
