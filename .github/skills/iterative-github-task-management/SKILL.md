@@ -91,10 +91,11 @@ AI が Sub-issue を起票する際は以下の形式を使用します。
 2. **Step 2（横断レビュー指摘是正 PR ＆ Android 実機検証）【🤖 指摘是正 PR は AI 自律マージ → 📱 人間による実機検証】**:
    - Sub-issue を起票し、横断レビュー指摘（`R1-xx`）のコード・テスト・設計是正および `docs/quality/bug-and-handover-log.md` への記録を含む PR（`Closes #Sub-issue`、複数分割可）を作成する。Gate 1〜6 完遂後、**メインエージェントが自律マージ** する。
    - 自律マージ直後、未消化の実機申し送り事項（`HO-xx`）および横断レビュー是正箇所を網羅した **構造化された「Android 実機検証試験項目表」** を人間に提示する。実機検証で不具合が見つかった場合は追加是正 PR を作成・自律マージし、実機確認 OK となるまで収束させる。
-3. **Step 3（品質分析レポート・再発防止 Kaizen・バグ＆申し送りアーカイブ・正本一括 Approved 化：最終承認 PR）【👤 人間承認・マージ】**:
+3. **Step 3（品質分析レポート・再発防止 Kaizen・バグ＆申し送りアーカイブ・正本一括 Approved 化・バージョン更新：最終承認 PR）【👤 人間承認・マージ】**:
    - 横断レビュー是正と Android 実機検証が完全収束（Round 2 残存指摘 0 件・未解決 `HO-xx` 0 件）した後、**1 本の最終 PR（`Closes #Milestone承認Issue`）** で以下を一括実施する：
      1. 確定した全バグ記録に基づく `docs/quality/reports/<milestone>.md`（定量メトリクス・バグ密度・DRE・原因傾向分析）の作成と `bug-and-handover-log.md` §4 サマリーへの追記
      2. 再発防止策としての `docs/guidelines/testing.md` および `.github/skills/*/SKILL.md` の改善（Kaizen）
      3. 当該 Milestone で完了したバグ記録および解決済み（`Resolved`）申し送り事項の `docs/quality/archive/<milestone>-log.md`（OKF `type: quality-log`, `status: "Completed (Archived)"`）へのアーカイブ移動と `bug-and-handover-log.md` のクリーンアップ（`docs/index.md` への登録含む）
      4. `docs/specs/` 配下の正本仕様書および品質レポートのフロントマター `status` の一括 `Approved` 化
+     5. [docs/guidelines/workflow.md §5.1](../../../docs/guidelines/workflow.md#51-バージョン採番semverと-git-tag--github-release-自動化ルール) に従い `package.json` の `version` を `X.Y.0` へ更新（マージ時に GitHub Actions で Git Tag / GitHub Release `vX.Y.0` を自動発行）
    - PR（`Closes #Milestone承認Issue`）で Gate 1〜6 を完遂し、**人間の最終確認・マージをもって Milestone を完了** する。

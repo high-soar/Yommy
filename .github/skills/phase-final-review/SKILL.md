@@ -80,7 +80,7 @@ description: "Use when orchestrating a cross-deliverable review at the end of a 
 
 ## 3. 横断レビュー指摘是正・Android 実機検証（Step 2）から品質分析・アーカイブ・最終承認（Step 3）への進行
 
-全モデルの Round 1 横断レビューが完了し、人間から Step 2 開始指示を受けた後、以下の手順で **Step 2（横断レビュー指摘是正 PR の AI 自律マージ ＋ Android 実機検証試験項目表の提示と実機収束）** から **Step 3（品質分析レポート・再発防止 Kaizen・バグ＆申し送りログアーカイブ・正本一括 Approved 化の最終承認 PR）** までを進めます。
+全モデルの Round 1 横断レビューが完了し、人間から Step 2 開始指示を受けた後、以下の手順で **Step 2（横断レビュー指摘是正 PR の AI 自律マージ ＋ Android 実機検証試験項目表の提示と実機収束）** から **Step 3（品質分析レポート・再発防止 Kaizen・バグ＆申し送りログアーカイブ・正本一括 Approved 化・バージョン更新の最終承認 PR）** までを進めます。
 
 1. **横断レビュー指摘の是正 PR 作成と AI 自律マージ（Step 2-1）**:
    - Sub-issue を起票し、Round 1 で検出された全指摘（`R1-xx`）を修正して [docs/quality/bug-and-handover-log.md](../../../docs/quality/bug-and-handover-log.md) に記録する（原因 `D` は `docs/specs/` も同時修正。規模に応じて複数の Sub-issue PR に分割可）。
@@ -88,9 +88,9 @@ description: "Use when orchestrating a cross-deliverable review at the end of a 
 2. **Android 実機検証試験項目表の提示と実機確認・是正収束（Step 2-2）**:
    - 指摘是正 PR の自律マージ完了後、AI は直ちに [docs/guidelines/workflow.md §2.2](../../../docs/guidelines/workflow.md#22-android-実機検証の実施判断基準と試験項目表フォーマット) に従い、未消化の申し送り事項（`HO-xx`）および横断レビューでの修正箇所を網羅した **構造化された「Android 実機検証試験項目表」（項番・確認項目・具体的な操作手順・期待される結果・一筆書き確認ルート）** を人間に提示する。
    - 人間による実機検証で不具合が発見された場合、AI は追加是正 PR（TDD 修正・設計同期・`bug-and-handover-log.md` への記録・Gate 1〜6 検証）を作成して自律マージし、実機再確認で全項目 OK（未解決 `HO-xx` 0 件）となるまで収束させる。
-3. **Round 2 収束確認・品質分析レポート（Kaizen）・バグ記録アーカイブ・正本一括 `Approved` 化（Step 3：人間最終承認ゲート）**:
+3. **Round 2 収束確認・品質分析レポート（Kaizen）・バグ記録アーカイブ・正本一括 `Approved` 化・バージョン更新（Step 3：人間最終承認ゲート）**:
    - 横断レビュー是正および Android 実機検証がすべて完了・収束した後、追跡 Issue 上で全指摘および実機検証の収束（Round 2 残存指摘 0 件・未解決 `HO-xx` 0 件）をコメント報告する。
-   - 続けて、Milestone 承認 Issue をクローズする **最終承認 PR（`Closes #Milestone承認Issue`）** を作成し、同一 PR 内で以下の ①〜④ を一括実施する：
+   - 続けて、Milestone 承認 Issue をクローズする **最終承認 PR（`Closes #Milestone承認Issue`）** を作成し、同一 PR 内で以下の ①〜⑤ を一括実施する：
      1. **品質分析・Kaizen レポートの作成（`docs/quality/reports/<milestone>.md`）**:
         - 当該 Milestone（または Phase 3）における製品コード不備件数、支援成果物不備件数、テストケースあたり/KLoC あたりバグ密度、欠陥除去率（DRE）、原因分類（`L`/`S`/`D`/`B`/`A`）の傾向、および精算済み実機申し送り（`HO-xx`）を確定値で集計・分析する（フロントマター `status: "Approved"`）。あわせて `docs/quality/bug-and-handover-log.md` §4 サマリーに追記する。
      2. **再発防止策（Kaizen）の反映**:
@@ -99,4 +99,6 @@ description: "Use when orchestrating a cross-deliverable review at the end of a 
         - 当該 Milestone で検出された全バグ記録（No. xx〜yy）および解決済み（`Resolved`）の申し送り事項（`HO-xx`）を `docs/quality/archive/<milestone>-log.md`（OKF `type: quality-log`, `status: "Completed (Archived)"`）へ切り出し、`docs/quality/bug-and-handover-log.md` には未解決（`Open`）の申し送りと次期マイルストーン用の記録枠のみを残す（`docs/index.md` のディレクトリツリーにも登録する）。
      4. **正本仕様書の一括 `Approved` 化**:
         - `docs/specs/` 配下の正本仕様書フロントマター `status` を一括で `"Approved"` に揃える。
+     5. **`package.json` バージョンの Milestone 連動更新**:
+        - [docs/guidelines/workflow.md §5.1](../../../docs/guidelines/workflow.md#51-バージョン採番semverと-git-tag--github-release-自動化ルール) に従い、`package.json` の `version` を `X.Y.0` へ更新する（マージ時の自動 Git Tag / GitHub Release `vX.Y.0` 発行トリガー）。
    - Step 3 PR で Gate 1〜6 を完遂した上で人間に報告し、**人間による本 PR のマージをもって Milestone を完了** とする。

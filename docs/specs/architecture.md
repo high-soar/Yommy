@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Approved"
+status: "Review (#371)"
 updated: "2026-11-15"
 tags:
   - architecture
@@ -58,7 +58,11 @@ tags:
   - cache-scheduler
   - priority-queue
   - ho-39
+  - semver
+  - release-automation
+  - ho-40
 related_specs:
+  - docs/specs/changes/issue-371-version-release-automation.md
   - docs/specs/changes/archive/issue-344-priority-cache-scheduler.md
   - docs/specs/changes/archive/issue-343-novel-detail-header-menu.md
   - docs/specs/changes/archive/issue-342-cloud-sync-bookmark-protection.md
@@ -1211,15 +1215,25 @@ Android Debug APK の継続的な検証と上書きインストール（`INSTALL
 
 ### 5.2 `versionCode` / `versionName` の動的注入と CI コンパイル検証
 
-- `android/app/build.gradle` の `defaultConfig` において、CI 環境変数（`BUILD_NUMBER`）および Gradle プロパティ（`versionCode` / `versionName`）から動的にバージョンを解決する。
+- `android/app/build.gradle` の `defaultConfig` において、CI 環境変数（`BUILD_NUMBER` / `BUILD_NAME`）および Gradle プロパティ（`versionCode` / `versionName`）から動的にバージョンを解決する。
 - GitHub Actions（`.github/workflows/build-android.yml`）では `BUILD_NUMBER: ${{ github.run_number }}` を注入し、ビルドごとに `versionCode` を単調増加させる。また、GitHub Secrets（`ANDROID_KEYSTORE_BASE64` 等）を Gradle ビルドステップへ注入する。
 - リモート CI（`.github/workflows/ci.yml`）の `quality-gate` において、`android-compile` ジョブによる `./gradlew compileDebugJavaWithJavac` を自動実行し、Java コンパイル安全性を保証する。
-- ローカルビルド時はフォールバック値（`versionCode 1`、`versionName "1.0.0"`）を採用し、開発作業の利便性を損なわない構成とする。
+- ローカルビルドおよび未指定時のフォールバック値には `versionCode 1` と、`groovy.json.JsonSlurper` でリポジトリルートの `package.json`（`../../package.json`）から読み出した `version` を `versionName` として採用し、バージョン番号の二重管理を排除する構成とする。
 
 ### 5.3 Google OAuth 用署名鍵の秘密管理と SHA-1 なりすまし防止
 
 - 公開 `android/debug.keystore` の SHA-1 は GCP に登録しない（第三者による偽造 APK の OAuth なりすまし防止）。
 - GitHub Secrets（`ANDROID_KEYSTORE_BASE64` 等）に保管した非公開 Keystore の SHA-1 とパッケージ名（`com.yommy.app`）のみを GCP の Android OAuth クライアントに登録し、CI APK ビルド時に署名する。Secrets 未設定のローカル/PR 環境のみ `android/debug.keystore` へフォールバックする。
+
+### 5.4 バージョン採番規律（SemVer）と GitHub Release 自動化（v1.3 Issue #371）
+
+- **SSOT 構成**: アプリバージョンの正本（Single Source of Truth）を `package.json` の `"version"` 1箇所に集約する。Web 定数（`src/shared/constants/app.ts` の `APP_VERSION`）は `package.json` から `version` を名前付きインポートし、Android Gradle（`android/app/build.gradle`）も `JsonSlurper` で同一値をフォールバック解決する。
+- **Milestone と SemVer の対応**:
+  - `Milestone (vX.Y)` 完了時に連動して **`MINOR`（`X.Y.0`）** を更新し、Milestone 間の緊急修正（Hotfix）のみ **`PATCH`（`X.Y.Z`）** を進める（`1.2.0` から適用開始・`v1.1` は非遡及）。
+  - メタデータ（`package.json`, `APP_VERSION`, `versionName`）は `v` なし、設定画面表示（`Yommy v{APP_VERSION}`）・Git Tag・GitHub Release は `v` ありで表記する。
+- **自動整合性ガードと Release 自動発行（案A）**:
+  - 単体テスト `src/shared/constants/app.test.ts` にて `package.json` と `APP_VERSION` の完全一致、SemVer 3桁形式、および `docs/quality/reports/` 内の最新完了マイルストーン番号（`vX.Y-*.md`）と `MAJOR.MINOR` の一致を検証する。
+  - `.github/workflows/release.yml` にて、`main` への `package.json` 更新マージ時に未作成タグ `vX.Y.Z` があれば Git Tag およびリリースノートのみの GitHub Release（案A：APK 添付なし、`--generate-notes` 併用、通常 Milestone 完了 `.0` リリース時は品質レポートへの誘導付き）を自動発行する。
 
 ---
 
@@ -1249,11 +1263,12 @@ Android Debug APK の継続的な検証と上書きインストール（`INSTALL
 
 ### 6.3 Android ビルド・署名・バージョン管理（`AC-APK-xx`）
 
-|   受入条件 ID   | 項目                        | 内容                                                                                                                                                                                                                     | 対応要件 ID  | 検証成果物                             |
-| :-------------: | :-------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------: | :------------------------------------- |
-| **`AC-APK-01`** | Debug 署名鍵の固定化        | `android/debug.keystore` が配備され、`build.gradle` で明示指定されることで、再ビルドした APK 間で署名証明書フィンガープリントが一致し、上書きインストール（`INSTALL_FAILED_UPDATE_INCOMPATIBLE` 回避）が可能であること。 | `SYS-REQ-16` | `scripts/android-build-config.test.ts` |
-| **`AC-APK-02`** | バージョン管理・単調増加    | `package.json` の `version`（`1.0.0`）に基づき `versionName` が解決され、GitHub Actions ビルド時に `github.run_number`（または `BUILD_NUMBER`）により `versionCode` がビルドごとに単調増加すること。                     | `SYS-REQ-16` | `scripts/android-build-config.test.ts` |
-| **`AC-APK-03`** | CI 署名・キーストア保護構成 | CI 署名設定として `ANDROID_KEYSTORE_BASE64` が存在する場合のデコードと未設定時フォールバック構成が含まれること。                                                                                                         | `SYS-REQ-16` | `scripts/android-build-config.test.ts` |
+|   受入条件 ID   | 項目                              | 内容                                                                                                                                                                                                                                                                                                                                                                          | 対応要件 ID  | 検証成果物                                                                 |
+| :-------------: | :-------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------: | :------------------------------------------------------------------------- |
+| **`AC-APK-01`** | Debug 署名鍵の固定化              | `android/debug.keystore` が配備され、`build.gradle` で明示指定されることで、再ビルドした APK 間で署名証明書フィンガープリントが一致し、上書きインストール（`INSTALL_FAILED_UPDATE_INCOMPATIBLE` 回避）が可能であること。                                                                                                                                                      | `SYS-REQ-16` | `scripts/android-build-config.test.ts`                                     |
+| **`AC-APK-02`** | バージョン管理・SSOT・単調増加    | `package.json` の `version`（SemVer 3桁、`docs/quality/reports/` 最新 `vX.Y-*.md` と `MAJOR.MINOR` 一致）を SSOT として `APP_VERSION` および `build.gradle` の既定 `versionName`（`JsonSlurper` による `../../package.json` 動的読込）が解決され、GitHub Actions ビルド時に `github.run_number`（または `BUILD_NUMBER`）により `versionCode` がビルドごとに単調増加すること。 | `SYS-REQ-16` | `src/shared/constants/app.test.ts`, `scripts/android-build-config.test.ts` |
+| **`AC-APK-03`** | CI 署名・キーストア保護構成       | CI 署名設定として `ANDROID_KEYSTORE_BASE64` が存在する場合のデコードと未設定時フォールバック構成が含まれること。                                                                                                                                                                                                                                                              | `SYS-REQ-16` | `scripts/android-build-config.test.ts`                                     |
+| **`AC-APK-04`** | Git Tag / GitHub Release 自動発行 | `.github/workflows/release.yml` により、`main` ブランチで `package.json` の `version` が未作成タグのバージョンに更新された際に `vX.Y.Z` タグおよびリリースノートのみの GitHub Release（案A：APK 添付なし）が自動発行され、既存タグ時は安全にスキップされること。                                                                                                              | `SYS-REQ-16` | `scripts/android-build-config.test.ts`                                     |
 
 ### 6.4 Android ネイティブ認可・認証契約（`AC-AUTH-xx`）
 
