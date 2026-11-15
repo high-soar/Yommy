@@ -3,7 +3,7 @@ type: guideline
 title: テスト・実装規律の正本（SSOT）
 description: Yommyの3層テスト体系（Parser/Storage/Viewer）、TDDコミット規約、1対1 Story/UT、親子分離、C0/C1 100%、縦書きVRT、および原因D設計同期ルールの正本。
 status: "Approved"
-updated: "2026-11-14"
+updated: "2026-11-15"
 tags: [testing, tdd, vrt, storybook, vitest, playwright, coverage]
 related_specs:
   - docs/index.md
@@ -247,6 +247,30 @@ Milestone `v1.1`（Issue `#342`, `#343`, `#345`, `#358`）で検出された非�
 5. **単体テストの `vi.spyOn` 確実復元（`afterEach` / `try-finally`）と Step 2 設計更新 PR レビュー指摘の台帳即時記録（`No. 397, 415, 416, 442`: `R1-10, R1-11` 再発防止）**:
    - 単体テスト内で設定した `vi.spyOn` スパイはアサーション失敗時も確実に解放されるよう、`afterEach(() => vi.restoreAllMocks())` または `try { ... } finally { spy.mockRestore(); }` を必須とすること。
    - Step 3 MK PR に加え、**Step 2 設計更新 PR** の `pr-reviewer` 指摘事項も、是正コミットと同一 PR 内で `docs/quality/bug-and-handover-log.md` へ漏れなく即時記録すること。
+
+### 3.10 非同期スケジューラ世代管理・保存後後始末・親子完全分離・tsconfig test 統合・仕様双方向対称規約（`v1.2` Kaizen）
+
+Milestone `v1.2`（Issue `#344`, `#367`, `#368`）で検出された非同期スケジューラ競合・保存後後始末・親子テスト分離・型検査/IT 安定性・仕様双方向トレーサビリティの不備（`No. 447〜489`）を再発防止するため、以下を実装・テスト標準として義務付けます。
+
+1. **マルチ `await` スケジューラ初期化のエポック・直列化ガード、保存後クリーンアップ完遂、および優先度跨ぎレート制限（`No. 453, 454, 456, 458, 473, 477, 483`: `R1-12, R1-16, R1-22` 再発防止）**:
+   - `CacheScheduler.enqueueBatchCache` 等で DB 参照・登録が複数 `await` に跨る場合は、開始時の世代スナップショット（`globalCancelEpoch` / `novelCancelEpochs`）による陳腐化判定（`isStaleInit`）と未解決投入追跡（`pendingEnqueues` による作品別直列化・完了待機）を導入し、`pauseNovelTasks` / `cancelNovelTasks` / `cancelAllTasks` / `handleTombstoneDeletion` / `dispose` 競合後の復活起動を確実に遮断すること。
+   - `chapterRepository.saveChapterBody` による本文保存完了後は、中断判定（`signal.aborted`）に関わらず `queueRepository.deleteByNovelAndChapters` によるキュー削除と進捗確定（`markChapterCompletedInBatch` 等、非アクティブ batch の失敗解除含む）を完遂し、保存済み本文と残存キューの不整合を防止すること。
+   - 全優先度（`high` / `medium` / `low`）共通の最終ネットワーク完了時刻（`lastNetworkRequestCompletedAt`）を基準に低優先度の 1.5 秒レート制限を維持すること（`activeLowSleeping` 中の `high` / `medium` 0ms 割り込みは許容）。
+2. **失敗キュー（`'failed'`）永続保護・排他世代カウンタ・アンマウント非依存再開・高優先度 `AbortSignal` 伝播（`No. 452, 460, 461, 462, 472, 474, 475, 476, 484`: `R1-01, R1-11, R1-13, R1-14, R1-15, R1-23` 再発防止）**:
+   - 完了時キュー掃除では `clearCompletedQueueRows` により既存の `'failed'` 行を保護しつつ非 `'failed'` 行を無条件削除し、キャッシュ済み話の不要な `'failed'` 行は `freshIndexes` / `saveChapterBody` でのキュー削除および `extractUncachedFailedChapterIndexes` / `syncProgressFromDb` による UI 集計除外で整理すること。また手動再試行では再試行回数上限（`maxRetryCount`）なしで再挑戦可能とする一方、目次更新等の自動再開時は `'failed'` 行を除外すること。
+   - `useNovelDetail` の排他操作（`refreshToc` / `confirmDeleteNovel` / `confirmClearCache` / `reloadDetail`）開始時は `progressSyncSeqRef` を加算して古い非同期進捗同期（`syncProgressFromDb` 等）による上書きを遮断し、`refreshToc` の通信失敗や `SCR-02` アンマウント時でも `finally` 内で DB ベースの `resumePausedBatchCacheIfNeeded` を実行して停止中の一括キャッシュを確実に再開すること（UI State 更新のみ `runIfMounted` で保護）。
+   - `useWebViewImport.importCapturedDomInternal` の `onImportComplete` 通知には `isMountedRef.current` ガードを必須とし、`useReader` のオンデマンド `'high'` 取得（`resolveChapterBody` / `enqueuePrefetch` / `fetchAndSaveChapterBody`）には `AbortSignal` 伝播と中断後の保存・State 更新遮断を導入すること。
+3. **親コンポーネント単体テストの `.mockImplementation(() => null)` 完全分離・非同期初期化待機・`afterEach(vi.restoreAllMocks)` 徹底（`No. 466, 467, 489`: `R1-05, R1-06` 再発防止）**:
+   - Container / Page 等の親テストで直下の子コンポーネントに `vi.spyOn` を適用する際は、必ず `.mockImplementation(() => null)` を徹底して子・孫のレンダリング、子 `data-testid` 探索、および子側タイマー（`setTimeout` 等）の巻き込みを根絶し、Props・コールバック配線のみを検証すること。
+   - 非同期初期化を伴う Hook / Provider UT では、フォールバック分岐を検証する前に `waitFor` で初期設定（`getSetting` 等）や認証状態（`getAuthState` 等）の安定完了を待機すること。
+   - `vi.spyOn` を使用する全テストファイルの冒頭（`describe` 先頭等）に `afterEach(() => { vi.restoreAllMocks(); })` を配置し、アサーション失敗時を含めスパイ復元漏れを防ぐこと。
+4. **`tsconfig.app.json` による `test/` 常時型検査、Playwright ワークツリー排他ポート分離・`isReady` 待機、および境界・競合モック条件一致（`No. 465, 479, 481, 482, 485, 488`: `R1-04, R1-18, R1-20, R1-21, R1-24` 再発防止）**:
+   - `tsconfig.app.json` の `"include"` に `"src"` と `"test"` の双方を常時維持して E2E モックや Repository 戻り値型変更（`ChapterSummary` と `ChapterRecord` の `bodyHtml` 欠落による乖離等）を `npm run typecheck` で即時検知し、サマリー配列の実体値（`byteSize > 0`）と `getChapter` による本文長（`bodyHtml.length > 0`）の双方でアサートすること。
+   - `playwright.it.config.ts` / `playwright.vrt.config.ts` は `process.cwd()` の FNV-1a ハッシュ（`computeWorkspacePort`）によるワークツリー固有ポートと `reuseExistingServer: false` で並行ワークツリー実行時のポート競合・別サーバー誤接続を防ぐこと。
+   - 全 `page.goto(...)` および `page.reload()` の直後には、DOM 探索や操作に先立ち必ず `waitForServicesReady(page)`（`window.__yommyServices?.isReady === true`）の待機を義務付けること。
+   - 境界・競合テスト（`syncEngine.test.ts` の `deletedNovels` マップ等）のモックデータでは、対象エンティティ ID・現行分岐条件（`createdAt > deletedAt` 等）・`Date.now()` 相対時刻を一致させ、対象外キーや旧条件による分岐空振りを防ぐこと。
+5. **PR クローズ前 1対1 仕様・契約・双方向トレーサビリティ完全照合（`No. 463, 464, 471, 478, 480, 486, 487`: `R1-02, R1-03, R1-10, R1-17, R1-19, R1-25, R1-26` 再発防止）**:
+   - 実装完了後（PR クローズ前）は、変更モジュールの Hook Options / Result 型（`GoToChapterOptions` や WebView インポート DI 契約等）、`docs/specs/db-schema.md` の状態遷移・削除契機、公開型名、および `docs/specs/requirements.md`（`SYS-REQ-xx`）と機能別仕様書（`AC-xx` / `related_specs` / `related_tests`）の双方向対称性を 1対1 で漏れなく照合すること。
 
 ---
 
