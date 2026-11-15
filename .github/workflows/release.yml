@@ -20,6 +20,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Verify release runs on main branch
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::Release workflow must run on refs/heads/main (actual: ${GITHUB_REF})."
+            exit 1
+          fi
+
       - name: Checkout code
         uses: actions/checkout@v4
 

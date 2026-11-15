@@ -137,7 +137,7 @@ related_tests:
 - **採用方式**: **案A（リリースノートのみ、APK ビルド・アセット添付なし）**
 - **トリガー**:
   - `push`: `branches: [main]`、`paths: ['package.json']`（`main` へマージされた PR に `package.json` の変更が含まれる場合のみ発火し、通常の開発 PR マージの CI コスト・通知ノイズを増やさない）
-  - `workflow_dispatch`: 障害発生時の手動再実行・復旧用
+  - `workflow_dispatch`: 障害発生時の手動再実行・復旧用（`refs/heads/main` ブランチ限定ガード付き：`actions/checkout@v4` 前に `GITHUB_REF == "refs/heads/main"` を検証し、他ブランチでは失敗停止）
 - **権限**: `permissions: contents: write`
 - **処理ステップ**:
   1. `actions/checkout@v4`（最新 `main` コミットを取得）
