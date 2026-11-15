@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./SettingsContainer.stories";
 import { SettingsContainer } from "./SettingsContainer";
+import { APP_NAME, APP_VERSION } from "../../../shared/constants/app";
 import * as SettingsPageModule from "./SettingsPage";
 import { ServiceProvider } from "../../../app/ServiceProvider";
 import { resetTestDb } from "../../../storage/adapter/inMemoryDb";
@@ -27,6 +28,7 @@ describe("SettingsContainer", () => {
         .mockImplementation(() => null);
       render(<Default />);
 
+      expect(APP_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
       await waitFor(() => {
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
@@ -38,8 +40,8 @@ describe("SettingsContainer", () => {
             pageMarginPx: 20,
             pagingMode: "auto",
             enableVolumeKeyPaging: false,
-            appName: "Yommy",
-            appVersion: "1.0.0",
+            appName: APP_NAME,
+            appVersion: APP_VERSION,
             isLoading: false,
             error: null,
           }),
@@ -246,12 +248,13 @@ describe("SettingsContainer", () => {
         .mockImplementation(() => null);
       render(<Default />);
 
+      expect(APP_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
       await waitFor(() => {
         expect(pageSpy).toHaveBeenLastCalledWith(
           expect.objectContaining({
             enableVolumeKeyPaging: false,
-            appName: "Yommy",
-            appVersion: "1.0.0",
+            appName: APP_NAME,
+            appVersion: APP_VERSION,
             isLoading: false,
           }),
           undefined,
