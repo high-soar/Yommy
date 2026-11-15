@@ -2,7 +2,7 @@
 type: spec-requirements
 title: 全体要件定義・機能一覧・ロードマップ（App 全体正本）
 description: "Yommyのターゲット環境、小説サイト対応優先順位、全機能要件（SYS-REQ-01〜20）、およびミニMilestoneロードマップの正本。"
-status: "Review (#368)"
+status: "Approved"
 updated: "2026-11-15"
 tags:
   - requirements
@@ -72,6 +72,8 @@ tags:
   - non-blocking
   - ho-39
 related_specs:
+  - docs/quality/reports/v1.2-non-blocking-priority-cache-scheduler.md
+  - docs/quality/archive/v1.2-non-blocking-priority-cache-scheduler-log.md
   - docs/specs/changes/archive/issue-344-priority-cache-scheduler.md
   - docs/specs/changes/archive/issue-342-cloud-sync-bookmark-protection.md
   - docs/specs/changes/archive/issue-343-novel-detail-header-menu.md
@@ -291,4 +293,4 @@ flowchart LR
 | **Milestone `v0.9`**<br>（永続キュー ＆ WebView インポート）                 | 永続ダウンロードキュー（`QueueRepository` / `download_queue`）の実装と一括キャッシュ中断再開・失敗話スキップ継続・再試行統合（#268 / `HO-34`）、および内蔵ブラウザ画面（`SCR-04`）と表示中 DOM インポート機能・フォールバック遷移（#269 / `HO-35`）。Yommy 全 7 画面（`SCR-01`〜`SCR-07`）および全システム要件（`SYS-REQ-01`〜`20`）のコンプリート。詳細: [v0.9 レポート](../quality/reports/v0.9-persistent-queue-and-webview-fallback.md)。                                                                                                                                                                                                                                                                                                        | `SYS-REQ-02（拡張）`, `03（拡張）`, `05（拡張）`, `13`, `14`                                                                                                                                           |
 | **Milestone `v1.0`**<br>（リリース整備 ＆ システム全体横断品質監査）         | バージョンメタデータ（`package.json`, `build.gradle`）の `1.0.0` 統一、設定画面（`SCR-05`）フッターでのアプリバージョン表示（`Yommy v1.0.0`）、初期立ち上げ一時ディレクトリ `reference/` の完全撤去、アイコン生成スクリプト厳格化、および `README.md` の正式版ドキュメント化（#304）。システム全体 4 領域（Parser/Bridge/Security, Storage/Sync, UI/Pagination/State, E2E/Architecture）ゼロベース横断品質監査、全画面実機総括検証、および Phase 3 PoC からの全期間品質分析レポート（Kaizen）・v1.0 最終承認（#305）。詳細: [v1.0 レポート](../quality/reports/v1.0-full-system-quality-audit.md)。                                                                                                                                                  | `SYS-REQ-15（アイコン生成厳格化）`, `SYS-REQ-16（設定画面バージョン表示 #304）`                                                                                                                        |
 | **Milestone `v1.1`**<br>（クラウド同期しおり保護 ＆ 作品詳細ヘッダーUX改善） | 複数端末利用時における画面ロック・バックグラウンド 5 分以上休止後復帰時の全画面自動 Pull（`useBackgroundAutoPull`）、作品詳細（`SCR-02`）自動最新化、リーダー（`SCR-03`）しおり競合確認モーダルダイアログ（OS バックキー・背景タップ抑止）、および未操作離脱時 `flushBookmark` 不要上書き防止・画面ロック時即時フラッシュ（#342 / `HO-38`）。また作品詳細・目次画面（`SCR-02`）ヘッダーの管理アクションバー整理（お気に入り・目次更新の1行アイコン化と4アクションの3点メニュー集約、#343 / `HO-37`）。さらに Milestone 横断レビュー Round 1（#345）指摘是正（#358 / #359）および Android 実機検証完了（`HO-37`, `HO-38` すべて OK・不具合 0 件で精算）。詳細: [v1.1 レポート](../quality/reports/v1.1-cloud-sync-bookmark-and-detail-header-ux.md)。 | `SYS-REQ-01`, `04`, `05`, `06（拡張）`, `12（拡張）`, `13`, `16（拡張）`                                                                                                                               |
-| **Milestone `v1.2`**<br>（非ブロッキング優先度キャッシュスケジューラ）       | アプリ共有の 3 段階優先度付きバックグラウンドキュー `CacheScheduler`（`high` 0ms 割り込み &gt; `medium` 5話先読み &gt; `low` 一括キャッシュ）の導入と 1.5 秒レート制限・`download_queue` 重複防止・自動再開制御、`SCR-02`（作品詳細）一括キャッシュ中の操作ロック撤廃および画面離脱バックグラウンド継続・再訪問復元、ならびに設定画面全削除・WebView DOM インポートとの統合（#344 / `HO-39`）。                                                                                                                                                                                                                                                                                                                                                      | `SYS-REQ-02（拡張）`, `03（拡張）`, `05（拡張）`, `14`                                                                                                                                                 |
+| **Milestone `v1.2`**<br>（非ブロッキング優先度キャッシュスケジューラ）       | アプリ共有の 3 段階優先度付きバックグラウンドキュー `CacheScheduler`（`high` 0ms 割り込み &gt; `medium` 5話先読み &gt; `low` 一括キャッシュ）の導入と 1.5 秒レート制限・`download_queue` 重複防止・自動再開制御、`SCR-02`（作品詳細）一括キャッシュ中の操作ロック撤廃および画面離脱バックグラウンド継続・再訪問復元、ならびに設定画面全削除・WebView DOM インポートとの統合（#344 / `HO-39`）。さらに Milestone 横断レビュー Round 1（#367）指摘是正（#368 / #369）および Android 実機検証完了（`HO-39`: `DV-01〜DV-07` すべて OK・不具合 0 件で精算）。詳細: [v1.2 レポート](../quality/reports/v1.2-non-blocking-priority-cache-scheduler.md)。                                                                                                    | `SYS-REQ-02（拡張）`, `03（拡張）`, `05（拡張）`, `14`                                                                                                                                                 |
