@@ -134,6 +134,14 @@ describe("Android ビルド設定および署名・バージョン管理・Relea
       expect(content).toMatch(/permissions:\s*[\s\S]*?contents:\s*write/);
     });
 
+    it("workflow_dispatch 実行時を含め refs/heads/main ブランチ以外では checkout やリリース作成を行わず失敗停止するガードを持つこと", () => {
+      const content = fs.readFileSync(releaseWorkflowPath, "utf-8");
+
+      expect(content).toMatch(
+        /(?:if:\s*github\.ref\s*==\s*['"]refs\/heads\/main['"][\s\S]*steps:|if\s*\[\s*"\$\{GITHUB_REF\}"\s*!=\s*"refs\/heads\/main"\s*\][\s\S]*?exit\s+1[\s\S]*?uses:\s*actions\/checkout@v4)/,
+      );
+    });
+
     it("git ls-remote (refs/tags/) および gh release view による重複スキップガードを備え、exists == 'false' 条件でのみ gh release create を実行すること", () => {
       const content = fs.readFileSync(releaseWorkflowPath, "utf-8");
 
