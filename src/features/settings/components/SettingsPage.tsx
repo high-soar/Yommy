@@ -92,7 +92,7 @@ export interface SettingsPageProps {
   error?: string | null;
   /** アプリケーション表示名（省略時: "Yommy"、v1.0 Issue #304） */
   appName?: string;
-  /** アプリケーションバージョン（省略時: "1.0.0"、v1.0 Issue #304） */
+  /** アプリケーションバージョン（省略時: APP_VERSION［package.json 連動］、v1.0 Issue #304 / v1.3 Issue #371） */
   appVersion?: string;
   /** 追加の CSS クラス（任意） */
   className?: string;
