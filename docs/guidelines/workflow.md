@@ -3,7 +3,7 @@ type: guideline
 title: 開発プロセス・ワークフロー標準（SSOT）
 description: ハイブリッド進行モデル、Issue駆動マイクロ・ウォーターフォール、Android実機検証の実施判断・試験項目提示ルール、OKFステータス管理、Task Completion Gate 7条件（中間PR自律マージ＆エスカレーション規律）、およびミニMilestone運用（Step 3での品質分析・アーカイブ統合）の正本。
 status: Approved
-updated: "2026-11-05"
+updated: "2026-11-15"
 tags:
   [
     workflow,
@@ -13,6 +13,8 @@ tags:
     kaizen,
     auto-merge,
     device-verification,
+    versioning,
+    release,
   ]
 related_specs:
   - docs/index.md
@@ -160,8 +162,8 @@ Phase 3 以降のすべての PR 作業において、**PR を作成しただけ
    - 実装・検証中に、Step 2 で合意済みの「受入条件（`AC-xx`）」「画面遷移（`TR-xx`）」「DB スキーマ定義（テーブル/カラム）」「ユーザー向け UI/UX 挙動」を変更する必要が生じた場合（※内部関数名、定数切り出し、テストファイルパス追記等の外部挙動を変えない軽微な設計書同期は自律マージ可）。
 2. **新規パッケージ・ネイティブ権限・外部通信先の追加**:
    - `package.json` や Gradle への新規依存パッケージ追加、`AndroidManifest.xml` のパーミッション追加、または承認済み設計に含まれない新規外部通信先ドメインを追加する場合。
-3. **ワークフロー・ガバナンス・CI 定義自体の変更**:
-   - `AGENTS.md`, `docs/guidelines/workflow.md`, `.github/workflows/*.yml` 等の開発憲法・ゲート定義自体を変更する場合。
+3. **ワークフロー・ガバナンス・CI 定義・リリースバージョンの変更**:
+   - `AGENTS.md`, `docs/guidelines/workflow.md`, `.github/workflows/*.yml` 等の開発憲法・ゲート定義自体を変更する場合、または `package.json` の `version` フィールドを更新する場合（緊急 Hotfix リリース等、`main` マージに伴い Git Tag / GitHub Release が自動発行される変更を含む）。
 4. **独立 AI レビューの未収束**:
    - `pr-reviewer` との指摘解消ループが 3 ラウンド以上収束しない場合、または仕様解釈・トレードオフ判断が割れた場合。
 5. **親 Issue クローズを兼ねる統合 PR**:
@@ -190,8 +192,8 @@ Phase 4 以降は、直近の要望（親 Issue）を 3〜5 件程度束ねた *
    - **② Android 実機検証試験項目表の提示と実機確認・是正ループ**:
      - 指摘是正 PR の自律マージ直後、AI は未消化の実機申し送り事項（`HO-xx`）および横断レビューでの修正箇所を網羅した **「Android 実機検証試験項目表」** を人間に提示する。
      - 人間が実機検証を実施し、不具合が見つかった場合は AI が追加是正 PR（TDD 修正・設計同期・`bug-and-handover-log.md` 記録・Gate 1〜6 検証）を作成・自律マージし、実機再確認で全項目 OK（未解決 `HO-xx` が 0 件）となるまで収束させる。
-3. **Step 3: 品質分析レポート（Kaizen）・バグ記録アーカイブ・正本仕様一括 `Approved` 化と Milestone 最終承認【👤 人間承認・マージ】**:
-   - 横断レビュー是正および Android 実機検証がすべて完了・収束（Round 2 残存指摘 0 件・未解決 `HO-xx` 0 件）した確定状態に基づき、Milestone 承認 Issue をクローズする **最終 PR（`Closes #Milestone承認Issue`）** で以下の ①〜④ を一括実施する：
+3. **Step 3: 品質分析レポート（Kaizen）・バグ記録アーカイブ・正本仕様一括 `Approved` 化・バージョン更新と Milestone 最終承認【👤 人間承認・マージ】**:
+   - 横断レビュー是正および Android 実機検証がすべて完了・収束（Round 2 残存指摘 0 件・未解決 `HO-xx` 0 件）した確定状態に基づき、Milestone 承認 Issue をクローズする **最終 PR（`Closes #Milestone承認Issue`）** で以下の ①〜⑤ を一括実施する：
      - **① 品質分析レポート（`docs/quality/reports/<milestone>.md`）の作成とサマリー追記**:
        - 当該 Milestone で検出された全バグ記録（横断レビューおよび実機検証での検出分を含む確定値）を集計し、定量品質メトリクス、製品コードバグ密度、原因分類（`L`/`S`/`D`/`B`/`A`）傾向、欠陥除去率（DRE）、および精算済み申し送り事項（`HO-xx`）を分析した品質レポート（`type: quality-report`, `status: "Approved"`）を作成する。あわせて `docs/quality/bug-and-handover-log.md` §4 に当該 Milestone の振り返りサマリーを追記する。
      - **② 再発防止策（Kaizen）のガイドライン・スキル反映**:
@@ -201,4 +203,22 @@ Phase 4 以降は、直近の要望（親 Issue）を 3〜5 件程度束ねた *
        - 正本台帳 `docs/quality/bug-and-handover-log.md` から完了分を除去し、「次期作業中マイルストーンのバグ記録枠」および「未解決（`Open`）の申し送り事項」のみが残るクリーンな状態に整理する（`docs/index.md` のツリーにも新規アーカイブおよびレポートを登録する）。
      - **④ 正本仕様の一括 `Approved` 化**:
        - `docs/specs/` 配下の正本仕様書のフロントマター `status` がすべて `"Approved"` に揃っていることを確認・更新する。
-   - **⑤ 人間による最終承認とマージ**: 上記 Step 3 PR で Gate 1〜6 を完遂した上で人間に報告し、**人間がレビュー・マージすることで Milestone 完了を確定** し、次期 Milestone へ移行する。
+     - **⑤ `package.json` の `version` を `X.Y.0` へ更新（Milestone 連動バージョン更新）**:
+       - §5.1 の規律に従い、`package.json` の `version` を当該 Milestone（`vX.Y`）に対応する `X.Y.0` へ更新する（整合性テスト `src/shared/constants/app.test.ts` が品質レポート `vX.Y-*.md` との一致を検証し、マージ時に GitHub Actions で Git Tag / GitHub Release `vX.Y.0` を自動発行する）。
+   - **人間による最終承認とマージ**: 上記 Step 3 PR で Gate 1〜6 を完遂した上で人間に報告し、**人間がレビュー・マージすることで Milestone 完了を確定**（Git Tag / Release 自動発行）し、次期 Milestone へ移行する。
+
+### 5.1 バージョン採番（SemVer）と Git Tag / GitHub Release 自動化ルール
+
+Milestone とアプリバージョン表記・Git Tag・GitHub Release の乖離および形骸化を防止するため、以下の統一ルールを適用します（`1.2.0` / Tag `v1.2.0` から適用開始し、`v1.1` は遡及適用しない）。
+
+1. **Milestone（`vX.Y`）とリリースバージョン（`X.Y.Z`）の使い分け**:
+   - **Milestone（`vMAJOR.MINOR` 2桁）**: 要望 Issue を束ねる開発・品質監査の計画単位（GitHub Milestone / ロードマップ / 品質レポート `docs/quality/reports/vX.Y-*.md`）。パッチ桁は持たない。
+   - **`MAJOR`（`X.0.0`）**: 大規模アーキテクチャ刷新や破壊的データ変更などの大きな節目のみ更新する。
+   - **`MINOR`（`1.Y.0`）**: **Milestone（`v1.Y`）完了と 1対1 で連動** させる。Milestone 途中の個別機能 PR では変更せず、**Milestone Step 3（最終承認 PR）でのみ `1.Y.0` に更新** する。
+   - **`PATCH`（`1.Y.Z`）**: **Milestone 間の緊急修正（Hotfix）専用**。次期 Milestone 完了を待たずに単発修正を配布する場合のみ `+1` する（通常サイクルでは `.0` を使用）。なお Hotfix PR のマージは必ず人間承認を要する（§4.1 項3）。
+   - **`v` プレフィックス有無**: メタデータ値（`package.json` `version` / `APP_VERSION` / Android `versionName`）は `v` なし（例: `1.2.0`）、UI 表示（`Yommy v1.2.0`）・Git Tag・GitHub Release は `v` あり（例: `v1.2.0`）とする。
+2. **`package.json` への SSOT 一本化とバンプ忘れ防止テスト**:
+   - アプリバージョンの正本は `package.json` の `"version"` 1箇所のみとし、Web 定数（`src/shared/constants/app.ts`）および Android Gradle（`android/app/build.gradle`）が動的参照する（通常バンプ時は `package.json` のみ編集し、VRT スナップショットの再生成も不要）。
+   - `src/shared/constants/app.test.ts` にて、`docs/quality/reports/` 内の最新完了マイルストーン番号（`vX.Y-*.md`）と `package.json` の `MAJOR.MINOR` が一致することを機械検証し、Step 3 での上げ忘れを CI で阻止する。
+3. **Git Tag / GitHub Release の自動発行（案A：リリースノートのみ）**:
+   - `.github/workflows/release.yml` により、`main` ブランチへ `package.json` の変更がマージされた際、対応するタグ `vX.Y.Z` が未作成であれば Git Tag およびリリースノートのみの GitHub Release（APK 添付なし、`--generate-notes` 併用、通常 Milestone `.0` リリース時は品質レポートへの誘導付き）を自動発行する（既にタグが存在する場合は安全にスキップする）。

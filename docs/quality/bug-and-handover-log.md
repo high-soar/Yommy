@@ -130,11 +130,11 @@ related_tests: []
 > - Milestone `v1.1` で解決済みの申し送り（`HO-37`, `HO-38`）: [docs/quality/archive/v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md](archive/v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md)
 > - Milestone `v1.2` で解決済みの申し送り（`HO-39`）: [docs/quality/archive/v1.2-non-blocking-priority-cache-scheduler-log.md](archive/v1.2-non-blocking-priority-cache-scheduler-log.md)
 
-現在、未解決（`Open`）の申し送り事項は **0 件** です（すべての既存 `HO-xx` は上記アーカイブにて完了精算済み）。
+現在、未解決（`Open`）の申し送り事項は **1 件** です（`HO-01`〜`HO-39` は上記アーカイブにて完了精算済み）。
 
-| ID  | 起票元 Issue / PR | 申し送り事項の内容                       | 解決先（対象 Issue / 成果物） | 完了ゲート | 状態 (`Open` / `Resolved`) |
-| :-: | :---------------: | :--------------------------------------- | :---------------------------- | :--------: | :------------------------: |
-|  -  |         -         | （現在 Open の申し送り事項はありません） | -                             |     -      |             -              |
+|     ID      | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                     | 解決先（対象 Issue / 成果物） |       完了ゲート        | 状態 (`Open` / `Resolved`) |
+| :---------: | :---------------: | :------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------- | :---------------------: | :------------------------: |
+| **`HO-40`** |    Issue #371     | Android 実機ビルド APK における `package.json` 連動 `versionName`（`v1.2.0` 以降）および設定画面（`SCR-05`）フッター表示のスモーク確認 | Milestone `v1.3` 実機一括検証 | Milestone `v1.3` 完了前 |           `Open`           |
 
 ---
 
