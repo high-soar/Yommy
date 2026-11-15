@@ -1,4 +1,11 @@
+import fs from "node:fs";
+import path from "node:path";
 import { test, expect, type Page } from "@playwright/test";
+
+const packageJson = JSON.parse(
+  fs.readFileSync(path.resolve(process.cwd(), "package.json"), "utf-8"),
+) as { version: string };
+const packageVersion = packageJson.version;
 
 /**
  * アプリケーションのサービス初期化（SQLite / DB / スケジューラ準備）完了まで待機する。
@@ -58,10 +65,11 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     const settingsPage = page.getByTestId("settings-page");
     await expect(settingsPage).toBeVisible();
 
-    // フッターバージョン表示の確認（AC-ST-20, v1.0 Issue #304）
+    // フッターバージョン表示の確認（AC-ST-20, v1.0 Issue #304, v1.3 Issue #371）
+    expect(packageVersion).toMatch(/^\d+\.\d+\.\d+$/);
     const versionFooter = page.getByTestId("settings-version-footer");
     await expect(versionFooter).toBeVisible();
-    await expect(versionFooter).toHaveText("Yommy v1.0.0");
+    await expect(versionFooter).toHaveText(`Yommy v${packageVersion}`);
 
     // サンプル文章プレビュー枠の確認（ルビ・傍点の描画確認）
     const samplePreview = page.getByTestId("sample-text-preview");
@@ -1243,10 +1251,11 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     const settingsPage = page.getByTestId("settings-page");
     await expect(settingsPage).toBeVisible();
 
-    // フッターバージョン表示の確認（AC-ST-20, v1.0 Issue #304）
+    // フッターバージョン表示の確認（AC-ST-20, v1.0 Issue #304, v1.3 Issue #371）
+    expect(packageVersion).toMatch(/^\d+\.\d+\.\d+$/);
     const versionFooter = page.getByTestId("settings-version-footer");
     await expect(versionFooter).toBeVisible();
-    await expect(versionFooter).toHaveText("Yommy v1.0.0");
+    await expect(versionFooter).toHaveText(`Yommy v${packageVersion}`);
 
     const samplePreview = page.getByTestId("sample-text-preview");
     await expect(samplePreview).toBeVisible();
