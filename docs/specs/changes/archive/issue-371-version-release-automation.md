@@ -3,7 +3,7 @@ type: spec-delta
 title: "バージョン管理の package.json SSOT 化と Milestone 連動 Git Tag / GitHub Release 自動化ルールの整備"
 description: "Issue #371 に対する差分仕様：Milestone（vX.Y）と SemVer（X.Y.Z）の使い分け規律、package.json へのバージョン正本一本化、品質レポート連動テスト、および GitHub Release 自動発行ワークフロー（案A）の設計。"
 issue: "#371"
-status: "Review (#371)"
+status: "Completed (Archived)"
 updated: "2026-11-15"
 tags:
   [
@@ -37,7 +37,7 @@ related_tests:
 ## 1. 変更の背景・目的（Why）
 
 - **背景**:
-  - `Milestone v1.0`（[#304](archive/issue-304-v1-release-readiness.md)）にてアプリバージョン表記が `1.0.0` に統一され、設定画面（`SCR-05`）フッターおよび GitHub Release `v1.0.0` の基盤が整備されたが、以降の `Milestone v1.1` / `v1.2` 完了時にバージョン番号を更新する運用規定および Git Tag / GitHub Release 発行手順が `docs/guidelines/workflow.md` に存在せず、アプリバージョンが `"1.0.0"` のまま据え置かれていた。
+  - `Milestone v1.0`（[#304](issue-304-v1-release-readiness.md)）にてアプリバージョン表記が `1.0.0` に統一され、設定画面（`SCR-05`）フッターおよび GitHub Release `v1.0.0` の基盤が整備されたが、以降の `Milestone v1.1` / `v1.2` 完了時にバージョン番号を更新する運用規定および Git Tag / GitHub Release 発行手順が `docs/guidelines/workflow.md` に存在せず、アプリバージョンが `"1.0.0"` のまま据え置かれていた。
   - また、`src/shared/constants/app.ts`、`android/app/build.gradle`、各単体テスト、および Playwright IT（`scn01-poc-vertical-reader.spec.ts`）に `"1.0.0"` のハードコードが残存しているため、バージョンを更新するたびに複数箇所の手動修正とテスト変更が必要になり、形骸化や更新漏れを招きやすい構造となっていた。
 - **目的**:
   - **2桁の Milestone（`vX.Y`）** と **3桁の SemVer リリースバージョン（`X.Y.Z` / Tag `vX.Y.Z`）** の役割・使い分けを明確化する。
