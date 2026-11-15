@@ -80,7 +80,7 @@ description: "Use when orchestrating a cross-deliverable review at the end of a 
 
 ## 3. 横断レビュー指摘是正・Android 実機検証（Step 2）から品質分析・アーカイブ・最終承認（Step 3）への進行
 
-全モデルの Round 1 横断レビューが完了し、人間から Step 2 開始指示を受けた後、以下の手順で **Step 2（横断レビュー指摘是正 PR の AI 自律マージ ＋ Android 実機検証試験項目表の提示と実機収束）** から **Step 3（品質分析レポート・再発防止 Kaizen・バグ＆申し送りログアーカイブ・正本一括 Approved 化の最終承認 PR）** までを進めます。
+全モデルの Round 1 横断レビューが完了し、人間から Step 2 開始指示を受けた後、以下の手順で **Step 2（横断レビュー指摘是正 PR の AI 自律マージ ＋ Android 実機検証試験項目表の提示と実機収束）** から **Step 3（品質分析レポート・再発防止 Kaizen・バグ＆申し送りログアーカイブ・正本一括 Approved 化・バージョン更新の最終承認 PR）** までを進めます。
 
 1. **横断レビュー指摘の是正 PR 作成と AI 自律マージ（Step 2-1）**:
    - Sub-issue を起票し、Round 1 で検出された全指摘（`R1-xx`）を修正して [docs/quality/bug-and-handover-log.md](../../../docs/quality/bug-and-handover-log.md) に記録する（原因 `D` は `docs/specs/` も同時修正。規模に応じて複数の Sub-issue PR に分割可）。

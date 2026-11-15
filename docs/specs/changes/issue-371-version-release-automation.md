@@ -110,7 +110,7 @@ related_tests:
      ```
 3. **Android ネイティブビルド設定（`android/app/build.gradle`）**:
    - Groovy 標準ライブラリ `groovy.json.JsonSlurper` をインポートし、リポジトリルートの `package.json`（`file("../../package.json")`）から `version` を読み出す。
-   - `defaultConfig` 内の `appVersionName` 解決フォールバック値を固定文字列 `"1.0.0"` から `packageJsonVersion` に置き換える（`BUILD_NAME` 環境変数および `-PversionName` Gradle プロパティによる明示上書き優先順位は維持）：
+   - `defaultConfig` 内の `appVersionName` 解決フォールバック値を固定文字列 `"1.0.0"` から `packageJson.version` に置き換える（`BUILD_NAME` 環境変数および `-PversionName` Gradle プロパティによる明示上書き優先順位は維持）：
      ```groovy
      import groovy.json.JsonSlurper
      // android { ... } 冒頭:
@@ -197,7 +197,7 @@ related_tests:
     2. `src/shared/constants/app.ts`, `android/app/build.gradle`, `.github/workflows/release.yml` の実装。
     3. `app.test.ts`, `scripts/android-build-config.test.ts`, `SettingsPage.test.tsx`, `SettingsContainer.test.tsx`, `scn01-poc-vertical-reader.spec.ts` の TDD 更新と C0/C1/Functions 100% カバレッジ確認。
     4. `npm run test:vrt` / `npm run test:it` 全件 PASS 確認、および `./gradlew compileDebugJavaWithJavac` / Gradle 設定パース検証（CI `android-compile` 含む）確認。
-    5. 本差分仕様書を `status: "Completed (Archived)"` として `docs/specs/changes/archive/issue-371-version-release-automation.md` へ移動（`git mv`）し、人間レビュー・マージ後に `release.yml` によって `v1.2.0` Git Tag / GitHub Release が自動発行されることを確認する。
+    5. 本差分仕様書を `status: "Completed (Archived)"` として `docs/specs/changes/archive/issue-371-version-release-automation.md` へ移動（`git mv`）し、あわせて `docs/index.md` の参照パス更新および正本仕様書 3 冊（`docs/specs/architecture.md`・`docs/specs/requirements.md`・`docs/specs/features/settings.md`）の `related_specs`（`changes/` → `changes/archive/`）と `status: "Approved"` 復帰を同期実施する（`npm run lint:okf` PASS 確認）。人間レビュー・マージ（`Closes #372, Closes #371`）後に `release.yml` によって `v1.2.0` Git Tag / GitHub Release が自動発行されることを確認する。
 
 ---
 
