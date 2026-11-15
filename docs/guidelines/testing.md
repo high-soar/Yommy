@@ -264,10 +264,11 @@ Milestone `v1.2`（Issue `#344`, `#367`, `#368`）で検出された非同期ス
    - Container / Page 等の親テストで直下の子コンポーネントに `vi.spyOn` を適用する際は、必ず `.mockImplementation(() => null)` を徹底して子・孫のレンダリング、子 `data-testid` 探索、および子側タイマー（`setTimeout` 等）の巻き込みを根絶し、Props・コールバック配線のみを検証すること。
    - 非同期初期化を伴う Hook / Provider UT では、フォールバック分岐を検証する前に `waitFor` で初期設定（`getSetting` 等）や認証状態（`getAuthState` 等）の安定完了を待機すること。
    - `vi.spyOn` を使用する全テストファイルの冒頭（`describe` 先頭等）に `afterEach(() => { vi.restoreAllMocks(); })` を配置し、アサーション失敗時を含めスパイ復元漏れを防ぐこと。
-4. **`tsconfig.app.json` による `test/` 常時型検査、Playwright ワークツリー排他ポート分離、および全画面遷移直後の `isReady` 待機（`No. 465, 479, 481, 482, 485, 488`: `R1-04, R1-18, R1-20, R1-21, R1-24` 再発防止）**:
+4. **`tsconfig.app.json` による `test/` 常時型検査、Playwright ワークツリー排他ポート分離・`isReady` 待機、および境界・競合モック条件一致（`No. 465, 479, 481, 482, 485, 488`: `R1-04, R1-18, R1-20, R1-21, R1-24` 再発防止）**:
    - `tsconfig.app.json` の `"include"` に `"src"` と `"test"` の双方を常時維持して E2E モックや Repository 戻り値型変更（`ChapterSummary` と `ChapterRecord` の `bodyHtml` 欠落による乖離等）を `npm run typecheck` で即時検知し、サマリー配列の実体値（`byteSize > 0`）と `getChapter` による本文長（`bodyHtml.length > 0`）の双方でアサートすること。
    - `playwright.it.config.ts` / `playwright.vrt.config.ts` は `process.cwd()` の FNV-1a ハッシュ（`computeWorkspacePort`）によるワークツリー固有ポートと `reuseExistingServer: false` で並行ワークツリー実行時のポート競合・別サーバー誤接続を防ぐこと。
    - 全 `page.goto(...)` および `page.reload()` の直後には、DOM 探索や操作に先立ち必ず `waitForServicesReady(page)`（`window.__yommyServices?.isReady === true`）の待機を義務付けること。
+   - 境界・競合テスト（`syncEngine.test.ts` の `deletedNovels` マップ等）のモックデータでは、対象エンティティ ID・現行分岐条件（`createdAt > deletedAt` 等）・`Date.now()` 相対時刻を一致させ、対象外キーや旧条件による分岐空振りを防ぐこと。
 5. **PR クローズ前 1対1 仕様・契約・双方向トレーサビリティ完全照合（`No. 463, 464, 471, 478, 480, 486, 487`: `R1-02, R1-03, R1-10, R1-17, R1-19, R1-25, R1-26` 再発防止）**:
    - 実装完了後（PR クローズ前）は、変更モジュールの Hook Options / Result 型（`GoToChapterOptions` や WebView インポート DI 契約等）、`docs/specs/db-schema.md` の状態遷移・削除契機、公開型名、および `docs/specs/requirements.md`（`SYS-REQ-xx`）と機能別仕様書（`AC-xx` / `related_specs` / `related_tests`）の双方向対称性を 1対1 で漏れなく照合すること。
 
