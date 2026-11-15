@@ -1,12 +1,15 @@
+import groovy.json.JsonSlurper
+
 apply plugin: 'com.android.application'
 
 android {
     namespace = "com.yommy.app"
     compileSdk = rootProject.ext.compileSdkVersion
 
-    // AC-APK-02: CI ランナー (BUILD_NUMBER) または Gradle プロパティから versionCode / versionName を動的に解決
+    // AC-APK-02: CI ランナー (BUILD_NUMBER / BUILD_NAME)、Gradle プロパティ、または package.json (SSOT) から versionCode / versionName を動的に解決
+    def packageJson = new JsonSlurper().parse(file('../../package.json'))
     def appVersionCode = Integer.parseInt(System.getenv("BUILD_NUMBER") ?: (project.findProperty("versionCode") ?: "1"))
-    def appVersionName = System.getenv("BUILD_NAME") ?: (project.findProperty("versionName") ?: "1.0.0")
+    def appVersionName = System.getenv("BUILD_NAME") ?: (project.findProperty("versionName") ?: packageJson.version)
 
     defaultConfig {
         applicationId "com.yommy.app"
