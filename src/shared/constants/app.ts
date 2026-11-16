@@ -1,6 +1,8 @@
+import { version as PACKAGE_VERSION } from "../../../package.json";
+
 /**
- * アプリケーション基本メタデータ定数定義
- * (docs/specs/features/settings.md §2, docs/specs/changes/issue-304-v1-release-readiness.md)
+ * アプリケーション基本メタデータ定数定義（SSOT: package.json）
+ * (docs/specs/features/settings.md §3.2, docs/specs/architecture.md §5.4)
  */
 
 /**
@@ -9,6 +11,6 @@
 export const APP_NAME = "Yommy";
 
 /**
- * アプリケーションセマンティックバージョン（1.0.0）
+ * アプリケーションセマンティックバージョン（package.json の version と連動）
  */
-export const APP_VERSION = "1.0.0";
+export const APP_VERSION: string = PACKAGE_VERSION;

@@ -4,6 +4,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./SettingsPage.stories";
 import { SettingsPage } from "./SettingsPage";
+import { APP_NAME, APP_VERSION } from "../../../shared/constants/app";
 import * as sampleTextPreviewModule from "./SampleTextPreview";
 import * as cloudSyncSectionModule from "./CloudSyncSection";
 import * as storageCacheSectionModule from "./StorageCacheSection";
@@ -1075,8 +1076,8 @@ describe("SettingsPage", () => {
     });
   });
 
-  describe("バージョン表示フッター (AC-ST-20, v1.0 Issue #304)", () => {
-    it("最下部に settings-version-footer がレンダリングされ、デフォルトで 'Yommy v1.0.0' が表示されること (AC-ST-20)", () => {
+  describe("バージョン表示フッター (AC-ST-20, v1.0 Issue #304, v1.3 Issue #371)", () => {
+    it("最下部に settings-version-footer がレンダリングされ、デフォルトで package.json 連動の APP_VERSION が表示されること (AC-ST-20)", () => {
       render(
         <SettingsPage
           writingMode="vertical-rl"
@@ -1088,9 +1089,11 @@ describe("SettingsPage", () => {
         />,
       );
 
+      expect(APP_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
       const footer = screen.getByTestId("settings-version-footer");
       expect(footer).toBeInTheDocument();
-      expect(footer).toHaveTextContent("Yommy v1.0.0");
+      expect(footer).toHaveTextContent(`${APP_NAME} v${APP_VERSION}`);
+      expect(footer.textContent).toMatch(/^Yommy v\d+\.\d+\.\d+$/);
       expect(footer).toHaveClass(
         "mt-8",
         "mb-6",

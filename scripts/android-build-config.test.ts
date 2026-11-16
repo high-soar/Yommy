@@ -3,13 +3,17 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
 
-describe("Android ビルド設定および署名・バージョン管理検証 (AC-APK-01, AC-APK-02)", () => {
+describe("Android ビルド設定および署名・バージョン管理・Release自動化検証 (AC-APK-01〜04)", () => {
   const rootDir = process.cwd();
   const keystorePath = path.resolve(rootDir, "android/debug.keystore");
   const buildGradlePath = path.resolve(rootDir, "android/app/build.gradle");
   const workflowPath = path.resolve(
     rootDir,
     ".github/workflows/build-android.yml",
+  );
+  const releaseWorkflowPath = path.resolve(
+    rootDir,
+    ".github/workflows/release.yml",
   );
 
   describe("固定 Debug Keystore の配置検証 (AC-APK-01)", () => {
@@ -88,13 +92,116 @@ describe("Android ビルド設定および署名・バージョン管理検証 (
       expect(content).toMatch(/versionCode\s+appVersionCode/);
     });
 
-    it("versionName が BUILD_NAME および versionName プロパティから動的に解決されていること", () => {
+    it("versionName が BUILD_NAME・versionName プロパティ優先かつ ../../package.json の version フォールバックで動的に解決されていること", () => {
       const content = fs.readFileSync(buildGradlePath, "utf-8");
 
+      expect(content).toMatch(/^import\s+groovy\.json\.JsonSlurper/m);
       expect(content).toMatch(
-        /def\s+appVersionName\s*=\s*System\.getenv\(["']BUILD_NAME["']\)\s*\?:\s*\(project\.findProperty\(["']versionName["']\)\s*\?:\s*["']1\.0\.0["']\)/,
+        /def\s+packageJson\s*=\s*new\s+JsonSlurper\(\)\.parse\(file\(["']\.\.\/\.\.\/package\.json["']\)\)/,
+      );
+
+      const resolvedPackageJsonPath = path.resolve(
+        path.dirname(buildGradlePath),
+        "../../package.json",
+      );
+      expect(fs.existsSync(resolvedPackageJsonPath)).toBe(true);
+      expect(resolvedPackageJsonPath).toBe(
+        path.resolve(rootDir, "package.json"),
+      );
+      const packageJson = JSON.parse(
+        fs.readFileSync(resolvedPackageJsonPath, "utf-8"),
+      ) as { version: string };
+      expect(packageJson.version).toMatch(/^\d+\.\d+\.\d+$/);
+
+      expect(content).toMatch(
+        /def\s+appVersionName\s*=\s*System\.getenv\(["']BUILD_NAME["']\)\s*\?:\s*\(project\.findProperty\(["']versionName["']\)\s*\?:\s*packageJson\.version\)/,
       );
       expect(content).toMatch(/versionName\s+appVersionName/);
+      expect(content).not.toMatch(/\?:\s*["']1\.0\.0["']/);
+    });
+  });
+
+  describe("GitHub Release 自動発行ワークフロー検証 (AC-APK-04, Issue #371)", () => {
+    it(".github/workflows/release.yml が存在し、main ブランチの package.json 更新プッシュと workflow_dispatch トリガーおよび contents: write 権限を持つこと", () => {
+      expect(fs.existsSync(releaseWorkflowPath)).toBe(true);
+      const content = fs.readFileSync(releaseWorkflowPath, "utf-8");
+
+      expect(content).toMatch(
+        /on:\s*[\s\S]*?push:\s*[\s\S]*?branches:\s*(?:\[\s*main\s*\]|[\r\n]+\s*-\s*main)/,
+      );
+      expect(content).toMatch(/push:\s*[\s\S]*?paths:\s*[\s\S]*?package\.json/);
+      expect(content).toMatch(/workflow_dispatch:/);
+      expect(content).toMatch(/permissions:\s*[\s\S]*?contents:\s*write/);
+    });
+
+    it("workflow_dispatch 実行時を含め refs/heads/main ブランチ以外では checkout やリリース作成を行わず失敗停止するガードを持つこと", () => {
+      const content = fs.readFileSync(releaseWorkflowPath, "utf-8");
+
+      expect(content).toMatch(
+        /(?:if:\s*github\.ref\s*==\s*['"]refs\/heads\/main['"][\s\S]*steps:|if\s*\[\s*"\$\{GITHUB_REF\}"\s*!=\s*"refs\/heads\/main"\s*\][\s\S]*?exit\s+1[\s\S]*?uses:\s*actions\/checkout@v4)/,
+      );
+    });
+
+    it("git ls-remote (refs/tags/) および gh release view による重複スキップガードを備え、exists == 'false' 条件でのみ gh release create を実行すること", () => {
+      const content = fs.readFileSync(releaseWorkflowPath, "utf-8");
+
+      expect(content).toMatch(/git\s+ls-remote[\s\S]*?refs\/tags\//);
+      expect(content).toMatch(/gh\s+release\s+view/);
+      expect(content).toMatch(
+        /if:\s*steps\.check_existing\.outputs\.exists\s*==\s*['"]false['"][\s\S]*?gh\s+release\s+create/,
+      );
+    });
+
+    it("docs/quality/reports/ を参照し、patch '0' 時と Hotfix 時のノート生成、および gh release create の --target / --notes / --generate-notes 指定が存在すること", () => {
+      const content = fs.readFileSync(releaseWorkflowPath, "utf-8");
+
+      expect(content).toContain("docs/quality/reports/");
+      expect(content).toMatch(/PATCH.*["']0["']|["']0["'].*PATCH/);
+      expect(content).toContain("Hotfix");
+      expect(content).toMatch(/gh\s+release\s+create[\s\S]*?--target/);
+      expect(content).toMatch(/gh\s+release\s+create[\s\S]*?--notes/);
+      expect(content).toMatch(/gh\s+release\s+create[\s\S]*?--generate-notes/);
+    });
+
+    it("run ブロック内に ${{ ... }} が直接展開されず、案A境界として APK ビルドおよびアップロード処理が含まれないこと", () => {
+      const content = fs.readFileSync(releaseWorkflowPath, "utf-8");
+      const lines = content.split(/\r?\n/);
+      const runLines: string[] = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const runMatch = line.match(/^(\s*)(?:-\s+)?run:\s*(.*)$/);
+        if (!runMatch) continue;
+        const baseIndent =
+          runMatch[1].length + (line.trimStart().startsWith("-") ? 2 : 0);
+        const inlineVal = runMatch[2].trim();
+        if (
+          inlineVal === "|" ||
+          inlineVal === ">" ||
+          inlineVal === "|-" ||
+          inlineVal === ">-"
+        ) {
+          for (let j = i + 1; j < lines.length; j++) {
+            const nextLine = lines[j];
+            if (nextLine.trim() === "") continue;
+            const nextIndent = nextLine.match(/^(\s*)/)?.[1].length ?? 0;
+            if (nextIndent <= baseIndent) break;
+            runLines.push(nextLine);
+            i = j;
+          }
+        } else {
+          runLines.push(inlineVal);
+        }
+      }
+
+      expect(runLines.length).toBeGreaterThan(0);
+      for (const runLine of runLines) {
+        expect(runLine).not.toMatch(/\$\{\{/);
+      }
+
+      expect(content).not.toMatch(
+        /assembleDebug|assembleRelease|\.apk|upload-artifact/,
+      );
     });
   });
 

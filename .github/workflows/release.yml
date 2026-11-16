@@ -1,0 +1,108 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "package.json"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Create Git Tag & GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Verify release runs on main branch
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::Release workflow must run on refs/heads/main (actual: ${GITHUB_REF})."
+            exit 1
+          fi
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Extract version metadata from package.json
+        id: meta
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const path = require("node:path");
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            const version = String(pkg.version || "").trim();
+            const match = version.match(/^(\d+)\.(\d+)\.(\d+)$/);
+            if (!match) {
+              console.error("Invalid SemVer version in package.json:", version);
+              process.exit(1);
+            }
+            const [, major, minor, patch] = match;
+            const majorMinor = `${major}.${minor}`;
+            const reportsDir = path.resolve("docs/quality/reports");
+            const reportPattern = new RegExp(`^v${major}\\.${minor}-.*\\.md$`);
+            const reportFile = fs.existsSync(reportsDir)
+              ? fs.readdirSync(reportsDir).sort().find((f) => reportPattern.test(f)) || ""
+              : "";
+            const reportPath = reportFile ? `docs/quality/reports/${reportFile}` : "";
+            const out = [
+              `version=${version}`,
+              `tag=v${version}`,
+              `major_minor=${majorMinor}`,
+              `patch=${patch}`,
+              `report_path=${reportPath}`,
+            ].join("\n") + "\n";
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, out);
+          '
+
+      - name: Check existing tag and release
+        id: check_existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1 || gh release view "${TAG}" --repo "${REPO}" >/dev/null 2>&1; then
+            echo "Tag or Release ${TAG} already exists. Skipping release creation."
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "Tag and Release ${TAG} do not exist yet."
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Create Git Tag and GitHub Release
+        if: steps.check_existing.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TARGET_SHA: ${{ github.sha }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          MAJOR_MINOR: ${{ steps.meta.outputs.major_minor }}
+          PATCH: ${{ steps.meta.outputs.patch }}
+          REPORT_PATH: ${{ steps.meta.outputs.report_path }}
+        run: |
+          if [ "${PATCH}" = "0" ] && [ -n "${REPORT_PATH}" ]; then
+            NOTES_HEADER="Milestone \`v${MAJOR_MINOR}\` 完了リリース（品質分析レポート: https://github.com/${REPO}/blob/${TAG}/${REPORT_PATH} ）"
+          elif [ "${PATCH}" != "0" ]; then
+            NOTES_HEADER="Hotfix リリース（${TAG}）"
+          else
+            NOTES_HEADER="リリース ${TAG}"
+          fi
+
+          gh release create "${TAG}" \
+            --repo "${REPO}" \
+            --target "${TARGET_SHA}" \
+            --title "${TAG}" \
+            --notes "${NOTES_HEADER}" \
+            --generate-notes
