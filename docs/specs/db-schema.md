@@ -2,8 +2,8 @@
 type: spec-db-schema
 title: ローカル DB スキーマ定義（App 全体正本）
 description: SQLite（novels, chapters, download_queue, reader_settings, app_settings, deleted_novels）のER図、テーブル構造、およびDDL定義の正本。
-status: "Approved"
-updated: "2026-11-15"
+status: "Review (#375)"
+updated: "2026-11-19"
 tags:
   [
     database,
@@ -32,8 +32,11 @@ tags:
     ho-25,
     ho-32,
     ho-34,
+    bookmark-advance,
+    ho-41,
   ]
 related_specs:
+  - docs/specs/changes/issue-375-bookmark-advance-on-update.md
   - docs/specs/changes/archive/issue-344-priority-cache-scheduler.md
   - docs/specs/changes/archive/issue-268-persistent-download-queue.md
   - docs/specs/changes/archive/issue-266-bookshelf-favorite-and-sync.md
@@ -176,6 +179,7 @@ erDiagram
 - **`latest_episode_published_at`**: `upsertNovelWithToc` 実行時に `index.chapters` 内の各エピソードのうち有効な `publishedAt` の最大値（最新公開/更新日時）を算出し、ISO 8601 UTC 文字列（例: `2026-01-01T20:00:00.000Z`）に正規化して保持します（サイトごとのタイムゾーン表記揺れによる文字列ソート誤差を防止）。全エピソード未設定時は `NULL` となります。本カラムにより、ソート順「作品更新日順（`latest_published`）」において `chapters` テーブルとの結合なしで高速にソートクエリを実行可能です。
 - **`is_favorite` と `updated_at` 連動（`v0.8` Issue #266 / R1-01）**: 本棚画面（`SCR-01`）または作品詳細画面（`SCR-02`）からお気に入り状態がトグル操作（`novelRepository.setFavorite(novelId, isFavorite)`）された際、`novels.is_favorite`（`1` または `0`）の更新と同一の SQL 文で **`novels.updated_at` も現在時刻（ISO 8601 UTC 文字列）へ同時に更新** します。これにより Google Drive クラウド同期（`SyncEngine`）において、端末間のお気に入り変更が `updated_at` 基準の Last-Write-Wins（LWW）競合解決で双方向（Push / Pull とも）に正しく反映されます。なお、目次再取得（`upsertNovelWithToc`）時には既存の `is_favorite` 値が保持されます。
 - **`updated_at` の保護規約とクラウド同期時の `created_at` / `updated_at` 復元（`v0.5` Issue #170 / `v0.8` R1-01 / R2-02 / `v1.0` R2-06）**: `novels.updated_at` はユーザーによる作品メタデータ変更（お気に入りトグル `setFavorite`、初回作品登録）およびクラウド同期での最新メタデータ適用（`updateSyncMetadata`）でのみ更新されます。また新規作品のクラウド Pull 復元時（`mergeNewNovel`）には、`updateSyncMetadata` により `remoteNovel.createdAt` および `remoteNovel.updatedAt` の双方をローカル DB に同期保持し、Pull 実行時のローカル現在時刻によって後続の Tombstone 削除判定が阻害されるのを防ぎます（R2-02）。定常的な目次更新チェック（`upsertNovelWithToc`）、読書時のしおり更新（`updateBookmark`）、本文キャッシュ保存・再集計（`saveChapterBody`, `recalculateNovelStats`）、キャッシュ削除（作品詳細画面での `deleteCachedBodies` または設定画面での `deleteAllCachedBodies`）では、**`novels.updated_at` は意図的に更新されず既存値が保持されます**。これらの定常処理で `updated_at` を進めてしまうと、他端末で行われたお気に入り変更（`isFavorite`）や論理削除（Tombstone `remoteDeletedAt >= localNovel.createdAt`）が LWW 判定でローカルの新しい `updated_at` により不当に上書き・消失してしまう致命的な競合を防ぐためです（R1-01, R2-06）。
+- **目次更新時のしおり自動進行と `last_read_at` 保護（`v1.3` Issue #375）**: 既存作品に対する `upsertNovelWithToc` 実行時、更新前の状態が「当時の最終話（`total_chapters > 0` かつ `bookmark_chapter_index === total_chapters`）の末尾到達（`bookmark_scroll_progress >= 0.99`）」であり、かつ更新前の最終話（`remote_chapter_id` 基準）の直後に新着エピソードが追加された場合、同一トランザクション内で `bookmark_chapter_index` を直後の新着話の先頭（`newLastPos + 1`、`bookmark_scroll_progress = 0`）へ自動進行させます（過去話の途中挿入のみの場合は `newLastPos` へ追従して進捗率を維持、元最終話削除時は総話数増加なら `oldTotalChapters + 1` / 減少時は新最終話または `NULL` へクランプ）。この自動進行では移動先新着話の `chapters.is_read` は `0`（未読）のまま維持し、**`novels.last_read_at` および `novels.updated_at` は一切更新せず既存値を保持** します（起動時自動更新チェックがクラウド同期 Pull より先に走っても LWW 順序を破壊しないため）。
 
 ```sql
 CREATE TABLE IF NOT EXISTS novels (

@@ -32,6 +32,7 @@ docs/
 │   │   ├── kakuyomu.md                # カクヨム パーサー・スクレイピング仕様書（kakuyomu.jp）
 │   │   └── narou.md                   # 小説家になろう パーサー・スクレイピング仕様書（ncode.syosetu.com）
 │   └── changes/                       # [差分仕様 (Delta Specs)] 要望（親Issue）ごとの設計差分・テスト計画・Sub-issue分割
+│       ├── issue-375-bookmark-advance-on-update.md # [Review (#375)] 最新話末尾しおり時の新着話追加に伴うしおり自動進行およびクラウド同期進捗連携の差分仕様 (#375)
 │       └── archive/                   # 完了済みの差分仕様アーカイブ（親Issueクローズ時に git mv で移動）
 │           ├── issue-371-version-release-automation.md # [Archived] バージョン管理の package.json SSOT 化と Milestone 連動 Release 自動化ルールの整備の差分仕様 (#371)
 │           ├── issue-344-priority-cache-scheduler.md # [Archived] バックグラウンド一括キャッシュの非ブロッキング化とリーダー5話先読み優先度キュー統合の差分仕様 (#344)

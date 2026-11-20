@@ -2,8 +2,8 @@
 type: spec-feature
 title: "作品詳細・目次画面仕様書（SCR-02: Novel Detail & TOC）"
 description: 登録済み作品のヘッダー情報・あらすじ表示、お気に入り（★）登録・解除、章見出し付きエピソード一覧（キャッシュ済み・既読・しおり状態）、目次更新（再取得）、作品削除、およびリーダー画面への閲覧遷移を提供する作品詳細・目次画面（SCR-02）の正本仕様。
-status: "Approved"
-updated: "2026-11-15"
+status: "Review (#375)"
+updated: "2026-11-19"
 tags:
   [
     novel-detail,
@@ -40,8 +40,11 @@ tags:
     ho-37,
     ho-38,
     ho-39,
+    bookmark-advance,
+    ho-41,
   ]
 related_specs:
+  - docs/specs/changes/issue-375-bookmark-advance-on-update.md
   - docs/specs/changes/archive/issue-344-priority-cache-scheduler.md
   - docs/specs/changes/archive/issue-342-cloud-sync-bookmark-protection.md
   - docs/specs/changes/archive/issue-343-novel-detail-header-menu.md
@@ -588,6 +591,7 @@ export interface UseNovelDetailResult {
 | **`AC-ND-28`** | バックグラウンド復帰時自動 Pull によるしおり・既読表示自動更新（v1.1 Issue #342） | 作品詳細画面（`SCR-02`）を表示したまま画面ロック・バックグラウンドへ移行し 5 分（300,000ms）以上経過して復帰した際、自動 Pull（`syncEngine.pullAndMerge()`）完了後に `reloadDetail({ silent: true })` が `isLoading` を切り替えず自動実行され、ユーザーのスクロール位置を維持したまま他端末で更新されたしおり位置（`しおり` バッジ・「続きから読む」ボタン文言）および既読バッジ（`既読`）がリロードなしで最新化されること。                                                                                                                                                                                                                                                                    | `SYS-REQ-06, 12` / `SCN-05`                       |
 | **`AC-ND-29`** | 一括キャッシュ中の非ブロッキング操作・即時読書遷移（v1.2 Issue #344）             | 対象作品の一括キャッシュ実行中（`isBatchCaching === true`）であっても、「最初から読む」「続きから読む」、お気に入り、目次更新、3点メニューボタン、目次領域（`episode-list-container`）の縦スクロール、および目次一覧の各エピソード行（既読・未取得問わず）がいずれも操作ロック（`pointer-events-none` 等）されず、任意の話（例: 第1話や未キャッシュ話）をタップして即座にリーダー画面（`SCR-03`）へ遷移できること。                                                                                                                                                                                                                                                                             | `SYS-REQ-02, 03` / `TR-04`, `TR-18`, `SCN-04`     |
 | **`AC-ND-30`** | `SCR-02` 離脱時の継続実行および再訪問時の実行中状態競合ガード（v1.2 Issue #344）  | 一括キャッシュ実行中に `SCR-02` をアンマウント（`SCR-03` 等へ遷移）しても `CacheScheduler` のバックグラウンドタスクは中断されず継続し、再び `SCR-02` に戻った際、`useNovelDetail` は `resetInterruptedToPending` を誤実行せず進行中の `'downloading'` 話数を保持したまま現在の進捗（`batch-cache-progress`）と取得済み話数を正しく再接続・復元表示すること。                                                                                                                                                                                                                                                                                                                                    | `SYS-REQ-02, 03, 05` / `TR-06`, `TR-18`, `SCN-04` |
+| **`AC-ND-31`** | 目次更新時の最新話末尾しおり自動進行と未読状態維持（v1.3 Issue #375）             | 当時最終話の末尾（`bookmarkScrollProgress >= 0.99`）にしおりがある状態で作品詳細ヘッダーの目次更新ボタン（`refresh-toc-button`）を実行し新着話が追加された際、`upsertNovelWithToc` によりしおりが追加された新着未読話の先頭（`progress = 0`、`last_read_at` 維持）へ自動進行し、「続きから読む（第N話）」ボタンおよび目次一覧の `しおり` バッジが新着話へ即座に更新されること。移動先の新着話は開封まで未読（`既読` バッジなし）を維持し、また過去話行を直接タップした際はその話の先頭から再読できること（最新話途中の場合は移動せず維持されること）。                                                                                                                                          | `SYS-REQ-04, 06, 12` / `TR-04`, `SCN-03`          |
 
 ---
 
@@ -597,7 +601,7 @@ export interface UseNovelDetailResult {
 
 - **`SCN-01`（`test/it/scenarios/scn01-poc-vertical-reader.spec.ts`）**: 作品カード選択による目次表示・アイコンボタンによる目次更新、エピソード選択からリーダー閲覧、「← 目次」ボタンおよび OS バックキーでの復帰時の既読・しおり反映、3点メニュー経由の作品削除（`TR-02`, `TR-04`, `TR-06`, `TR-07`, `AC-ND-01`〜`09`, `27`）。
 - **`SCN-02`（`test/it/scenarios/scn02-search-ranking-discovery.spec.ts`）**: 検索・ランキングからの作品カード選択による目次遷移と、OS バックキーによる直前の探索元画面への論理復帰（`TR-07`, `TR-14`, `AC-ND-07`, `09`）。
-- **`SCN-03`（`test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts`）**: 作品詳細画面表示による本棚「NEW」バッジの自動解除、および作品詳細ヘッダーのアイコンボタンからのお気に入り登録・解除と本棚への反映（`TR-02`, `AC-ND-10`, `23`, `27`）。
+- **`SCN-03`（`test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts`）**: 作品詳細画面表示による本棚「NEW」バッジの自動解除、目次更新による最新話末尾しおりの新着話先頭自動進行（`AC-ND-31`）、および作品詳細ヘッダーのアイコンボタンからのお気に入り登録・解除と本棚への反映（`TR-02`, `AC-ND-10`, `23`, `27`, `31`）。
 - **`SCN-04`（`test/it/scenarios/scn04-prefetch-and-cache.spec.ts`）**: `CacheScheduler` 優先度キュー統合および永続ダウンロードキュー（`download_queue`）を用いた非ブロッキング一括キャッシュ（開始直後の「最初から読む」／未キャッシュ話タップによる即時 `SCR-03` 遷移、リーダー画面での即時取得 `high` と 5話先読み `medium` 実行、`SCR-02` 復帰時の自動継続・進捗復元）、中断ボタン押下による `キャッシュを再開（残りN話）`、途中話エラー時のスキップ継続と `取得失敗` バッジおよび `失敗した話を再試行（N話）`、作品ヘッダーでのキャッシュ容量表示、および3点メニュー経由の本文キャッシュ整理ダイアログ（既読話のみ／全話削除）による容量即時再計算・キュークリーンアップと目次・既読・しおり保持（`TR-04`, `TR-06`, `TR-18`, `TR-19`, `AC-ND-11`〜`13`, `20`〜`22`, `24`, `25`, `27`, `29`, `30`）。
 - **`SCN-05`（`test/it/scenarios/scn05-cloud-sync.spec.ts`）**: 3点メニュー経由の作品削除時のクラウド同期 Tombstone 自動 Push 連携、お気に入りアイコン状態変更のクラウド同期反映、および画面ロック・5分復帰時自動 Pull による作品詳細表示の自動更新（`TR-07`, `AC-ND-06`, `23`, `27`, `28`）。
 - **`SCN-07`（`test/it/scenarios/scn07-webview-import-fallback.spec.ts`）**: 作品詳細ヘッダーの3点メニュー内「内蔵ブラウザで開く」ボタン（`TR-09`）押下による `SCR-04` 遷移と目次 DOM インポート後の `SCR-02` 復帰・エピソード一覧更新検証（`TR-11`, `AC-ND-26`, `27`）。

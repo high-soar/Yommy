@@ -39,7 +39,7 @@ describe("Android ビルド設定および署名・バージョン管理・Relea
           { encoding: "utf-8" },
         );
         expect(output).toContain("friendlyName: androiddebugkey");
-        expect(output).toContain("CN=Android Debug");
+        expect(output).toMatch(/CN\s*=\s*Android Debug/);
       },
     );
   });
