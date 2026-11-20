@@ -2,8 +2,8 @@
 type: spec-feature
 title: "設定画面仕様書（SCR-05: Settings）"
 description: 小説リーダーの組版設定（縦書き/横書き、ページ送りモード、4カラーテーマ、文字サイズ、行間、フォント種別、画面余白、ハードウェア音量キー送り）の一括カスタマイズ・永続化、ルビ・傍点を含むサンプル文章プレビュー、Google Drive クラウド同期連携、ストレージ・本文キャッシュ管理、および下部タブ・OSバックキー連携を提供する設定画面（SCR-05）の正本仕様。
-status: "Approved"
-updated: "2026-11-15"
+status: "Review (#385)"
+updated: "2026-11-20"
 tags:
   [
     settings,
@@ -205,6 +205,7 @@ src/features/settings/
 | `enableVolumeKeyPaging`         | `boolean`                                                     | 任意 | `false`                              | ハードウェア音量キー送り有効フラグ（v0.6 Issue #203）                       |
 | `pagingMode`                    | `ReaderPagingMode`                                            | 任意 | `'auto'`                             | 現在のページ送りモード（`'auto'`, `'paged'`, `'scroll'`、v0.4 Issue #122）  |
 | `isLoading`                     | `boolean`                                                     | 任意 | `false`                              | 設定読み込み中フラグ                                                        |
+| `isUpdating`                    | `boolean`                                                     | 任意 | `false`                              | 設定更新中フラグ（トグル・更新中の多重実行防止、R1-35）                     |
 | `error`                         | `string \| null`                                              | 任意 | `null`                               | 設定保存・読込エラーメッセージ                                              |
 | `cloudSyncAuthState`            | `CloudSyncAuthState`                                          | 任意 | `{ status: 'unlinked' }`             | Google アカウント認証状態（v0.4）                                           |
 | `cloudSyncLastSyncedAt`         | `string \| null`                                              | 任意 | `null`                               | 最終同期完了日時（ISO 8601、v0.4）                                          |
