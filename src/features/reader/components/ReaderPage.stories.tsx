@@ -70,6 +70,7 @@ const meta: Meta<typeof ReaderPage> = {
     onNextChapter: fn(),
     onPageChange: fn(),
     onTotalPagesChange: fn(),
+    onSingleScreenContentMeasured: fn(),
     onScrollProgressChange: fn(),
     onSelectTab: fn(),
     onBackToToc: fn(),

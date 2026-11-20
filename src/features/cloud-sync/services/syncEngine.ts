@@ -10,6 +10,7 @@ import type {
   NovelRepository,
 } from "../../../storage/types";
 import type { SyncNovelData, YommySyncState } from "../types";
+import { isBookmarkAtEnd } from "../../../shared/constants/bookmark";
 
 export interface SyncEngineDependencies {
   bridge: CloudSyncBridge;
@@ -201,6 +202,18 @@ export function validateSyncState(jsonStringOrObj: unknown): YommySyncState {
     ) {
       throw new Error(
         "Invalid bookmarkChapterIndex: must be null or positive integer >= 1",
+      );
+    }
+
+    if (
+      n.bookmarkScrollProgress !== undefined &&
+      (typeof n.bookmarkScrollProgress !== "number" ||
+        !Number.isFinite(n.bookmarkScrollProgress) ||
+        n.bookmarkScrollProgress < 0 ||
+        n.bookmarkScrollProgress > 1)
+    ) {
+      throw new Error(
+        "Invalid bookmarkScrollProgress: must be a finite number between 0.0 and 1.0",
       );
     }
 
@@ -492,10 +505,20 @@ export class SyncEngine {
     );
 
     if (remoteNovel.bookmarkChapterIndex !== null) {
+      const remoteProgress = remoteNovel.bookmarkScrollProgress ?? 0.0;
+      const shouldAutoAdvance =
+        remoteNovel.totalChapters > 0 &&
+        remoteNovel.bookmarkChapterIndex === remoteNovel.totalChapters &&
+        isBookmarkAtEnd(remoteProgress) &&
+        parsedIndex.chapters.length > remoteNovel.totalChapters;
+      const targetChapterIndex = shouldAutoAdvance
+        ? remoteNovel.totalChapters + 1
+        : remoteNovel.bookmarkChapterIndex;
+      const targetProgress = shouldAutoAdvance ? 0.0 : remoteProgress;
       await this.deps.novelRepository.updateBookmark(
         novelId,
-        remoteNovel.bookmarkChapterIndex,
-        0.0,
+        targetChapterIndex,
+        targetProgress,
       );
     }
 
@@ -588,16 +611,40 @@ export class SyncEngine {
       remoteNovel.bookmarkChapterIndex > currentLocalNovel.totalChapters;
 
     if (remoteLastRead > localLastRead && !isBookmarkOutOfRange) {
-      if (
-        remoteNovel.bookmarkChapterIndex !== null &&
-        remoteNovel.bookmarkChapterIndex !==
+      if (remoteNovel.bookmarkChapterIndex !== null) {
+        const remoteProgress = remoteNovel.bookmarkScrollProgress;
+        const shouldAutoAdvance =
+          remoteNovel.totalChapters > 0 &&
+          remoteNovel.bookmarkChapterIndex === remoteNovel.totalChapters &&
+          remoteProgress !== undefined &&
+          isBookmarkAtEnd(remoteProgress) &&
+          currentLocalNovel.totalChapters > remoteNovel.totalChapters;
+
+        if (shouldAutoAdvance) {
+          await this.deps.novelRepository.updateBookmark(
+            novelId,
+            remoteNovel.totalChapters + 1,
+            0.0,
+          );
+        } else if (
+          remoteNovel.bookmarkChapterIndex !==
           currentLocalNovel.bookmarkChapterIndex
-      ) {
-        await this.deps.novelRepository.updateBookmark(
-          novelId,
-          remoteNovel.bookmarkChapterIndex,
-          0.0,
-        );
+        ) {
+          await this.deps.novelRepository.updateBookmark(
+            novelId,
+            remoteNovel.bookmarkChapterIndex,
+            remoteProgress ?? 0.0,
+          );
+        } else if (
+          remoteProgress !== undefined &&
+          remoteProgress !== currentLocalNovel.bookmarkScrollProgress
+        ) {
+          await this.deps.novelRepository.updateBookmark(
+            novelId,
+            remoteNovel.bookmarkChapterIndex,
+            remoteProgress,
+          );
+        }
       }
       // updateBookmark による lastReadAt のローカル現在時刻上書きを防ぎ、リモートの lastReadAt を復元 (R1-07)
       await this.deps.novelRepository.updateSyncMetadata?.(novelId, {
@@ -764,6 +811,7 @@ export class SyncEngine {
         hasNewUpdate: full.hasNewUpdate ? 1 : 0,
         latestEpisodePublishedAt: full.latestEpisodePublishedAt ?? null,
         bookmarkChapterIndex: full.bookmarkChapterIndex,
+        bookmarkScrollProgress: full.bookmarkScrollProgress,
         lastReadAt: full.lastReadAt,
         readChapterIds,
         createdAt: full.createdAt,
@@ -836,6 +884,16 @@ export class SyncEngine {
                 ? remoteNovel.bookmarkChapterIndex
                 : local.bookmarkChapterIndex
               : local.bookmarkChapterIndex,
+            bookmarkScrollProgress: isRemoteReadNewer
+              ? remoteNovel.bookmarkChapterIndex !== null
+                ? remoteNovel.bookmarkScrollProgress !== undefined
+                  ? remoteNovel.bookmarkScrollProgress
+                  : remoteNovel.bookmarkChapterIndex ===
+                      local.bookmarkChapterIndex
+                    ? local.bookmarkScrollProgress
+                    : 0.0
+                : local.bookmarkScrollProgress
+              : local.bookmarkScrollProgress,
             updatedAt: isRemoteUpdateNewer
               ? remoteNovel.updatedAt
               : local.updatedAt,

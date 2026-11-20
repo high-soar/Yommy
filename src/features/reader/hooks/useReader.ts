@@ -24,6 +24,7 @@ import {
   delay,
   toErrorMessage,
 } from "../../../shared/utils/cache";
+import { isBookmarkAtEnd } from "../../../shared/constants/bookmark";
 
 export { isChapterFresh, delay, toErrorMessage };
 
@@ -208,6 +209,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     useState<BookmarkConflictState | null>(null);
 
   const novelRef = useRef<NovelRecord | null>(novel);
+  const chapterRef = useRef<ChapterRecord | null>(chapter);
   const currentChapterIndexRef = useRef<number>(currentChapterIndex);
   const scrollProgressRef = useRef<number>(scrollProgress);
   const currentPageRef = useRef<number>(currentPage);
@@ -215,6 +217,13 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   const initialScrollProgressRef = useRef<number>(initialScrollProgress);
   const hasUserChangedPageRef = useRef<boolean>(false);
   const hasPendingBookmarkRef = useRef<boolean>(false);
+  const isAutoSingleScreenSavePendingRef = useRef<boolean>(false);
+  const isLoadingRef = useRef<boolean>(isLoading);
+  const writingModeRef = useRef<WritingMode>(writingMode);
+  const pagingModeRef = useRef<ReaderPagingMode>(pagingMode);
+  const effectivePagingModeRef = useRef<"paged" | "scroll">(
+    resolveEffectivePagingMode(pagingMode, writingMode),
+  );
   const bookmarkConflictRef = useRef<BookmarkConflictState | null>(
     bookmarkConflict,
   );
@@ -229,9 +238,24 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   const isResolvingConflictRef = useRef<boolean>(false);
   const isMountedRef = useRef<boolean>(true);
 
+  writingModeRef.current = writingMode;
+  pagingModeRef.current = pagingMode;
+  effectivePagingModeRef.current = resolveEffectivePagingMode(
+    pagingMode,
+    writingMode,
+  );
+
   useEffect(() => {
     novelRef.current = novel;
   }, [novel]);
+
+  useEffect(() => {
+    chapterRef.current = chapter;
+  }, [chapter]);
+
+  useEffect(() => {
+    isLoadingRef.current = isLoading;
+  }, [isLoading]);
 
   useEffect(() => {
     currentChapterIndexRef.current = currentChapterIndex;
@@ -285,6 +309,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       totalPagesRef.current = 1;
       hasUserChangedPageRef.current = false;
       hasPendingBookmarkRef.current = false;
+      isAutoSingleScreenSavePendingRef.current = false;
     },
     [clearBookmarkDebounceTimer],
   );
@@ -595,6 +620,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     const fetchAbortController = new AbortController();
     chapterFetchAbortControllerRef.current = fetchAbortController;
     setIsLoading(true);
+    isLoadingRef.current = true;
     setError(null);
 
     let targetNovel: NovelRecord | null = null;
@@ -607,6 +633,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           const settings = await settingsRepository.getReaderSettings();
           if (settings) {
             setWritingMode(settings.writingMode);
+            writingModeRef.current = settings.writingMode;
             setTheme(settings.theme);
             setFontSizePx(settings.fontSizePx);
             setLineHeight(settings.lineHeight);
@@ -618,7 +645,12 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             }
             if (settings.pagingMode) {
               setPagingMode(settings.pagingMode);
+              pagingModeRef.current = settings.pagingMode;
             }
+            effectivePagingModeRef.current = resolveEffectivePagingMode(
+              settings.pagingMode ?? pagingModeRef.current,
+              settings.writingMode,
+            );
             if (typeof settings.enableVolumeKeyPaging === "boolean") {
               setEnableVolumeKeyPaging(settings.enableVolumeKeyPaging);
             }
@@ -641,7 +673,9 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
 
         if (!targetNovel) {
           setNovel(null);
+          novelRef.current = null;
           setChapter(null);
+          chapterRef.current = null;
           setCurrentChapterIndex(targetIndex);
           resetPaginationState(0, 0);
           return;
@@ -715,6 +749,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             ...targetNovel,
             bookmarkChapterIndex: targetIndex,
             bookmarkScrollProgress: 0,
+            lastReadAt: new Date().toISOString(),
           };
         }
 
@@ -722,6 +757,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         setNovel(targetNovel);
         novelRef.current = targetNovel;
         setChapter(targetChapter);
+        chapterRef.current = targetChapter;
         setCurrentChapterIndex(targetIndex);
         currentChapterIndexRef.current = targetIndex;
 
@@ -739,6 +775,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           }
           if (targetChapter) {
             setChapter(targetChapter);
+            chapterRef.current = targetChapter;
           }
         }
       } finally {
@@ -747,6 +784,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         }
         if (isMounted && !fetchAbortController.signal.aborted) {
           setIsLoading(false);
+          isLoadingRef.current = false;
         }
       }
     }
@@ -777,6 +815,11 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     const nextMode: WritingMode =
       writingMode === "vertical-rl" ? "horizontal-tb" : "vertical-rl";
     setWritingMode(nextMode);
+    writingModeRef.current = nextMode;
+    effectivePagingModeRef.current = resolveEffectivePagingMode(
+      pagingModeRef.current,
+      nextMode,
+    );
     try {
       await settingsRepository.updateReaderSettings({ writingMode: nextMode });
     } catch (err: unknown) {
@@ -830,6 +873,11 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   const changePagingMode = useCallback(
     async (nextPagingMode: ReaderPagingMode): Promise<void> => {
       setPagingMode(nextPagingMode);
+      pagingModeRef.current = nextPagingMode;
+      effectivePagingModeRef.current = resolveEffectivePagingMode(
+        nextPagingMode,
+        writingModeRef.current,
+      );
       try {
         await settingsRepository.updateReaderSettings({
           pagingMode: nextPagingMode,
@@ -840,36 +888,6 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     },
     [settingsRepository],
   );
-
-  // 総ページ数設定および初期復元／クランプ
-  const setTotalPages = useCallback((total: number): void => {
-    const validTotal = Math.max(
-      1,
-      Math.floor(Number.isFinite(total) ? total : 1),
-    );
-    setTotalPagesState(validTotal);
-    totalPagesRef.current = validTotal;
-
-    if (!hasUserChangedPageRef.current) {
-      if (initialScrollProgressRef.current > 0) {
-        const restoredPage = calculatePageFromProgress(
-          initialScrollProgressRef.current,
-          validTotal,
-        );
-        setCurrentPage(restoredPage);
-        currentPageRef.current = restoredPage;
-        return;
-      }
-    }
-
-    setCurrentPage((prevPage) => {
-      if (prevPage > validTotal) {
-        currentPageRef.current = validTotal;
-        return validTotal;
-      }
-      return prevPage;
-    });
-  }, []);
 
   // しおり永続化・メモリ状態同期・クラウド同期通知の共通ヘルパー
   const persistBookmark = useCallback(
@@ -888,10 +906,12 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           progress,
         );
         hasPendingBookmarkRef.current = false;
+        isAutoSingleScreenSavePendingRef.current = false;
         const updatedNovel: NovelRecord = {
           ...targetNovel,
           bookmarkChapterIndex: chapterIdx,
           bookmarkScrollProgress: progress,
+          lastReadAt: new Date().toISOString(),
         };
         setNovel(updatedNovel);
         novelRef.current = updatedNovel;
@@ -908,16 +928,18 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
   );
 
   // スクロール進捗率更新（0.0〜1.0 クランプ）および DB 自動保存（300ms デバウンス: R1-12）
-  const updateScrollProgress = useCallback(
-    async (progress: number): Promise<void> => {
+  const scheduleBookmarkProgressSave = useCallback(
+    (progress: number, isAutoSingleScreen: boolean): void => {
       if (bookmarkConflictRef.current !== null) {
         clearBookmarkDebounceTimer();
+        isAutoSingleScreenSavePendingRef.current = false;
         return;
       }
       const clamped = Math.max(
         0,
         Math.min(1, Number.isFinite(progress) ? progress : 0),
       );
+      isAutoSingleScreenSavePendingRef.current = isAutoSingleScreen;
       hasPendingBookmarkRef.current = true;
       setScrollProgress(clamped);
       scrollProgressRef.current = clamped;
@@ -934,6 +956,98 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       }, 300);
     },
     [clearBookmarkDebounceTimer, persistBookmark],
+  );
+
+  const updateScrollProgress = useCallback(
+    async (progress: number): Promise<void> => {
+      scheduleBookmarkProgressSave(progress, false);
+    },
+    [scheduleBookmarkProgressSave],
+  );
+
+  const triggerAutoSingleScreenSave = useCallback((): void => {
+    if (
+      isLoadingRef.current ||
+      !novelRef.current ||
+      !chapterRef.current ||
+      chapterRef.current.bodyHtml === null ||
+      bookmarkConflictRef.current !== null ||
+      isBookmarkAtEnd(scrollProgressRef.current)
+    ) {
+      return;
+    }
+    scheduleBookmarkProgressSave(1.0, true);
+  }, [scheduleBookmarkProgressSave]);
+
+  const rollbackAutoSingleScreenSave = useCallback((): void => {
+    if (
+      !isAutoSingleScreenSavePendingRef.current ||
+      hasUserChangedPageRef.current
+    ) {
+      return;
+    }
+    clearBookmarkDebounceTimer();
+    isAutoSingleScreenSavePendingRef.current = false;
+    hasPendingBookmarkRef.current = false;
+    const restoredProgress = initialScrollProgressRef.current;
+    setScrollProgress(restoredProgress);
+    scrollProgressRef.current = restoredProgress;
+  }, [clearBookmarkDebounceTimer]);
+
+  // 総ページ数設定および初期復元／クランプ／1ページ完了保存 (Issue #375)
+  const setTotalPages = useCallback(
+    (total: number): void => {
+      const validTotal = Math.max(
+        1,
+        Math.floor(Number.isFinite(total) ? total : 1),
+      );
+      setTotalPagesState(validTotal);
+      totalPagesRef.current = validTotal;
+
+      if (validTotal > 1) {
+        rollbackAutoSingleScreenSave();
+      }
+
+      if (
+        !hasUserChangedPageRef.current &&
+        initialScrollProgressRef.current > 0
+      ) {
+        const restoredPage = calculatePageFromProgress(
+          initialScrollProgressRef.current,
+          validTotal,
+        );
+        setCurrentPage(restoredPage);
+        currentPageRef.current = restoredPage;
+      } else {
+        setCurrentPage((prevPage) => {
+          if (prevPage > validTotal) {
+            currentPageRef.current = validTotal;
+            return validTotal;
+          }
+          return prevPage;
+        });
+      }
+
+      if (validTotal === 1 && effectivePagingModeRef.current === "paged") {
+        triggerAutoSingleScreenSave();
+      }
+    },
+    [rollbackAutoSingleScreenSave, triggerAutoSingleScreenSave],
+  );
+
+  // スクロールモードの1画面収まり計測通知による短文完了自動保存／ロールバック (AC-RD-36)
+  const markSingleScreenContentMeasured = useCallback(
+    (isSingleScreen: boolean): void => {
+      if (effectivePagingModeRef.current !== "scroll") {
+        return;
+      }
+      if (isSingleScreen) {
+        triggerAutoSingleScreenSave();
+      } else {
+        rollbackAutoSingleScreenSave();
+      }
+    },
+    [rollbackAutoSingleScreenSave, triggerAutoSingleScreenSave],
   );
 
   // 指定ページへの遷移およびしおり自動保存
@@ -1001,7 +1115,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     };
   }, [clearBookmarkDebounceTimer, flushBookmark]);
 
-  // クラウド同期 Pull 完了時のしおり競合検知 (Issue #342)
+  // クラウド同期 Pull 完了時のしおり競合検知 (Issue #342, Issue #375)
   useEffect(() => {
     if (!syncEngine?.subscribePullCompleted) {
       return;
@@ -1017,28 +1131,51 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           if (!isMountedRef.current || !latestNovel) {
             return;
           }
+          const currentInMemoryNovel = novelRef.current;
+          const prevLastReadAt = currentInMemoryNovel?.lastReadAt ?? null;
+          const hasRemoteReadUpdate =
+            latestNovel.lastReadAt !== null &&
+            (prevLastReadAt === null ||
+              Date.parse(latestNovel.lastReadAt) > Date.parse(prevLastReadAt));
+          const remoteBookmarkIdx = latestNovel.bookmarkChapterIndex;
+
           if (
-            latestNovel.bookmarkChapterIndex !== null &&
-            latestNovel.bookmarkChapterIndex >= 1 &&
-            latestNovel.bookmarkChapterIndex <= latestNovel.totalChapters
+            remoteBookmarkIdx !== null &&
+            remoteBookmarkIdx >= 1 &&
+            remoteBookmarkIdx <= latestNovel.totalChapters
           ) {
-            if (
-              latestNovel.bookmarkChapterIndex !==
-              currentChapterIndexRef.current
-            ) {
-              clearBookmarkDebounceTimer();
-              hasPendingBookmarkRef.current = false;
-              const nextConflict: BookmarkConflictState = {
-                currentChapterIndex: currentChapterIndexRef.current,
-                remoteChapterIndex: latestNovel.bookmarkChapterIndex,
-              };
-              bookmarkConflictRef.current = nextConflict;
-              setBookmarkConflict(nextConflict);
+            if (remoteBookmarkIdx !== currentChapterIndexRef.current) {
+              if (hasRemoteReadUpdate) {
+                clearBookmarkDebounceTimer();
+                hasPendingBookmarkRef.current = false;
+                isAutoSingleScreenSavePendingRef.current = false;
+                if (currentInMemoryNovel) {
+                  const syncedMetaNovel: NovelRecord = {
+                    ...currentInMemoryNovel,
+                    totalChapters: latestNovel.totalChapters,
+                    latestEpisodePublishedAt:
+                      latestNovel.latestEpisodePublishedAt,
+                    hasNewUpdate: latestNovel.hasNewUpdate,
+                  };
+                  novelRef.current = syncedMetaNovel;
+                  setNovel(syncedMetaNovel);
+                }
+                const nextConflict: BookmarkConflictState = {
+                  currentChapterIndex: currentChapterIndexRef.current,
+                  remoteChapterIndex: remoteBookmarkIdx,
+                };
+                bookmarkConflictRef.current = nextConflict;
+                setBookmarkConflict(nextConflict);
+                return;
+              }
             } else {
               bookmarkConflictRef.current = null;
               setBookmarkConflict(null);
             }
           }
+
+          novelRef.current = latestNovel;
+          setNovel(latestNovel);
         } catch {
           // 競合検知用 DB 読み取り失敗時は既存表示を維持
         }
@@ -1076,6 +1213,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
       let isSuccess = false;
       isNavigatingChapterRef.current = true;
       setIsLoading(true);
+      isLoadingRef.current = true;
       setError(null);
 
       try {
@@ -1089,6 +1227,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           if (!isMountedRef.current) return false;
         }
         hasPendingBookmarkRef.current = false;
+        isAutoSingleScreenSavePendingRef.current = false;
 
         // 1. 遷移前の現在話に対して既読更新
         await chapterRepository.markChapterRead(
@@ -1114,6 +1253,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
             !options?.preserveChapterOnError
           ) {
             setChapter(null);
+            chapterRef.current = null;
           }
           try {
             const resolved = await resolveChapterBody(
@@ -1135,6 +1275,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
               !options?.preserveChapterOnError
             ) {
               setChapter(targetChapter);
+              chapterRef.current = targetChapter;
               setCurrentChapterIndex(targetChapterIndex);
               currentChapterIndexRef.current = targetChapterIndex;
               resetPaginationState(0, 0);
@@ -1181,6 +1322,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         setCurrentChapterIndex(targetChapterIndex);
         currentChapterIndexRef.current = targetChapterIndex;
         setChapter(targetChapter);
+        chapterRef.current = targetChapter;
         setNovel(reloadedNovel);
         novelRef.current = reloadedNovel;
         resetPaginationState(nextProgress, nextProgress);
@@ -1212,6 +1354,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         }
         if (isMountedRef.current && !signal.aborted) {
           setIsLoading(false);
+          isLoadingRef.current = false;
         }
       }
       return isSuccess;
@@ -1251,6 +1394,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     }
 
     setIsLoading(true);
+    isLoadingRef.current = true;
     setError(null);
 
     try {
@@ -1302,9 +1446,13 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         const reloadedNovel = await novelRepository.getNovelById(savedNovel.id);
         if (!isMountedRef.current) return;
 
+        const nextChapter = savedChapter
+          ? { ...savedChapter, isRead: true }
+          : null;
         setNovel(reloadedNovel);
         novelRef.current = reloadedNovel;
-        setChapter(savedChapter ? { ...savedChapter, isRead: true } : null);
+        setChapter(nextChapter);
+        chapterRef.current = nextChapter;
         setCurrentChapterIndex(targetChapterIdx);
         currentChapterIndexRef.current = targetChapterIdx;
         resetPaginationState(0, 0);
@@ -1320,6 +1468,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         setNovel(savedNovel);
         novelRef.current = savedNovel;
         setChapter(null);
+        chapterRef.current = null;
         resetPaginationState(0, 0);
       }
     } catch (err: unknown) {
@@ -1329,6 +1478,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     } finally {
       if (isMountedRef.current) {
         setIsLoading(false);
+        isLoadingRef.current = false;
       }
     }
   }, [
@@ -1423,7 +1573,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     nextPage,
     prevPage,
     setTotalPages,
-    markSingleScreenContentMeasured: () => {},
+    markSingleScreenContentMeasured,
     updateScrollProgress,
     flushBookmark,
     goToChapter,

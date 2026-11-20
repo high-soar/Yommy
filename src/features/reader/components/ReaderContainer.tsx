@@ -73,6 +73,7 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
     error,
     goToPage,
     setTotalPages,
+    markSingleScreenContentMeasured,
     updateScrollProgress,
     flushBookmark,
     goToChapter,
@@ -266,6 +267,7 @@ export const ReaderContainer: React.FC<ReaderContainerProps> = ({
       onNextChapter={handleNextChapter}
       onPageChange={goToPage}
       onTotalPagesChange={setTotalPages}
+      onSingleScreenContentMeasured={markSingleScreenContentMeasured}
       onScrollProgressChange={handleScrollProgressChange}
       onSelectTab={handleSelectTab}
       onBackToToc={handleBackToToc}

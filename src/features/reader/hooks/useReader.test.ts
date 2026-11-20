@@ -6381,8 +6381,8 @@ describe("useReader", () => {
       });
 
       await db.execute(
-        "UPDATE novels SET bookmark_chapter_index = 2, bookmark_scroll_progress = 0.5 WHERE id = ?",
-        [seeded.id],
+        "UPDATE novels SET bookmark_chapter_index = 2, bookmark_scroll_progress = 0.5, last_read_at = ? WHERE id = ?",
+        [new Date(Date.now() + 1000).toISOString(), seeded.id],
       );
 
       await act(async () => {

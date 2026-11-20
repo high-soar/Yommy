@@ -136,6 +136,7 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
   onNextChapter,
   onPageChange,
   onTotalPagesChange,
+  onSingleScreenContentMeasured,
   onScrollProgressChange,
   onSelectTab,
   onBackToToc,
@@ -416,6 +417,7 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
               slideOffsetPx={slideOffsetPx}
               isAnimating={isAnimating}
               onTotalPagesChange={onTotalPagesChange}
+              onSingleScreenContentMeasured={onSingleScreenContentMeasured}
               chapterIndex={chapterIndex}
               totalChapters={totalChapters}
               onPrevChapter={handlePrevChapter}
