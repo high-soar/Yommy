@@ -8145,6 +8145,7 @@ describe("useReader", () => {
         const seeded = await seedNovelWithChapters(novelRepo, chapterRepo, {
           chapterCount: 2,
           cachedCount: 2,
+          isReadCount: 2,
           bookmarkChapterIndex: 1,
           bookmarkScrollProgress: 0,
         });

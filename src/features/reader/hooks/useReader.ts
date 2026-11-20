@@ -742,14 +742,18 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           nextScrollProgress = targetNovel.bookmarkScrollProgress;
         } else {
           await novelRepository.updateBookmark(targetNovel.id, targetIndex, 0);
+          if (!isMounted) return;
           if (syncEngine) {
             syncEngine.notifyChanged().catch(() => {});
           }
-          targetNovel = {
+          const reloadedNovel = await novelRepository.getNovelById(
+            targetNovel.id,
+          );
+          if (!isMounted) return;
+          targetNovel = reloadedNovel ?? {
             ...targetNovel,
             bookmarkChapterIndex: targetIndex,
             bookmarkScrollProgress: 0,
-            lastReadAt: new Date().toISOString(),
           };
         }
 
@@ -907,7 +911,19 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         );
         hasPendingBookmarkRef.current = false;
         isAutoSingleScreenSavePendingRef.current = false;
-        const updatedNovel: NovelRecord = {
+        if (syncEngine) {
+          syncEngine.notifyChanged().catch(() => {});
+        }
+        if (!isMountedRef.current) {
+          return false;
+        }
+        const reloadedNovel = await novelRepository.getNovelById(
+          targetNovel.id,
+        );
+        if (!isMountedRef.current) {
+          return false;
+        }
+        const updatedNovel: NovelRecord = reloadedNovel ?? {
           ...targetNovel,
           bookmarkChapterIndex: chapterIdx,
           bookmarkScrollProgress: progress,
@@ -915,12 +931,11 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
         };
         setNovel(updatedNovel);
         novelRef.current = updatedNovel;
-        if (syncEngine) {
-          syncEngine.notifyChanged().catch(() => {});
-        }
         return true;
       } catch (err: unknown) {
-        setError(toErrorMessage(err));
+        if (isMountedRef.current) {
+          setError(toErrorMessage(err));
+        }
         return false;
       }
     },
@@ -1133,10 +1148,17 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
           }
           const currentInMemoryNovel = novelRef.current;
           const prevLastReadAt = currentInMemoryNovel?.lastReadAt ?? null;
+          const latestMs =
+            latestNovel.lastReadAt !== null
+              ? Date.parse(latestNovel.lastReadAt)
+              : Number.NaN;
+          const prevMs =
+            prevLastReadAt !== null ? Date.parse(prevLastReadAt) : Number.NaN;
           const hasRemoteReadUpdate =
-            latestNovel.lastReadAt !== null &&
+            Number.isFinite(latestMs) &&
             (prevLastReadAt === null ||
-              Date.parse(latestNovel.lastReadAt) > Date.parse(prevLastReadAt));
+              Number.isNaN(prevMs) ||
+              latestMs > prevMs);
           const remoteBookmarkIdx = latestNovel.bookmarkChapterIndex;
 
           if (
