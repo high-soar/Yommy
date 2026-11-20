@@ -98,6 +98,92 @@ export function computeLatestEpisodePublishedAt(
   return new Date(maxTime).toISOString();
 }
 
+interface ExistingChapterRef {
+  remote_chapter_id: string;
+  chapter_index: number;
+}
+
+/**
+ * 目次更新時のしおり自動進行先を算出する。
+ * 更新前が「当時最終話の末尾到達 (isBookmarkAtEnd)」である場合のみ、
+ * remote_chapter_id 基準で新着話先頭への自動進行・途中挿入追従・削除フォールバックを解決する。
+ * （docs/specs/changes/issue-375-bookmark-advance-on-update.md §2.2 に準拠）
+ */
+function resolveBookmarkOnTocUpdate(
+  existing: NovelRecord,
+  existingChapterRows: ExistingChapterRef[],
+  nextChapters: ParsedTocItem[],
+): {
+  bookmarkChapterIndex: number | null;
+  bookmarkScrollProgress: number;
+} {
+  if (
+    existing.totalChapters <= 0 ||
+    existing.bookmarkChapterIndex !== existing.totalChapters ||
+    !isBookmarkAtEnd(existing.bookmarkScrollProgress)
+  ) {
+    // Case 4: 前提条件未達（最新話途中・過去話・未読・旧0話）は従来値を維持
+    return {
+      bookmarkChapterIndex: existing.bookmarkChapterIndex,
+      bookmarkScrollProgress: existing.bookmarkScrollProgress,
+    };
+  }
+
+  const prevLastChapter = existingChapterRows.find(
+    (c) => c.chapter_index === existing.totalChapters,
+  );
+  const sortedChapters = [...nextChapters].sort(
+    (a, b) => a.chapterIndex - b.chapterIndex,
+  );
+  const foundIdx = prevLastChapter
+    ? sortedChapters.findIndex(
+        (c) => c.remoteChapterId === prevLastChapter.remote_chapter_id,
+      )
+    : -1;
+
+  if (foundIdx >= 0) {
+    const newLastPos = foundIdx + 1;
+    if (newLastPos < sortedChapters.length) {
+      // Case 1: 元の最終話の後ろに新着話が追加されている -> 直後の新着話先頭へ進行
+      return {
+        bookmarkChapterIndex: sortedChapters[foundIdx + 1].chapterIndex,
+        bookmarkScrollProgress: 0,
+      };
+    }
+    // Case 2: 元の最終話が依然として最終話（過去話途中挿入等） -> 連番のみ追従し末尾進捗維持
+    return {
+      bookmarkChapterIndex: sortedChapters[foundIdx].chapterIndex,
+      bookmarkScrollProgress: existing.bookmarkScrollProgress,
+    };
+  }
+
+  // Case 3: 元の最終話が新目次に存在しない場合のフォールバック
+  if (sortedChapters.length === 0) {
+    return {
+      bookmarkChapterIndex: null,
+      bookmarkScrollProgress: 0,
+    };
+  }
+  if (sortedChapters.length > existing.totalChapters) {
+    return {
+      bookmarkChapterIndex: existing.totalChapters + 1,
+      bookmarkScrollProgress: 0,
+    };
+  }
+  if (existing.bookmarkChapterIndex > sortedChapters.length) {
+    return {
+      bookmarkChapterIndex:
+        sortedChapters[sortedChapters.length - 1].chapterIndex,
+      bookmarkScrollProgress: existing.bookmarkScrollProgress,
+    };
+  }
+
+  return {
+    bookmarkChapterIndex: existing.bookmarkChapterIndex,
+    bookmarkScrollProgress: existing.bookmarkScrollProgress,
+  };
+}
+
 /**
  * SQLite バックエンドによる作品リポジトリ実装
  * （docs/specs/architecture.md および docs/specs/db-schema.md に準拠）
@@ -237,10 +323,7 @@ export class SqlNovelRepository implements NovelRepository {
           ],
         );
       } else {
-        const existingChapterRows = await tx.query<{
-          remote_chapter_id: string;
-          chapter_index: number;
-        }>(
+        const existingChapterRows = await tx.query<ExistingChapterRef>(
           `SELECT remote_chapter_id, chapter_index FROM chapters WHERE novel_id = ?;`,
           [id],
         );
@@ -258,48 +341,11 @@ export class SqlNovelRepository implements NovelRepository {
               ? 1
               : 0;
 
-        let nextBookmarkChapterIndex = existing.bookmarkChapterIndex;
-        let nextBookmarkScrollProgress = existing.bookmarkScrollProgress;
-
-        if (
-          existing.totalChapters > 0 &&
-          existing.bookmarkChapterIndex === existing.totalChapters &&
-          isBookmarkAtEnd(existing.bookmarkScrollProgress)
-        ) {
-          const prevLastChapter = existingChapterRows.find(
-            (c) => c.chapter_index === existing.totalChapters,
-          );
-          const sortedChapters = [...index.chapters].sort(
-            (a, b) => a.chapterIndex - b.chapterIndex,
-          );
-          const foundIdx = prevLastChapter
-            ? sortedChapters.findIndex(
-                (c) => c.remoteChapterId === prevLastChapter.remote_chapter_id,
-              )
-            : -1;
-
-          if (foundIdx >= 0) {
-            const newLastPos = foundIdx + 1;
-            if (newLastPos < sortedChapters.length) {
-              nextBookmarkChapterIndex =
-                sortedChapters[foundIdx + 1].chapterIndex;
-              nextBookmarkScrollProgress = 0;
-            } else {
-              nextBookmarkChapterIndex = sortedChapters[foundIdx].chapterIndex;
-              nextBookmarkScrollProgress = existing.bookmarkScrollProgress;
-            }
-          } else if (sortedChapters.length === 0) {
-            nextBookmarkChapterIndex = null;
-            nextBookmarkScrollProgress = 0;
-          } else if (sortedChapters.length > existing.totalChapters) {
-            nextBookmarkChapterIndex = existing.totalChapters + 1;
-            nextBookmarkScrollProgress = 0;
-          } else if (existing.bookmarkChapterIndex > sortedChapters.length) {
-            nextBookmarkChapterIndex =
-              sortedChapters[sortedChapters.length - 1].chapterIndex;
-            nextBookmarkScrollProgress = existing.bookmarkScrollProgress;
-          }
-        }
+        const nextBookmark = resolveBookmarkOnTocUpdate(
+          existing,
+          existingChapterRows,
+          index.chapters,
+        );
 
         await tx.execute(
           `UPDATE novels
@@ -318,38 +364,27 @@ export class SqlNovelRepository implements NovelRepository {
             hasNewUpdate,
             latestEpisodePublishedAt,
             fetchedAt,
-            nextBookmarkChapterIndex,
-            nextBookmarkScrollProgress,
+            nextBookmark.bookmarkChapterIndex,
+            nextBookmark.bookmarkScrollProgress,
             id,
           ],
         );
-      }
 
-      // 新しい目次に含まれない古いエピソードの削除およびキュー整理 (R1-03)
-      const currentRemoteIds = new Set(
-        index.chapters.map((c) => c.remoteChapterId),
-      );
-      const existingChapters = await tx.query<{
-        remote_chapter_id: string;
-        chapter_index: number;
-      }>(
-        `SELECT remote_chapter_id, chapter_index FROM chapters WHERE novel_id = ?;`,
-        [id],
-      );
-      const removedChapters = existingChapters.filter(
-        (c) => !currentRemoteIds.has(c.remote_chapter_id),
-      );
-
-      if (removedChapters.length > 0) {
-        for (const removed of removedChapters) {
-          await tx.execute(
-            `DELETE FROM chapters WHERE novel_id = ? AND remote_chapter_id = ?;`,
-            [id, removed.remote_chapter_id],
-          );
-          await tx.execute(
-            `DELETE FROM download_queue WHERE novel_id = ? AND chapter_index = ?;`,
-            [id, removed.chapter_index],
-          );
+        // 新しい目次に含まれない古いエピソードの削除およびキュー整理 (R1-03)
+        const currentRemoteIds = new Set(
+          index.chapters.map((c) => c.remoteChapterId),
+        );
+        for (const removed of existingChapterRows) {
+          if (!currentRemoteIds.has(removed.remote_chapter_id)) {
+            await tx.execute(
+              `DELETE FROM chapters WHERE novel_id = ? AND remote_chapter_id = ?;`,
+              [id, removed.remote_chapter_id],
+            );
+            await tx.execute(
+              `DELETE FROM download_queue WHERE novel_id = ? AND chapter_index = ?;`,
+              [id, removed.chapter_index],
+            );
+          }
         }
       }
 

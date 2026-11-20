@@ -24,6 +24,7 @@ related_specs:
   - docs/specs/features/reader-view.md
   - docs/quality/bug-and-handover-log.md
 related_tests:
+  - src/shared/constants/bookmark.test.ts
   - src/storage/repositories/novelRepository.test.ts
   - src/features/reader/components/ReaderView.test.tsx
   - src/features/reader/hooks/useReader.test.ts

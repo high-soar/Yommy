@@ -160,6 +160,7 @@ related_tests:
   - src/shared/utils/cache.test.ts
   - src/shared/utils/formatByteSize.test.ts
   - src/shared/constants/app.test.ts
+  - src/shared/constants/bookmark.test.ts
   - src/shared/constants/cache.test.ts
   - src/shared/constants/typography.test.ts
   - scripts/generate-icons.test.ts
