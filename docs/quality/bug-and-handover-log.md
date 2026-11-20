@@ -3,9 +3,10 @@ type: quality-log
 title: 品質記録・バグ記録票 ＆ 申し送り管理シート（Bug & Handover Log）
 description: 製品コードと支援成果物を分離したバグ記録（原因5分類 L/S/D/B/A）および後続タスクへの申し送り事項（HO-xx）を追跡する正本シート。
 status: "Approved"
-updated: "2026-11-15"
+updated: "2026-11-19"
 tags: [quality, bug-log, handover, dre, kaizen]
 related_specs:
+  - docs/specs/changes/issue-375-bookmark-advance-on-update.md
   - docs/specs/changes/archive/issue-371-version-release-automation.md
   - docs/quality/archive/v1.2-non-blocking-priority-cache-scheduler-log.md
   - docs/quality/reports/v1.2-non-blocking-priority-cache-scheduler.md
@@ -135,11 +136,12 @@ related_tests: []
 > - Milestone `v1.1` で解決済みの申し送り（`HO-37`, `HO-38`）: [docs/quality/archive/v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md](archive/v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md)
 > - Milestone `v1.2` で解決済みの申し送り（`HO-39`）: [docs/quality/archive/v1.2-non-blocking-priority-cache-scheduler-log.md](archive/v1.2-non-blocking-priority-cache-scheduler-log.md)
 
-現在、未解決（`Open`）の申し送り事項は **1 件** です（`HO-01`〜`HO-39` は上記アーカイブにて完了精算済み）。
+現在、未解決（`Open`）の申し送り事項は **2 件** です（`HO-01`〜`HO-39` は上記アーカイブにて完了精算済み）。
 
-|     ID      | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                     | 解決先（対象 Issue / 成果物） |       完了ゲート        | 状態 (`Open` / `Resolved`) |
-| :---------: | :---------------: | :------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------- | :---------------------: | :------------------------: |
-| **`HO-40`** |    Issue #371     | Android 実機ビルド APK における `package.json` 連動 `versionName`（`v1.2.0` 以降）および設定画面（`SCR-05`）フッター表示のスモーク確認 | Milestone `v1.3` 実機一括検証 | Milestone `v1.3` 完了前 |           `Open`           |
+|     ID      | 起票元 Issue / PR | 申し送り事項の内容                                                                                                                                                             | 解決先（対象 Issue / 成果物） |       完了ゲート        | 状態 (`Open` / `Resolved`) |
+| :---------: | :---------------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------- | :---------------------: | :------------------------: |
+| **`HO-40`** |    Issue #371     | Android 実機ビルド APK における `package.json` 連動 `versionName`（`v1.2.0` 以降）および設定画面（`SCR-05`）フッター表示のスモーク確認                                         | Milestone `v1.3` 実機一括検証 | Milestone `v1.3` 完了前 |           `Open`           |
+| **`HO-41`** |    Issue #375     | Android 実機（高 DPI 端末）での連続スクロール末尾到達（5px 丸め）・1ページ短文話読了後の新着話追加によるしおり自動進行、および Google Drive クラウド同期での進捗率引き継ぎ確認 | Milestone `v1.3` 実機一括検証 | Milestone `v1.3` 完了前 |           `Open`           |
 
 ---
 

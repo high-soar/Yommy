@@ -2,8 +2,8 @@
 type: spec-feature
 title: "小説リーダー画面仕様書（SCR-03: Novel Reader）"
 description: "小説本文の全画面（100dvh）縦書き・横書き組版表示、ページめくり（タップ/Kindle様式スワイプ送り）と連続スクロール切替、ハードウェア音量キー操作連携、エピソード端シームレス遷移、上下連動オーバーレイ（ReaderTopOverlay: 作品名・サブタイトル1行固定省略・目次導線 / ReaderBottomOverlay: RTLページシークバー・前後話ナビ・下部タブ）、ルビ・傍点描画、4カラーテーマ・文字サイズ・行間設定の永続化、前後エピソード遷移、未キャッシュ話のオンデマンド取得、既読・しおり・進捗率の自動保存/復元、およびSCN-01統合シナリオの正本仕様。"
-status: "Approved"
-updated: "2026-11-15"
+status: "Review (#375)"
+updated: "2026-11-19"
 tags:
   - reader
   - scr-03
@@ -54,7 +54,10 @@ tags:
   - cache-scheduler
   - priority-queue
   - ho-39
+  - bookmark-advance
+  - ho-41
 related_specs:
+  - docs/specs/changes/issue-375-bookmark-advance-on-update.md
   - docs/specs/changes/archive/issue-344-priority-cache-scheduler.md
   - docs/specs/changes/archive/issue-342-cloud-sync-bookmark-protection.md
   - docs/specs/changes/archive/issue-269-webview-fallback-and-dom-import.md
@@ -293,29 +296,30 @@ src/features/reader/
 
 #### プロパティ契約（`ReaderViewProps`）
 
-| プロパティ名             | 型                             | 必須 | 既定値            | 説明                                                                                 |
-| :----------------------- | :----------------------------- | :--- | :---------------- | :----------------------------------------------------------------------------------- |
-| `title`                  | `string`                       | 任意 | -                 | 作品タイトル                                                                         |
-| `chapterTitle`           | `string`                       | 任意 | -                 | 各話サブタイトル                                                                     |
-| `bodyHtml`               | `string`                       | 必須 | -                 | サニタイズ済み本文 HTML（ルビ `<ruby>`, 傍点 `<em class="bouten">` 含む）            |
-| `writingMode`            | `WritingMode`                  | 任意 | `'vertical-rl'`   | 組み方向（`'vertical-rl'` または `'horizontal-tb'`）                                 |
-| `theme`                  | `ReaderTheme`                  | 任意 | `'light'`         | 背景・文字色テーマ（`'light'`, `'sepia'`, `'dark'`, `'black'`）                      |
-| `fontSizePx`             | `number`                       | 任意 | `18`              | 文字サイズ (px)                                                                      |
-| `lineHeight`             | `number`                       | 任意 | `1.8`             | 行間倍率                                                                             |
-| `fontFamily`             | `ReaderFontFamily`             | 任意 | `'biz-ud-mincho'` | フォント種別（5種、v0.5 Issue #169）                                                 |
-| `pageMarginPx`           | `number`                       | 任意 | `20`              | 画面余白 px（8〜48px、v0.5 Issue #169）                                              |
-| `initialScrollProgress`  | `number`                       | 任意 | `0`               | 初期復元する進捗率（`0.0 〜 1.0`）                                                   |
-| `pagingMode`             | `ReaderPagingMode`             | 任意 | `'auto'`          | ページ送りモード（`'auto'`, `'paged'`, `'scroll'`、v0.4 Issue #122）                 |
-| `currentPage`            | `number`                       | 任意 | `1`               | ページめくり表示時の現在ページ番号（1始まり）                                        |
-| `totalPages`             | `number`                       | 任意 | `1`               | ページめくり表示時の総ページ数                                                       |
-| `slideOffsetPx`          | `number`                       | 任意 | `0`               | スワイプドラッグ中のリアルタイムスライド変位量 (px)                                  |
-| `isAnimating`            | `boolean`                      | 任意 | `false`           | ページ遷移アニメーション中フラグ                                                     |
-| `onTotalPagesChange`     | `(totalPages: number) => void` | 任意 | -                 | DOM寸法・組版計算により総ページ数が確定・変化した際のコールバック                    |
-| `onScrollProgressChange` | `(progress: number) => void`   | 任意 | -                 | スクロールまたはページ変更時に算出された進捗率（`0.0 〜 1.0`）を通知するコールバック |
-| `onPrevChapter`          | `() => void`                   | 任意 | -                 | 連続スクロール時本文先頭「前の話へ」ボタン押下時コールバック（v0.5 Issue #168）      |
-| `onNextChapter`          | `() => void`                   | 任意 | -                 | 連続スクロール時本文末尾「次の話へ」ボタン押下時コールバック（v0.5 Issue #168）      |
-| `chapterIndex`           | `number`                       | 任意 | `1`               | 現在のエピソード番号（1始まり、v0.5 Issue #168）                                     |
-| `totalChapters`          | `number`                       | 任意 | `1`               | 作品の総エピソード数（v0.5 Issue #168）                                              |
+| プロパティ名                    | 型                                  | 必須 | 既定値            | 説明                                                                                                             |
+| :------------------------------ | :---------------------------------- | :--- | :---------------- | :--------------------------------------------------------------------------------------------------------------- |
+| `title`                         | `string`                            | 任意 | -                 | 作品タイトル                                                                                                     |
+| `chapterTitle`                  | `string`                            | 任意 | -                 | 各話サブタイトル                                                                                                 |
+| `bodyHtml`                      | `string`                            | 必須 | -                 | サニタイズ済み本文 HTML（ルビ `<ruby>`, 傍点 `<em class="bouten">` 含む）                                        |
+| `writingMode`                   | `WritingMode`                       | 任意 | `'vertical-rl'`   | 組み方向（`'vertical-rl'` または `'horizontal-tb'`）                                                             |
+| `theme`                         | `ReaderTheme`                       | 任意 | `'light'`         | 背景・文字色テーマ（`'light'`, `'sepia'`, `'dark'`, `'black'`）                                                  |
+| `fontSizePx`                    | `number`                            | 任意 | `18`              | 文字サイズ (px)                                                                                                  |
+| `lineHeight`                    | `number`                            | 任意 | `1.8`             | 行間倍率                                                                                                         |
+| `fontFamily`                    | `ReaderFontFamily`                  | 任意 | `'biz-ud-mincho'` | フォント種別（5種、v0.5 Issue #169）                                                                             |
+| `pageMarginPx`                  | `number`                            | 任意 | `20`              | 画面余白 px（8〜48px、v0.5 Issue #169）                                                                          |
+| `initialScrollProgress`         | `number`                            | 任意 | `0`               | 初期復元する進捗率（`0.0 〜 1.0`）                                                                               |
+| `pagingMode`                    | `ReaderPagingMode`                  | 任意 | `'auto'`          | ページ送りモード（`'auto'`, `'paged'`, `'scroll'`、v0.4 Issue #122）                                             |
+| `currentPage`                   | `number`                            | 任意 | `1`               | ページめくり表示時の現在ページ番号（1始まり）                                                                    |
+| `totalPages`                    | `number`                            | 任意 | `1`               | ページめくり表示時の総ページ数                                                                                   |
+| `slideOffsetPx`                 | `number`                            | 任意 | `0`               | スワイプドラッグ中のリアルタイムスライド変位量 (px)                                                              |
+| `isAnimating`                   | `boolean`                           | 任意 | `false`           | ページ遷移アニメーション中フラグ                                                                                 |
+| `onTotalPagesChange`            | `(totalPages: number) => void`      | 任意 | -                 | DOM寸法・組版計算により総ページ数が確定・変化した際のコールバック                                                |
+| `onSingleScreenContentMeasured` | `(isSingleScreen: boolean) => void` | 任意 | -                 | 連続スクロールモード時に本文が1画面内に収まるか（`maxScroll <= 0`）を計測通知するコールバック（v1.3 Issue #375） |
+| `onScrollProgressChange`        | `(progress: number) => void`        | 任意 | -                 | スクロールまたはページ変更時に算出された進捗率（`0.0 〜 1.0`）を通知するコールバック                             |
+| `onPrevChapter`                 | `() => void`                        | 任意 | -                 | 連続スクロール時本文先頭「前の話へ」ボタン押下時コールバック（v0.5 Issue #168）                                  |
+| `onNextChapter`                 | `() => void`                        | 任意 | -                 | 連続スクロール時本文末尾「次の話へ」ボタン押下時コールバック（v0.5 Issue #168）                                  |
+| `chapterIndex`                  | `number`                            | 任意 | `1`               | 現在のエピソード番号（1始まり、v0.5 Issue #168）                                                                 |
+| `totalChapters`                 | `number`                            | 任意 | `1`               | 作品の総エピソード数（v0.5 Issue #168）                                                                          |
 
 #### セマンティック属性と組版・スクロール仕様
 
@@ -359,18 +363,21 @@ src/features/reader/
 - **縦書き・横書き双方のスクロール進捗率（`0.0 〜 1.0`）算出・復元アルゴリズム**:
   1. **横書き（`horizontal-tb`、上→下の垂直スクロール）**:
      - 最大スクロール量: `maxScroll = element.scrollHeight - element.clientHeight`
-     - 進捗率算出: `progress = maxScroll > 0 ? Math.min(1, Math.max(0, element.scrollTop / maxScroll)) : 0`
+     - 進捗率算出: `maxScroll > 0` のとき、`maxScroll - element.scrollTop <= SCROLL_END_SNAP_TOLERANCE_PX`（5px 以内、高 DPI 端末のサブピクセル誤差丸め、`v1.3` Issue #375）であれば `1`、それ以外は `Math.min(1, Math.max(0, element.scrollTop / maxScroll))`（`maxScroll <= 0` のときは `0`）
      - 位置復元: `maxScroll > 0` のとき `element.scrollTop = clampedInitialProgress * maxScroll`（`maxScroll <= 0` のときは `0`）
   2. **縦書き（`vertical-rl`、右→左の水平スクロール）**:
      - Chromium 等のモダンブラウザにおける `writing-mode: vertical-rl` では、先頭（右端）が `scrollLeft = 0` であり、左方向へ読み進めるにつれて `scrollLeft` が負の値（`0` 〜 `-maxScroll`）となる。
      - 最大スクロール量: `maxScroll = element.scrollWidth - element.clientWidth`
-     - 進捗率算出: `progress = maxScroll > 0 ? Math.min(1, Math.max(0, Math.abs(element.scrollLeft) / maxScroll)) : 0`
+     - 進捗率算出: `maxScroll > 0` のとき、`maxScroll - Math.abs(element.scrollLeft) <= SCROLL_END_SNAP_TOLERANCE_PX`（5px 以内、`v1.3` Issue #375）であれば `1`、それ以外は `Math.min(1, Math.max(0, Math.abs(element.scrollLeft) / maxScroll))`（`maxScroll <= 0` のときは `0`）
      - 位置復元: `maxScroll > 0` のとき `element.scrollLeft = -clampedInitialProgress * maxScroll`（`maxScroll <= 0` のときは `0`）
   3. **ページめくり表示（実効 `"paged"`）時の進捗率（`0.0 〜 1.0`）算出・復元アルゴリズム**:
      - 総ページ数 $P_{total}$、現在ページ $P_{current}$（1始まり）のとき：
        - 進捗率算出: `progress = totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0`
        - ページ復元: `targetPage = totalPages > 1 ? Math.round(clampedInitialProgress * (totalPages - 1)) + 1 : 1`
-  4. **位置復元の発火トリガー条件（`R1-18`）**:
+  4. **1ページ／1画面完結短文エピソードの末尾到達検知（`v1.3` Issue #375）**:
+     - 連続スクロールモード（`!isPaged`）において本文（`bodyHtml !== null`）のレイアウト計測が完了しコンテナ寸法が正のとき、`maxScroll <= 0` かどうかを `onSingleScreenContentMeasured?.(isSingleScreen)` で親（`useReader`）へ通知する。
+     - ページめくりモード（`isPaged`）では既存の `onTotalPagesChange?.(measuredPages)` により `measuredPages === 1` を `useReader` へ通知する。
+  5. **位置復元の発火トリガー条件（`R1-18`）**:
      - マウント時、および `initialScrollProgress`・`bodyHtml`（エピソード切替時）・`writingMode`（縦書き/横書き切替時）・`pagingMode`（ページ送りモード切替時）のいずれかが変化したタイミングで、進捗率に基づく位置復元を実行する。
      - なお、連続スクロールモード（`!isPaged`）で初期表示直後（`scroll` イベント未発火時）や 1 画面内に全文が収まる短文（`maxScroll <= 0`）の場合でも端での 2 段階遷移が確実に動作するよう、`useReaderGestures` 側の `syncScrollBoundaryState()` により各操作開始時（ポインター・タッチ・ホイール・音量キー）に実 DOM のスクロール位置および `maxScroll <= 0` から先頭・末尾到達フラグ（`reachedStartRef` / `reachedEndRef`）を同期評価する。
 
@@ -407,6 +414,7 @@ src/features/reader/
 | `onNextChapter`                 | `() => void`                        | 必須 | 「次の話へ」押下時（`TR-05`）                                                                                     |
 | `onPageChange`                  | `(targetPage: number) => void`      | 任意 | タップ・スワイプ・シークバーによるページ送り確定時のコールバック                                                  |
 | `onTotalPagesChange`            | `(totalPages: number) => void`      | 任意 | 総ページ数確定・変化時のコールバック                                                                              |
+| `onSingleScreenContentMeasured` | `(isSingleScreen: boolean) => void` | 任意 | 連続スクロール時に本文が1画面内に収まるかを計測通知するコールバック（v1.3 Issue #375）                            |
 | `onScrollProgressChange`        | `(progress: number) => void`        | 必須 | 本文スクロール／ページ進捗変化時                                                                                  |
 | `onSelectTab`                   | `(tab: BottomTab) => void`          | 任意 | 下部タブ押下時                                                                                                    |
 | `onBackToToc`                   | `() => void`                        | 任意 | 上部オーバーレイ「← 目次」ボタン押下時コールバック（`TR-06`、v0.6 Issue #202）                                    |
@@ -589,6 +597,7 @@ export interface UseReaderResult {
   nextPage: () => void; // 【新設: v0.4 Issue #122】
   prevPage: () => void; // 【新設: v0.4 Issue #122】
   setTotalPages: (total: number) => void; // 【新設: v0.4 Issue #122】
+  markSingleScreenContentMeasured: (isSingleScreen: boolean) => void; // 【新設: v1.3 Issue #375】
   updateScrollProgress: (progress: number) => Promise<void>;
   flushBookmark: () => Promise<void>;
   goToChapter: (
@@ -625,6 +634,7 @@ export interface UseReaderResult {
      - `ReaderView` では `restoreScrollPosition` 実行中に発生するプログラム的な `scroll` イベントを `isRestoringScrollRef` で抑止し、ユーザー操作以外の初期復元で `onScrollProgressChange` が誤発火しないようにする。
      - `useReader` は未 DB 保存の進捗変更フラグ `hasPendingBookmarkRef` を保持し、初期ロード完了時および `goToChapter` 完了時は `false` に初期化する。
      - ユーザースクロール時またはページ遷移時（`goToPage(targetPage)` / `nextPage()` / `prevPage()`）、`hasPendingBookmarkRef.current = true` にセットし、連続スクロール時の SQLite 負荷を抑制するため 300ms デバウンスを介して `novelRepository.updateBookmark(novel.id, chapterIndex, clampedProgress)` で DB へ自動保存し、完了時に `hasPendingBookmarkRef.current = false` へ戻した上で `syncEngine?.notifyChanged()` を呼び出す（`R1-12`）。
+     - **1ページ／1画面完結短文エピソードの完了進捗 `1.0` 自動保存（`v1.3` Issue #375）**: 本文読み込み完了済み（`chapter?.bodyHtml !== null && !isLoading`）かつ `bookmarkConflictRef.current === null` の状態で、実効 `paged` モードの DOM 計測結果が `totalPages === 1` となった場合、または実効 `scroll` モードで `onSingleScreenContentMeasured(true)`（`maxScroll <= 0`）が通知された場合、現在進捗が末尾未到達（`!isBookmarkAtEnd(scrollProgressRef.current)`）のときに限り `updateScrollProgress(1)` を実行して `bookmarkScrollProgress = 1.0` を保存する。すでに末尾到達済み（`>= 0.99`）として保存済みの短文話を再表示しただけの場合は書き込まず、`hasPendingBookmarkRef.current = false` を維持する（`AC-RD-34` 保護）。
      - 画面ロック・バックグラウンド移行時（`document.visibilityState === "hidden"`）に `hasPendingBookmarkRef.current === true`（300ms デバウンス待機中を含む未保存進捗あり）の場合は即座に `flushBookmark()` を呼び出して DB 保存を完了させる（`false` の場合は何もしない）。
      - OS バックキー（`TR-06`）、「← 目次」ボタン、下部オーバーレイ 4 タブ（`TR-01` / `TR-01b`）遷移、およびアンマウント時の `flushBookmark()` では、保留中のデバウンスタイマーをキャンセルした上で、**`hasPendingBookmarkRef.current === true` の場合のみ** `novelRepository.updateBookmark()` および `syncEngine.notifyChanged()` を実行する。未保存の進捗変更がない状態（`false`）での離脱時は書き込み・同期通知を一切行わず、別端末が更新した新しい `last_read_at` / しおり話数を保護する。
 5. **前後エピソード遷移（`goToChapter(targetChapterIndex, options?: GoToChapterOptions)`、`TR-05`）**:
@@ -652,12 +662,13 @@ export interface UseReaderResult {
      - `useReader` の初期ロード `useEffect` 開始・クリーンアップ（`chapterIndex` プロップ変更等）および受理済み `goToChapter` 開始時（`AC-RD-06` の重複遷移ガード `isNavigatingChapterRef` と範囲検証を通過した直後）は、`stopChapterFetch()` と `stopPrefetch()` により先行する `'high'` 取得および直前の `'medium'` 先読み（いずれも進行中の HTTP 通信含む）のみを直ちにキャンセルし（同一/他作品の `'low'` 一括キャッシュタスクは停止しない）、新エピソードの本文取得および新エピソード起点の 5話先読みを開始する。
      - リーダー画面離脱時（アンマウント、OS バックキー、タブ遷移）は、`stopChapterFetch()` と `stopPrefetch()` によりリーダー由来の `'high'` オンデマンド取得および `'medium'` 先読みタスクの双方を即座に中断し、完了後の遅延 State 更新・DB 保存を抑止しつつ、`low` 一括キャッシュタスクは継続したままバックグラウンド再開を許可する。
    - 先読み処理中の通信失敗・例外はコンソール警告等に留め、現在閲覧中の読書画面にはエラーを表示しない。
-8. **クラウド同期連携（自動 Push デバウンス ＆ 復帰時自動 Pull 競合検知: v0.4 Issue #120 / v1.1 Issue #342 拡張）**:
+8. **クラウド同期連携（自動 Push デバウンス ＆ 復帰時自動 Pull 競合検知: v0.4 Issue #120 / v1.1 Issue #342 / v1.3 Issue #375 拡張）**:
    - `goToChapter` による話数移動時、`markChapterRead` による既読状態更新時、進捗保存（300ms デバウンス完了時および未保存あり時の `flushBookmark`）時、および競合確認で「現在の話のまま読む」を選択した時に、`SyncEngine.notifyChanged()` を呼び出す（未保存変更なし離脱時の `flushBookmark()` スキップ時は呼び出さない）。
    - 読書中の連続操作による過剰な API 通信を避けるため、`SyncEngine` 側で 2〜3秒（2500ms）デバウンスした上で Google Drive（`yommy-sync-state.json`）へ非同期 Push する。
-   - **復帰時自動 Pull によるしおり競合検知と解決（`subscribePullCompleted` / `resolveBookmarkConflict`、`v1.1` Issue #342）**:
+   - **復帰時自動 Pull によるしおり競合検知と解決（`subscribePullCompleted` / `resolveBookmarkConflict`、`v1.1` Issue #342 / `v1.3` Issue #375 精緻化）**:
      - `useReader` はマウント中に `syncEngine?.subscribePullCompleted` を購読し、`result.pulled === true` 完了時に `novelRepository.getNovelById(novelId)` を再取得する。
-     - 再取得した `latestNovel.bookmarkChapterIndex` が非 null（有効範囲 `1..totalChapters`）かつ現在表示中話数 `currentChapterIndexRef.current` と異なる場合、`bookmarkConflict = { currentChapterIndex, remoteChapterIndex }` をセットして `BookmarkConflictDialog` を表示する（この時点で未保存フラグは立てない）。
+     - `latestNovel.totalChapters` が増加していれば、現在保持中の `novel` State / `novelRef` の `totalChapters` を最新化する（最新話表示中に新着話が補完された場合に「次の話へ」を有効化するため）。
+     - 再取得した `latestNovel.bookmarkChapterIndex` が非 null（有効範囲 `1..totalChapters`）かつ現在表示中話数 `currentChapterIndexRef.current` と異なる場合のうち、**他端末での閲覧により `lastReadAt` が変化している場合（`latestNovel.lastReadAt !== novelRef.current?.lastReadAt`）** に `bookmarkConflict = { currentChapterIndex, remoteChapterIndex }` をセットして `BookmarkConflictDialog` を表示する（目次更新に伴うローカル自動進行のみで `lastReadAt` が変化していない場合は競合ダイアログを誤表示しない）。
      - `resolveBookmarkConflict("move")` / `resolveBookmarkConflict("keep")` の非同期ライフサイクル（`R1-01`）: 再入ガード `isResolvingConflictRef` により二重実行を抑止しつつ、`bookmarkConflict` / `bookmarkConflictRef` は非同期解決完了まで**非 null（モーダル開状態・`blockBackNavigation` 有効）のまま維持**し、`ReaderContainer` は `isResolvingBookmarkConflict = true`（ボタン `disabled`）で待機する。`"move"` では `goToChapter(remoteChapterIndex, { preserveChapterOnError: true })`（対象話が未キャッシュの場合は `CacheScheduler` 優先度 `'high'` 経由で取得し、失敗 reject 時はそのまま失敗契約として捕捉）、`"keep"` では現在表示中の話数・進捗率で `persistBookmark(..., { forceSyncNotify: true })`（`last_read_at = now` ＋ `syncEngine?.notifyChanged()`）を実行し、**解決が `true`（成功）で完了した場合のみ** `bookmarkConflict` をクリアしてモーダルを閉じる（失敗時 `false` はモーダルを開いたまま現在話も維持する）。`ReaderContainer` 側は返却値が `true` の場合のみ既存 `navigateToTargetChapter` 同様の URL 同期（`onNavigateChapter` または `router.navigateToReader(..., { replace: true })`）を行い、`try / finally` で確実に解決中フラグを解除する。
 
 ---
@@ -718,6 +729,7 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
 | **`AC-RD-33`** | 画面ロック移行時の未保存進捗即時フラッシュ（v1.1 Issue #342）                            | ページめくりまたはスクロール操作後 300ms デバウンス完了前に `visibilityState === "hidden"`（画面ロック・バックグラウンド移行）となった場合、保留中の進捗が即座に `novelRepository.updateBookmark()` へ書き込まれること。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `SYS-REQ-12` / `SCN-05`                                            |
 | **`AC-RD-34`** | 未操作離脱時の `flushBookmark` 不要書き込み防止（v1.1 Issue #342）                       | ページめくり・スクロール変更が存在しない状態（ロック前保存済みまたは復帰後未操作）で「← 目次」、OS バックキー、下部タブ遷移、またはアンマウントにより離脱した際、`flushBookmark()` は `novelRepository.updateBookmark()`（`last_read_at` 現在時刻上書き）および `syncEngine.notifyChanged()` を一切呼び出さず、他端末が同期した最新しおりを保持すること。                                                                                                                                                                                                                                                                                                                                                                                                                                               | `SYS-REQ-06, 12` / `TR-01`, `TR-06`, `SCN-05`                      |
 | **`AC-RD-35`** | `high` 優先度即時割り込みと先読み完了後バッチ自動再開（v1.2 Issue #344）                 | バックグラウンドで `low` 一括キャッシュ（または `medium` 先読み）が進行中または待機中に、ユーザーがリーダー画面（`SCR-03`）で未キャッシュ話を閲覧・遷移した際、`useReader` は `CacheScheduler` 優先度 `'high'` により 0ms 待機で下位タスクを即時中断・割り込みして現在話を最優先取得すること（中断された `low` タスクの `download_queue` は `retryCount` を増加させず `'pending'` に保持）。さらに `'high'` および続く `'medium'` 5話先読みが完了した後、保留されていた `'low'` 一括キャッシュが残り `'pending'` 話から自動再開すること。                                                                                                                                                                                                                                                               | `SYS-REQ-02, 03` / `TR-04`, `TR-05`, `SCN-04`                      |
+| **`AC-RD-36`** | 短文1ページ/1画面完了保存・連続スクロール5px丸め・Pull非競合（v1.3 Issue #375）          | 連続スクロールモード（縦書き/横書き）で最下部 5px 以内到達時に進捗率が `1.0` へ丸めて保存されること。また 1 ページ（`totalPages === 1`）または 1 画面（`maxScroll <= 0`）に収まる短文エピソードを表示完了した際、進捗未到達なら `1.0` として保存され、既保存 `1.0` の再表示時は `updateBookmark` / `notifyChanged` を再実行しないこと（`AC-RD-34` 保護）。さらにリーダー表示中の自動 Pull で `lastReadAt` 未変化のまま目次更新によるしおり進行のみ起きた場合は競合ダイアログを誤表示せず `totalChapters` を最新化すること。                                                                                                                                                                                                                                                                             | `SYS-REQ-06, 12` / `SCN-03`, `SCN-05`                              |
 
 ---
 
