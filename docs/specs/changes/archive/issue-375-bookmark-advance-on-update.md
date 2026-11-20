@@ -19,6 +19,7 @@ related_specs:
   - docs/specs/requirements.md
   - docs/specs/architecture.md
   - docs/specs/db-schema.md
+  - docs/specs/screen-transitions.md
   - docs/specs/features/bookshelf.md
   - docs/specs/features/novel-detail.md
   - docs/specs/features/reader-view.md
@@ -228,7 +229,7 @@ UI コンポーネントのレイアウト・DOM 構造の変更はありませ�
    - `src/features/cloud-sync/types.ts` および `src/features/cloud-sync/services/syncEngine.ts` の `bookmarkScrollProgress?: number` ゼロトラスト検証・LWW 同期復元・Pull 時末尾到達新着遷移の実装・TDD テスト（C0/C1/Functions 100%）。
 3. **Sub-issue ③（IT / 全体回帰テスト・差分仕様アーカイブ・親 Issue #375 完了）**:
    - `test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts` および `test/it/scenarios/scn05-cloud-sync.spec.ts` への E2E シナリオ追加・全 IT シナリオ 100% PASS 確認。
-   - 本差分仕様書の `status: "Completed (Archived)"` 更新および `git mv docs/specs/changes/issue-375-bookmark-advance-on-update.md docs/specs/changes/archive/issue-375-bookmark-advance-on-update.md`、`docs/index.md` および影響正本 6 冊の `related_specs`・`status: "Approved"` 復帰、`Closes #375` による親 Issue 完了（人間マージ）。
+   - 本差分仕様書の `status: "Completed (Archived)"` 更新および `git mv docs/specs/changes/issue-375-bookmark-advance-on-update.md docs/specs/changes/archive/issue-375-bookmark-advance-on-update.md`、`docs/index.md` および影響正本 7 冊（architecture / requirements / db-schema / screen-transitions / bookshelf / novel-detail / reader-view）の `related_specs`・`status: "Approved"` 復帰、`Closes #375` による親 Issue 完了（人間マージ）。
 
 ---
 

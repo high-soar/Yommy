@@ -735,7 +735,7 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
 
 ---
 
-## 7. Playwright システム結合テストシナリオ仕様（`SCN-01` / `SCN-04` / `SCN-05` / `SCN-06` / `SCN-07`）
+## 7. Playwright システム結合テストシナリオ仕様（`SCN-01` / `SCN-03` / `SCN-04` / `SCN-05` / `SCN-06` / `SCN-07`）
 
 ### 7.1 `SCN-01` 結合シナリオ仕様（`test/it/scenarios/scn01-poc-vertical-reader.spec.ts`）
 

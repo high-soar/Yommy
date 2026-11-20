@@ -1,6 +1,6 @@
 /**
  * しおり末尾到達判定および連続スクロール端丸めに関する共通定数・判定ヘルパー
- * (docs/specs/architecture.md §3.4, docs/specs/changes/issue-375-bookmark-advance-on-update.md §2.1)
+ * (docs/specs/architecture.md §3.4, docs/specs/changes/archive/issue-375-bookmark-advance-on-update.md §2.1)
  */
 
 /** しおりがエピソード末尾（読み終わり）に到達していると判定する進捗率の下限閾値（既存 DB レコード互換） */
