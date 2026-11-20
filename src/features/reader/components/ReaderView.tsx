@@ -135,21 +135,32 @@ function calculateScrollProgress(
   el: HTMLElement,
   writingMode: WritingMode,
 ): number {
-  if (writingMode === "horizontal-tb") {
-    const maxScroll = el.scrollHeight - el.clientHeight;
-    if (maxScroll <= 0) return 0;
-    if (maxScroll - el.scrollTop <= SCROLL_END_SNAP_TOLERANCE_PX) {
-      return 1.0;
-    }
-    return clampProgress(el.scrollTop / maxScroll);
-  }
-  const maxScroll = el.scrollWidth - el.clientWidth;
+  const isHorizontal = writingMode === "horizontal-tb";
+  const maxScroll = isHorizontal
+    ? el.scrollHeight - el.clientHeight
+    : el.scrollWidth - el.clientWidth;
   if (maxScroll <= 0) return 0;
-  const absScrollLeft = Math.abs(el.scrollLeft);
-  if (maxScroll - absScrollLeft <= SCROLL_END_SNAP_TOLERANCE_PX) {
+  const currentScroll = isHorizontal ? el.scrollTop : Math.abs(el.scrollLeft);
+  if (maxScroll - currentScroll <= SCROLL_END_SNAP_TOLERANCE_PX) {
     return 1.0;
   }
-  return clampProgress(absScrollLeft / maxScroll);
+  return clampProgress(currentScroll / maxScroll);
+}
+
+/**
+ * スクロールモード時にコンテンツが1画面内に収まるかを判定する純粋関数
+ */
+function isContentWithinSingleScreen(
+  el: HTMLElement,
+  width: number,
+  height: number,
+  writingMode: WritingMode,
+): boolean {
+  const maxScroll =
+    writingMode === "horizontal-tb"
+      ? el.scrollHeight - height
+      : el.scrollWidth - width;
+  return maxScroll <= 0;
 }
 
 /**
@@ -236,11 +247,14 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           );
           onTotalPagesChange?.(measuredPages);
         } else if (!isPaged) {
-          const maxScroll =
-            writingMode === "horizontal-tb"
-              ? containerRef.current.scrollHeight - h
-              : containerRef.current.scrollWidth - w;
-          onSingleScreenContentMeasured?.(maxScroll <= 0);
+          onSingleScreenContentMeasured?.(
+            isContentWithinSingleScreen(
+              containerRef.current,
+              w,
+              h,
+              writingMode,
+            ),
+          );
         }
       }
     };
@@ -279,11 +293,14 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         );
         onTotalPagesChange?.(measuredPages);
       } else {
-        const maxScroll =
-          writingMode === "horizontal-tb"
-            ? container.scrollHeight - currentHeight
-            : container.scrollWidth - currentWidth;
-        onSingleScreenContentMeasured?.(maxScroll <= 0);
+        onSingleScreenContentMeasured?.(
+          isContentWithinSingleScreen(
+            container,
+            currentWidth,
+            currentHeight,
+            writingMode,
+          ),
+        );
       }
     };
 

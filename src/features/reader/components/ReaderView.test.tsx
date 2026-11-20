@@ -1908,7 +1908,7 @@ describe("ReaderView", () => {
       });
       expect(onSingleScreenContentMeasured).toHaveBeenLastCalledWith(false);
 
-      // 縦書きスクロール: 1画面収まり (scrollWidth <= clientWidth)
+      // 縦書きスクロール: 1画面収まり (scrollWidth <= clientWidth) およびリサイズでの複数画面遷移
       mockElementDimensions(container, {
         clientWidth: 400,
         clientHeight: 600,
@@ -1923,6 +1923,16 @@ describe("ReaderView", () => {
         />,
       );
       expect(onSingleScreenContentMeasured).toHaveBeenLastCalledWith(true);
+
+      mockElementDimensions(container, {
+        clientWidth: 400,
+        clientHeight: 600,
+        scrollWidth: 900,
+      });
+      act(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+      expect(onSingleScreenContentMeasured).toHaveBeenLastCalledWith(false);
 
       // 実効 paged モードでは onSingleScreenContentMeasured が発火しないこと
       onSingleScreenContentMeasured.mockClear();

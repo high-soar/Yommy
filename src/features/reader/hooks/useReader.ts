@@ -648,7 +648,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
               pagingModeRef.current = settings.pagingMode;
             }
             effectivePagingModeRef.current = resolveEffectivePagingMode(
-              settings.pagingMode ?? pagingModeRef.current,
+              pagingModeRef.current,
               settings.writingMode,
             );
             if (typeof settings.enableVolumeKeyPaging === "boolean") {
