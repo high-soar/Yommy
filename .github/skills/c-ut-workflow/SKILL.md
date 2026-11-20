@@ -38,7 +38,7 @@ MK 作業はファイル編集数やテスト・VRT 実行ログが多く、メ�
    - 新規設定カラム・DB カラム追加時は、DDL（`schema.ts` ＋ 既存 DB 復元マイグレーション）→ 型定義（`types.ts`）→ Repository → Hook / Container → Page → View → Storybook / UT / IT の全層でプロップス・コールバック・マイグレーションが途切れず伝播しているか確認すること。
    - Green 以降や検証中に不備を見つけた場合は `docs/quality/bug-and-handover-log.md` に記録し、原因分類 `D`（設計不備）の場合は必ず `docs/specs/` も同時修正すること。
 3. 完了前検証:
-   - `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run test:coverage`（C0/C1/Functions 100%）を実行し PASS を確認すること。
+   - `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run test:coverage`（C0/C1/Functions 100%）、および `docs/` 変更・追加時の `npm run lint:okf` を実行し PASS を確認すること。
    - `.env.local` の有無に関わらずテスト・ビルドが 100% 決定論的に PASS することを確認すること（モック DI 徹底）。
    - UI/Story 変更時は `npm run test:vrt:update` および `npm run test:vrt`（1280px / 375px）を実行し PASS を確認すること。
 4. 報告内容:
@@ -127,7 +127,7 @@ MK 作業はファイル編集数やテスト・VRT 実行ログが多く、メ�
 ### Step 4: 局所検証・カバレッジ・VRT・不備記録
 
 1. `npm run test:coverage` を実行し、変更・追加した全ファイルの **C0 / C1 / Functions カバレッジが 100%** であることを確認する（不正な `v8 ignore` は使用禁止）。
-2. `npm run typecheck`, `npm run lint`, `npm run format:check` を実行し PASS を確認する。
+2. `npm run typecheck`, `npm run lint`, `npm run format:check`、および `docs/` 変更・追加時の `npm run lint:okf` を実行し PASS を確認する。
 3. Story を追加・変更した場合は `npm run test:vrt:update` → `npm run test:vrt` を実行し、1280px / 375px のスナップショットが正しく生成・検証されることを確認する（Story を削除・置換した場合は旧スナップショット PNG を削除し、孤児スナップショット検知ガードテストを通過させること）。
 4. 作業中に検出した不備や後続への申し送り（`HO-xx`）を [docs/quality/bug-and-handover-log.md](../../../docs/quality/bug-and-handover-log.md) に記録する（原因 `D` は設計書も同時修正）。
 
@@ -140,6 +140,7 @@ MK 作業はファイル編集数やテスト・VRT 実行ログが多く、メ�
 | `npm run typecheck`                            | TypeScript 型検査                                           |
 | `npm run lint`                                 | ESLint 静的解析                                             |
 | `npm run format:check` / `npm run format`      | Prettier 書式検査 / 自動整形                                |
+| `npm run lint:okf`                             | OKF フロントマター・相対リンク切れ機械検証（`docs/` 対象）  |
 | `npm run test:unit`                            | Vitest 単体テスト実行                                       |
 | `npm run test:coverage`                        | Vitest カバレッジ計測（C0/C1/Functions 100% 検証）          |
 | `npm run test:vrt` / `npm run test:vrt:update` | Storybook VRT 実行 / スナップショット更新（1280px / 375px） |

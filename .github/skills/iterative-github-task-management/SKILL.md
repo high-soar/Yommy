@@ -52,7 +52,7 @@ description: "Use when breaking down a Feature Request Issue into an iterative m
 1. 各 MK Sub-issue について、汎用サブエージェント（`self`）に [c-ut-workflow スキル](../c-ut-workflow/SKILL.md) を指定して **直列（逐次）委託** する。
 2. サブエージェント完了後、メインエージェントが PR（`Closes #Sub-issue番号`）を作成し、[git-workflow スキル](../git-workflow/SKILL.md) に従い **Task Completion Gate（条件 1〜6）** を完遂する。
 3. 実装中に原因分類 `D`（設計不備）が見つかった場合は、同一 PR 内で **差分仕様（`docs/specs/changes/issue-XX-*.md`）と App 全体正本の両方を同時修正** し、[docs/quality/bug-and-handover-log.md](../../../docs/quality/bug-and-handover-log.md) にコード修正と設計同期の双方のコミットを記録する。
-4. [docs/guidelines/workflow.md §4.1](../../../docs/guidelines/workflow.md#41-ai-自律マージの停止人間エスカレーション条件) の人間エスカレーション条件（外部仕様 `AC-xx` / `TR-xx` / DB スキーマ変更を伴う原因 `D`、新規依存パッケージ / 権限 / ドメイン追加、小規模要望で `Closes #親Issue` を兼ねる場合等）に該当しないことを確認した上で、**メインエージェントが `gh pr merge --squash --delete-branch` で MK Sub-issue PR を自律マージ** し、`main` を更新して直ちに次の MK Sub-issue（または Step 4）へ連続進行する（エスカレーション条件に該当する場合のみ人間の確認・マージを待つ）。
+4. [docs/guidelines/workflow.md §4.1](../../../docs/guidelines/workflow.md#41-ai-自律マージの停止人間エスカレーション条件) の人間エスカレーション条件（外部仕様 `AC-xx` / `TR-xx` / DB スキーマ変更を伴う原因 `D`、新規依存パッケージ / 権限 / ドメイン追加、`package.json` のリリースバージョン `version` 更新を含む変更、小規模要望で `Closes #親Issue` を兼ねる場合等）に該当しないことを確認した上で、**メインエージェントが `gh pr merge --squash --delete-branch` で MK Sub-issue PR を自律マージ** し、`main` を更新して直ちに次の MK Sub-issue（または Step 4）へ連続進行する（エスカレーション条件に該当する場合のみ人間の確認・マージを待つ）。
 
 ### Step 4: IT（全体回帰テスト）・実機検証（対象時）・申し送り精算・差分仕様アーカイブ・親 Issue 完了（人間マージ）
 

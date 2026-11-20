@@ -50,7 +50,7 @@ description: "Use when orchestrating a cross-deliverable review at the end of a 
 3. **メインセッションでの事実検証と品質ゲート実行（仮 ID での下書き整理）**:
    - 全サブエージェントの応答完了後、サブエージェントを明示的に終了（`manage_subagents` の `kill` / `kill_all`）する。
    - 報告された候補をメインセッションで実際のコード・正本と照合し、誤検知を除外して重複を整理する（この時点ではまだ `R1-xx` の確定番号を振らず、仮番号 `#1, #2...` で指摘内容・Location・Problem・Impact・Recommendation を完成させておく）。
-   - メインセッションで一通りの検証コマンド（`npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run test:coverage`, `npm run test:vrt`, `npm run test:it`）を実行し、100% PASS することを確認する。
+   - メインセッションで一通りの検証コマンド（`npm run lint:okf`, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run test:coverage`, `npm run test:vrt`, `npm run test:it`）を実行し、100% PASS することを確認する。
 4. **投稿直前（Just-in-Time）の既存コメント確認・採番と、投稿直後（Post-Submit）の衝突検知・自動リナンバー**:
    - **① 投稿直前の最新コメント取得**:
      ステップ 3 の全検証と指摘下書きが完了し、**いざコメントを投稿する直前** に初めて追跡 Issue の既存コメントを取得する：
