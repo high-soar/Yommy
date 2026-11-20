@@ -3,8 +3,8 @@ type: spec-delta
 title: "最新話末尾しおり時の新着話追加に伴うしおり自動進行およびクラウド同期進捗連携の設計"
 description: "Issue #375 に対する差分仕様、upsertNovelWithToc における末尾到達しおり自動進行（last_read_at/updated_at 保護・remote_chapter_id 追跡）、リーダー短文1ページ/1画面完了保存と5px端丸め、SyncNovelData.bookmarkScrollProgress 同期、テスト計画、Sub-issue 分割計画、および実機検証計画（HO-41）。"
 issue: "#375"
-status: "Review (#375)"
-updated: "2026-11-19"
+status: "Completed (Archived)"
+updated: "2026-11-20"
 tags:
   - delta
   - bookmark
@@ -63,7 +63,7 @@ Step 1 の合意事項に基づき、以下の各層および正本仕様を変�
 
 ### 2.1 共通定数・判定ヘルパー（`src/shared/constants/bookmark.ts` 新設）
 
-[docs/specs/architecture.md](../architecture.md) §3.4 に準拠し、Storage 層・Reader 層・Cloud Sync 層で末尾判定基準のズレを防ぐ SSOT として新規モジュール `src/shared/constants/bookmark.ts`（+ 1対1 単体テスト `bookmark.test.ts`）を追加します。
+[docs/specs/architecture.md](../../architecture.md) §3.4 に準拠し、Storage 層・Reader 層・Cloud Sync 層で末尾判定基準のズレを防ぐ SSOT として新規モジュール `src/shared/constants/bookmark.ts`（+ 1対1 単体テスト `bookmark.test.ts`）を追加します。
 
 ```ts
 /** しおりがエピソード末尾（読み終わり）に到達していると判定する進捗率の下限閾値（既存 DB レコード互換） */
@@ -82,7 +82,7 @@ export function isBookmarkAtEnd(progress: number): boolean {
 
 ### 2.2 Storage 層（`SqlNovelRepository.upsertNovelWithToc` のしおり自動進行）
 
-[docs/specs/architecture.md](../architecture.md) §3.4 および [docs/specs/db-schema.md](../db-schema.md) §3.1 を以下の通り拡張します。
+[docs/specs/architecture.md](../../architecture.md) §3.4 および [docs/specs/db-schema.md](../../db-schema.md) §3.1 を以下の通り拡張します。
 
 1. **自動進行の発動前提条件**:
    `upsertNovelWithToc(index, fetchedAt, options)` の既存作品更新トランザクション内において、更新前の `existing` レコードが以下のすべてを満たす場合を「当時の最終話末尾（読み終わり）」と判定する：
@@ -111,7 +111,7 @@ export function isBookmarkAtEnd(progress: number): boolean {
 
 ### 2.3 Reader 層（`ReaderView` 端丸め・短文検知 ＆ `useReader` 自動保存・Pull 非競合）
 
-[docs/specs/features/reader-view.md](../features/reader-view.md) §3.5・§4.2・§6 を以下の通り拡張します。
+[docs/specs/features/reader-view.md](../../features/reader-view.md) §3.5・§4.2・§6 を以下の通り拡張します。
 
 1. **`ReaderView.tsx` の連続スクロール 5px 端丸めと 1 画面短文検知**:
    - `calculateScrollProgress(el, writingMode)` において、`maxScroll > 0` かつ `maxScroll - currentScroll <= SCROLL_END_SNAP_TOLERANCE_PX`（5px 以内、横書きは `el.scrollTop`、縦書きは `Math.abs(el.scrollLeft)`）の場合に **`1`**（`1.0`）を返すよう丸める。これにより Android 高 DPI 端末のサブピクセル誤差で `0.994` 等に留まる現象を解消し、`1.0` として確実に保存する。
@@ -133,7 +133,7 @@ export function isBookmarkAtEnd(progress: number): boolean {
 
 ### 2.4 Cloud Sync 層（`SyncNovelData.bookmarkScrollProgress` 追加と LWW 同期・Pull 時新着遷移）
 
-[docs/specs/architecture.md](../architecture.md) §3.6・§3.8.2 を以下の通り拡張します。
+[docs/specs/architecture.md](../../architecture.md) §3.6・§3.8.2 を以下の通り拡張します。
 
 1. **`SyncNovelData` 型拡張（`src/features/cloud-sync/types.ts`）**:
    - `version: 1` のまま後方互換の任意フィールドを追加する：
@@ -234,7 +234,7 @@ UI コンポーネントのレイアウト・DOM 構造の変更はありませ�
 
 ## 5. 申し送り事項（Handover Items: `HO-41`）・Android 実機検証計画
 
-[docs/guidelines/workflow.md §2.2](../../guidelines/workflow.md#22-android-実機検証の実施判断基準と試験項目表フォーマット) の判断基準に基づき、本要望の実機検証タイミングを以下の通り決定します。
+[docs/guidelines/workflow.md §2.2](../../../guidelines/workflow.md#22-android-実機検証の実施判断基準と試験項目表フォーマット) の判断基準に基づき、本要望の実機検証タイミングを以下の通り決定します。
 
 - **実施区分**: **B. Milestone 最終レビュー後に一括で実機検証を実施**（完了ゲート: **`Milestone v1.3 完了前`**）
 - **判断理由**:

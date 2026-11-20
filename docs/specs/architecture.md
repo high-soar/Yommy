@@ -2,8 +2,8 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Review (#375)"
-updated: "2026-11-19"
+status: "Approved"
+updated: "2026-11-20"
 tags:
   - architecture
   - parser
@@ -64,7 +64,7 @@ tags:
   - bookmark-advance
   - ho-41
 related_specs:
-  - docs/specs/changes/issue-375-bookmark-advance-on-update.md
+  - docs/specs/changes/archive/issue-375-bookmark-advance-on-update.md
   - docs/specs/changes/archive/issue-371-version-release-automation.md
   - docs/specs/changes/archive/issue-344-priority-cache-scheduler.md
   - docs/specs/changes/archive/issue-343-novel-detail-header-menu.md

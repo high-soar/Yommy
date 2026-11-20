@@ -2,8 +2,8 @@
 type: spec-feature
 title: "小説リーダー画面仕様書（SCR-03: Novel Reader）"
 description: "小説本文の全画面（100dvh）縦書き・横書き組版表示、ページめくり（タップ/Kindle様式スワイプ送り）と連続スクロール切替、ハードウェア音量キー操作連携、エピソード端シームレス遷移、上下連動オーバーレイ（ReaderTopOverlay: 作品名・サブタイトル1行固定省略・目次導線 / ReaderBottomOverlay: RTLページシークバー・前後話ナビ・下部タブ）、ルビ・傍点描画、4カラーテーマ・文字サイズ・行間設定の永続化、前後エピソード遷移、未キャッシュ話のオンデマンド取得、既読・しおり・進捗率の自動保存/復元、およびSCN-01統合シナリオの正本仕様。"
-status: "Review (#375)"
-updated: "2026-11-19"
+status: "Approved"
+updated: "2026-11-20"
 tags:
   - reader
   - scr-03
@@ -57,7 +57,7 @@ tags:
   - bookmark-advance
   - ho-41
 related_specs:
-  - docs/specs/changes/issue-375-bookmark-advance-on-update.md
+  - docs/specs/changes/archive/issue-375-bookmark-advance-on-update.md
   - docs/specs/changes/archive/issue-344-priority-cache-scheduler.md
   - docs/specs/changes/archive/issue-342-cloud-sync-bookmark-protection.md
   - docs/specs/changes/archive/issue-269-webview-fallback-and-dom-import.md
@@ -777,10 +777,15 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
   3. 内蔵ブラウザ画面で DOM インポートを実行し、本文保存完了後に自動で `SCR-03: /novels/:novelId/chapters/:chapterIndex` へ遷移（`TR-11`）することを確認。
   4. ローディングスピナーを経て保存された本文が縦書きで描画され、読書が再開できることを確認。
 
-### 7.4 `SCN-05` 関連検証観点（`test/it/scenarios/scn05-cloud-sync.spec.ts`、`v1.1` Issue #342）
+### 7.4 `SCN-05` 関連検証観点（`test/it/scenarios/scn05-cloud-sync.spec.ts`、`v1.1` Issue #342 / `v1.3` Issue #375）
 
 - リーダー画面（`SCR-03`）表示中の画面ロック（5分経過モック→復帰）による自動 Pull 発動、他端末しおり競合確認ダイアログ（`bookmark-conflict-dialog`）の 2 択操作（「第N話へ移動する」/「第M話のまま読む」）および背景タップ・`Escape`・戻る操作抑止、画面ロック移行時の未保存進捗即時フラッシュ、ならびに未操作離脱時の他端末しおり保護を一気通貫で回帰検証する（`AC-RD-30`〜`34`）。
+- あわせて他端末で保存された `bookmarkScrollProgress`（途中進捗率）の自動 Pull 復元とリーダー表示ページ位置の正確な再現、ならびにリーダー閲覧中に `lastReadAt` 未更新のまま自動 Pull 経由で目次追加・しおり自動進行（`totalChapters` 増加）が発生した際に競合確認モーダルを誤表示せず総話数のみ更新することを検証する（`AC-RD-36`）。
 
 ### 7.5 `SCN-04` 関連検証観点（`test/it/scenarios/scn04-prefetch-and-cache.spec.ts`、`v1.2` Issue #344）
 
 - 作品詳細（`SCR-02`）で一括キャッシュ（`low`）を開始した直後に「最初から読む」または任意の未キャッシュ話をタップしてリーダー画面（`SCR-03`）へ遷移し、`CacheScheduler` の `'high'` 割り込みによる即時本文表示・`'medium'` 5話先読みの優先実行、および `SCR-02` 復帰時の一括キャッシュ自動継続・完了を一気通貫で検証する（`AC-RD-12`, `AC-RD-35`）。
+
+### 7.6 `SCN-03` 関連検証観点（`test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts`、`v1.3` Issue #375）
+
+- 1ページで完結する短文エピソードを開いた際に DOM 計測後に自動で `bookmarkScrollProgress = 1.0` が保存され、本棚更新チェックでの新着話追加に伴い新着第3話先頭へしおりが自動進行し、「第N話から読む」で第3話の先頭が開いて既読化されることを検証する（`AC-RD-36`）。
