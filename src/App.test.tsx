@@ -292,8 +292,12 @@ describe("App コンポーネント", () => {
 
   describe("ルーティングと下部タブナビゲーション操作の検証", () => {
     it("下部タブバーの「検索」を選択すると検索画面へ遷移する (TR-01)", async () => {
-      const bottomSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
-      const searchSpy = vi.spyOn(SearchContainerModule, "SearchContainer");
+      const bottomSpy = vi
+        .spyOn(BottomTabBarModule, "BottomTabBar")
+        .mockImplementation(() => null);
+      const searchSpy = vi
+        .spyOn(SearchContainerModule, "SearchContainer")
+        .mockImplementation(() => null);
       render(<App initialPath="/" />);
 
       await waitFor(() => {
@@ -311,8 +315,12 @@ describe("App コンポーネント", () => {
     });
 
     it("下部タブバーの「ランキング」を選択するとランキング画面へ遷移する (TR-01)", async () => {
-      const bottomSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
-      const rankingSpy = vi.spyOn(RankingContainerModule, "RankingContainer");
+      const bottomSpy = vi
+        .spyOn(BottomTabBarModule, "BottomTabBar")
+        .mockImplementation(() => null);
+      const rankingSpy = vi
+        .spyOn(RankingContainerModule, "RankingContainer")
+        .mockImplementation(() => null);
       render(<App initialPath="/" />);
 
       await waitFor(() => {
@@ -330,11 +338,12 @@ describe("App コンポーネント", () => {
     });
 
     it("下部タブバーの「設定」を選択すると設定画面へ遷移する (TR-01)", async () => {
-      const bottomSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
-      const settingsSpy = vi.spyOn(
-        SettingsContainerModule,
-        "SettingsContainer",
-      );
+      const bottomSpy = vi
+        .spyOn(BottomTabBarModule, "BottomTabBar")
+        .mockImplementation(() => null);
+      const settingsSpy = vi
+        .spyOn(SettingsContainerModule, "SettingsContainer")
+        .mockImplementation(() => null);
       render(<App initialPath="/" />);
 
       await waitFor(() => {
@@ -352,11 +361,12 @@ describe("App コンポーネント", () => {
     });
 
     it("検索画面で下部タブバーの「本棚」を選択すると本棚画面へ遷移する (TR-01b)", async () => {
-      const bottomSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
-      const bookshelfSpy = vi.spyOn(
-        BookshelfContainerModule,
-        "BookshelfContainer",
-      );
+      const bottomSpy = vi
+        .spyOn(BottomTabBarModule, "BottomTabBar")
+        .mockImplementation(() => null);
+      const bookshelfSpy = vi
+        .spyOn(BookshelfContainerModule, "BookshelfContainer")
+        .mockImplementation(() => null);
       render(<App initialPath="/search" />);
 
       await waitFor(() => {
@@ -374,11 +384,12 @@ describe("App コンポーネント", () => {
     });
 
     it("ランキング画面で下部タブバーの「本棚」を選択すると本棚画面へ遷移する (TR-01b)", async () => {
-      const bottomSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
-      const bookshelfSpy = vi.spyOn(
-        BookshelfContainerModule,
-        "BookshelfContainer",
-      );
+      const bottomSpy = vi
+        .spyOn(BottomTabBarModule, "BottomTabBar")
+        .mockImplementation(() => null);
+      const bookshelfSpy = vi
+        .spyOn(BookshelfContainerModule, "BookshelfContainer")
+        .mockImplementation(() => null);
       render(<App initialPath="/ranking" />);
 
       await waitFor(() => {
@@ -396,11 +407,12 @@ describe("App コンポーネント", () => {
     });
 
     it("設定画面で下部タブバーの「本棚」を選択すると本棚画面へ遷移する (TR-01b)", async () => {
-      const bottomSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
-      const bookshelfSpy = vi.spyOn(
-        BookshelfContainerModule,
-        "BookshelfContainer",
-      );
+      const bottomSpy = vi
+        .spyOn(BottomTabBarModule, "BottomTabBar")
+        .mockImplementation(() => null);
+      const bookshelfSpy = vi
+        .spyOn(BookshelfContainerModule, "BookshelfContainer")
+        .mockImplementation(() => null);
       render(<App initialPath="/settings" />);
 
       await waitFor(() => {
@@ -418,11 +430,12 @@ describe("App コンポーネント", () => {
     });
 
     it("作品詳細画面で下部タブバーの「本棚」を選択すると本棚画面へ遷移する (TR-01b)", async () => {
-      const bottomSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
-      const bookshelfSpy = vi.spyOn(
-        BookshelfContainerModule,
-        "BookshelfContainer",
-      );
+      const bottomSpy = vi
+        .spyOn(BottomTabBarModule, "BottomTabBar")
+        .mockImplementation(() => null);
+      const bookshelfSpy = vi
+        .spyOn(BookshelfContainerModule, "BookshelfContainer")
+        .mockImplementation(() => null);
       render(<App initialPath="/novels/kakuyomu:16817330658027210412" />);
 
       await waitFor(() => {
@@ -440,10 +453,9 @@ describe("App コンポーネント", () => {
     });
 
     it("リーダー画面から本棚画面へ遷移した際、BookshelfContainer が描画されること", async () => {
-      const bookshelfSpy = vi.spyOn(
-        BookshelfContainerModule,
-        "BookshelfContainer",
-      );
+      const bookshelfSpy = vi
+        .spyOn(BookshelfContainerModule, "BookshelfContainer")
+        .mockImplementation(() => null);
       let routerRef: RouterContextValue | null = null;
       const RouterCapture: React.FC = () => {
         routerRef = useRouter();
@@ -469,10 +481,9 @@ describe("App コンポーネント", () => {
     });
 
     it("リーダー画面から設定画面へ遷移した際、SettingsContainer が描画されること", async () => {
-      const settingsSpy = vi.spyOn(
-        SettingsContainerModule,
-        "SettingsContainer",
-      );
+      const settingsSpy = vi
+        .spyOn(SettingsContainerModule, "SettingsContainer")
+        .mockImplementation(() => null);
       let routerRef: RouterContextValue | null = null;
       const RouterCapture: React.FC = () => {
         routerRef = useRouter();
@@ -498,7 +509,9 @@ describe("App コンポーネント", () => {
     });
 
     it("リーダー画面から検索画面へ遷移した際、SearchContainer が描画されること", async () => {
-      const searchSpy = vi.spyOn(SearchContainerModule, "SearchContainer");
+      const searchSpy = vi
+        .spyOn(SearchContainerModule, "SearchContainer")
+        .mockImplementation(() => null);
       let routerRef: RouterContextValue | null = null;
       const RouterCapture: React.FC = () => {
         routerRef = useRouter();
@@ -524,7 +537,9 @@ describe("App コンポーネント", () => {
     });
 
     it("リーダー画面からランキング画面へ遷移した際、RankingContainer が描画されること", async () => {
-      const rankingSpy = vi.spyOn(RankingContainerModule, "RankingContainer");
+      const rankingSpy = vi
+        .spyOn(RankingContainerModule, "RankingContainer")
+        .mockImplementation(() => null);
       let routerRef: RouterContextValue | null = null;
       const RouterCapture: React.FC = () => {
         routerRef = useRouter();
@@ -550,11 +565,12 @@ describe("App コンポーネント", () => {
     });
 
     it("リーダー画面で OS 戻る操作（popstate）を行うと作品詳細画面へ戻る", async () => {
-      const readerSpy = vi.spyOn(ReaderContainerModule, "ReaderContainer");
-      const novelDetailSpy = vi.spyOn(
-        NovelDetailContainerModule,
-        "NovelDetailContainer",
-      );
+      const readerSpy = vi
+        .spyOn(ReaderContainerModule, "ReaderContainer")
+        .mockImplementation(() => null);
+      const novelDetailSpy = vi
+        .spyOn(NovelDetailContainerModule, "NovelDetailContainer")
+        .mockImplementation(() => null);
       render(
         <App initialPath="/novels/kakuyomu:16817330658027210412/chapters/1" />,
       );
@@ -578,7 +594,9 @@ describe("App コンポーネント", () => {
     });
 
     it("カスタム initialWorkUrl および props 省略時にも正常に動作する", async () => {
-      const readerSpy = vi.spyOn(ReaderContainerModule, "ReaderContainer");
+      const readerSpy = vi
+        .spyOn(ReaderContainerModule, "ReaderContainer")
+        .mockImplementation(() => null);
       render(
         <App
           initialPath="/novels/kakuyomu:16817330658027210412/chapters/1"
@@ -600,11 +618,12 @@ describe("App コンポーネント", () => {
   describe("実機システム戻るボタン（AppBridge）連携と論理階層遷移・終了UXの検証 (AC-AB-02〜06)", () => {
     it("リーダー画面 (SCR-03) で戻るボタン押下時、目次画面 (SCR-02) へ論理階層遷移すること (AC-AB-02, TR-06)", async () => {
       const mockAppBridge = new MockAppBridge();
-      const readerSpy = vi.spyOn(ReaderContainerModule, "ReaderContainer");
-      const novelDetailSpy = vi.spyOn(
-        NovelDetailContainerModule,
-        "NovelDetailContainer",
-      );
+      const readerSpy = vi
+        .spyOn(ReaderContainerModule, "ReaderContainer")
+        .mockImplementation(() => null);
+      const novelDetailSpy = vi
+        .spyOn(NovelDetailContainerModule, "NovelDetailContainer")
+        .mockImplementation(() => null);
       render(
         <App
           initialPath="/novels/kakuyomu:16817330658027210412/chapters/1"
@@ -627,14 +646,12 @@ describe("App コンポーネント", () => {
 
     it("作品詳細・目次画面 (SCR-02) で戻るボタン押下時、本棚画面 (SCR-01) へ復帰すること (AC-AB-03, TR-07)", async () => {
       const mockAppBridge = new MockAppBridge();
-      const novelDetailSpy = vi.spyOn(
-        NovelDetailContainerModule,
-        "NovelDetailContainer",
-      );
-      const bookshelfSpy = vi.spyOn(
-        BookshelfContainerModule,
-        "BookshelfContainer",
-      );
+      const novelDetailSpy = vi
+        .spyOn(NovelDetailContainerModule, "NovelDetailContainer")
+        .mockImplementation(() => null);
+      const bookshelfSpy = vi
+        .spyOn(BookshelfContainerModule, "BookshelfContainer")
+        .mockImplementation(() => null);
       render(
         <App
           initialPath="/novels/kakuyomu:16817330658027210412"
@@ -657,14 +674,12 @@ describe("App コンポーネント", () => {
 
     it("設定画面 (SCR-05) で戻るボタン押下時、ホーム本棚画面 (SCR-01) へ復帰すること (AC-AB-04, TR-12)", async () => {
       const mockAppBridge = new MockAppBridge();
-      const settingsSpy = vi.spyOn(
-        SettingsContainerModule,
-        "SettingsContainer",
-      );
-      const bookshelfSpy = vi.spyOn(
-        BookshelfContainerModule,
-        "BookshelfContainer",
-      );
+      const settingsSpy = vi
+        .spyOn(SettingsContainerModule, "SettingsContainer")
+        .mockImplementation(() => null);
+      const bookshelfSpy = vi
+        .spyOn(BookshelfContainerModule, "BookshelfContainer")
+        .mockImplementation(() => null);
       render(<App initialPath="/settings" appBridge={mockAppBridge} />);
 
       await waitFor(() => {
@@ -682,11 +697,12 @@ describe("App コンポーネント", () => {
 
     it("リーダー画面 (SCR-03) から設定画面 (SCR-05) へ遷移後、戻るボタン押下時にリーダー画面へ復帰すること (AC-AB-04, TR-12)", async () => {
       const mockAppBridge = new MockAppBridge();
-      const readerSpy = vi.spyOn(ReaderContainerModule, "ReaderContainer");
-      const settingsSpy = vi.spyOn(
-        SettingsContainerModule,
-        "SettingsContainer",
-      );
+      const readerSpy = vi
+        .spyOn(ReaderContainerModule, "ReaderContainer")
+        .mockImplementation(() => null);
+      const settingsSpy = vi
+        .spyOn(SettingsContainerModule, "SettingsContainer")
+        .mockImplementation(() => null);
       let routerRef: RouterContextValue | null = null;
       const RouterCapture: React.FC = () => {
         routerRef = useRouter();
@@ -728,15 +744,15 @@ describe("App コンポーネント", () => {
 
     it("作品詳細画面 (SCR-02) から下部タブ経由で設定画面 (SCR-05) へ遷移後、戻るボタン押下時に作品詳細画面へ復帰すること (AC-AB-04, TR-12)", async () => {
       const mockAppBridge = new MockAppBridge();
-      const bottomSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
-      const novelDetailSpy = vi.spyOn(
-        NovelDetailContainerModule,
-        "NovelDetailContainer",
-      );
-      const settingsSpy = vi.spyOn(
-        SettingsContainerModule,
-        "SettingsContainer",
-      );
+      const bottomSpy = vi
+        .spyOn(BottomTabBarModule, "BottomTabBar")
+        .mockImplementation(() => null);
+      const novelDetailSpy = vi
+        .spyOn(NovelDetailContainerModule, "NovelDetailContainer")
+        .mockImplementation(() => null);
+      const settingsSpy = vi
+        .spyOn(SettingsContainerModule, "SettingsContainer")
+        .mockImplementation(() => null);
       render(
         <App
           initialPath="/novels/kakuyomu:16817330658027210412"
@@ -770,11 +786,12 @@ describe("App コンポーネント", () => {
 
     it("検索画面 (SCR-06) で戻るボタン押下時、ホーム本棚画面 (SCR-01) へ復帰すること (TR-12)", async () => {
       const mockAppBridge = new MockAppBridge();
-      const searchSpy = vi.spyOn(SearchContainerModule, "SearchContainer");
-      const bookshelfSpy = vi.spyOn(
-        BookshelfContainerModule,
-        "BookshelfContainer",
-      );
+      const searchSpy = vi
+        .spyOn(SearchContainerModule, "SearchContainer")
+        .mockImplementation(() => null);
+      const bookshelfSpy = vi
+        .spyOn(BookshelfContainerModule, "BookshelfContainer")
+        .mockImplementation(() => null);
       render(<App initialPath="/search" appBridge={mockAppBridge} />);
 
       await waitFor(() => {
@@ -792,11 +809,12 @@ describe("App コンポーネント", () => {
 
     it("ランキング画面 (SCR-07) で戻るボタン押下時、ホーム本棚画面 (SCR-01) へ復帰すること (TR-12)", async () => {
       const mockAppBridge = new MockAppBridge();
-      const rankingSpy = vi.spyOn(RankingContainerModule, "RankingContainer");
-      const bookshelfSpy = vi.spyOn(
-        BookshelfContainerModule,
-        "BookshelfContainer",
-      );
+      const rankingSpy = vi
+        .spyOn(RankingContainerModule, "RankingContainer")
+        .mockImplementation(() => null);
+      const bookshelfSpy = vi
+        .spyOn(BookshelfContainerModule, "BookshelfContainer")
+        .mockImplementation(() => null);
       render(<App initialPath="/ranking" appBridge={mockAppBridge} />);
 
       await waitFor(() => {
@@ -814,14 +832,12 @@ describe("App コンポーネント", () => {
 
     it("内蔵ブラウザ画面 (SCR-04) で戻るボタン押下時、router.back() が呼ばれて直前の画面へ論理復帰すること (SCR-04, TR-12)", async () => {
       const mockAppBridge = new MockAppBridge();
-      const browserSpy = vi.spyOn(
-        WebViewImportContainerModule,
-        "WebViewImportContainer",
-      );
-      const novelDetailSpy = vi.spyOn(
-        NovelDetailContainerModule,
-        "NovelDetailContainer",
-      );
+      const browserSpy = vi
+        .spyOn(WebViewImportContainerModule, "WebViewImportContainer")
+        .mockImplementation(() => null);
+      const novelDetailSpy = vi
+        .spyOn(NovelDetailContainerModule, "NovelDetailContainer")
+        .mockImplementation(() => null);
       render(
         <App
           appBridge={mockAppBridge}
@@ -890,8 +906,12 @@ describe("App コンポーネント", () => {
 
     it("本棚画面 (SCR-01) でトースト表示中にタブ切り替えで他画面へ遷移したとき、確認トーストが即座に消去されること (TR-13, R1-11)", async () => {
       const mockAppBridge = new MockAppBridge();
-      const bottomSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
-      const searchSpy = vi.spyOn(SearchContainerModule, "SearchContainer");
+      const bottomSpy = vi
+        .spyOn(BottomTabBarModule, "BottomTabBar")
+        .mockImplementation(() => null);
+      const searchSpy = vi
+        .spyOn(SearchContainerModule, "SearchContainer")
+        .mockImplementation(() => null);
       render(<App initialPath="/" appBridge={mockAppBridge} />);
 
       await waitFor(() => {
@@ -1033,15 +1053,15 @@ describe("App コンポーネント", () => {
 
     it("本棚で戻るボタン押下後、トースト表示中に設定画面へ遷移して戻るボタンを押下した際、トーストタイマーが解除され直前画面へ復帰すること", async () => {
       const mockAppBridge = new MockAppBridge();
-      const bottomSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
-      const bookshelfSpy = vi.spyOn(
-        BookshelfContainerModule,
-        "BookshelfContainer",
-      );
-      const settingsSpy = vi.spyOn(
-        SettingsContainerModule,
-        "SettingsContainer",
-      );
+      const bottomSpy = vi
+        .spyOn(BottomTabBarModule, "BottomTabBar")
+        .mockImplementation(() => null);
+      const bookshelfSpy = vi
+        .spyOn(BookshelfContainerModule, "BookshelfContainer")
+        .mockImplementation(() => null);
+      const settingsSpy = vi
+        .spyOn(SettingsContainerModule, "SettingsContainer")
+        .mockImplementation(() => null);
       render(<App initialPath="/" appBridge={mockAppBridge} />);
 
       await waitFor(() => {

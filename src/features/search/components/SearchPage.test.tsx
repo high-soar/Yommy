@@ -357,8 +357,12 @@ describe("SearchPage コンポーネント", () => {
   });
 
   it("親子分離: selectedSite が SiteSelector および SearchFilterBar へ正しく伝播すること (AC-SE-10)", () => {
-    const siteSelectorSpy = vi.spyOn(siteSelectorModule, "SiteSelector");
-    const filterBarSpy = vi.spyOn(searchFilterBarModule, "SearchFilterBar");
+    const siteSelectorSpy = vi
+      .spyOn(siteSelectorModule, "SiteSelector")
+      .mockImplementation(() => null);
+    const filterBarSpy = vi
+      .spyOn(searchFilterBarModule, "SearchFilterBar")
+      .mockImplementation(() => null);
 
     render(
       <SearchPage
@@ -401,9 +405,15 @@ describe("SearchPage コンポーネント", () => {
   });
 
   it("isLoadingMore が true の場合、SiteSelector, SearchInputBar, SearchFilterBar が非活性化されること (R1-01)", () => {
-    const siteSelectorSpy = vi.spyOn(siteSelectorModule, "SiteSelector");
-    const inputBarSpy = vi.spyOn(searchInputBarModule, "SearchInputBar");
-    const filterBarSpy = vi.spyOn(searchFilterBarModule, "SearchFilterBar");
+    const siteSelectorSpy = vi
+      .spyOn(siteSelectorModule, "SiteSelector")
+      .mockImplementation(() => null);
+    const inputBarSpy = vi
+      .spyOn(searchInputBarModule, "SearchInputBar")
+      .mockImplementation(() => null);
+    const filterBarSpy = vi
+      .spyOn(searchFilterBarModule, "SearchFilterBar")
+      .mockImplementation(() => null);
 
     render(
       <SearchPage
@@ -451,7 +461,9 @@ describe("SearchPage コンポーネント", () => {
   });
 
   it("親子分離: SearchNovelCard へ item, onAdd, onSelect が正しく伝播し、コールバック呼び出し時に onSelectCard および onAddNovel が正しく呼び出されること", () => {
-    const cardSpy = vi.spyOn(searchNovelCardModule, "SearchNovelCard");
+    const cardSpy = vi
+      .spyOn(searchNovelCardModule, "SearchNovelCard")
+      .mockImplementation(() => null);
     const handleAddNovel = vi.fn();
     const handleSelectCard = vi.fn();
 
@@ -535,8 +547,12 @@ describe("SearchPage コンポーネント", () => {
   });
 
   it("親子分離: excludeKeyword, onChangeExcludeKeyword, selectedGenres が子コンポーネントへ正しく伝播すること (v0.8 Issue #264)", () => {
-    const inputBarSpy = vi.spyOn(searchInputBarModule, "SearchInputBar");
-    const filterBarSpy = vi.spyOn(searchFilterBarModule, "SearchFilterBar");
+    const inputBarSpy = vi
+      .spyOn(searchInputBarModule, "SearchInputBar")
+      .mockImplementation(() => null);
+    const filterBarSpy = vi
+      .spyOn(searchFilterBarModule, "SearchFilterBar")
+      .mockImplementation(() => null);
     const handleExcludeChange = vi.fn();
 
     render(

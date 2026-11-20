@@ -5,8 +5,9 @@ import path from "node:path";
 import os from "node:os";
 import { createStorybookServer } from "./serve-storybook.mjs";
 
-describe("serve-storybook (R1-39)", () => {
+describe("serve-storybook (R1-39, R1-15)", () => {
   let tempDir: string;
+  let siblingSecretDir: string;
   let server: http.Server;
   let serverPort: number;
 
@@ -18,6 +19,19 @@ describe("serve-storybook (R1-39)", () => {
       "<html>Storybook</html>",
     );
     fs.writeFileSync(path.join(tempDir, "test.js"), "console.log('test');");
+    fs.mkdirSync(path.join(tempDir, "sub"), { recursive: true });
+    fs.writeFileSync(
+      path.join(tempDir, "sub", "nested.js"),
+      "console.log('nested');",
+    );
+
+    // baseDir と前方一致する隣接接頭辞ディレクトリを作成（R1-15 検証用）
+    siblingSecretDir = `${tempDir}-secret`;
+    fs.mkdirSync(siblingSecretDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(siblingSecretDir, "secret.txt"),
+      "TOP_SECRET_DATA",
+    );
 
     server = createStorybookServer({ baseDir: tempDir, port: 0 });
     await new Promise<void>((resolve) => {
@@ -36,6 +50,7 @@ describe("serve-storybook (R1-39)", () => {
       server.close(() => resolve());
     });
     fs.rmSync(tempDir, { recursive: true, force: true });
+    fs.rmSync(siblingSecretDir, { recursive: true, force: true });
   });
 
   const request = (
@@ -46,8 +61,13 @@ describe("serve-storybook (R1-39)", () => {
     headers: http.IncomingHttpHeaders;
   }> => {
     return new Promise((resolve, reject) => {
+      // クライアント側 URL 正規化による ".." 事前折り畳みを防ぎ、生のパスを送信する
       const req = http.get(
-        `http://127.0.0.1:${serverPort}${urlPath}`,
+        {
+          hostname: "127.0.0.1",
+          port: serverPort,
+          path: urlPath,
+        },
         (res) => {
           let data = "";
           res.on("data", (chunk) => {
@@ -82,6 +102,28 @@ describe("serve-storybook (R1-39)", () => {
     );
   });
 
+  it("正常なサブパス（./test.js, sub/nested.js, sub/../test.js, 先頭バックスラッシュ, クエリ付き）が正しく配信されること (R1-15)", async () => {
+    const dotRes = await request("/./test.js");
+    expect(dotRes.statusCode).toBe(200);
+    expect(dotRes.data).toBe("console.log('test');");
+
+    const nestedRes = await request("/sub/nested.js");
+    expect(nestedRes.statusCode).toBe(200);
+    expect(nestedRes.data).toBe("console.log('nested');");
+
+    const parentWithinBaseRes = await request("/sub/../test.js");
+    expect(parentWithinBaseRes.statusCode).toBe(200);
+    expect(parentWithinBaseRes.data).toBe("console.log('test');");
+
+    const leadingBackslashRes = await request("/%5ctest.js");
+    expect(leadingBackslashRes.statusCode).toBe(200);
+    expect(leadingBackslashRes.data).toBe("console.log('test');");
+
+    const queryRootRes = await request("/?story=default");
+    expect(queryRootRes.statusCode).toBe(200);
+    expect(queryRootRes.data).toBe("<html>Storybook</html>");
+  });
+
   it("存在しないファイルへのリクエストで 404 が返されること", async () => {
     const res = await request("/non-existent.html");
     expect(res.statusCode).toBe(404);
@@ -94,9 +136,35 @@ describe("serve-storybook (R1-39)", () => {
     expect(res.data).toBe("Bad Request");
   });
 
-  it("パストラバーサル（../）を含むリクエストで 404 または 403 が返され安全に遮断されること", async () => {
+  it("パストラバーサル（../）を含むリクエストで 403 Forbidden が返され安全に遮断されること (R1-15)", async () => {
     const res = await request("/../../etc/passwd");
-    // 正規化されて baseDir 内で探されるか 403 / 404
-    expect([403, 404]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(403);
+    expect(res.data).toBe("Forbidden");
+
+    const deepRes = await request("/sub/../../etc/passwd");
+    expect(deepRes.statusCode).toBe(403);
+    expect(deepRes.data).toBe("Forbidden");
+  });
+
+  it("baseDir 自体（/. や /sub/..）へ解決されるリクエストは 403 Forbidden が返されること (R1-15)", async () => {
+    const dotRes = await request("/.");
+    expect(dotRes.statusCode).toBe(403);
+    expect(dotRes.data).toBe("Forbidden");
+
+    const subParentRes = await request("/sub/..");
+    expect(subParentRes.statusCode).toBe(403);
+    expect(subParentRes.data).toBe("Forbidden");
+  });
+
+  it("隣接接頭辞ディレクトリ（baseDir + '-secret'）への突破リクエスト（生パス・URLエンコード双方）が 403 Forbidden で遮断されること (R1-15)", async () => {
+    const siblingName = path.basename(siblingSecretDir);
+
+    const rawRes = await request(`/../${siblingName}/secret.txt`);
+    expect(rawRes.statusCode).toBe(403);
+    expect(rawRes.data).toBe("Forbidden");
+
+    const encodedRes = await request(`/%2e%2e/${siblingName}/secret.txt`);
+    expect(encodedRes.statusCode).toBe(403);
+    expect(encodedRes.data).toBe("Forbidden");
   });
 });

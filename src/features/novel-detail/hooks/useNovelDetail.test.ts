@@ -5780,12 +5780,9 @@ describe("useNovelDetail", () => {
       const ep2HttpGate = new Promise<void>((r) => {
         releaseEp2Http = r;
       });
-      let notifyEp2Started!: () => void;
-      const ep2Started = new Promise<void>((r) => {
-        notifyEp2Started = r;
-      });
+      let ep2HasStarted = false;
       httpClient.setResponse(new RegExp(KAKUYOMU_EPISODE_IDS[1]), async () => {
-        notifyEp2Started();
+        ep2HasStarted = true;
         await ep2HttpGate;
         return { status: 200, headers: {}, html: episodeContentHtml };
       });
@@ -5822,18 +5819,20 @@ describe("useNovelDetail", () => {
       await waitFor(() => expect(result.current.isLoading).toBe(false));
 
       // ch 2 のみを対象にしてバッチ進行中に refreshToc を呼ぶ
-      await scheduler.enqueueBatchCache(seeded.id, [2]);
-      await ep2Started;
+      await act(async () => {
+        await scheduler.enqueueBatchCache(seeded.id, [2]);
+      });
+      await waitFor(() => expect(ep2HasStarted).toBe(true));
       enqueueSpy.mockClear();
 
       let refreshPromise: Promise<boolean> | undefined;
       act(() => {
         refreshPromise = result.current.refreshToc();
       });
-      // refreshToc 内の pauseNovelTasks が完了できるよう ep-2 の待機を解除
-      releaseEp2Http();
 
       await act(async () => {
+        // refreshToc 内の pauseNovelTasks が完了できるよう ep-2 の待機を解除
+        releaseEp2Http();
         expect(await refreshPromise).toBe(true);
       });
 
@@ -5847,6 +5846,11 @@ describe("useNovelDetail", () => {
       await waitFor(() => {
         expect(result.current.isBatchCaching).toBe(false);
         expect(result.current.failedChapterIndexes).toEqual([1]);
+        expect(result.current.chapters).toHaveLength(4);
+      });
+      // syncProgressFromDb による非同期 State 更新の残りマイクロタスクを act 内で収束
+      await act(async () => {
+        await Promise.resolve();
       });
       expect(result.current.refreshMessage).not.toBe(
         "全話のキャッシュを取得しました",

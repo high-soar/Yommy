@@ -558,16 +558,18 @@ describe("useNovelSearch", () => {
       expect(secondResult).toBeNull();
       expect(fetchCount).toBe(1);
     } finally {
-      resolves.forEach((resolve) =>
-        resolve({
-          url: item1.workUrl,
-          status: 200,
-          headers: {},
-          html: workIndexHtml,
-        }),
-      );
-      await promise1!;
-      await promise2;
+      await act(async () => {
+        resolves.forEach((resolve) =>
+          resolve({
+            url: item1.workUrl,
+            status: 200,
+            headers: {},
+            html: workIndexHtml,
+          }),
+        );
+        await promise1!;
+        await promise2;
+      });
     }
     await waitFor(() => {
       expect(result.current.addingWorkId).toBeNull();
@@ -626,16 +628,18 @@ describe("useNovelSearch", () => {
       expect(fetchCount).toBe(1);
       expect(window.location.pathname).toBe("/search");
     } finally {
-      resolves.forEach((resolve) =>
-        resolve({
-          url: item1.workUrl,
-          status: 200,
-          headers: {},
-          html: workIndexHtml,
-        }),
-      );
-      await promise1!;
-      await selectPromise;
+      await act(async () => {
+        resolves.forEach((resolve) =>
+          resolve({
+            url: item1.workUrl,
+            status: 200,
+            headers: {},
+            html: workIndexHtml,
+          }),
+        );
+        await promise1!;
+        await selectPromise;
+      });
     }
   });
 

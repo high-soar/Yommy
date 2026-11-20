@@ -83,16 +83,18 @@ describe("NovelDetailPage", () => {
 
   describe("Storybook Stories 検証 (composeStories)", () => {
     it("Default ストーリーで作品ヘッダーと目次一覧が表示され、ローディング・Not Found・削除ダイアログは表示されないこと", () => {
-      const headerSpy = vi.spyOn(NovelDetailHeaderModule, "NovelDetailHeader");
-      const episodeListSpy = vi.spyOn(EpisodeListModule, "EpisodeList");
-      const deleteDialogSpy = vi.spyOn(
-        DeleteConfirmDialogModule,
-        "DeleteConfirmDialog",
-      );
-      const clearCacheDialogSpy = vi.spyOn(
-        ClearCacheConfirmDialogModule,
-        "ClearCacheConfirmDialog",
-      );
+      const headerSpy = vi
+        .spyOn(NovelDetailHeaderModule, "NovelDetailHeader")
+        .mockImplementation(() => null);
+      const episodeListSpy = vi
+        .spyOn(EpisodeListModule, "EpisodeList")
+        .mockImplementation(() => null);
+      const deleteDialogSpy = vi
+        .spyOn(DeleteConfirmDialogModule, "DeleteConfirmDialog")
+        .mockImplementation(() => null);
+      const clearCacheDialogSpy = vi
+        .spyOn(ClearCacheConfirmDialogModule, "ClearCacheConfirmDialog")
+        .mockImplementation(() => null);
 
       render(<Default />);
 
@@ -148,8 +150,12 @@ describe("NovelDetailPage", () => {
     });
 
     it("WithBookmark ストーリーで作品情報・しおり情報がヘッダーと目次に反映されること", () => {
-      const headerSpy = vi.spyOn(NovelDetailHeaderModule, "NovelDetailHeader");
-      const episodeListSpy = vi.spyOn(EpisodeListModule, "EpisodeList");
+      const headerSpy = vi
+        .spyOn(NovelDetailHeaderModule, "NovelDetailHeader")
+        .mockImplementation(() => null);
+      const episodeListSpy = vi
+        .spyOn(EpisodeListModule, "EpisodeList")
+        .mockImplementation(() => null);
 
       render(<WithBookmark />);
 
@@ -171,16 +177,18 @@ describe("NovelDetailPage", () => {
     });
 
     it("Loading ストーリーでローディング表示になり、ヘッダー・目次・Not Found が非表示であること", () => {
-      const headerSpy = vi.spyOn(NovelDetailHeaderModule, "NovelDetailHeader");
-      const episodeListSpy = vi.spyOn(EpisodeListModule, "EpisodeList");
-      const deleteDialogSpy = vi.spyOn(
-        DeleteConfirmDialogModule,
-        "DeleteConfirmDialog",
-      );
-      const clearCacheDialogSpy = vi.spyOn(
-        ClearCacheConfirmDialogModule,
-        "ClearCacheConfirmDialog",
-      );
+      const headerSpy = vi
+        .spyOn(NovelDetailHeaderModule, "NovelDetailHeader")
+        .mockImplementation(() => null);
+      const episodeListSpy = vi
+        .spyOn(EpisodeListModule, "EpisodeList")
+        .mockImplementation(() => null);
+      const deleteDialogSpy = vi
+        .spyOn(DeleteConfirmDialogModule, "DeleteConfirmDialog")
+        .mockImplementation(() => null);
+      const clearCacheDialogSpy = vi
+        .spyOn(ClearCacheConfirmDialogModule, "ClearCacheConfirmDialog")
+        .mockImplementation(() => null);
 
       render(<Loading />);
 
@@ -201,8 +209,12 @@ describe("NovelDetailPage", () => {
     });
 
     it("NotFound ストーリーで未検出表示と「本棚へ戻る」ボタンが表示され、ヘッダー・目次は非表示であること (AC-ND-07)", () => {
-      const headerSpy = vi.spyOn(NovelDetailHeaderModule, "NovelDetailHeader");
-      const episodeListSpy = vi.spyOn(EpisodeListModule, "EpisodeList");
+      const headerSpy = vi
+        .spyOn(NovelDetailHeaderModule, "NovelDetailHeader")
+        .mockImplementation(() => null);
+      const episodeListSpy = vi
+        .spyOn(EpisodeListModule, "EpisodeList")
+        .mockImplementation(() => null);
 
       render(<NotFound />);
 
@@ -227,10 +239,9 @@ describe("NovelDetailPage", () => {
     });
 
     it("WithDeleteDialog ストーリーで削除確認ダイアログが表示されること", () => {
-      const deleteDialogSpy = vi.spyOn(
-        DeleteConfirmDialogModule,
-        "DeleteConfirmDialog",
-      );
+      const deleteDialogSpy = vi
+        .spyOn(DeleteConfirmDialogModule, "DeleteConfirmDialog")
+        .mockImplementation(() => null);
 
       render(<WithDeleteDialog />);
 
@@ -243,7 +254,9 @@ describe("NovelDetailPage", () => {
     });
 
     it("Refreshing ストーリーで更新中フラグが NovelDetailHeader へ伝達されること", () => {
-      const headerSpy = vi.spyOn(NovelDetailHeaderModule, "NovelDetailHeader");
+      const headerSpy = vi
+        .spyOn(NovelDetailHeaderModule, "NovelDetailHeader")
+        .mockImplementation(() => null);
       render(<Refreshing />);
 
       expect(headerSpy).toHaveBeenCalledWith(
@@ -254,7 +267,9 @@ describe("NovelDetailPage", () => {
     });
 
     it("WithError ストーリーでエラーメッセージがヘッダーに反映されること", () => {
-      const headerSpy = vi.spyOn(NovelDetailHeaderModule, "NovelDetailHeader");
+      const headerSpy = vi
+        .spyOn(NovelDetailHeaderModule, "NovelDetailHeader")
+        .mockImplementation(() => null);
 
       render(<WithError />);
 
@@ -267,10 +282,9 @@ describe("NovelDetailPage", () => {
     });
 
     it("WithClearCacheDialog ストーリーでキャッシュ整理確認ダイアログが表示されること (AC-ND-21)", () => {
-      const clearCacheDialogSpy = vi.spyOn(
-        ClearCacheConfirmDialogModule,
-        "ClearCacheConfirmDialog",
-      );
+      const clearCacheDialogSpy = vi
+        .spyOn(ClearCacheConfirmDialogModule, "ClearCacheConfirmDialog")
+        .mockImplementation(() => null);
 
       render(<WithClearCacheDialog />);
 
@@ -283,7 +297,9 @@ describe("NovelDetailPage", () => {
     });
 
     it("WithClearCacheNotice ストーリーでキャッシュ削除完了通知メッセージがヘッダーへ伝達されること (AC-ND-22)", () => {
-      const headerSpy = vi.spyOn(NovelDetailHeaderModule, "NovelDetailHeader");
+      const headerSpy = vi
+        .spyOn(NovelDetailHeaderModule, "NovelDetailHeader")
+        .mockImplementation(() => null);
 
       render(<WithClearCacheNotice />);
 
@@ -355,7 +371,9 @@ describe("NovelDetailPage", () => {
     });
 
     it("親子分離: 通常表示時にヘッダーの各アクションが NovelDetailHeader へ正しく伝達されること", () => {
-      const headerSpy = vi.spyOn(NovelDetailHeaderModule, "NovelDetailHeader");
+      const headerSpy = vi
+        .spyOn(NovelDetailHeaderModule, "NovelDetailHeader")
+        .mockImplementation(() => null);
       const onStartFromBeginning = vi.fn();
       const onResumeBookmark = vi.fn();
       const onRefreshToc = vi.fn();
@@ -399,7 +417,9 @@ describe("NovelDetailPage", () => {
     });
 
     it("親子分離: 目次一覧の onSelectEpisode が EpisodeList へ正しく伝達されること", () => {
-      const episodeListSpy = vi.spyOn(EpisodeListModule, "EpisodeList");
+      const episodeListSpy = vi
+        .spyOn(EpisodeListModule, "EpisodeList")
+        .mockImplementation(() => null);
       const onSelectEpisode = vi.fn();
 
       render(
@@ -424,10 +444,9 @@ describe("NovelDetailPage", () => {
     });
 
     it("親子分離: 削除ダイアログの isOpen, onClose, onConfirm が DeleteConfirmDialog へ正しく伝達されること", () => {
-      const dialogSpy = vi.spyOn(
-        DeleteConfirmDialogModule,
-        "DeleteConfirmDialog",
-      );
+      const dialogSpy = vi
+        .spyOn(DeleteConfirmDialogModule, "DeleteConfirmDialog")
+        .mockImplementation(() => null);
       const onCloseDeleteDialog = vi.fn();
       const onConfirmDelete = vi.fn();
 
@@ -564,10 +583,9 @@ describe("NovelDetailPage", () => {
 
     describe("未取得話一括キャッシュ関連の連携・非ブロッキング操作制御 (AC-ND-11, AC-ND-13, Issue #344)", () => {
       it("BatchCaching ストーリーで一括キャッシュ状態が NovelDetailHeader へ伝達され、各話リストコンテナは操作ブロック（pointer-events-none / opacity-80）されないこと (Issue #344)", () => {
-        const headerSpy = vi.spyOn(
-          NovelDetailHeaderModule,
-          "NovelDetailHeader",
-        );
+        const headerSpy = vi
+          .spyOn(NovelDetailHeaderModule, "NovelDetailHeader")
+          .mockImplementation(() => null);
 
         render(<BatchCaching />);
 
@@ -586,10 +604,9 @@ describe("NovelDetailPage", () => {
       });
 
       it("BatchCachingWithFailures ストーリーで一括キャッシュ失敗件数が NovelDetailHeader へ伝達されること (AC-ND-25)", () => {
-        const headerSpy = vi.spyOn(
-          NovelDetailHeaderModule,
-          "NovelDetailHeader",
-        );
+        const headerSpy = vi
+          .spyOn(NovelDetailHeaderModule, "NovelDetailHeader")
+          .mockImplementation(() => null);
 
         render(<BatchCachingWithFailures />);
 
@@ -606,10 +623,9 @@ describe("NovelDetailPage", () => {
       });
 
       it("ResumePending ストーリーで pendingCacheCount=2 が NovelDetailHeader へ伝達されること (AC-ND-24)", () => {
-        const headerSpy = vi.spyOn(
-          NovelDetailHeaderModule,
-          "NovelDetailHeader",
-        );
+        const headerSpy = vi
+          .spyOn(NovelDetailHeaderModule, "NovelDetailHeader")
+          .mockImplementation(() => null);
         render(<ResumePending />);
 
         expect(headerSpy).toHaveBeenCalledWith(
@@ -620,11 +636,12 @@ describe("NovelDetailPage", () => {
       });
 
       it("RetryFailed ストーリーで failedCacheCount=1 が NovelDetailHeader へ、failedChapterIndexes=[2] が EpisodeList へ伝達されること (AC-ND-25)", () => {
-        const headerSpy = vi.spyOn(
-          NovelDetailHeaderModule,
-          "NovelDetailHeader",
-        );
-        const episodeListSpy = vi.spyOn(EpisodeListModule, "EpisodeList");
+        const headerSpy = vi
+          .spyOn(NovelDetailHeaderModule, "NovelDetailHeader")
+          .mockImplementation(() => null);
+        const episodeListSpy = vi
+          .spyOn(EpisodeListModule, "EpisodeList")
+          .mockImplementation(() => null);
         render(<RetryFailed />);
 
         expect(headerSpy).toHaveBeenCalledWith(
@@ -645,10 +662,9 @@ describe("NovelDetailPage", () => {
       });
 
       it("AllCached ストーリーで isAllCached=true が NovelDetailHeader へ伝達されること (AC-ND-13)", () => {
-        const headerSpy = vi.spyOn(
-          NovelDetailHeaderModule,
-          "NovelDetailHeader",
-        );
+        const headerSpy = vi
+          .spyOn(NovelDetailHeaderModule, "NovelDetailHeader")
+          .mockImplementation(() => null);
         render(<AllCached />);
 
         expect(headerSpy).toHaveBeenCalledWith(
@@ -659,7 +675,9 @@ describe("NovelDetailPage", () => {
       });
 
       it("親子分離: isBatchCaching === true のときでも EpisodeList の onSelectEpisode 呼び出しが親コールバックへ透過伝達されること (Issue #344)", () => {
-        const episodeListSpy = vi.spyOn(EpisodeListModule, "EpisodeList");
+        const episodeListSpy = vi
+          .spyOn(EpisodeListModule, "EpisodeList")
+          .mockImplementation(() => null);
         const onSelectEpisode = vi.fn();
 
         render(
@@ -697,10 +715,9 @@ describe("NovelDetailPage", () => {
 
     describe("本文キャッシュ整理ダイアログ連携 (AC-ND-21, AC-ND-22, TR-19)", () => {
       it("isClearCacheDialogOpen === true のとき ClearCacheConfirmDialog へ isOpen=true が伝達されること (AC-ND-21)", () => {
-        const dialogSpy = vi.spyOn(
-          ClearCacheConfirmDialogModule,
-          "ClearCacheConfirmDialog",
-        );
+        const dialogSpy = vi
+          .spyOn(ClearCacheConfirmDialogModule, "ClearCacheConfirmDialog")
+          .mockImplementation(() => null);
 
         render(
           <NovelDetailPage
@@ -718,10 +735,9 @@ describe("NovelDetailPage", () => {
       });
 
       it("isClearCacheDialogOpen が false または未定義のとき ClearCacheConfirmDialog へ isOpen=false が伝達されること", () => {
-        const dialogSpy = vi.spyOn(
-          ClearCacheConfirmDialogModule,
-          "ClearCacheConfirmDialog",
-        );
+        const dialogSpy = vi
+          .spyOn(ClearCacheConfirmDialogModule, "ClearCacheConfirmDialog")
+          .mockImplementation(() => null);
 
         render(
           <NovelDetailPage
@@ -739,10 +755,9 @@ describe("NovelDetailPage", () => {
       });
 
       it("親子分離: NovelDetailHeader の onOpenClearCacheDialog が正しく伝達されること", () => {
-        const headerSpy = vi.spyOn(
-          NovelDetailHeaderModule,
-          "NovelDetailHeader",
-        );
+        const headerSpy = vi
+          .spyOn(NovelDetailHeaderModule, "NovelDetailHeader")
+          .mockImplementation(() => null);
         const onOpenClearCacheDialog = vi.fn();
 
         render(
@@ -767,10 +782,9 @@ describe("NovelDetailPage", () => {
       });
 
       it("親子分離: ClearCacheConfirmDialog の onConfirm が正しく伝達されること (AC-ND-21)", () => {
-        const dialogSpy = vi.spyOn(
-          ClearCacheConfirmDialogModule,
-          "ClearCacheConfirmDialog",
-        );
+        const dialogSpy = vi
+          .spyOn(ClearCacheConfirmDialogModule, "ClearCacheConfirmDialog")
+          .mockImplementation(() => null);
         const onConfirmClearCache = vi.fn();
 
         render(
@@ -800,10 +814,9 @@ describe("NovelDetailPage", () => {
       });
 
       it("親子分離: ClearCacheConfirmDialog の onClose が正しく伝達されること", () => {
-        const dialogSpy = vi.spyOn(
-          ClearCacheConfirmDialogModule,
-          "ClearCacheConfirmDialog",
-        );
+        const dialogSpy = vi
+          .spyOn(ClearCacheConfirmDialogModule, "ClearCacheConfirmDialog")
+          .mockImplementation(() => null);
         const onCloseClearCacheDialog = vi.fn();
 
         render(
@@ -830,10 +843,9 @@ describe("NovelDetailPage", () => {
       });
 
       it("親子分離: onCloseClearCacheDialog が省略された場合でも安全に no-op 処理されること", () => {
-        const dialogSpy = vi.spyOn(
-          ClearCacheConfirmDialogModule,
-          "ClearCacheConfirmDialog",
-        );
+        const dialogSpy = vi
+          .spyOn(ClearCacheConfirmDialogModule, "ClearCacheConfirmDialog")
+          .mockImplementation(() => null);
 
         render(
           <NovelDetailPage
@@ -849,10 +861,9 @@ describe("NovelDetailPage", () => {
       });
 
       it("親子分離: onConfirmClearCache が省略された場合でも安全に no-op 処理されること", () => {
-        const dialogSpy = vi.spyOn(
-          ClearCacheConfirmDialogModule,
-          "ClearCacheConfirmDialog",
-        );
+        const dialogSpy = vi
+          .spyOn(ClearCacheConfirmDialogModule, "ClearCacheConfirmDialog")
+          .mockImplementation(() => null);
 
         render(
           <NovelDetailPage
@@ -868,10 +879,9 @@ describe("NovelDetailPage", () => {
       });
 
       it("refreshMessage にキャッシュ削除完了メッセージが設定された場合、NovelDetailHeader へ伝達されること (AC-ND-22)", () => {
-        const headerSpy = vi.spyOn(
-          NovelDetailHeaderModule,
-          "NovelDetailHeader",
-        );
+        const headerSpy = vi
+          .spyOn(NovelDetailHeaderModule, "NovelDetailHeader")
+          .mockImplementation(() => null);
 
         render(
           <NovelDetailPage
@@ -891,10 +901,9 @@ describe("NovelDetailPage", () => {
       });
 
       it("onToggleFavorite が指定された場合、NovelDetailHeader へコールバックが正しく伝搬されること (Issue #266, R1-04)", () => {
-        const headerSpy = vi.spyOn(
-          NovelDetailHeaderModule,
-          "NovelDetailHeader",
-        );
+        const headerSpy = vi
+          .spyOn(NovelDetailHeaderModule, "NovelDetailHeader")
+          .mockImplementation(() => null);
         const onToggleFavorite = vi.fn();
 
         render(
@@ -919,11 +928,12 @@ describe("NovelDetailPage", () => {
       });
 
       it("pendingCacheCount, failedCacheCount が NovelDetailHeader へ、failedChapterIndexes が EpisodeList へ正しく伝搬されること (AC-ND-24, AC-ND-25)", () => {
-        const headerSpy = vi.spyOn(
-          NovelDetailHeaderModule,
-          "NovelDetailHeader",
-        );
-        const episodeListSpy = vi.spyOn(EpisodeListModule, "EpisodeList");
+        const headerSpy = vi
+          .spyOn(NovelDetailHeaderModule, "NovelDetailHeader")
+          .mockImplementation(() => null);
+        const episodeListSpy = vi
+          .spyOn(EpisodeListModule, "EpisodeList")
+          .mockImplementation(() => null);
 
         render(
           <NovelDetailPage
@@ -954,10 +964,9 @@ describe("NovelDetailPage", () => {
       });
 
       it("onOpenWebView が指定された場合、NovelDetailHeader へコールバックが渡され canonicalUrl で呼び出されること (Issue #269, TR-09, AC-ND-26)", () => {
-        const headerSpy = vi.spyOn(
-          NovelDetailHeaderModule,
-          "NovelDetailHeader",
-        );
+        const headerSpy = vi
+          .spyOn(NovelDetailHeaderModule, "NovelDetailHeader")
+          .mockImplementation(() => null);
         const onOpenWebView = vi.fn();
 
         render(
