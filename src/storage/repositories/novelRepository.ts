@@ -107,7 +107,7 @@ interface ExistingChapterRef {
  * 目次更新時のしおり自動進行先を算出する。
  * 更新前が「当時最終話の末尾到達 (isBookmarkAtEnd)」である場合のみ、
  * remote_chapter_id 基準で新着話先頭への自動進行・途中挿入追従・削除フォールバックを解決する。
- * （docs/specs/changes/issue-375-bookmark-advance-on-update.md §2.2 に準拠）
+ * （docs/specs/changes/archive/issue-375-bookmark-advance-on-update.md §2.2 に準拠）
  */
 function resolveBookmarkOnTocUpdate(
   existing: NovelRecord,

@@ -1,4 +1,12 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+
+async function waitForServicesReady(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () =>
+      typeof window.__yommyServices !== "undefined" &&
+      window.__yommyServices.isReady === true,
+  );
+}
 
 test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手動一括更新・5種ソート永続化・お気に入りトグル/フィルタ/更新連動シナリオ (HO-18, HO-19, HO-32)", () => {
   test.beforeEach(async ({ page }) => {
@@ -691,5 +699,379 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
 
     // 作品2は更新対象外（3時間前のまま変化なし）
     expect(work2Row!.last_checked_at).toBe(threeHoursAgo);
+  });
+});
+
+test.describe("SCN-03 (Issue #375): 最新話末尾しおり時の新着話更新に伴うしおり自動進行 E2E", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await waitForServicesReady(page);
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await waitForServicesReady(page);
+  });
+
+  test("本棚手動更新チェックでの短文1ページ完了→末尾自動進行＆途中しおり維持＆「第N話から読む」起動", async ({
+    page,
+  }) => {
+    const work1Id = "kakuyomu:16817330658027210412";
+    const work2Id = "kakuyomu:16817330658027210002";
+
+    // 1. 2作品を初期2話のみでシード登録（last_checked_at = now で自動更新の先行発火を抑止）
+    await page.evaluate(
+      async ({ w1Id, w2Id }) => {
+        const services = window.__yommyServices!;
+        const nowIso = new Date().toISOString();
+
+        const url1 = "https://kakuyomu.jp/works/16817330658027210412";
+        const res1 = await services.httpClient.getHtml({ url: url1 });
+        const parser1 = services.parserRegistry.requireParser(url1);
+        const parsed1 = parser1.parseNovelIndex(res1.html, url1);
+        await services.novelRepository.upsertNovelWithToc(
+          {
+            ...parsed1,
+            chapters: parsed1.chapters.slice(0, 2),
+          },
+          nowIso,
+        );
+
+        const shortBodyHtml = "<p>短い第2話の本文です。</p>";
+        await services.chapterRepository.saveChapterBody(
+          w1Id,
+          2,
+          {
+            remoteChapterId: parsed1.chapters[1].remoteChapterId,
+            title: parsed1.chapters[1].title,
+            bodyHtml: shortBodyHtml,
+            byteSize: new TextEncoder().encode(shortBodyHtml).length,
+            prevChapterUrl: parsed1.chapters[0].url,
+            nextChapterUrl: null,
+          },
+          nowIso,
+        );
+        await services.chapterRepository.markChapterRead(w1Id, 1, true);
+        await services.chapterRepository.markChapterRead(w1Id, 2, true);
+        await services.novelRepository.updateBookmark(w1Id, 2, 0);
+
+        const url2 = "https://kakuyomu.jp/works/16817330658027210002";
+        const res2 = await services.httpClient.getHtml({ url: url2 });
+        const parser2 = services.parserRegistry.requireParser(url2);
+        const parsed2 = parser2.parseNovelIndex(res2.html, url2);
+        await services.novelRepository.upsertNovelWithToc(
+          {
+            ...parsed2,
+            chapters: parsed2.chapters.slice(0, 2),
+          },
+          nowIso,
+        );
+        await services.chapterRepository.markChapterRead(w2Id, 1, true);
+        await services.novelRepository.updateBookmark(w2Id, 2, 0.5);
+      },
+      { w1Id: work1Id, w2Id: work2Id },
+    );
+
+    // 2. 作品1の第2話（1ページ短文）をリーダーで開き、自動完了保存（bookmarkScrollProgress >= 0.99）を確認
+    await page.goto(`/novels/${encodeURIComponent(work1Id)}/chapters/2`);
+    await waitForServicesReady(page);
+
+    const readerView = page.getByTestId("reader-view");
+    await expect(readerView).toBeVisible();
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "第1話 見知らぬ空",
+    );
+    await expect(readerView).toHaveAttribute(
+      "data-effective-paging-mode",
+      "paged",
+    );
+    await expect(readerView).toHaveAttribute("data-total-pages", "1");
+    await expect(readerView).toHaveAttribute("data-current-page", "1");
+
+    await expect
+      .poll(
+        async () => {
+          return await page.evaluate(async (id) => {
+            const novel =
+              await window.__yommyServices!.novelRepository.getNovelById(id);
+            return {
+              bookmarkChapterIndex: novel?.bookmarkChapterIndex ?? null,
+              bookmarkScrollProgress: novel?.bookmarkScrollProgress ?? 0,
+            };
+          }, work1Id);
+        },
+        { timeout: 10000 },
+      )
+      .toEqual({
+        bookmarkChapterIndex: 2,
+        bookmarkScrollProgress: 1,
+      });
+
+    // 3. リーダー下部オーバーレイから本棚（/）へ戻り、更新前のしおり表示を確認
+    await page.getByTestId("reader-bottom-touch-zone").click();
+    const bookshelfTab = page.getByTestId("reader-bottom-tab-bookshelf");
+    await expect(bookshelfTab).toBeVisible();
+    await bookshelfTab.click();
+    await expect(page).toHaveURL("/");
+    await expect(page.getByTestId("bookshelf-page")).toBeVisible();
+    await expect(page.getByTestId("novel-card")).toHaveCount(2);
+
+    const work1Card = page
+      .getByTestId("novel-card")
+      .filter({ hasText: "境界迷宮と異界の魔術師" });
+    const work2Card = page
+      .getByTestId("novel-card")
+      .filter({ hasText: "あいうえおの冒険" });
+
+    await expect(work1Card.getByTestId("novel-card-bookmark")).toHaveText(
+      "しおり: 第2話",
+    );
+    await expect(work1Card.getByTestId("novel-card-resume")).toHaveText(
+      "第2話から読む",
+    );
+    await expect(work2Card.getByTestId("novel-card-bookmark")).toHaveText(
+      "しおり: 第2話",
+    );
+    await expect(work2Card.getByTestId("novel-card-resume")).toHaveText(
+      "第2話から読む",
+    );
+
+    // 更新前の lastReadAt / updatedAt を記録（自動進行時の保護検証用）
+    const preRefreshMeta = await page.evaluate(
+      async ({ w1Id, w2Id }) => {
+        const services = window.__yommyServices!;
+        const n1 = await services.novelRepository.getNovelById(w1Id);
+        const n2 = await services.novelRepository.getNovelById(w2Id);
+        return {
+          w1LastReadAt: n1?.lastReadAt ?? null,
+          w1UpdatedAt: n1?.updatedAt ?? null,
+          w2LastReadAt: n2?.lastReadAt ?? null,
+          w2UpdatedAt: n2?.updatedAt ?? null,
+        };
+      },
+      { w1Id: work1Id, w2Id: work2Id },
+    );
+    expect(preRefreshMeta.w1LastReadAt).not.toBeNull();
+    expect(preRefreshMeta.w1UpdatedAt).not.toBeNull();
+
+    // 4. 手動一括更新チェック（MockHttpClient の全4話目次を取り込む）
+    const refreshBtn = page.getByTestId("bookshelf-refresh-button");
+    await expect(refreshBtn).toBeEnabled();
+    await refreshBtn.click();
+
+    await expect(
+      page.getByTestId("bookshelf-refresh-progress"),
+    ).not.toBeVisible({ timeout: 15000 });
+    await expect(refreshBtn).toBeEnabled({ timeout: 15000 });
+
+    await expect
+      .poll(
+        async () => {
+          return await page.evaluate(
+            async ({ w1Id, w2Id }) => {
+              const services = window.__yommyServices!;
+              const n1 = await services.novelRepository.getNovelById(w1Id);
+              const n2 = await services.novelRepository.getNovelById(w2Id);
+              return {
+                w1Total: n1?.totalChapters ?? 0,
+                w2Total: n2?.totalChapters ?? 0,
+              };
+            },
+            { w1Id: work1Id, w2Id: work2Id },
+          );
+        },
+        { timeout: 15000 },
+      )
+      .toEqual({ w1Total: 4, w2Total: 4 });
+
+    // 5. UI と DB で作品1のしおり自動進行（第3話・progress=0・lastReadAt/updatedAt 保護・Ch3 未読）および作品2の途中しおり維持（第2話・0.5）を検証
+    await expect(work1Card.getByTestId("novel-card-new-badge")).toHaveText(
+      "NEW",
+    );
+    await expect(work1Card.getByTestId("novel-card-bookmark")).toHaveText(
+      "しおり: 第3話",
+    );
+    await expect(work1Card.getByTestId("novel-card-resume")).toHaveText(
+      "第3話から読む",
+    );
+
+    await expect(work2Card.getByTestId("novel-card-bookmark")).toHaveText(
+      "しおり: 第2話",
+    );
+    await expect(work2Card.getByTestId("novel-card-resume")).toHaveText(
+      "第2話から読む",
+    );
+
+    const postRefreshState = await page.evaluate(
+      async ({ w1Id, w2Id }) => {
+        const services = window.__yommyServices!;
+        const n1 = await services.novelRepository.getNovelById(w1Id);
+        const n2 = await services.novelRepository.getNovelById(w2Id);
+        const ch3 = await services.chapterRepository.getChapter(w1Id, 3);
+        return {
+          w1Bookmark: n1?.bookmarkChapterIndex ?? null,
+          w1Progress: n1?.bookmarkScrollProgress ?? -1,
+          w1LastReadAt: n1?.lastReadAt ?? null,
+          w1UpdatedAt: n1?.updatedAt ?? null,
+          w1Ch3IsRead: ch3?.isRead ?? null,
+          w2Bookmark: n2?.bookmarkChapterIndex ?? null,
+          w2Progress: n2?.bookmarkScrollProgress ?? -1,
+          w2LastReadAt: n2?.lastReadAt ?? null,
+          w2UpdatedAt: n2?.updatedAt ?? null,
+        };
+      },
+      { w1Id: work1Id, w2Id: work2Id },
+    );
+
+    expect(postRefreshState).toEqual({
+      w1Bookmark: 3,
+      w1Progress: 0,
+      w1LastReadAt: preRefreshMeta.w1LastReadAt,
+      w1UpdatedAt: preRefreshMeta.w1UpdatedAt,
+      w1Ch3IsRead: false,
+      w2Bookmark: 2,
+      w2Progress: 0.5,
+      w2LastReadAt: preRefreshMeta.w2LastReadAt,
+      w2UpdatedAt: preRefreshMeta.w2UpdatedAt,
+    });
+
+    // 6. 作品1の「第3話から読む」押下で新着第3話の先頭（1ページ目）から開き、既読化されることを検証
+    await work1Card.getByTestId("novel-card-resume").click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/3$/,
+    );
+    await expect(readerView).toBeVisible();
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "第2話 初めての魔法",
+    );
+    await expect(readerView).toHaveAttribute("data-current-page", "1");
+
+    await expect
+      .poll(
+        async () => {
+          return await page.evaluate(async (w1Id) => {
+            const ch3 =
+              await window.__yommyServices!.chapterRepository.getChapter(
+                w1Id,
+                3,
+              );
+            return ch3?.isRead ?? false;
+          }, work1Id);
+        },
+        { timeout: 10000 },
+      )
+      .toBe(true);
+  });
+
+  test("作品詳細画面（SCR-02）目次更新での自動進行・しおりバッジ移動・既読/未読整合確認", async ({
+    page,
+  }) => {
+    const novelId = "kakuyomu:16817330658027210001";
+
+    // 1. 2話のみでシード登録し、第1・2話既読・第2話末尾しおり（progress=1.0）を設定
+    const preRefreshMeta = await page.evaluate(async (id) => {
+      const services = window.__yommyServices!;
+      const nowIso = new Date().toISOString();
+      const workUrl = "https://kakuyomu.jp/works/16817330658027210001";
+      const res = await services.httpClient.getHtml({ url: workUrl });
+      const parser = services.parserRegistry.requireParser(workUrl);
+      const parsed = parser.parseNovelIndex(res.html, workUrl);
+      await services.novelRepository.upsertNovelWithToc(
+        {
+          ...parsed,
+          chapters: parsed.chapters.slice(0, 2),
+        },
+        nowIso,
+      );
+      await services.chapterRepository.markChapterRead(id, 1, true);
+      await services.chapterRepository.markChapterRead(id, 2, true);
+      await services.novelRepository.updateBookmark(id, 2, 1.0);
+      const novel = await services.novelRepository.getNovelById(id);
+      return {
+        lastReadAt: novel?.lastReadAt ?? null,
+        updatedAt: novel?.updatedAt ?? null,
+      };
+    }, novelId);
+
+    expect(preRefreshMeta.lastReadAt).not.toBeNull();
+    expect(preRefreshMeta.updatedAt).not.toBeNull();
+
+    // 2. 作品詳細画面（SCR-02）を開く
+    await page.goto(`/novels/${encodeURIComponent(novelId)}`);
+    await waitForServicesReady(page);
+
+    await expect(page.getByTestId("novel-detail-title")).toHaveText(
+      "転生令嬢の異世界冒険譚",
+    );
+    const resumeButton = page.getByTestId("detail-resume-button");
+    await expect(resumeButton).toHaveText("続きから読む（第2話）");
+
+    const episodeItems = page.getByTestId("episode-item");
+    await expect(episodeItems).toHaveCount(2);
+    await expect(
+      episodeItems.nth(0).getByTestId("episode-bookmark-badge"),
+    ).toHaveCount(0);
+    await expect(
+      episodeItems.nth(1).getByTestId("episode-bookmark-badge"),
+    ).toBeVisible();
+    await expect(
+      episodeItems.nth(1).getByTestId("episode-read-badge"),
+    ).toBeVisible();
+
+    // 3. リロードなしで目次更新ボタン（refresh-toc-button）を押下
+    await page.getByTestId("refresh-toc-button").click();
+
+    await expect(page.getByTestId("novel-detail-notice")).toHaveText(
+      "目次を更新しました（+2話）",
+    );
+    await expect(episodeItems).toHaveCount(4);
+    await expect(resumeButton).toHaveText("続きから読む（第3話）");
+
+    // しおりバッジが第3話（未読）へ移動し、第2話は既読のまましおりバッジが外れること
+    await expect(
+      episodeItems.nth(1).getByTestId("episode-bookmark-badge"),
+    ).toHaveCount(0);
+    await expect(
+      episodeItems.nth(1).getByTestId("episode-read-badge"),
+    ).toBeVisible();
+    await expect(
+      episodeItems.nth(2).getByTestId("episode-bookmark-badge"),
+    ).toBeVisible();
+    await expect(
+      episodeItems.nth(2).getByTestId("episode-read-badge"),
+    ).toHaveCount(0);
+
+    const postRefreshDb = await page.evaluate(async (id) => {
+      const services = window.__yommyServices!;
+      const novel = await services.novelRepository.getNovelById(id);
+      const ch3 = await services.chapterRepository.getChapter(id, 3);
+      return {
+        bookmarkChapterIndex: novel?.bookmarkChapterIndex ?? null,
+        bookmarkScrollProgress: novel?.bookmarkScrollProgress ?? -1,
+        lastReadAt: novel?.lastReadAt ?? null,
+        updatedAt: novel?.updatedAt ?? null,
+        ch3IsRead: ch3?.isRead ?? null,
+      };
+    }, novelId);
+
+    expect(postRefreshDb).toEqual({
+      bookmarkChapterIndex: 3,
+      bookmarkScrollProgress: 0,
+      lastReadAt: preRefreshMeta.lastReadAt,
+      updatedAt: preRefreshMeta.updatedAt,
+      ch3IsRead: false,
+    });
+
+    // 4. 目次一覧から第2話を直接タップすると第2話の先頭から正常に開けること
+    await episodeItems.nth(1).click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210001\/chapters\/2$/,
+    );
+    await expect(page.getByTestId("reader-view")).toBeVisible();
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "第1話 見知らぬ空",
+    );
+    await expect(page.getByTestId("reader-view")).toHaveAttribute(
+      "data-current-page",
+      "1",
+    );
   });
 });

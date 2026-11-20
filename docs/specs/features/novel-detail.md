@@ -2,8 +2,8 @@
 type: spec-feature
 title: "作品詳細・目次画面仕様書（SCR-02: Novel Detail & TOC）"
 description: 登録済み作品のヘッダー情報・あらすじ表示、お気に入り（★）登録・解除、章見出し付きエピソード一覧（キャッシュ済み・既読・しおり状態）、目次更新（再取得）、作品削除、およびリーダー画面への閲覧遷移を提供する作品詳細・目次画面（SCR-02）の正本仕様。
-status: "Review (#375)"
-updated: "2026-11-19"
+status: "Approved"
+updated: "2026-11-20"
 tags:
   [
     novel-detail,
@@ -44,7 +44,7 @@ tags:
     ho-41,
   ]
 related_specs:
-  - docs/specs/changes/issue-375-bookmark-advance-on-update.md
+  - docs/specs/changes/archive/issue-375-bookmark-advance-on-update.md
   - docs/specs/changes/archive/issue-344-priority-cache-scheduler.md
   - docs/specs/changes/archive/issue-342-cloud-sync-bookmark-protection.md
   - docs/specs/changes/archive/issue-343-novel-detail-header-menu.md
@@ -603,5 +603,5 @@ export interface UseNovelDetailResult {
 - **`SCN-02`（`test/it/scenarios/scn02-search-ranking-discovery.spec.ts`）**: 検索・ランキングからの作品カード選択による目次遷移と、OS バックキーによる直前の探索元画面への論理復帰（`TR-07`, `TR-14`, `AC-ND-07`, `09`）。
 - **`SCN-03`（`test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts`）**: 作品詳細画面表示による本棚「NEW」バッジの自動解除、目次更新による最新話末尾しおりの新着話先頭自動進行（`AC-ND-31`）、および作品詳細ヘッダーのアイコンボタンからのお気に入り登録・解除と本棚への反映（`TR-02`, `AC-ND-10`, `23`, `27`, `31`）。
 - **`SCN-04`（`test/it/scenarios/scn04-prefetch-and-cache.spec.ts`）**: `CacheScheduler` 優先度キュー統合および永続ダウンロードキュー（`download_queue`）を用いた非ブロッキング一括キャッシュ（開始直後の「最初から読む」／未キャッシュ話タップによる即時 `SCR-03` 遷移、リーダー画面での即時取得 `high` と 5話先読み `medium` 実行、`SCR-02` 復帰時の自動継続・進捗復元）、中断ボタン押下による `キャッシュを再開（残りN話）`、途中話エラー時のスキップ継続と `取得失敗` バッジおよび `失敗した話を再試行（N話）`、作品ヘッダーでのキャッシュ容量表示、および3点メニュー経由の本文キャッシュ整理ダイアログ（既読話のみ／全話削除）による容量即時再計算・キュークリーンアップと目次・既読・しおり保持（`TR-04`, `TR-06`, `TR-18`, `TR-19`, `AC-ND-11`〜`13`, `20`〜`22`, `24`, `25`, `27`, `29`, `30`）。
-- **`SCN-05`（`test/it/scenarios/scn05-cloud-sync.spec.ts`）**: 3点メニュー経由の作品削除時のクラウド同期 Tombstone 自動 Push 連携、お気に入りアイコン状態変更のクラウド同期反映、および画面ロック・5分復帰時自動 Pull による作品詳細表示の自動更新（`TR-07`, `AC-ND-06`, `23`, `27`, `28`）。
+- **`SCN-05`（`test/it/scenarios/scn05-cloud-sync.spec.ts`）**: 3点メニュー経由の作品削除時のクラウド同期 Tombstone 自動 Push 連携、お気に入りアイコン状態変更のクラウド同期反映、および画面ロック・5分復帰時自動 Pull による作品詳細表示の自動更新・最新話末尾読了＋新着話あり時の「続きから読む」ボタン自動進行（`TR-07`, `AC-ND-06`, `23`, `27`, `28`, `31`）。
 - **`SCN-07`（`test/it/scenarios/scn07-webview-import-fallback.spec.ts`）**: 作品詳細ヘッダーの3点メニュー内「内蔵ブラウザで開く」ボタン（`TR-09`）押下による `SCR-04` 遷移と目次 DOM インポート後の `SCR-02` 復帰・エピソード一覧更新検証（`TR-11`, `AC-ND-26`, `27`）。
