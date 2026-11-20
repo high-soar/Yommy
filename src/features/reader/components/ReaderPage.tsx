@@ -73,6 +73,8 @@ export interface ReaderPageProps {
   onPageChange?: (targetPage: number) => void;
   /** DOM寸法計測により総ページ数が変化した際のコールバック */
   onTotalPagesChange?: (totalPages: number) => void;
+  /** スクロールモードで1画面収まり判定を計測した際のコールバック */
+  onSingleScreenContentMeasured?: (isSingleScreen: boolean) => void;
   /** 本文スクロール／ページ進捗変化時のコールバック */
   onScrollProgressChange: (progress: number) => void;
   /** 下部タブ押下時のコールバック */
@@ -134,6 +136,7 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
   onNextChapter,
   onPageChange,
   onTotalPagesChange,
+  onSingleScreenContentMeasured,
   onScrollProgressChange,
   onSelectTab,
   onBackToToc,
@@ -414,6 +417,7 @@ export const ReaderPage: React.FC<ReaderPageProps> = ({
               slideOffsetPx={slideOffsetPx}
               isAnimating={isAnimating}
               onTotalPagesChange={onTotalPagesChange}
+              onSingleScreenContentMeasured={onSingleScreenContentMeasured}
               chapterIndex={chapterIndex}
               totalChapters={totalChapters}
               onPrevChapter={handlePrevChapter}

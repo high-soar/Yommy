@@ -108,6 +108,7 @@ function createMockNovelRepo(initialNovel: NovelRecord | null = sampleNovel): {
           ...currentNovel,
           bookmarkChapterIndex: chapterIndex,
           bookmarkScrollProgress: progress,
+          lastReadAt: new Date().toISOString(),
         };
       }
     },
@@ -2338,6 +2339,62 @@ describe("ReaderContainer", () => {
       unmount();
       expect(updateBookmarkSpy).not.toHaveBeenCalled();
       pageSpy.mockRestore();
+    });
+
+    it("onSingleScreenContentMeasured が ReaderPage へ渡され、scroll モードでの 1画面収まり通知によりしおり進捗 1.0 が永続化されること (Issue #375)", async () => {
+      const pageSpy = vi
+        .spyOn(ReaderPageModule, "ReaderPage")
+        .mockImplementation(() => null);
+      const { repo: novelRepository, updateBookmarkSpy } = createMockNovelRepo({
+        ...sampleNovel,
+        bookmarkChapterIndex: 1,
+        bookmarkScrollProgress: 0,
+      });
+      const { repo: chapterRepository } = createMockChapterRepo();
+      const settingsRepository = createMockSettingsRepo({
+        writingMode: "horizontal-tb",
+        pagingMode: "scroll",
+      });
+
+      render(
+        <TestWrapper
+          novelId={sampleNovel.id}
+          chapterIndex={1}
+          novelRepository={novelRepository}
+          chapterRepository={chapterRepository}
+          settingsRepository={settingsRepository}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(pageSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            isLoading: false,
+            pagingMode: "scroll",
+          }),
+          undefined,
+        );
+      });
+
+      vi.useFakeTimers();
+      try {
+        const lastProps = pageSpy.mock.lastCall?.[0];
+        expect(typeof lastProps?.onSingleScreenContentMeasured).toBe(
+          "function",
+        );
+
+        act(() => {
+          lastProps?.onSingleScreenContentMeasured?.(true);
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(350);
+        });
+
+        expect(updateBookmarkSpy).toHaveBeenCalledWith(sampleNovel.id, 1, 1.0);
+        pageSpy.mockRestore();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

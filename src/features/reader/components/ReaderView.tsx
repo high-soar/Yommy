@@ -11,6 +11,7 @@ import {
   DEFAULT_FONT_FAMILY,
   DEFAULT_PAGE_MARGIN_PX,
 } from "../../../shared/constants/typography";
+import { SCROLL_END_SNAP_TOLERANCE_PX } from "../../../shared/constants/bookmark";
 
 export type { WritingMode, ReaderTheme, ReaderPagingMode, ReaderFontFamily };
 
@@ -32,6 +33,7 @@ export interface ReaderViewProps {
   slideOffsetPx?: number;
   isAnimating?: boolean;
   onTotalPagesChange?: (totalPages: number) => void;
+  onSingleScreenContentMeasured?: (isSingleScreen: boolean) => void;
   chapterIndex?: number;
   totalChapters?: number;
   onPrevChapter?: () => void;
@@ -114,7 +116,7 @@ function getPagedSlotContentStyle(
  * マルチカラム要素の scrollHeight とコンテナ高さから総ページ数を算出する純粋関数 (AC-RD-16)
  * （gap = pageMarginPx * 2, pageStride = pageHeight）
  */
-function calculateMeasuredTotalPages(
+export function calculateMeasuredTotalPages(
   scrollHeight: number,
   pageHeight: number,
   pageMarginPx: number = DEFAULT_PAGE_MARGIN_PX,
@@ -133,12 +135,32 @@ function calculateScrollProgress(
   el: HTMLElement,
   writingMode: WritingMode,
 ): number {
-  if (writingMode === "horizontal-tb") {
-    const maxScroll = el.scrollHeight - el.clientHeight;
-    return maxScroll > 0 ? clampProgress(el.scrollTop / maxScroll) : 0;
+  const isHorizontal = writingMode === "horizontal-tb";
+  const maxScroll = isHorizontal
+    ? el.scrollHeight - el.clientHeight
+    : el.scrollWidth - el.clientWidth;
+  if (maxScroll <= 0) return 0;
+  const currentScroll = isHorizontal ? el.scrollTop : Math.abs(el.scrollLeft);
+  if (maxScroll - currentScroll <= SCROLL_END_SNAP_TOLERANCE_PX) {
+    return 1.0;
   }
-  const maxScroll = el.scrollWidth - el.clientWidth;
-  return maxScroll > 0 ? clampProgress(Math.abs(el.scrollLeft) / maxScroll) : 0;
+  return clampProgress(currentScroll / maxScroll);
+}
+
+/**
+ * スクロールモード時にコンテンツが1画面内に収まるかを判定する純粋関数
+ */
+function isContentWithinSingleScreen(
+  el: HTMLElement,
+  width: number,
+  height: number,
+  writingMode: WritingMode,
+): boolean {
+  const maxScroll =
+    writingMode === "horizontal-tb"
+      ? el.scrollHeight - height
+      : el.scrollWidth - width;
+  return maxScroll <= 0;
 }
 
 /**
@@ -182,6 +204,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   slideOffsetPx = 0,
   isAnimating = false,
   onTotalPagesChange,
+  onSingleScreenContentMeasured,
   chapterIndex = 1,
   totalChapters,
   onPrevChapter,
@@ -213,6 +236,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         const h = containerRef.current.clientHeight;
         setContainerWidth(w);
         setContainerHeight(h);
+        if (w <= 0 || h <= 0) {
+          return;
+        }
         if (isPaged && contentRef.current) {
           const measuredPages = calculateMeasuredTotalPages(
             contentRef.current.scrollHeight,
@@ -220,16 +246,30 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             pageMarginPx,
           );
           onTotalPagesChange?.(measuredPages);
+        } else if (!isPaged) {
+          onSingleScreenContentMeasured?.(
+            isContentWithinSingleScreen(
+              containerRef.current,
+              w,
+              h,
+              writingMode,
+            ),
+          );
         }
       }
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [isPaged, onTotalPagesChange, pageMarginPx]);
+  }, [
+    isPaged,
+    writingMode,
+    onTotalPagesChange,
+    onSingleScreenContentMeasured,
+    pageMarginPx,
+  ]);
 
-  // DOM 寸法計測（総ページ数算出）: マウント時および chapterTitle, bodyHtml, initialScrollProgress, writingMode, fontSizePx, lineHeight, fontFamily, pageMarginPx, pagingMode, containerWidth, containerHeight 変更時
+  // DOM 寸法計測（総ページ数および 1画面収まり判定算出）
   useEffect(() => {
-    if (!isPaged) return;
     const container = containerRef.current;
     const content = contentRef.current;
     if (!container || !content) return;
@@ -240,16 +280,28 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       if (isDisposed) return;
       const currentWidth = container.clientWidth || containerWidth;
       const currentHeight = container.clientHeight || containerHeight;
-      if (currentWidth > 0 && currentHeight > 0) {
+      if (currentWidth <= 0 || currentHeight <= 0) {
+        return;
+      }
+      if (isPaged) {
         content.style.width = `${Math.max(1, currentWidth - pageMarginPx * 2)}px`;
         content.style.height = `${Math.max(1, currentHeight - pageMarginPx * 2)}px`;
+        const measuredPages = calculateMeasuredTotalPages(
+          content.scrollHeight,
+          currentHeight,
+          pageMarginPx,
+        );
+        onTotalPagesChange?.(measuredPages);
+      } else {
+        onSingleScreenContentMeasured?.(
+          isContentWithinSingleScreen(
+            container,
+            currentWidth,
+            currentHeight,
+            writingMode,
+          ),
+        );
       }
-      const measuredPages = calculateMeasuredTotalPages(
-        content.scrollHeight,
-        currentHeight,
-        pageMarginPx,
-      );
-      onTotalPagesChange?.(measuredPages);
     };
 
     // 即時計測
@@ -290,6 +342,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     containerWidth,
     containerHeight,
     onTotalPagesChange,
+    onSingleScreenContentMeasured,
   ]);
 
   // スクロール操作時の進捗率（0.0 〜 1.0）算出（実効 paged 時・プログラム的復元中は通知を抑制: R1-22, Issue #342）

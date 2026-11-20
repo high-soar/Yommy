@@ -144,7 +144,7 @@ export function isBookmarkAtEnd(progress: number): boolean {
    - `n.bookmarkScrollProgress !== undefined` の場合、`typeof n.bookmarkScrollProgress === "number" && Number.isFinite(n.bookmarkScrollProgress) && n.bookmarkScrollProgress >= 0 && n.bookmarkScrollProgress <= 1` を厳格に検証し、範囲外・`NaN`・非数値は拒否して例外を送出する。
 3. **Push 構築・マージ（`buildSyncNovels` / `buildMergedSyncNovels`）**:
    - `buildSyncNovels()` にて `bookmarkScrollProgress: full.bookmarkScrollProgress` を出力する。
-   - `buildMergedSyncNovels()` の LWW マージ（`remoteLastRead > localLastRead`）において、`bookmarkChapterIndex` とセットで `bookmarkScrollProgress` も新しい方（リモート側が `undefined` の場合は `0`）を採用する。
+   - `buildMergedSyncNovels()` の LWW マージ（`remoteLastRead > localLastRead`）において、`bookmarkChapterIndex` とセットで `bookmarkScrollProgress` も新しい方を採用する。ただしリモート側が旧形式（`bookmarkScrollProgress === undefined`）の場合は、話数が異なるとき（`remoteNovel.bookmarkChapterIndex !== local.bookmarkChapterIndex`）のみ `0.0` にフォールバックし、**ローカルと同一話数（`remoteNovel.bookmarkChapterIndex === local.bookmarkChapterIndex`）のときは後方互換保護としてローカルの `bookmarkScrollProgress` を維持する**。
    - `remoteLastRead === localLastRead` かつ同一話数で片方のみ `bookmarkScrollProgress` が大きい（または `undefined` を補完する）場合は `Math.max(localProgress, remoteProgress)` ではなくローカル優先（`local.bookmarkScrollProgress`）を維持する。
 4. **Pull マージ（`mergeNewNovel` / `mergeExistingNovel`）と末尾到達新着遷移**:
    - **`mergeNewNovel`**:
@@ -154,9 +154,10 @@ export function isBookmarkAtEnd(progress: number): boolean {
    - **`mergeExistingNovel`**:
      - 既存作品の目次補完（`needsTocRefresh`）において、リモートが最新話末尾到達かつローカルより話数が多い場合はすでに `upsertNovelWithToc` が実行される。
      - LWW 判定で `remoteLastRead > localLastRead && !isBookmarkOutOfRange` の場合：
-       - リモートの進捗率 `remoteProgress = remoteNovel.bookmarkScrollProgress ?? 0` を用いて適用先を決定する。
-       - もし `remoteNovel.totalChapters > 0 && remoteNovel.bookmarkChapterIndex === remoteNovel.totalChapters && isBookmarkAtEnd(remoteProgress)` かつ `currentLocalNovel.totalChapters > remoteNovel.totalChapters`（ローカル側ですでに新着話を取り込み済み、または今回の目次補完で新着話が増えた場合）は、新着話の先頭（`remoteNovel.totalChapters + 1`, `progress = 0`）を `updateBookmark` で適用する。
-       - それ以外の場合は、話数が異なる場合だけでなく**同一話数で進捗率が異なる場合**（`remoteProgress !== currentLocalNovel.bookmarkScrollProgress`）も含め、`updateBookmark(novelId, remoteNovel.bookmarkChapterIndex, remoteProgress)` でリモートの話数・進捗率をそのまま復元する。
+       - リモートの進捗率 `remoteProgress = remoteNovel.bookmarkScrollProgress`（旧形式時は `undefined`）を用いて適用先を決定する。
+       - もし `remoteNovel.totalChapters > 0 && remoteNovel.bookmarkChapterIndex === remoteNovel.totalChapters && remoteProgress !== undefined && isBookmarkAtEnd(remoteProgress)` かつ `currentLocalNovel.totalChapters > remoteNovel.totalChapters`（ローカル側ですでに新着話を取り込み済み、または今回の目次補完で新着話が増えた場合）は、新着話の先頭（`remoteNovel.totalChapters + 1`, `progress = 0`）を `updateBookmark` で適用する。
+       - 話数が異なる場合（`remoteNovel.bookmarkChapterIndex !== currentLocalNovel.bookmarkChapterIndex`）は、`updateBookmark(novelId, remoteNovel.bookmarkChapterIndex, remoteProgress ?? 0.0)` でリモートの話数・進捗率（旧形式時は `0.0` フォールバック）を復元する。
+       - 同一話数の場合、リモートが新形式（`remoteProgress !== undefined`）かつ進捗率が異なるとき（`remoteProgress !== currentLocalNovel.bookmarkScrollProgress`）のみ `updateBookmark(novelId, remoteNovel.bookmarkChapterIndex, remoteProgress)` でリモートの進捗率を復元し、**リモートが旧形式（`bookmarkScrollProgress === undefined`）のときは後方互換保護としてローカルの `bookmarkScrollProgress` を維持する**。
        - 直後に `updateSyncMetadata(novelId, { lastReadAt: remoteNovel.lastReadAt })` でリモートの `lastReadAt` を復元・維持する。
 
 ### 2.5 UI 表示（`SCR-01` 本棚・`SCR-02` 作品詳細）への波及と整合性

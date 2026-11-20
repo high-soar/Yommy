@@ -50,6 +50,7 @@ export default tseslint.config(
             "resolveInitialPath",
             "getActiveTab",
             "calculateSwipeTrackStyle",
+            "calculateMeasuredTotalPages",
           ],
         },
       ],

@@ -261,6 +261,52 @@ describe("syncEngine", () => {
       );
     });
 
+    it("novels 内の作品データで bookmarkScrollProgress が省略・有効範囲（0.0〜1.0）なら許容し、不正な値の場合は例外を送出すること (Issue #375)", () => {
+      // 省略（後方互換 v1 ペイロード）および 0.0 / 0.5 / 1.0 は許容
+      expect(
+        validateSyncState(validState).novels["kakuyomu:16817330658027210412"]
+          .bookmarkScrollProgress,
+      ).toBeUndefined();
+      for (const validProgress of [0.0, 0.5, 1.0]) {
+        const okState = {
+          ...validState,
+          novels: {
+            "kakuyomu:16817330658027210412": {
+              ...validState.novels["kakuyomu:16817330658027210412"],
+              bookmarkScrollProgress: validProgress,
+            },
+          },
+        };
+        expect(
+          validateSyncState(okState).novels["kakuyomu:16817330658027210412"]
+            .bookmarkScrollProgress,
+        ).toBe(validProgress);
+      }
+
+      // 範囲外・非数・型不正・null は例外
+      for (const invalidProgress of [
+        -0.01,
+        1.01,
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+        "0.5",
+        null,
+      ]) {
+        const badState = {
+          ...validState,
+          novels: {
+            "kakuyomu:16817330658027210412": {
+              ...validState.novels["kakuyomu:16817330658027210412"],
+              bookmarkScrollProgress: invalidProgress as unknown as number,
+            },
+          },
+        };
+        expect(() => validateSyncState(badState)).toThrow(
+          /bookmarkScrollProgress/i,
+        );
+      }
+    });
+
     it("novels 内の作品データで readChapterIds が配列でない、または文字列以外が含まれる場合に例外を送出すること", () => {
       const invalidNovels1 = {
         ...validState,
@@ -4058,6 +4104,324 @@ describe("syncEngine", () => {
         pushed4.novels["kakuyomu:16817330658027210412"]
           .latestEpisodePublishedAt,
       ).toBe(tNewer);
+    });
+  });
+
+  describe("しおり進捗率（bookmarkScrollProgress）連携と Pull 時話末繰り上げ (Issue #375)", () => {
+    it("pushCurrentState でローカルの bookmarkScrollProgress が同期 JSON に含められ、LWW マージでも lastReadAt に基づき反映されること（後方互換 undefined も安全に処理）", async () => {
+      await resetTestDb();
+      const db = await createInMemoryDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const appSettingsRepo = new SqlAppSettingsRepository(db);
+      const bridge = new MockCloudSyncBridge();
+      await bridge.signIn();
+      const parserRegistry = createDefaultParserRegistry();
+      const httpClient = new MockHttpClient();
+
+      const engine = new SyncEngine({
+        bridge,
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        appSettingsRepository: appSettingsRepo,
+        parserRegistry,
+        httpClient,
+      });
+
+      const parser = parserRegistry.requireParser(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      const index = parser.parseNovelIndex(
+        workIndexHtml,
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      const novelId = "kakuyomu:16817330658027210412";
+      await novelRepo.upsertNovelWithToc(index, "2026-10-10T00:00:00.000Z");
+      await novelRepo.updateBookmark(novelId, 2, 0.65);
+      await novelRepo.updateSyncMetadata?.(novelId, {
+        lastReadAt: "2026-10-20T10:00:00.000Z",
+        updatedAt: "2026-10-20T10:00:00.000Z",
+      });
+
+      // 1. リモートなしでの Push
+      await engine.pushCurrentState();
+      const pushed1 = validateSyncState((await bridge.pullFile())!);
+      expect(pushed1.novels[novelId].bookmarkChapterIndex).toBe(2);
+      expect(pushed1.novels[novelId].bookmarkScrollProgress).toBe(0.65);
+
+      // 2. リモートの lastReadAt がより新しい（かつ同一話数で進捗率が異なる）場合、リモートの bookmarkScrollProgress が採用されること
+      await bridge.pushFile(
+        JSON.stringify({
+          ...pushed1,
+          novels: {
+            [novelId]: {
+              ...pushed1.novels[novelId],
+              bookmarkChapterIndex: 2,
+              bookmarkScrollProgress: 0.9,
+              lastReadAt: "2026-10-25T10:00:00.000Z",
+            },
+          },
+        }),
+      );
+      await engine.pushCurrentState();
+      const pushed2 = validateSyncState((await bridge.pullFile())!);
+      expect(pushed2.novels[novelId].bookmarkScrollProgress).toBe(0.9);
+
+      // 3. リモートの方が新しいが旧形式 (bookmarkScrollProgress === undefined) かつ話数が異なる場合は 0.0、同じ場合はローカル維持となること
+      await bridge.pushFile(
+        JSON.stringify({
+          ...pushed1,
+          novels: {
+            [novelId]: {
+              ...pushed1.novels[novelId],
+              bookmarkChapterIndex: 3,
+              bookmarkScrollProgress: undefined,
+              lastReadAt: "2026-10-26T10:00:00.000Z",
+            },
+          },
+        }),
+      );
+      await engine.pushCurrentState();
+      const pushed3 = validateSyncState((await bridge.pullFile())!);
+      expect(pushed3.novels[novelId].bookmarkChapterIndex).toBe(3);
+      expect(pushed3.novels[novelId].bookmarkScrollProgress).toBe(0.0);
+
+      await bridge.pushFile(
+        JSON.stringify({
+          ...pushed1,
+          novels: {
+            [novelId]: {
+              ...pushed1.novels[novelId],
+              bookmarkChapterIndex: 2,
+              bookmarkScrollProgress: undefined,
+              lastReadAt: "2026-10-27T10:00:00.000Z",
+            },
+          },
+        }),
+      );
+      await engine.pushCurrentState();
+      const pushed4 = validateSyncState((await bridge.pullFile())!);
+      expect(pushed4.novels[novelId].bookmarkChapterIndex).toBe(2);
+      expect(pushed4.novels[novelId].bookmarkScrollProgress).toBe(0.65);
+
+      // 4. ローカルの lastReadAt がより新しい（または同値）の場合はローカルの bookmarkScrollProgress が維持されること
+      await bridge.pushFile(
+        JSON.stringify({
+          ...pushed1,
+          novels: {
+            [novelId]: {
+              ...pushed1.novels[novelId],
+              bookmarkChapterIndex: 1,
+              bookmarkScrollProgress: 0.1,
+              lastReadAt: "2026-10-15T10:00:00.000Z",
+            },
+          },
+        }),
+      );
+      await engine.pushCurrentState();
+      const pushed5 = validateSyncState((await bridge.pullFile())!);
+      expect(pushed5.novels[novelId].bookmarkChapterIndex).toBe(2);
+      expect(pushed5.novels[novelId].bookmarkScrollProgress).toBe(0.65);
+    });
+
+    it("pullAndMerge: 新規取り込み時および既存作品の同一話数更新時にリモートの bookmarkScrollProgress が復元されること", async () => {
+      await resetTestDb();
+      const db = await createInMemoryDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const appSettingsRepo = new SqlAppSettingsRepository(db);
+      const bridge = new MockCloudSyncBridge();
+      await bridge.signIn();
+      const parserRegistry = createDefaultParserRegistry();
+      const httpClient = new MockHttpClient();
+      vi.spyOn(httpClient, "getHtml").mockResolvedValue({
+        url: "https://kakuyomu.jp/works/16817330658027210412",
+        status: 200,
+        headers: {},
+        html: workIndexHtml,
+      });
+
+      const engine = new SyncEngine({
+        bridge,
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        appSettingsRepository: appSettingsRepo,
+        parserRegistry,
+        httpClient,
+      });
+
+      const novelId = "kakuyomu:16817330658027210412";
+      const remoteNovelBase: SyncNovelData = {
+        id: novelId,
+        siteType: "kakuyomu",
+        remoteWorkId: "16817330658027210412",
+        canonicalUrl: "https://kakuyomu.jp/works/16817330658027210412",
+        title: "境界迷宮と異界の魔術師",
+        author: "小野崎",
+        synopsis: "あらすじ本文",
+        totalChapters: 3,
+        isFavorite: 0,
+        hasNewUpdate: 0,
+        latestEpisodePublishedAt: "2026-10-10T10:00:00.000Z",
+        bookmarkChapterIndex: 2,
+        bookmarkScrollProgress: 0.42,
+        lastReadAt: "2026-10-20T10:00:00.000Z",
+        readChapterIds: [],
+        createdAt: "2026-10-10T00:00:00.000Z",
+        updatedAt: "2026-10-20T10:00:00.000Z",
+      };
+
+      // 1. 新規取り込みで bookmarkScrollProgress: 0.42 が復元されること
+      await bridge.pushFile(
+        JSON.stringify({
+          version: 1,
+          lastSyncedAt: "2026-10-20T10:00:00.000Z",
+          novels: { [novelId]: remoteNovelBase },
+          deletedNovels: {},
+        }),
+      );
+      await engine.pullAndMerge();
+      const imported = await novelRepo.getNovelById(novelId);
+      expect(imported?.bookmarkChapterIndex).toBe(2);
+      expect(imported?.bookmarkScrollProgress).toBe(0.42);
+
+      // 2. 既存作品で同じ第2話のままリモート進捗が 0.88 かつ lastReadAt が新しい場合に反映されること
+      await bridge.pushFile(
+        JSON.stringify({
+          version: 1,
+          lastSyncedAt: "2026-10-25T10:00:00.000Z",
+          novels: {
+            [novelId]: {
+              ...remoteNovelBase,
+              bookmarkChapterIndex: 2,
+              bookmarkScrollProgress: 0.88,
+              lastReadAt: "2026-10-25T10:00:00.000Z",
+              updatedAt: "2026-10-25T10:00:00.000Z",
+            },
+          },
+          deletedNovels: {},
+        }),
+      );
+      await engine.pullAndMerge();
+      const updated = await novelRepo.getNovelById(novelId);
+      expect(updated?.bookmarkChapterIndex).toBe(2);
+      expect(updated?.bookmarkScrollProgress).toBe(0.88);
+      expect(updated?.lastReadAt).toBe("2026-10-25T10:00:00.000Z");
+    });
+
+    it("pullAndMerge: リモート端末が当時の最終話（bookmarkChapterIndex === remote.totalChapters）の末尾（>= 0.99）で停止しており、新規話が追加されている場合は新話先頭へ繰り上げられ lastReadAt は維持されること", async () => {
+      await resetTestDb();
+      const db = await createInMemoryDb();
+      const novelRepo = new SqlNovelRepository(db);
+      const chapterRepo = new SqlChapterRepository(db);
+      const appSettingsRepo = new SqlAppSettingsRepository(db);
+      const bridge = new MockCloudSyncBridge();
+      await bridge.signIn();
+      const parserRegistry = createDefaultParserRegistry();
+      const httpClient = new MockHttpClient();
+      vi.spyOn(httpClient, "getHtml").mockResolvedValue({
+        url: "https://kakuyomu.jp/works/16817330658027210412",
+        status: 200,
+        headers: {},
+        html: workIndexHtml,
+      });
+
+      const engine = new SyncEngine({
+        bridge,
+        novelRepository: novelRepo,
+        chapterRepository: chapterRepo,
+        appSettingsRepository: appSettingsRepo,
+        parserRegistry,
+        httpClient,
+      });
+
+      const novelId = "kakuyomu:16817330658027210412";
+      const parser = parserRegistry.requireParser(
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      const index = parser.parseNovelIndex(
+        workIndexHtml,
+        "https://kakuyomu.jp/works/16817330658027210412",
+      );
+      const totalInFixture = index.chapters.length;
+      const oldTotal = totalInFixture - 1;
+      const remoteReadTs = "2026-10-28T10:00:00.000Z";
+
+      // ケースA: 新規取り込み時（remote は oldTotal 話の末尾 1.0、TOC取得後は totalInFixture 話）
+      await bridge.pushFile(
+        JSON.stringify({
+          version: 1,
+          lastSyncedAt: remoteReadTs,
+          novels: {
+            [novelId]: {
+              id: novelId,
+              siteType: "kakuyomu",
+              remoteWorkId: "16817330658027210412",
+              canonicalUrl: "https://kakuyomu.jp/works/16817330658027210412",
+              title: index.title,
+              author: index.author,
+              synopsis: index.synopsis,
+              totalChapters: oldTotal,
+              isFavorite: 0,
+              hasNewUpdate: 0,
+              latestEpisodePublishedAt: "2026-10-10T10:00:00.000Z",
+              bookmarkChapterIndex: oldTotal,
+              bookmarkScrollProgress: 1.0,
+              lastReadAt: remoteReadTs,
+              readChapterIds: [],
+              createdAt: "2026-10-10T00:00:00.000Z",
+              updatedAt: remoteReadTs,
+            },
+          },
+          deletedNovels: {},
+        }),
+      );
+      await engine.pullAndMerge();
+      const imported = await novelRepo.getNovelById(novelId);
+      expect(imported?.bookmarkChapterIndex).toBe(oldTotal + 1);
+      expect(imported?.bookmarkScrollProgress).toBe(0.0);
+      expect(imported?.lastReadAt).toBe(remoteReadTs);
+
+      // ケースB: 既存作品でローカルが既に totalInFixture 話へ更新済み・しおり第1話の状態で、
+      // 他端末 (lastReadAt がより新しい) が oldTotal 話目の 0.99 読了を送ってきた場合も oldTotal + 1 へ繰り上げること
+      await novelRepo.updateBookmark(novelId, 1, 0.2);
+      await novelRepo.updateSyncMetadata?.(novelId, {
+        lastReadAt: "2026-10-15T00:00:00.000Z",
+      });
+      const newerRemoteReadTs = "2026-11-02T10:00:00.000Z";
+      await bridge.pushFile(
+        JSON.stringify({
+          version: 1,
+          lastSyncedAt: newerRemoteReadTs,
+          novels: {
+            [novelId]: {
+              id: novelId,
+              siteType: "kakuyomu",
+              remoteWorkId: "16817330658027210412",
+              canonicalUrl: "https://kakuyomu.jp/works/16817330658027210412",
+              title: index.title,
+              author: index.author,
+              synopsis: index.synopsis,
+              totalChapters: oldTotal,
+              isFavorite: 0,
+              hasNewUpdate: 0,
+              latestEpisodePublishedAt: "2026-10-10T10:00:00.000Z",
+              bookmarkChapterIndex: oldTotal,
+              bookmarkScrollProgress: 0.99,
+              lastReadAt: newerRemoteReadTs,
+              readChapterIds: [],
+              createdAt: "2026-10-10T00:00:00.000Z",
+              updatedAt: newerRemoteReadTs,
+            },
+          },
+          deletedNovels: {},
+        }),
+      );
+      await engine.pullAndMerge();
+      const existingUpdated = await novelRepo.getNovelById(novelId);
+      expect(existingUpdated?.bookmarkChapterIndex).toBe(oldTotal + 1);
+      expect(existingUpdated?.bookmarkScrollProgress).toBe(0.0);
+      expect(existingUpdated?.lastReadAt).toBe(newerRemoteReadTs);
     });
   });
 });

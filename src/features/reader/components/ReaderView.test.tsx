@@ -3,7 +3,12 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { composeStories } from "@storybook/react";
 import * as stories from "./ReaderView.stories";
-import { ReaderView, calculateSwipeTrackStyle } from "./ReaderView";
+import {
+  ReaderView,
+  calculateSwipeTrackStyle,
+  calculateMeasuredTotalPages,
+} from "./ReaderView";
+import { SCROLL_END_SNAP_TOLERANCE_PX } from "../../../shared/constants/bookmark";
 import { FONT_FAMILY_STACKS } from "../../../shared/constants/typography";
 import type { ReaderFontFamily } from "../../../storage/types";
 
@@ -918,7 +923,7 @@ describe("ReaderView", () => {
       expect(onTotalPagesChange).toHaveBeenCalledWith(3);
     });
 
-    it("clientWidth が 0 のときはゼロ除算を回避して総ページ数 1 が通知されること", () => {
+    it("clientWidth または clientHeight が 0 のときは未確定寸法として onTotalPagesChange が抑止されること (Issue #375)", () => {
       const onTotalPagesChange = vi.fn();
       render(
         <ReaderView
@@ -929,14 +934,30 @@ describe("ReaderView", () => {
         />,
       );
 
+      expect(onTotalPagesChange).not.toHaveBeenCalled();
+
       const container = screen.getByTestId("reader-view");
       mockElementDimensions(container, {
         scrollWidth: 1000,
         clientHeight: 600,
         clientWidth: 0,
       });
+      act(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
 
-      expect(onTotalPagesChange).toHaveBeenCalledWith(1);
+      expect(onTotalPagesChange).not.toHaveBeenCalled();
+
+      mockElementDimensions(container, {
+        scrollWidth: 1000,
+        clientHeight: 0,
+        clientWidth: 400,
+      });
+      act(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+
+      expect(onTotalPagesChange).not.toHaveBeenCalled();
     });
 
     it("初回マウント時（containerRef 未接続の初回 render 直後）でも実 DOM の clientWidth / clientHeight からスロット幅・高さが即座に適用された上で scrollHeight が計測され、0px 幅レイアウトによる過大ページ数が通知されないこと (R1-26, AC-RD-16)", () => {
@@ -1079,6 +1100,11 @@ describe("ReaderView", () => {
         />,
       );
 
+      const container = screen.getByTestId("reader-view");
+      mockElementDimensions(container, {
+        clientWidth: 800,
+        clientHeight: 600,
+      });
       onTotalPagesChange.mockClear();
 
       act(() => {
@@ -1766,6 +1792,159 @@ describe("ReaderView", () => {
       const style = calculateSwipeTrackStyle(400, 50);
       expect(style.transition).toBe("none");
       expect(style.left).toBe("-350px");
+    });
+  });
+
+  describe("calculateMeasuredTotalPages (純粋関数)", () => {
+    it("pageHeight が 0 以下のときはゼロ除算を回避して 1 を返すこと", () => {
+      expect(calculateMeasuredTotalPages(1000, 0)).toBe(1);
+      expect(calculateMeasuredTotalPages(1000, -100, 20)).toBe(1);
+    });
+
+    it("scrollHeight と pageHeight・pageMarginPx から正しい総ページ数を算出すること", () => {
+      expect(calculateMeasuredTotalPages(560, 600)).toBe(1);
+      expect(calculateMeasuredTotalPages(1160, 600, 20)).toBe(2);
+      expect(calculateMeasuredTotalPages(1760, 600, 20)).toBe(3);
+    });
+  });
+
+  describe("スクロール末尾 5px スナップと 1画面収まり計測コールバック (Issue #375)", () => {
+    it("横書きスクロールで末尾残り 5px 以内の場合は 1.0 にスナップし、6px 残る場合はスナップしないこと", () => {
+      const onProgress = vi.fn();
+      render(
+        <ReaderView
+          bodyHtml="<p>本文</p>"
+          writingMode="horizontal-tb"
+          pagingMode="scroll"
+          onScrollProgressChange={onProgress}
+        />,
+      );
+
+      const container = screen.getByTestId("reader-view");
+      mockElementDimensions(container, {
+        scrollHeight: 1000,
+        clientHeight: 400,
+        clientWidth: 800,
+      });
+
+      // maxScroll = 600. 残り 6px (scrollTop = 594) -> 594 / 600 = 0.99 (< 1.0)
+      container.scrollTop = 600 - (SCROLL_END_SNAP_TOLERANCE_PX + 1);
+      fireEvent.scroll(container);
+      expect(onProgress).toHaveBeenLastCalledWith(
+        (600 - (SCROLL_END_SNAP_TOLERANCE_PX + 1)) / 600,
+      );
+
+      // 残り 5px (scrollTop = 595) -> 1.0 にスナップ
+      container.scrollTop = 600 - SCROLL_END_SNAP_TOLERANCE_PX;
+      fireEvent.scroll(container);
+      expect(onProgress).toHaveBeenLastCalledWith(1.0);
+    });
+
+    it("縦書きスクロールで末尾残り 5px 以内の場合は 1.0 にスナップし、6px 残る場合はスナップしないこと", () => {
+      const onProgress = vi.fn();
+      render(
+        <ReaderView
+          bodyHtml="<p>本文</p>"
+          writingMode="vertical-rl"
+          pagingMode="scroll"
+          onScrollProgressChange={onProgress}
+        />,
+      );
+
+      const container = screen.getByTestId("reader-view");
+      mockElementDimensions(container, {
+        scrollWidth: 1000,
+        clientWidth: 400,
+        clientHeight: 600,
+      });
+
+      // maxScroll = 600. 残り 6px (scrollLeft = -594) -> 594 / 600 = 0.99
+      container.scrollLeft = -(600 - (SCROLL_END_SNAP_TOLERANCE_PX + 1));
+      fireEvent.scroll(container);
+      expect(onProgress).toHaveBeenLastCalledWith(
+        (600 - (SCROLL_END_SNAP_TOLERANCE_PX + 1)) / 600,
+      );
+
+      // 残り 5px (scrollLeft = -595) -> 1.0 にスナップ
+      container.scrollLeft = -(600 - SCROLL_END_SNAP_TOLERANCE_PX);
+      fireEvent.scroll(container);
+      expect(onProgress).toHaveBeenLastCalledWith(1.0);
+    });
+
+    it("scroll モードで 0px 未確定時は onSingleScreenContentMeasured を抑止し、寸法確定後に 1画面収まり判定を通知すること（横書き・縦書き・リサイズ対応）", () => {
+      const onSingleScreenContentMeasured = vi.fn();
+      const { rerender } = render(
+        <ReaderView
+          bodyHtml="<p>短文</p>"
+          writingMode="horizontal-tb"
+          pagingMode="scroll"
+          onSingleScreenContentMeasured={onSingleScreenContentMeasured}
+        />,
+      );
+
+      // 初期 JSDOM 0x0 のままでは通知されないこと
+      expect(onSingleScreenContentMeasured).not.toHaveBeenCalled();
+
+      const container = screen.getByTestId("reader-view");
+      // 横書き: 1画面収まり (scrollHeight <= clientHeight)
+      mockElementDimensions(container, {
+        clientWidth: 800,
+        clientHeight: 600,
+        scrollHeight: 600,
+      });
+      act(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+      expect(onSingleScreenContentMeasured).toHaveBeenLastCalledWith(true);
+
+      // 横書き: 複数画面 (scrollHeight > clientHeight)
+      mockElementDimensions(container, {
+        clientWidth: 800,
+        clientHeight: 600,
+        scrollHeight: 1200,
+      });
+      act(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+      expect(onSingleScreenContentMeasured).toHaveBeenLastCalledWith(false);
+
+      // 縦書きスクロール: 1画面収まり (scrollWidth <= clientWidth) およびリサイズでの複数画面遷移
+      mockElementDimensions(container, {
+        clientWidth: 400,
+        clientHeight: 600,
+        scrollWidth: 400,
+      });
+      rerender(
+        <ReaderView
+          bodyHtml="<p>短文</p>"
+          writingMode="vertical-rl"
+          pagingMode="scroll"
+          onSingleScreenContentMeasured={onSingleScreenContentMeasured}
+        />,
+      );
+      expect(onSingleScreenContentMeasured).toHaveBeenLastCalledWith(true);
+
+      mockElementDimensions(container, {
+        clientWidth: 400,
+        clientHeight: 600,
+        scrollWidth: 900,
+      });
+      act(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+      expect(onSingleScreenContentMeasured).toHaveBeenLastCalledWith(false);
+
+      // 実効 paged モードでは onSingleScreenContentMeasured が発火しないこと
+      onSingleScreenContentMeasured.mockClear();
+      rerender(
+        <ReaderView
+          bodyHtml="<p>短文</p>"
+          writingMode="vertical-rl"
+          pagingMode="paged"
+          onSingleScreenContentMeasured={onSingleScreenContentMeasured}
+        />,
+      );
+      expect(onSingleScreenContentMeasured).not.toHaveBeenCalled();
     });
   });
 });

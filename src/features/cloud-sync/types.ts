@@ -30,6 +30,7 @@ export interface SyncNovelData {
   hasNewUpdate: number; // 0 | 1
   latestEpisodePublishedAt: string | null;
   bookmarkChapterIndex: number | null; // しおり話数（1始まり）
+  bookmarkScrollProgress?: number; // しおり進捗率（0.0〜1.0、v1後方互換のためオプショナル）
   lastReadAt: string | null; // 最終閲覧日時（ISO 8601）
   readChapterIds: string[]; // 既読エピソードID（remote_chapter_id）の配列
   createdAt: string; // 初回登録日時（ISO 8601）

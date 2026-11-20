@@ -97,6 +97,7 @@ function createMockNovelRepository(novel: NovelRecord | null): NovelRepository {
           ...current,
           bookmarkChapterIndex: chapterIdx,
           bookmarkScrollProgress: progress,
+          lastReadAt: new Date().toISOString(),
         };
       }
     },
