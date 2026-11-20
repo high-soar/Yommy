@@ -326,7 +326,7 @@ Yommy/
     │       ├── appSettingsRepository.ts # app_settings 操作（ソート順等永続化）
     │       └── queueRepository.ts     # download_queue テーブル操作（永続ダウンロードキュー・中断再開・再試行管理、v0.9 Issue #268）
     └── shared/                        # 複数機能で共有する汎用 UI コンポーネント・ユーティリティ
-        ├── constants/                 # アプリ基本情報・キャッシュ・レートリミット・タイポグラフィ等の共有定数（app.ts, cache.ts, typography.ts）
+        ├── constants/                 # アプリ基本情報・しおり末尾判定・キャッシュ・レートリミット・タイポグラフィ等の共有定数（app.ts, bookmark.ts, cache.ts, typography.ts）
         ├── utils/                     # キャッシュ判定・容量フォーマット等の共有ユーティリティ（cache.ts, formatByteSize.ts）
         └── ui/                        # BottomTabBar 等共通コンポーネント（モバイル幅での改行防止縦並び flex-col sm:flex-row ＋ whitespace-nowrap 最適化）
 ├── docs/                              # 【ドキュメント正本（OKF）】

@@ -115,16 +115,20 @@ export function isBookmarkAtEnd(progress: number): boolean {
 1. **`ReaderView.tsx` の連続スクロール 5px 端丸めと 1 画面短文検知**:
    - `calculateScrollProgress(el, writingMode)` において、`maxScroll > 0` かつ `maxScroll - currentScroll <= SCROLL_END_SNAP_TOLERANCE_PX`（5px 以内、横書きは `el.scrollTop`、縦書きは `Math.abs(el.scrollLeft)`）の場合に **`1`**（`1.0`）を返すよう丸める。これにより Android 高 DPI 端末のサブピクセル誤差で `0.994` 等に留まる現象を解消し、`1.0` として確実に保存する。
    - `ReaderViewProps` に任意コールバック `onSingleScreenContentMeasured?: (isSingleScreen: boolean) => void`（または既存レイアウト計測 `useEffect` からの通知）を導入し、実効連続スクロールモード（`!isPaged`）で本文（`bodyHtml !== null`）が描画・計測された際、`maxScroll <= 0`（1 画面内に全文が収まる短文エピソード）であることを `useReader` へ通知する。
-     - ※`maxScroll <= 0` の計測は `bodyHtml`, `chapterTitle`, `writingMode`, `fontSizePx`, `lineHeight`, `fontFamily`, `pageMarginPx`, `pagingMode`, `containerWidth`, `containerHeight` に連動し、初回・`requestAnimationFrame`・`document.fonts.ready` のタイミングで確定評価する（コンテナ寸法が `0` の未レイアウト状態では通知しない）。
-2. **`useReader.ts` の 1 ページ／1 画面完結エピソード進捗 `1.0` 自動保存と Issue #342 保護**:
+     - ※**未レイアウト状態（`0px`）の共通抑止ガード**: 実効 `paged` の `measure()`（`onTotalPagesChange`）および連続スクロール計測（`onSingleScreenContentMeasured`）の双方において、コンテナ寸法（`currentWidth <= 0 || currentHeight <= 0`）の未レイアウト状態ではコールバックを発火しない。計測は `bodyHtml`, `chapterTitle`, `writingMode`, `fontSizePx`, `lineHeight`, `fontFamily`, `pageMarginPx`, `pagingMode`, `containerWidth`, `containerHeight` に連動し、初回・`requestAnimationFrame`・`document.fonts.ready` のタイミングで確定評価する。
+2. **`useReader.ts` の 1 ページ／1 画面完結エピソード進捗 `1.0` 自動保存と再計測巻き戻し・Issue #342 保護**:
    - 本文読み込み完了済み（`chapter?.bodyHtml !== null` かつ `!isLoading`）かつ `bookmarkConflictRef.current === null` の状態で：
      - 実効 `paged` モード時: DOM 計測により確定した `totalPages === 1` となった場合（ただし初期仮値 `1` での誤発火を防ぐため、`ReaderView` からの実 DOM 計測コールバック `setTotalPages(1)` 完了時かつ `chapter?.bodyHtml !== null` かつ `!isLoading` の場合）。
      - 実効 `scroll` モード時: `ReaderView` から `isSingleScreen === true`（`maxScroll <= 0`）が通知された場合。
-   - 上記に該当し、**現在の保存済み進捗が末尾未到達（`!isBookmarkAtEnd(scrollProgressRef.current)`）の場合のみ**、`updateScrollProgress(1)` を実行して `bookmarkScrollProgress = 1.0` を保存する。
+   - 上記に該当し、**現在の保存済み進捗が末尾未到達（`!isBookmarkAtEnd(scrollProgressRef.current)`）の場合のみ**、自動保存識別フラグ（`isAutoSingleScreenSavePendingRef.current = true`）を立てた上で `updateScrollProgress(1)` を実行して `bookmarkScrollProgress = 1.0` を保存する（300ms デバウンス完了・書き込み確定時にフラグを `false` クリア）。
+   - **再計測遷移時の誤保存キャンセル・巻き戻し契約**: 初回仮計測で一時的に `totalPages === 1`（または `isSingleScreen === true`）となり短文自動保存が保留中（`isAutoSingleScreenSavePendingRef.current === true`）の間に、後続の `rAF` / `document.fonts.ready` 等で `totalPages > 1`（または `isSingleScreen === false`）へ確定し、かつユーザーがまだページ送り・スクロール操作を行っていない場合（`!hasUserChangedPageRef.current`）は、保留中の 300ms デバウンスタイマーを即時キャンセルし、`isAutoSingleScreenSavePendingRef.current = false`、`hasPendingBookmarkRef.current = false` とした上で、`scrollProgress` / `scrollProgressRef` を直前の保存済み進捗（`initialScrollProgressRef.current`）へ巻き戻す。
    - **重要（Issue #342 未操作離脱保護との整合）**: すでに `isBookmarkAtEnd(targetNovel.bookmarkScrollProgress)`（`>= 0.99`）として保存済みの短文エピソードを再表示しただけの場合は `updateScrollProgress(1)` を呼ばず、`hasPendingBookmarkRef.current = false` のまま維持することで、再表示・離脱時に `last_read_at` を不要更新しない。
-3. **`useReader.ts` の自動 Pull 完了時における競合判定の精緻化**:
-   - `syncEngine.subscribePullCompleted` コールバック内で `latestNovel = await novelRepository.getNovelById(targetNovelId)` を取得した際、`latestNovel.totalChapters` が増加していれば、現在表示中 `novel` State / `novelRef` の `totalChapters` を最新化する（これにより、最新話末尾を表示中にバックグラウンド Pull で目次が補完された場合も「次の話へ」ボタンが有効化される）。
-   - 競合ダイアログ（`BookmarkConflictDialog`）の表示判定において、`latestNovel.bookmarkChapterIndex !== currentChapterIndexRef.current` であっても、**`latestNovel.lastReadAt === novelRef.current.lastReadAt`**（他端末での閲覧による `last_read_at` 更新ではなく、目次更新に伴うローカル自動進行のみでしおり話数が進んだケース）の場合は競合ダイアログを誤表示しない。
+3. **`useReader.ts` の `lastReadAt` メモリ同期と自動 Pull 完了時における競合判定の精緻化**:
+   - **`updateBookmark` 後の `lastReadAt` メモリ同期契約**: `loadInitialData`（別話初回表示時）・`goToChapter`・`persistBookmark`（300ms デバウンス完了・`flushBookmark`・`resolveBookmarkConflict("keep")`）で `novelRepository.updateBookmark()` を実行した後は、DB から最新の `last_read_at`（`novelRepository.getNovelById` の再取得、または `updateBookmark` と同一タイムスタンプの反映）を必ず `novel` State および `novelRef.current.lastReadAt` へ同期保持する。
+   - **`subscribePullCompleted` 内の比較順序と非競合判定**:
+     1. `latestNovel = await novelRepository.getNovelById(targetNovelId)` を取得した直後、`novelRef.current` を書き換える前に `prevLastReadAt = novelRef.current.lastReadAt` を退避する。
+     2. `latestNovel.totalChapters > novelRef.current.totalChapters` の場合、`novel` State / `novelRef.current` の `totalChapters` を最新化する（最新話表示中にバックグラウンド Pull で目次が補完された場合に「次の話へ」ボタンを有効化するため）。
+     3. 競合ダイアログ（`BookmarkConflictDialog`）の表示判定において、`latestNovel.bookmarkChapterIndex !== currentChapterIndexRef.current` であっても、**`latestNovel.lastReadAt === prevLastReadAt`**（他端末での閲覧による `last_read_at` 更新ではなく、目次更新に伴うローカル自動進行のみでしおり話数が進んだケース）の場合は競合ダイアログを誤表示しない。
 
 ### 2.4 Cloud Sync 層（`SyncNovelData.bookmarkScrollProgress` 追加と LWW 同期・Pull 時新着遷移）
 
@@ -184,12 +188,14 @@ UI コンポーネントのレイアウト・DOM 構造の変更はありませ�
 
 - `src/features/reader/components/ReaderView.test.tsx`:
   - 連続スクロールモード（縦書き・横書き双方）で `maxScroll - currentScroll <= 5` px（例: `maxScroll = 1000`, `scrollTop = 996`）のとき `calculateScrollProgress` が `1` を返すこと（6px 残りは `< 1`）。
+  - コンテナ寸法が `0`（未レイアウト状態）のときは、実効 `paged` の `onTotalPagesChange` および連続スクロールの `onSingleScreenContentMeasured` のいずれも発火しないこと。
   - 連続スクロールモードで `maxScroll <= 0`（1画面完結短文）の本文計測完了時に `onSingleScreenContentMeasured(true)` が呼ばれ、`maxScroll > 0` のときは `false` が呼ばれること。
 - `src/features/reader/hooks/useReader.test.ts`:
   - 実効 `paged` モードで本文ロード完了後に `setTotalPages(1)` が呼ばれた際、保存済み進捗が `0` であれば `updateScrollProgress(1)` が呼ばれて `1.0` が保存されること。
+  - 初回仮計測で `setTotalPages(1)`（または `markSingleScreenContentMeasured(true)`）が呼ばれて 300ms デバウンス保留中に、再計測で `setTotalPages(3)`（または `markSingleScreenContentMeasured(false)`）へ確定した場合、未操作であれば保留タイマーがキャンセルされ `hasPendingBookmark` および進捗率が直前の保存済み進捗へ巻き戻され誤保存されないこと。
   - すでに `bookmarkScrollProgress === 1.0` の1ページ短文話を再表示しただけの場合は `updateBookmark` / `notifyChanged` が呼ばれないこと（Issue #342 保護）。
-  - 実効 `scroll` モードで `onSingleScreenContentMeasured(true)` が通知された際、同様に `1.0` が保存され、既存 `1.0` 再表示時は再書き込みされないこと。
-  - `subscribePullCompleted` 受信時、`lastReadAt` が変化せずに目次更新でしおり話数が進んだだけのケースでは `bookmarkConflict` が `null` のまま維持され、`novel.totalChapters` が最新値へ更新されること。一方、他端末閲覧により `lastReadAt` が変化してしおり話数が異なった場合は従来通り `BookmarkConflictDialog` が表示されること。
+  - 実効 `scroll` モードで `markSingleScreenContentMeasured(true)` が通知された際、同様に `1.0` が保存され、既存 `1.0` 再表示時は再書き込みされないこと。
+  - `loadInitialData` / `goToChapter` / `persistBookmark` で `updateBookmark` を実行した直後に `novel.lastReadAt` が DB 最新値へ同期され、`subscribePullCompleted` 受信時に `lastReadAt` が変化せずに目次更新でしおり話数が進んだだけのケースでは `bookmarkConflict` が `null` のまま維持され、`novel.totalChapters` が最新値へ更新されること。一方、他端末閲覧により `lastReadAt` が変化してしおり話数が異なった場合は従来通り `BookmarkConflictDialog` が表示されること。
 - `src/features/cloud-sync/services/syncEngine.test.ts`:
   - `validateSyncState`: `bookmarkScrollProgress` 省略（旧データ後方互換）・`0`・`0.5`・`1` を受理し、`-0.1`・`1.1`・`NaN`・文字列を拒否すること。
   - `pushCurrentState`: `SyncNovelData.bookmarkScrollProgress` にローカル進捗率が出力され、`buildMergedSyncNovels` で LWW に従い進捗率もマージされること。
