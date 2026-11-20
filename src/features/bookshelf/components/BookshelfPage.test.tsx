@@ -214,10 +214,9 @@ describe("BookshelfPage", () => {
 
   describe("ユーザーインタラクションおよびProps結合の検証（親子分離原則）", () => {
     it("空状態で「小説を検索する」ボタンをクリックしたときに onNavigateSearch が呼び出されること (TR-15)", () => {
-      const emptyStateSpy = vi.spyOn(
-        BookshelfEmptyStateModule,
-        "BookshelfEmptyState",
-      );
+      const emptyStateSpy = vi
+        .spyOn(BookshelfEmptyStateModule, "BookshelfEmptyState")
+        .mockImplementation(() => null);
       const onNavigateSearch = vi.fn();
       const onNavigateRanking = vi.fn();
 
@@ -250,10 +249,9 @@ describe("BookshelfPage", () => {
     });
 
     it("空状態で「ランキングを見る」ボタンをクリックしたときに onNavigateRanking が呼び出されること (TR-15)", () => {
-      const emptyStateSpy = vi.spyOn(
-        BookshelfEmptyStateModule,
-        "BookshelfEmptyState",
-      );
+      const emptyStateSpy = vi
+        .spyOn(BookshelfEmptyStateModule, "BookshelfEmptyState")
+        .mockImplementation(() => null);
       const onNavigateSearch = vi.fn();
       const onNavigateRanking = vi.fn();
 
@@ -286,7 +284,9 @@ describe("BookshelfPage", () => {
     });
 
     it("作品カードの選択時に onSelectNovel が正しい novelId で呼び出されること (AC-BS-05, TR-02)", () => {
-      const novelCardSpy = vi.spyOn(NovelCardModule, "NovelCard");
+      const novelCardSpy = vi
+        .spyOn(NovelCardModule, "NovelCard")
+        .mockImplementation(() => null);
       const onSelectNovel = vi.fn();
 
       render(
@@ -316,7 +316,9 @@ describe("BookshelfPage", () => {
     });
 
     it("作品カードの「続きから読む」クリック時に onResumeNovel が正しい引数で呼び出されること (AC-BS-06, TR-03)", () => {
-      const novelCardSpy = vi.spyOn(NovelCardModule, "NovelCard");
+      const novelCardSpy = vi
+        .spyOn(NovelCardModule, "NovelCard")
+        .mockImplementation(() => null);
       const onResumeNovel = vi.fn();
 
       render(
@@ -479,10 +481,9 @@ describe("BookshelfPage", () => {
     });
 
     it("favoriteOnly === true かつ totalNovelsCount > 0 かつ novels.length === 0 のとき、BookshelfEmptyState に isFavoriteFilterActive=true と解除コールバックが正しく伝搬されること (Issue #266, R1-04)", () => {
-      const emptyStateSpy = vi.spyOn(
-        BookshelfEmptyStateModule,
-        "BookshelfEmptyState",
-      );
+      const emptyStateSpy = vi
+        .spyOn(BookshelfEmptyStateModule, "BookshelfEmptyState")
+        .mockImplementation(() => null);
       const onToggleFavoriteFilter = vi.fn();
 
       render(
@@ -514,10 +515,9 @@ describe("BookshelfPage", () => {
     });
 
     it("favoriteOnly === true でも totalNovelsCount === 0 のときは通常空状態（isFavoriteFilterActive なし）が BookshelfEmptyState へ伝搬すること (Issue #266, R1-04)", () => {
-      const emptyStateSpy = vi.spyOn(
-        BookshelfEmptyStateModule,
-        "BookshelfEmptyState",
-      );
+      const emptyStateSpy = vi
+        .spyOn(BookshelfEmptyStateModule, "BookshelfEmptyState")
+        .mockImplementation(() => null);
 
       render(
         <BookshelfPage
@@ -541,7 +541,9 @@ describe("BookshelfPage", () => {
     });
 
     it("onToggleFavoriteNovel が指定された場合、各 NovelCard にコールバックが正しく伝搬されること (Issue #266, R1-04)", () => {
-      const novelCardSpy = vi.spyOn(NovelCardModule, "NovelCard");
+      const novelCardSpy = vi
+        .spyOn(NovelCardModule, "NovelCard")
+        .mockImplementation(() => null);
       const onToggleFavoriteNovel = vi.fn();
 
       render(

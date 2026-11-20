@@ -729,16 +729,18 @@ describe("useNovelRanking", () => {
       expect(secondResult).toBeNull();
       expect(fetchCount).toBe(1);
     } finally {
-      resolves.forEach((resolve) =>
-        resolve({
-          url: sampleRankingItem1.workUrl,
-          status: 200,
-          headers: {},
-          html: workIndexHtml,
-        }),
-      );
-      await promise1!;
-      await promise2;
+      await act(async () => {
+        resolves.forEach((resolve) =>
+          resolve({
+            url: sampleRankingItem1.workUrl,
+            status: 200,
+            headers: {},
+            html: workIndexHtml,
+          }),
+        );
+        await promise1!;
+        await promise2;
+      });
     }
     await waitFor(() => {
       expect(result.current.addingWorkId).toBeNull();
@@ -794,16 +796,18 @@ describe("useNovelRanking", () => {
       expect(fetchCount).toBe(1);
       expect(window.location.pathname).toBe("/ranking");
     } finally {
-      resolves.forEach((resolve) =>
-        resolve({
-          url: sampleRankingItem1.workUrl,
-          status: 200,
-          headers: {},
-          html: workIndexHtml,
-        }),
-      );
-      await promise1!;
-      await selectPromise;
+      await act(async () => {
+        resolves.forEach((resolve) =>
+          resolve({
+            url: sampleRankingItem1.workUrl,
+            status: 200,
+            headers: {},
+            html: workIndexHtml,
+          }),
+        );
+        await promise1!;
+        await selectPromise;
+      });
     }
   });
 

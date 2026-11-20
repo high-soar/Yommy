@@ -119,12 +119,15 @@ describe("ReaderPage", () => {
 
   describe("Storybook Stories 検証 (composeStories)", () => {
     it("Default ストーリーで全画面本文と最下部タッチゾーンが描画され、オーバーレイは初期非表示（AC-RD-09）", () => {
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
-      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
+      const topSpy = vi
+        .spyOn(ReaderTopOverlayModule, "ReaderTopOverlay")
+        .mockImplementation(() => null);
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
 
       render(<Default />);
       const page = screen.getByTestId("reader-page");
@@ -156,11 +159,12 @@ describe("ReaderPage", () => {
     });
 
     it("OverlayOpen ストーリーで上下オーバーレイが展開表示されていること", () => {
-      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const topSpy = vi
+        .spyOn(ReaderTopOverlayModule, "ReaderTopOverlay")
+        .mockImplementation(() => null);
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
 
       render(<OverlayOpen />);
       expect(topSpy).toHaveBeenLastCalledWith(
@@ -174,11 +178,12 @@ describe("ReaderPage", () => {
     });
 
     it("OverlayOpenPaged ストーリーで上下オーバーレイおよびページシークバー用ページ設定が伝播されること", () => {
-      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const topSpy = vi
+        .spyOn(ReaderTopOverlayModule, "ReaderTopOverlay")
+        .mockImplementation(() => null);
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
 
       render(<OverlayOpenPaged />);
       expect(topSpy).toHaveBeenLastCalledWith(
@@ -197,7 +202,9 @@ describe("ReaderPage", () => {
     });
 
     it("OverlayOpenLongTitle ストーリーで長文タイトル・サブタイトルが ReaderTopOverlay にそのまま渡されること", () => {
-      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
+      const topSpy = vi
+        .spyOn(ReaderTopOverlayModule, "ReaderTopOverlay")
+        .mockImplementation(() => null);
 
       render(<OverlayOpenLongTitle />);
       expect(topSpy).toHaveBeenLastCalledWith(
@@ -212,7 +219,9 @@ describe("ReaderPage", () => {
     });
 
     it("HorizontalSepia ストーリーで横書き・セピアの ReaderView が描画されること", () => {
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
 
       render(<HorizontalSepia />);
       expect(viewSpy).toHaveBeenLastCalledWith(
@@ -225,7 +234,9 @@ describe("ReaderPage", () => {
     });
 
     it("Loading ストーリーでローディング表示が描画され本文や空状態が非表示となること", () => {
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
 
       render(<Loading />);
       expect(screen.getByTestId("reader-loading")).toBeInTheDocument();
@@ -235,7 +246,9 @@ describe("ReaderPage", () => {
     });
 
     it("TransitionLoading ストーリーで話数遷移中ローディング表示が描画され本文や空状態が非表示となること", () => {
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
 
       render(<TransitionLoading />);
       expect(screen.getByTestId("reader-loading")).toBeInTheDocument();
@@ -246,12 +259,15 @@ describe("ReaderPage", () => {
     });
 
     it("ErrorState ストーリーでエラーアラートと内蔵ブラウザボタンが描画され上下オーバーレイが初期展開表示されること（AC-RD-10, AC-RD-22, AC-RD-29）", () => {
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
-      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
+      const topSpy = vi
+        .spyOn(ReaderTopOverlayModule, "ReaderTopOverlay")
+        .mockImplementation(() => null);
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
 
       render(<ErrorState />);
       const errorEl = screen.getByTestId("reader-error");
@@ -276,12 +292,15 @@ describe("ReaderPage", () => {
     });
 
     it("Empty ストーリーで空状態が描画され上下オーバーレイが初期展開表示されること（AC-RD-10, AC-RD-22）", () => {
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
-      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
+      const topSpy = vi
+        .spyOn(ReaderTopOverlayModule, "ReaderTopOverlay")
+        .mockImplementation(() => null);
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
 
       render(<Empty />);
       expect(screen.getByTestId("reader-empty")).toBeInTheDocument();
@@ -299,11 +318,12 @@ describe("ReaderPage", () => {
     });
 
     it("Paged ストーリーでページめくり組版プロパティが ReaderView と ReaderBottomOverlay に伝播されること（AC-RD-15, AC-RD-16）", () => {
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
 
       render(<Paged />);
       expect(viewSpy).toHaveBeenLastCalledWith(
@@ -323,11 +343,12 @@ describe("ReaderPage", () => {
     });
 
     it("ScrollMode ストーリーで連続スクロールモードとして伝播されること（AC-RD-15）", () => {
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
 
       render(<ScrollMode />);
       expect(viewSpy).toHaveBeenLastCalledWith(
@@ -387,7 +408,9 @@ describe("ReaderPage", () => {
     });
 
     it("CustomFontAndMargin ストーリーで指定フォント（klee）と余白（32px）が ReaderView に反映されること (v0.5 Issue #169)", () => {
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
 
       render(<CustomFontAndMargin />);
       expect(viewSpy).toHaveBeenLastCalledWith(
@@ -400,10 +423,9 @@ describe("ReaderPage", () => {
     });
 
     it("BookmarkConflict ストーリーで BookmarkConflictDialog に競合状態 Props が渡されること (v1.1 Issue #342)", () => {
-      const conflictDialogSpy = vi.spyOn(
-        BookmarkConflictDialogModule,
-        "BookmarkConflictDialog",
-      );
+      const conflictDialogSpy = vi
+        .spyOn(BookmarkConflictDialogModule, "BookmarkConflictDialog")
+        .mockImplementation(() => null);
       render(<BookmarkConflict />);
       expect(conflictDialogSpy).toHaveBeenLastCalledWith(
         expect.objectContaining({
@@ -420,11 +442,12 @@ describe("ReaderPage", () => {
 
   describe("状態別排他描画ルールの検証", () => {
     it("error が存在する場合は isLoading が true であってもエラー表示が優先されること", () => {
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       const props = createDefaultProps({
         error: "致命的なネットワークエラー",
         isLoading: true,
@@ -441,7 +464,9 @@ describe("ReaderPage", () => {
     });
 
     it("isLoading が true であっても既に chapter.bodyHtml が存在する場合は ReaderView が維持されること", () => {
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
       const props = createDefaultProps({
         isLoading: true,
       });
@@ -452,10 +477,9 @@ describe("ReaderPage", () => {
     });
 
     it("novel === null のとき空状態となり、オーバーレイが初期展開されること", () => {
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       const props = createDefaultProps({
         novel: null,
       });
@@ -487,10 +511,9 @@ describe("ReaderPage", () => {
 
   describe("最下部タッチゾーンによるオーバーレイ開閉制御（AC-RD-10）", () => {
     it("最下部タッチゾーンをタップ（移動10px未満・500ms未満）するとオーバーレイが表示され、再タップで非表示になること", () => {
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       render(<ReaderPage {...createDefaultProps()} />);
       const touchZone = screen.getByTestId("reader-bottom-touch-zone");
 
@@ -518,10 +541,9 @@ describe("ReaderPage", () => {
     });
 
     it("タッチ移動距離が10px以上のスワイプ・ドラッグ操作ではオーバーレイが開かないこと", () => {
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       render(<ReaderPage {...createDefaultProps()} />);
       const touchZone = screen.getByTestId("reader-bottom-touch-zone");
 
@@ -538,10 +560,9 @@ describe("ReaderPage", () => {
     });
 
     it("タッチ時間が500ms以上の長押し操作ではオーバーレイが開かないこと", () => {
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       render(<ReaderPage {...createDefaultProps()} />);
       const touchZone = screen.getByTestId("reader-bottom-touch-zone");
 
@@ -556,10 +577,9 @@ describe("ReaderPage", () => {
     });
 
     it("pointercancel が発生した場合はその後の pointerup でオーバーレイが開かないこと", () => {
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       render(<ReaderPage {...createDefaultProps()} />);
       const touchZone = screen.getByTestId("reader-bottom-touch-zone");
 
@@ -571,10 +591,9 @@ describe("ReaderPage", () => {
     });
 
     it("キーボード操作（Enter / Space）でオーバーレイの開閉がトグルされること", () => {
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       render(<ReaderPage {...createDefaultProps()} />);
       const touchZone = screen.getByTestId("reader-bottom-touch-zone");
 
@@ -666,11 +685,12 @@ describe("ReaderPage", () => {
   describe("自動非表示（Auto-Hide）トリガーの検証（AC-RD-10）", () => {
     it("オーバーレイ展開中に本文スクロールが発生した際に自動的に閉じること", async () => {
       const onScrollProgressChange = vi.fn();
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       render(
         <ReaderPage
           {...createDefaultProps({
@@ -692,10 +712,9 @@ describe("ReaderPage", () => {
 
     it("オーバーレイ展開中に本文エリアをクリックした際に自動的に閉じること", async () => {
       const user = userEvent.setup();
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       render(
         <ReaderPage {...createDefaultProps({ initialOverlayOpen: true })} />,
       );
@@ -706,10 +725,9 @@ describe("ReaderPage", () => {
     });
 
     it("オーバーレイ展開中に「前の話へ」をクリックすると onPrevChapter が呼ばれ自動的に閉じること", async () => {
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       const onPrevChapter = vi.fn();
       render(
         <ReaderPage
@@ -731,10 +749,9 @@ describe("ReaderPage", () => {
     });
 
     it("オーバーレイ展開中に「次の話へ」をクリックすると onNextChapter が呼ばれ自動的に閉じること", async () => {
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       const onNextChapter = vi.fn();
       render(
         <ReaderPage
@@ -756,10 +773,9 @@ describe("ReaderPage", () => {
     });
 
     it("下部タブ（本棚 / 設定）をクリックした際に onSelectTab が呼ばれること", async () => {
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       const onSelectTab = vi.fn();
       render(
         <ReaderPage
@@ -783,10 +799,9 @@ describe("ReaderPage", () => {
     });
 
     it("activeTab が指定された場合、ReaderBottomOverlay に props が反映されること (R1-32)", () => {
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       const { rerender } = render(
         <ReaderPage
           {...createDefaultProps({
@@ -819,7 +834,9 @@ describe("ReaderPage", () => {
 
   describe("ページネーション状態・コールバックの伝播検証 (AC-RD-15, AC-RD-16)", () => {
     it("明示的な pagingMode, currentPage, totalPages が ReaderView に伝播されること", () => {
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
       render(
         <ReaderPage
           {...createDefaultProps({
@@ -841,7 +858,9 @@ describe("ReaderPage", () => {
     });
 
     it("pagingMode, currentPage, totalPages 未指定時に既定値（auto, 1, 1）が適用されること", () => {
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
       const props = createDefaultProps();
       delete (props as Partial<ReaderPageProps>).pagingMode;
       delete (props as Partial<ReaderPageProps>).currentPage;
@@ -860,7 +879,9 @@ describe("ReaderPage", () => {
     });
 
     it("ReaderView からの onTotalPagesChange イベントが親へ伝播されること", () => {
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
       const onTotalPagesChange = vi.fn();
       render(
         <ReaderPage
@@ -979,7 +1000,9 @@ describe("ReaderPage", () => {
     it("縦書きページ送りタップ時に isAnimating および slideOffsetPx が ReaderView に伝達されること（AC-RD-17, R1-23）", () => {
       vi.useFakeTimers();
       try {
-        const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
+        const viewSpy = vi
+          .spyOn(ReaderViewModule, "ReaderView")
+          .mockImplementation(() => null);
         render(
           <ReaderPage
             {...createDefaultProps({
@@ -1032,10 +1055,9 @@ describe("ReaderPage", () => {
     });
 
     it("画面中央タップ（幅約 60%: 60px <= x <= 240px）で下部オーバーレイ開閉がトグルすること（AC-RD-17）", () => {
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       render(
         <ReaderPage
           {...createDefaultProps({
@@ -1064,10 +1086,9 @@ describe("ReaderPage", () => {
     });
 
     it("連続スクロールモード（pagingMode: 'scroll'）でも画面中央タップで下部オーバーレイ開閉がトグルすること (R2-02)", () => {
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       render(
         <ReaderPage
           {...createDefaultProps({
@@ -1207,7 +1228,9 @@ describe("ReaderPage", () => {
     });
 
     it("連続スクロールモードでの 2 段階スクロール（末尾到達後の再ホイール）で次話遷移すること（AC-RD-19）", () => {
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
       const onNextChapter = vi.fn();
       const onScrollProgressChange = vi.fn();
       render(
@@ -1249,7 +1272,9 @@ describe("ReaderPage", () => {
     });
 
     it("連続スクロールモードでの 2 段階スクロール（先頭到達後の再ホイール）で前話遷移すること（AC-RD-19）", () => {
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
       const onPrevChapter = vi.fn();
       const onScrollProgressChange = vi.fn();
       render(
@@ -1321,7 +1346,9 @@ describe("ReaderPage", () => {
 
   describe("連続スクロール時の本文先頭・末尾前後話ボタン（AC-RD-19）", () => {
     it("スクロールモード時、ReaderView へ chapterIndex/totalChapters と onPrevChapter/onNextChapter が委譲されること", () => {
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
       const onPrevChapter = vi.fn();
       const onNextChapter = vi.fn();
       render(
@@ -1360,7 +1387,9 @@ describe("ReaderPage", () => {
 
   describe("フォント種別・画面余白 props の ReaderView への伝播検証 (AC-RD-21, SYS-REQ-09, v0.5 Issue #169, #180)", () => {
     it("fontFamily と pageMarginPx が指定された場合、直接描画される ReaderView に伝播されること", () => {
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
       render(
         <ReaderPage
           {...createDefaultProps({
@@ -1380,7 +1409,9 @@ describe("ReaderPage", () => {
     });
 
     it("fontFamily と pageMarginPx が省略された場合、undefined のまま ReaderView に委譲されること", () => {
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
       render(<ReaderPage {...createDefaultProps()} />);
 
       expect(viewSpy).toHaveBeenLastCalledWith(
@@ -1399,11 +1430,12 @@ describe("ReaderPage", () => {
     });
 
     it("ReaderTopOverlay と ReaderBottomOverlay に開閉状態 isOpen が上下連動して渡されること (AC-RD-22, R1-23)", () => {
-      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const topSpy = vi
+        .spyOn(ReaderTopOverlayModule, "ReaderTopOverlay")
+        .mockImplementation(() => null);
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       const { rerender } = render(
         <ReaderPage
           {...createDefaultProps({
@@ -1440,7 +1472,9 @@ describe("ReaderPage", () => {
     });
 
     it("作品タイトルとエピソードサブタイトルが ReaderTopOverlay に正しく伝播されること (AC-RD-23, R1-23)", () => {
-      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
+      const topSpy = vi
+        .spyOn(ReaderTopOverlayModule, "ReaderTopOverlay")
+        .mockImplementation(() => null);
       render(
         <ReaderPage
           {...createDefaultProps({
@@ -1467,7 +1501,9 @@ describe("ReaderPage", () => {
     });
 
     it("novel または chapter が null の場合でも ReaderTopOverlay に空文字が渡されること (R1-23)", () => {
-      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
+      const topSpy = vi
+        .spyOn(ReaderTopOverlayModule, "ReaderTopOverlay")
+        .mockImplementation(() => null);
       render(
         <ReaderPage
           {...createDefaultProps({
@@ -1488,7 +1524,9 @@ describe("ReaderPage", () => {
     });
 
     it("ReaderTopOverlay に渡された onBackToToc 呼び出し時にコールバックが発火すること (AC-RD-24, TR-06, R1-23)", () => {
-      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
+      const topSpy = vi
+        .spyOn(ReaderTopOverlayModule, "ReaderTopOverlay")
+        .mockImplementation(() => null);
       const onBackToToc = vi.fn();
       render(
         <ReaderPage
@@ -1507,7 +1545,9 @@ describe("ReaderPage", () => {
     });
 
     it("onBackToToc 省略時でも ReaderTopOverlay の onBackToToc 呼び出しでクラッシュしないこと (R1-23)", () => {
-      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
+      const topSpy = vi
+        .spyOn(ReaderTopOverlayModule, "ReaderTopOverlay")
+        .mockImplementation(() => null);
       render(
         <ReaderPage
           {...createDefaultProps({
@@ -1526,10 +1566,9 @@ describe("ReaderPage", () => {
     });
 
     it("縦書き paged モード時、ReaderBottomOverlay に effectivePagingMode='paged' とシークバー用 Props が伝播されること (AC-RD-25, R1-23)", () => {
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       render(
         <ReaderPage
           {...createDefaultProps({
@@ -1553,10 +1592,9 @@ describe("ReaderPage", () => {
     });
 
     it("連続スクロールモード時、ReaderBottomOverlay に effectivePagingMode='scroll' が伝播されること (AC-RD-25, R1-23)", () => {
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       render(
         <ReaderPage
           {...createDefaultProps({
@@ -1580,11 +1618,12 @@ describe("ReaderPage", () => {
     });
 
     it("ReaderBottomOverlay の onPageChange 呼び出し時、onPageChange が発火し、かつオーバーレイが開いたまま維持されること (AC-RD-25, §3.6, R1-23)", () => {
-      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const topSpy = vi
+        .spyOn(ReaderTopOverlayModule, "ReaderTopOverlay")
+        .mockImplementation(() => null);
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       const onPageChange = vi.fn();
       render(
         <ReaderPage
@@ -1619,11 +1658,12 @@ describe("ReaderPage", () => {
     });
 
     it("onPageChange 省略時に ReaderBottomOverlay の onPageChange を呼び出してもクラッシュせずオーバーレイが開いたまま維持されること (R1-23)", () => {
-      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const topSpy = vi
+        .spyOn(ReaderTopOverlayModule, "ReaderTopOverlay")
+        .mockImplementation(() => null);
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       render(
         <ReaderPage
           {...createDefaultProps({
@@ -1651,11 +1691,12 @@ describe("ReaderPage", () => {
     });
 
     it("画面中央タップで上下オーバーレイが同時に開閉トグルすること (AC-RD-22)", () => {
-      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const topSpy = vi
+        .spyOn(ReaderTopOverlayModule, "ReaderTopOverlay")
+        .mockImplementation(() => null);
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       render(
         <ReaderPage
           {...createDefaultProps({
@@ -1690,11 +1731,12 @@ describe("ReaderPage", () => {
     });
 
     it("最下部タッチゾーン操作で上下オーバーレイが同時に開閉トグルすること (AC-RD-22)", () => {
-      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const topSpy = vi
+        .spyOn(ReaderTopOverlayModule, "ReaderTopOverlay")
+        .mockImplementation(() => null);
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       render(
         <ReaderPage
           {...createDefaultProps({
@@ -1720,11 +1762,12 @@ describe("ReaderPage", () => {
     });
 
     it("前話・次話遷移時およびスクロール時に上下オーバーレイが自動で閉じること", () => {
-      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const topSpy = vi
+        .spyOn(ReaderTopOverlayModule, "ReaderTopOverlay")
+        .mockImplementation(() => null);
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       const onPrevChapter = vi.fn();
       const onNextChapter = vi.fn();
       const onScrollProgressChange = vi.fn();
@@ -1769,12 +1812,15 @@ describe("ReaderPage", () => {
     });
 
     it("連続スクロールモードでの本文スクロール時に上下オーバーレイが自動で閉じること", () => {
-      const viewSpy = vi.spyOn(ReaderViewModule, "ReaderView");
-      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
-      const bottomSpy = vi.spyOn(
-        ReaderBottomOverlayModule,
-        "ReaderBottomOverlay",
-      );
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
+      const topSpy = vi
+        .spyOn(ReaderTopOverlayModule, "ReaderTopOverlay")
+        .mockImplementation(() => null);
+      const bottomSpy = vi
+        .spyOn(ReaderBottomOverlayModule, "ReaderBottomOverlay")
+        .mockImplementation(() => null);
       const onScrollProgressChange = vi.fn();
       render(
         <ReaderPage
@@ -1978,7 +2024,9 @@ describe("ReaderPage", () => {
     });
 
     it("オーバーレイ展開中に音量キーイベントが発火した際、オーバーレイが自動で非表示になること (AC-RD-27)", () => {
-      const topSpy = vi.spyOn(ReaderTopOverlayModule, "ReaderTopOverlay");
+      const topSpy = vi
+        .spyOn(ReaderTopOverlayModule, "ReaderTopOverlay")
+        .mockImplementation(() => null);
       const mockBridge = new MockVolumeKeyBridge();
 
       render(
@@ -2070,10 +2118,9 @@ describe("ReaderPage", () => {
 
   describe("しおり競合確認ダイアログ連携 (Issue #342)", () => {
     it("bookmarkConflict が設定されているとき BookmarkConflictDialog へ Props と選択コールバックが伝播し、null 時は isOpen: false が渡されること", () => {
-      const conflictDialogSpy = vi.spyOn(
-        BookmarkConflictDialogModule,
-        "BookmarkConflictDialog",
-      );
+      const conflictDialogSpy = vi
+        .spyOn(BookmarkConflictDialogModule, "BookmarkConflictDialog")
+        .mockImplementation(() => null);
       const onResolveMove = vi.fn();
       const onResolveKeep = vi.fn();
 

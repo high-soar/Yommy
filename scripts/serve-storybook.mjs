@@ -40,12 +40,10 @@ export function createStorybookServer(options = {}) {
       res.end();
     });
 
-    let safePath;
+    let requestPath;
     try {
       const urlPath = req.url ? req.url.split("?")[0] : "/";
-      safePath = path
-        .normalize(decodeURIComponent(urlPath))
-        .replace(/^(\.\.[/\\])+/, "");
+      requestPath = decodeURIComponent(urlPath).replace(/^[/\\]+/, "");
     } catch {
       // 不正な URI エンコード（例: %E0%A4%A）時のハンドリング (R1-39)
       res.statusCode = 400;
@@ -53,14 +51,15 @@ export function createStorybookServer(options = {}) {
       return;
     }
 
-    if (safePath === "/" || safePath === "") {
-      safePath = "/index.html";
+    if (requestPath === "") {
+      requestPath = "index.html";
     }
 
-    const filePath = path.join(baseDir, safePath);
+    const filePath = path.resolve(baseDir, requestPath);
+    const rel = path.relative(baseDir, filePath);
 
-    // baseDir 外へのパストラバーサル防止ガード
-    if (!filePath.startsWith(baseDir)) {
+    // baseDir 外（隣接接頭辞ディレクトリや baseDir 自体を含む）へのパストラバーサル防止ガード (R1-15)
+    if (rel === "" || rel.startsWith("..") || path.isAbsolute(rel)) {
       res.statusCode = 403;
       res.end("Forbidden");
       return;

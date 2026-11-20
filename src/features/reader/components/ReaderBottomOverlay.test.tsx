@@ -443,7 +443,9 @@ describe("ReaderBottomOverlay", () => {
 
   describe("ユーザーインタラクションおよびコールバックの検証", () => {
     it("ReaderChapterNav の onPrevChapter 呼び出し時に onPrevChapter コールバックが呼ばれること", () => {
-      const navSpy = vi.spyOn(ReaderChapterNavModule, "ReaderChapterNav");
+      const navSpy = vi
+        .spyOn(ReaderChapterNavModule, "ReaderChapterNav")
+        .mockImplementation(() => null);
       try {
         const onPrev = vi.fn();
         render(
@@ -469,7 +471,9 @@ describe("ReaderBottomOverlay", () => {
     });
 
     it("ReaderChapterNav の onNextChapter 呼び出し時に onNextChapter コールバックが呼ばれること", () => {
-      const navSpy = vi.spyOn(ReaderChapterNavModule, "ReaderChapterNav");
+      const navSpy = vi
+        .spyOn(ReaderChapterNavModule, "ReaderChapterNav")
+        .mockImplementation(() => null);
       try {
         const onNext = vi.fn();
         render(

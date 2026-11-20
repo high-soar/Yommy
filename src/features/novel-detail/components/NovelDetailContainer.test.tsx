@@ -333,7 +333,9 @@ describe("NovelDetailContainer", () => {
     });
 
     it("ResumePending ストーリーで pendingCacheCount=2 が NovelDetailPage へ伝達されること (AC-ND-24)", async () => {
-      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
       render(<ResumePending />);
 
       await waitFor(() => {
@@ -349,7 +351,9 @@ describe("NovelDetailContainer", () => {
     });
 
     it("RetryFailed ストーリーで failedCacheCount=1 が NovelDetailPage へ伝達されること (AC-ND-25)", async () => {
-      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
       render(<RetryFailed />);
 
       await waitFor(() => {
@@ -427,7 +431,9 @@ describe("NovelDetailContainer", () => {
     });
 
     it("未検出（NotFound）画面での「本棚へ戻る」ボタン押下時、デフォルトで本棚へ遷移する (AC-ND-07)", async () => {
-      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
       render(
         <RouterProvider initialPath="/novels/not-found">
           <RouteObserverWrapper
@@ -456,7 +462,9 @@ describe("NovelDetailContainer", () => {
     });
 
     it("未検出画面で onBackToBookshelf 未指定時、探索元（/search）が存在する場合は router.back により /search へ復帰すること (TR-07, AC-ND-07)", async () => {
-      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
       let routerRef: ReturnType<typeof useRouter> | null = null;
       const TestOriginComponent = () => {
         const router = useRouter();
@@ -507,7 +515,9 @@ describe("NovelDetailContainer", () => {
     });
 
     it("未検出画面で onBackToBookshelf が注入された場合、カスタムコールバックが呼ばれる", async () => {
-      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
       const onBackToBookshelf = vi.fn();
       render(
         <RouterProvider initialPath="/novels/not-found">
@@ -537,7 +547,9 @@ describe("NovelDetailContainer", () => {
     });
 
     it("「最初から読む（第1話）」ボタン押下時、デフォルトでリーダー画面（第1話）へ遷移する (TR-04, AC-ND-03)", async () => {
-      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
       render(
         <RouterProvider
           initialPath={`/novels/${encodeURIComponent(sampleNovel.id)}`}
@@ -569,7 +581,9 @@ describe("NovelDetailContainer", () => {
     });
 
     it("「続きから読む（第2話）」ボタン押下時、デフォルトでリーダー画面（第2話）へ遷移する (TR-04, AC-ND-03)", async () => {
-      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
       render(
         <RouterProvider
           initialPath={`/novels/${encodeURIComponent(sampleNovelWithBookmark.id)}`}
@@ -603,7 +617,9 @@ describe("NovelDetailContainer", () => {
     });
 
     it("目次エピソード行タップ時、デフォルトで該当話のリーダー画面へ遷移する (TR-04, AC-ND-04)", async () => {
-      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
       render(
         <RouterProvider
           initialPath={`/novels/${encodeURIComponent(sampleNovel.id)}`}
@@ -635,7 +651,9 @@ describe("NovelDetailContainer", () => {
     });
 
     it("onSelectEpisode が注入された場合、読書開始・続きから読む・目次行タップでコールバックが呼ばれる", async () => {
-      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
       const onSelectEpisode = vi.fn();
       render(
         <RouterProvider
@@ -696,7 +714,9 @@ describe("NovelDetailContainer", () => {
 
   describe("目次更新（refreshToc）および作品削除フローの検証", () => {
     it("「目次を更新」ボタン押下時に refreshToc が実行され、通知が表示される (AC-ND-05)", async () => {
-      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
       const mockHttpClient: HttpClientBridge = {
         getHtml: async () => ({
           html: "<html><body>dummy html</body></html>",
@@ -769,7 +789,9 @@ describe("NovelDetailContainer", () => {
     });
 
     it("作品削除フロー: ダイアログの開閉、確定時の削除実行と本棚画面への遷移 (TR-07, AC-ND-06)", async () => {
-      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
       render(
         <RouterProvider
           initialPath={`/novels/${encodeURIComponent(sampleNovel.id)}`}
@@ -825,7 +847,9 @@ describe("NovelDetailContainer", () => {
     });
 
     it("作品削除フロー: onBackToBookshelf 未指定で直前探索元（/ranking）が存在する場合は router.back() により /ranking へ復帰すること (TR-07, AC-ND-06)", async () => {
-      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
       let routerRef: ReturnType<typeof useRouter> | null = null;
       const TestOriginDeleteComponent = () => {
         const router = useRouter();
@@ -877,7 +901,9 @@ describe("NovelDetailContainer", () => {
     });
 
     it("作品削除フロー: onBackToBookshelf 注入時は成功時にそのコールバックが呼ばれる", async () => {
-      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
       const onBackToBookshelf = vi.fn();
       render(
         <RouterProvider
@@ -913,7 +939,9 @@ describe("NovelDetailContainer", () => {
     });
 
     it("作品削除フロー: 削除処理失敗時はエラーが表示され本棚へ遷移しない", async () => {
-      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
       render(
         <RouterProvider
           initialPath={`/novels/${encodeURIComponent(sampleNovel.id)}`}
@@ -952,7 +980,9 @@ describe("NovelDetailContainer", () => {
     });
 
     it("一括キャッシュボタンが表示され、クリック時に一括キャッシュ処理が連携起動すること (AC-ND-11)", async () => {
-      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
       render(
         <RouterProvider
           initialPath={`/novels/${encodeURIComponent(sampleNovel.id)}`}
@@ -984,7 +1014,9 @@ describe("NovelDetailContainer", () => {
     });
 
     it("本文キャッシュ整理ボタンからダイアログを開き削除を実行した際、deleteCachedBodies が呼び出され完了通知が表示されること (AC-ND-21, AC-ND-22, TR-19)", async () => {
-      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
       const deleteCachedBodiesMock = vi.fn().mockResolvedValue(1);
       const mockChapterRepo: ChapterRepository = {
         ...createMockChapterRepo(sampleChapters),
@@ -1043,7 +1075,9 @@ describe("NovelDetailContainer", () => {
     });
 
     it("子コンポーネント（NovelDetailPage）の onToggleFavorite コールバック呼び出し時に作品のお気に入り状態がトグルされること (Issue #266, R1-04)", async () => {
-      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
       const setFavoriteMock = vi.fn().mockResolvedValue(undefined);
       const novelRepo = {
         ...createMockNovelRepo({
@@ -1090,7 +1124,9 @@ describe("NovelDetailContainer", () => {
     });
 
     it("useNovelDetail から得た pendingCacheCount, failedCacheCount, failedChapterIndexes が NovelDetailPage に伝達されること (AC-ND-24, AC-ND-25)", async () => {
-      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
 
       const db = await resetTestDb();
       const { SqlNovelRepository } =
@@ -1164,7 +1200,9 @@ describe("NovelDetailContainer", () => {
     });
 
     it("onOpenWebView が渡された場合、NovelDetailPage へ正しく伝搬されること (Issue #269, TR-09)", async () => {
-      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
       const onOpenWebView = vi.fn();
 
       render(
@@ -1200,7 +1238,9 @@ describe("NovelDetailContainer", () => {
     });
 
     it("onOpenWebView が省略された場合、デフォルトで router.navigateToBrowser により /browser へ遷移すること (Issue #269, TR-09, R1-19)", async () => {
-      const pageSpy = vi.spyOn(NovelDetailPageModule, "NovelDetailPage");
+      const pageSpy = vi
+        .spyOn(NovelDetailPageModule, "NovelDetailPage")
+        .mockImplementation(() => null);
 
       const Harness: React.FC = () => {
         const router = useRouter();

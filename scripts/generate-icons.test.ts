@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 
 const { createDummyPngBuffer } = vi.hoisted(() => {
   function createDummyPngBuffer(
@@ -25,57 +25,55 @@ const { createDummyPngBuffer } = vi.hoisted(() => {
 vi.mock("@playwright/test", () => {
   return {
     chromium: {
-      launch: vi.fn().mockImplementation(async () => {
+      launch: async () => {
         return {
-          newPage: vi.fn().mockResolvedValue({
-            evaluate: vi.fn().mockImplementation(
-              async (
-                _fn: unknown,
-                args: {
-                  densityList: Array<{
-                    dpi: string;
-                    legacy: number;
-                    fg: number;
-                  }>;
-                },
-              ) => {
-                const androidResults: Record<
-                  string,
-                  { legacy: string; round: string; foreground: string }
-                > = {};
-                for (const item of args.densityList) {
-                  const { dpi, legacy, fg } = item;
-                  androidResults[dpi] = {
-                    legacy: createDummyPngBuffer(legacy, legacy).toString(
-                      "base64",
-                    ),
-                    round: createDummyPngBuffer(legacy, legacy).toString(
-                      "base64",
-                    ),
-                    foreground: createDummyPngBuffer(fg, fg).toString("base64"),
-                  };
-                }
-                return {
-                  android: androidResults,
-                  web: {
-                    icon192: createDummyPngBuffer(192, 192).toString("base64"),
-                    icon512: createDummyPngBuffer(512, 512).toString("base64"),
-                    appleTouchIcon: createDummyPngBuffer(180, 180).toString(
-                      "base64",
-                    ),
-                    favicons: {
-                      16: createDummyPngBuffer(16, 16).toString("base64"),
-                      32: createDummyPngBuffer(32, 32).toString("base64"),
-                      48: createDummyPngBuffer(48, 48).toString("base64"),
-                    },
-                  },
-                };
+          newPage: async () => ({
+            evaluate: async (
+              _fn: unknown,
+              args: {
+                densityList: Array<{
+                  dpi: string;
+                  legacy: number;
+                  fg: number;
+                }>;
               },
-            ),
+            ) => {
+              const androidResults: Record<
+                string,
+                { legacy: string; round: string; foreground: string }
+              > = {};
+              for (const item of args.densityList) {
+                const { dpi, legacy, fg } = item;
+                androidResults[dpi] = {
+                  legacy: createDummyPngBuffer(legacy, legacy).toString(
+                    "base64",
+                  ),
+                  round: createDummyPngBuffer(legacy, legacy).toString(
+                    "base64",
+                  ),
+                  foreground: createDummyPngBuffer(fg, fg).toString("base64"),
+                };
+              }
+              return {
+                android: androidResults,
+                web: {
+                  icon192: createDummyPngBuffer(192, 192).toString("base64"),
+                  icon512: createDummyPngBuffer(512, 512).toString("base64"),
+                  appleTouchIcon: createDummyPngBuffer(180, 180).toString(
+                    "base64",
+                  ),
+                  favicons: {
+                    16: createDummyPngBuffer(16, 16).toString("base64"),
+                    32: createDummyPngBuffer(32, 32).toString("base64"),
+                    48: createDummyPngBuffer(48, 48).toString("base64"),
+                  },
+                },
+              };
+            },
           }),
-          close: vi.fn().mockResolvedValue(undefined),
+          close: async () => {},
         };
-      }),
+      },
     },
   };
 });
@@ -90,6 +88,10 @@ import {
 
 describe("アプリアイコン生成スクリプト及びアセット配置検証 (AC-ICON-01〜04)", () => {
   const rootDir = process.cwd();
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   describe("定数定義", () => {
     it("DENSITIES が 5 つの DPI 定義を持つこと", () => {

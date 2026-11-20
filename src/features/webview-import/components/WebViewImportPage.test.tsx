@@ -163,7 +163,9 @@ describe("WebViewImportPage", () => {
   });
 
   it("タブバーのコールバックおよび Props が正しく配線され、省略時もエラーが発生しないこと (R1-14)", () => {
-    const bottomTabBarSpy = vi.spyOn(BottomTabBarModule, "BottomTabBar");
+    const bottomTabBarSpy = vi
+      .spyOn(BottomTabBarModule, "BottomTabBar")
+      .mockImplementation(() => null);
     const onSelectBookshelf = vi.fn();
     const onSelectSearch = vi.fn();
     const onSelectRanking = vi.fn();

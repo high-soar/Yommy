@@ -257,8 +257,12 @@ describe("RankingPage コンポーネント", () => {
   });
 
   it("親子分離: フィルタおよびカードの各操作コールバックが子コンポーネントへ正しく伝達されること", () => {
-    const filterBarSpy = vi.spyOn(rankingFilterBarModule, "RankingFilterBar");
-    const cardSpy = vi.spyOn(rankingNovelCardModule, "RankingNovelCard");
+    const filterBarSpy = vi
+      .spyOn(rankingFilterBarModule, "RankingFilterBar")
+      .mockImplementation(() => null);
+    const cardSpy = vi
+      .spyOn(rankingNovelCardModule, "RankingNovelCard")
+      .mockImplementation(() => null);
     const handleSelectPeriod = vi.fn();
     const handleSelectGenre = vi.fn();
     const handleAddNovel = vi.fn();
@@ -318,8 +322,12 @@ describe("RankingPage コンポーネント", () => {
   });
 
   it("親子分離: selectedSite が SiteSelector および RankingFilterBar へ正しく伝播すること (AC-RK-09)", () => {
-    const siteSelectorSpy = vi.spyOn(siteSelectorModule, "SiteSelector");
-    const filterBarSpy = vi.spyOn(rankingFilterBarModule, "RankingFilterBar");
+    const siteSelectorSpy = vi
+      .spyOn(siteSelectorModule, "SiteSelector")
+      .mockImplementation(() => null);
+    const filterBarSpy = vi
+      .spyOn(rankingFilterBarModule, "RankingFilterBar")
+      .mockImplementation(() => null);
 
     render(
       <RankingPage
@@ -354,7 +362,9 @@ describe("RankingPage コンポーネント", () => {
   });
 
   it("親子分離: selectedWorkVariation と onSelectWorkVariation が RankingFilterBar へ正しく伝播すること (AC-RK-10, Issue #265)", () => {
-    const filterBarSpy = vi.spyOn(rankingFilterBarModule, "RankingFilterBar");
+    const filterBarSpy = vi
+      .spyOn(rankingFilterBarModule, "RankingFilterBar")
+      .mockImplementation(() => null);
     const handleWorkVariation = vi.fn();
 
     render(

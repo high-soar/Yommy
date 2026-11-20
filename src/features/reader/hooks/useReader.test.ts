@@ -5071,16 +5071,13 @@ describe("useReader", () => {
         const fetchBlocker = new Promise<void>((r) => {
           unblockFetch = r;
         });
-        let onFetchStarted: () => void = () => {};
-        const fetchStarted = new Promise<void>((r) => {
-          onFetchStarted = r;
-        });
+        let hasFetchStarted = false;
 
         const mockHttpClient = new MockHttpClient();
         mockHttpClient.setResponse(
           `https://kakuyomu.jp/works/${KAKUYOMU_WORK_ID}/episodes/${KAKUYOMU_EPISODE_IDS[0]}`,
           async () => {
-            onFetchStarted();
+            hasFetchStarted = true;
             await fetchBlocker;
             return {
               status: 200,
@@ -5102,13 +5099,17 @@ describe("useReader", () => {
           },
         );
 
-        // HTTP 通信が開始されたことを待機（初期 DB 取得を確実に通過）
-        await fetchStarted;
+        // ServiceProvider 初期化完了と HTTP 通信開始を waitFor（act 内）で待機
+        await waitFor(() => {
+          expect(hasFetchStarted).toBe(true);
+        });
 
         // 通信待機中にアンマウント
-        unmount();
-        unblockFetch();
-        await new Promise((r) => setTimeout(r, 50));
+        await act(async () => {
+          unmount();
+          unblockFetch();
+          await new Promise((r) => setTimeout(r, 50));
+        });
 
         // アンマウント後の不要な DB 書き込みがスキップされること
         expect(updateBookmarkSpy).not.toHaveBeenCalled();
