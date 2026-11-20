@@ -1537,13 +1537,13 @@ test.describe("SCN-05 (Issue #375): クラウド同期進捗率復元・Pull時�
         lastReadAt: thirtyMinAgo,
       });
 
-    await expect(
-      page.getByTestId("bookmark-conflict-dialog"),
-    ).not.toBeVisible();
     await expect(chapterIndicator).toHaveText("第 2 話 / 全 4 話", {
       timeout: 10000,
     });
     await expect(nextChapterBtn).toBeEnabled();
+    await expect(
+      page.getByTestId("bookmark-conflict-dialog"),
+    ).not.toBeVisible();
     await expect(page).toHaveURL(
       /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/2$/,
     );
