@@ -237,7 +237,7 @@ export interface UseNovelRankingResult {
 
 - **アンマウント時クリーンアップと世代・マウントガード（`isMountedRef` / `requestIdRef`, R1-19）**:
   - マウント状態フラグ `isMountedRef` を保持し、アンマウント時に `isMountedRef.current = false` および `requestIdRef.current += 1` を設定する。
-  - `refreshRegisteredIds`・`addNovelToBookshelf`（`try` / `catch` 内の `addingWorkId` / `registeredRemoteWorkIds` / `error` State 更新）・`handleCardSelect`（登録済み分岐の `listNovels()` 完了後 `router.navigateToNovelDetail`、および未登録分岐の `addNovelToBookshelf` 完了後 `router.navigateToNovelDetail`）において、非同期完了後の State 更新および画面遷移を `isMountedRef.current` でガードし、アンマウント後の React State 更新警告や遅延遷移を防止する。ただし本棚登録時の DB 保存および `syncEngine?.notifyChanged()` はデータ整合性維持のためアンマウント後も完遂させる。
+  - `refreshRegisteredIds`・`addNovelToBookshelf`（`try` / `catch` 内の `addingWorkId` / `registeredWorkIds` / `error` State 更新）・`handleCardSelect`（登録済み分岐の `listNovels()` 完了後 `router.navigateToNovelDetail`、および未登録分岐の `addNovelToBookshelf` 完了後 `router.navigateToNovelDetail`）において、非同期完了後の State 更新および画面遷移を `isMountedRef.current` でガードし、アンマウント後の React State 更新警告や遅延遷移を防止する。ただし本棚登録時の DB 保存および `syncEngine?.notifyChanged()` はデータ整合性維持のためアンマウント後も完遂させる。
 - **同一作品への連打・多重登録抑止ガード（`addingWorkIdsRef`, R1-13）**:
   - `addingWorkIdsRef = useRef<Set<string>>(new Set())` を保持し、`addNovelToBookshelf` および `handleCardSelect` の入口で `addingWorkIdsRef.current.has(item.remoteWorkId)` を同期チェックして同一ティック内の連続呼び出し（二重登録・二重遷移）を抑止し、`finally` ブロックで確実に解放する（別作品同士の並行追加を阻害しないよう作品単位の `Set<string>` で管理する）。
 
