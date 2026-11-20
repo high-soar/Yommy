@@ -101,4 +101,4 @@ description: "Use when orchestrating a cross-deliverable review at the end of a 
         - `docs/specs/` 配下の正本仕様書フロントマター `status` を一括で `"Approved"` に揃える。
      5. **`package.json` バージョンの Milestone 連動更新**:
         - [docs/guidelines/workflow.md §5.1](../../../docs/guidelines/workflow.md#51-バージョン採番semverと-git-tag--github-release-自動化ルール) に従い、`package.json` の `version` を `X.Y.0` へ更新する（マージ時の自動 Git Tag / GitHub Release `vX.Y.0` 発行トリガー）。
-   - Step 3 PR で Gate 1〜6 を完遂した上で人間に報告し、**人間による本 PR のマージをもって Milestone を完了** とする。
+   - Step 3 PR で Gate 1〜6 を完遂した上で人間に報告し、**人間による本 PR のマージをもって Milestone を完了** とする（マージ完了後、GitHub 上の当該 Milestone 自体も `closed` 状態へ更新してクローズ漏れを防止する）。
