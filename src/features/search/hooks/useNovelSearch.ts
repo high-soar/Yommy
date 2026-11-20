@@ -113,6 +113,7 @@ export function useNovelSearch(): UseNovelSearchResult {
   const isSearchingRef = useRef<boolean>(false);
   const searchGenerationRef = useRef<number>(0);
   const selectedSiteRef = useRef<NovelSiteType>(selectedSite);
+  const addingWorkIdsRef = useRef<Set<string>>(new Set());
   const committedQueryRef = useRef<{
     keyword: string;
     excludeKeyword: string;
@@ -148,6 +149,7 @@ export function useNovelSearch(): UseNovelSearchResult {
       const siteToQuery = targetSite ?? selectedSite;
       try {
         const novels = await novelRepository.listNovels();
+        if (!isMountedRef.current) return;
         const ids = new Set(
           novels
             .filter((n) => n.siteType === siteToQuery)
@@ -155,6 +157,7 @@ export function useNovelSearch(): UseNovelSearchResult {
         );
         setRegisteredWorkIds(ids);
       } catch {
+        if (!isMountedRef.current) return;
         // 登録済みID取得の失敗時は空セットにフォールバック
         setRegisteredWorkIds(new Set());
       }
@@ -327,7 +330,9 @@ export function useNovelSearch(): UseNovelSearchResult {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
     } finally {
-      setIsLoadingMore(false);
+      if (isMountedRef.current) {
+        setIsLoadingMore(false);
+      }
     }
   }, [
     hasNextPage,
@@ -391,12 +396,14 @@ export function useNovelSearch(): UseNovelSearchResult {
 
   const addNovelToBookshelf = useCallback(
     async (item: NovelSearchResultItem): Promise<string | null> => {
-      if (addingWorkId === item.remoteWorkId) return null;
+      if (addingWorkIdsRef.current.has(item.remoteWorkId)) return null;
+      addingWorkIdsRef.current.add(item.remoteWorkId);
 
       const siteAtStart = selectedSite;
       setAddingWorkId(item.remoteWorkId);
       setError(null);
 
+      let savedId: string | null = null;
       try {
         const parser = parserRegistry.requireParser(item.workUrl);
 
@@ -420,27 +427,24 @@ export function useNovelSearch(): UseNovelSearchResult {
           setAddingWorkId((prev) => (prev === item.remoteWorkId ? null : prev));
         }
         syncEngine?.notifyChanged().catch(() => {});
-        return savedNovel.id;
+        savedId = savedNovel.id;
       } catch (err) {
-        setAddingWorkId((prev) => (prev === item.remoteWorkId ? null : prev));
-        const message = err instanceof Error ? err.message : String(err);
-        setError(message);
-        return null;
+        if (isMountedRef.current) {
+          setAddingWorkId((prev) => (prev === item.remoteWorkId ? null : prev));
+          const message = err instanceof Error ? err.message : String(err);
+          setError(message);
+        }
+      } finally {
+        addingWorkIdsRef.current.delete(item.remoteWorkId);
       }
+      return savedId;
     },
-    [
-      addingWorkId,
-      httpClient,
-      novelRepository,
-      parserRegistry,
-      selectedSite,
-      syncEngine,
-    ],
+    [httpClient, novelRepository, parserRegistry, selectedSite, syncEngine],
   );
 
   const handleCardSelect = useCallback(
     async (item: NovelSearchResultItem): Promise<void> => {
-      if (addingWorkId === item.remoteWorkId) return;
+      if (addingWorkIdsRef.current.has(item.remoteWorkId)) return;
 
       if (registeredWorkIds.has(item.remoteWorkId)) {
         const fallbackSiteType =
@@ -459,6 +463,7 @@ export function useNovelSearch(): UseNovelSearchResult {
         } catch {
           // listNovels 取得失敗時は決定論的 ID をフォールバックとして使用
         }
+        if (!isMountedRef.current) return;
         router.navigateToNovelDetail(novelId, "/search");
         return;
       }
@@ -469,7 +474,6 @@ export function useNovelSearch(): UseNovelSearchResult {
       }
     },
     [
-      addingWorkId,
       registeredWorkIds,
       addNovelToBookshelf,
       novelRepository,

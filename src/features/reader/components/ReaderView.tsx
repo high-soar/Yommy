@@ -330,6 +330,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     };
   }, [
     isPaged,
+    chapterIndex,
     chapterTitle,
     bodyHtml,
     initialScrollProgress,
@@ -356,7 +357,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     onScrollProgressChange(progress);
   }, [isPaged, writingMode, onScrollProgressChange]);
 
-  // マウント時および bodyHtml / writingMode / initialScrollProgress / pagingMode 変化時のスクロール位置復元
+  // マウント時および chapterIndex / bodyHtml / writingMode / initialScrollProgress / pagingMode 変化時のスクロール位置復元
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -385,7 +386,14 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         isRestoringScrollRef.current = false;
       };
     }
-  }, [initialScrollProgress, bodyHtml, writingMode, pagingMode, isPaged]);
+  }, [
+    initialScrollProgress,
+    chapterIndex,
+    bodyHtml,
+    writingMode,
+    pagingMode,
+    isPaged,
+  ]);
 
   // pageWidth, pageHeight の解決
   const pageWidth = containerRef.current?.clientWidth ?? containerWidth;

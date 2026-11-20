@@ -863,12 +863,31 @@ export class SyncEngine {
           const isRemoteUpdateNewer =
             Date.parse(remoteNovel.updatedAt) > Date.parse(local.updatedAt);
 
+          const mergedTotalChapters = Math.max(
+            local.totalChapters,
+            remoteNovel.totalChapters,
+          );
+          const useRemoteBookmark =
+            isRemoteReadNewer && remoteNovel.bookmarkChapterIndex !== null;
+          const bookmarkWinner = useRemoteBookmark ? remoteNovel : local;
+          const baseBookmarkChapterIndex = bookmarkWinner.bookmarkChapterIndex;
+          const baseBookmarkScrollProgress = useRemoteBookmark
+            ? remoteNovel.bookmarkScrollProgress !== undefined
+              ? remoteNovel.bookmarkScrollProgress
+              : remoteNovel.bookmarkChapterIndex === local.bookmarkChapterIndex
+                ? local.bookmarkScrollProgress
+                : 0.0
+            : local.bookmarkScrollProgress;
+          const shouldAutoAdvance =
+            bookmarkWinner.totalChapters > 0 &&
+            baseBookmarkChapterIndex === bookmarkWinner.totalChapters &&
+            bookmarkWinner.bookmarkScrollProgress !== undefined &&
+            isBookmarkAtEnd(bookmarkWinner.bookmarkScrollProgress) &&
+            mergedTotalChapters > bookmarkWinner.totalChapters;
+
           merged[id] = {
             ...local,
-            totalChapters: Math.max(
-              local.totalChapters,
-              remoteNovel.totalChapters,
-            ),
+            totalChapters: mergedTotalChapters,
             latestEpisodePublishedAt: selectNewerIsoTimestamp(
               local.latestEpisodePublishedAt,
               remoteNovel.latestEpisodePublishedAt,
@@ -879,21 +898,12 @@ export class SyncEngine {
             lastReadAt: isRemoteReadNewer
               ? remoteNovel.lastReadAt
               : local.lastReadAt,
-            bookmarkChapterIndex: isRemoteReadNewer
-              ? remoteNovel.bookmarkChapterIndex !== null
-                ? remoteNovel.bookmarkChapterIndex
-                : local.bookmarkChapterIndex
-              : local.bookmarkChapterIndex,
-            bookmarkScrollProgress: isRemoteReadNewer
-              ? remoteNovel.bookmarkChapterIndex !== null
-                ? remoteNovel.bookmarkScrollProgress !== undefined
-                  ? remoteNovel.bookmarkScrollProgress
-                  : remoteNovel.bookmarkChapterIndex ===
-                      local.bookmarkChapterIndex
-                    ? local.bookmarkScrollProgress
-                    : 0.0
-                : local.bookmarkScrollProgress
-              : local.bookmarkScrollProgress,
+            bookmarkChapterIndex: shouldAutoAdvance
+              ? bookmarkWinner.totalChapters + 1
+              : baseBookmarkChapterIndex,
+            bookmarkScrollProgress: shouldAutoAdvance
+              ? 0.0
+              : baseBookmarkScrollProgress,
             updatedAt: isRemoteUpdateNewer
               ? remoteNovel.updatedAt
               : local.updatedAt,

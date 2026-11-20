@@ -9,6 +9,7 @@ import { SiteSelector } from "./SiteSelector";
 import { SearchInputBar } from "./SearchInputBar";
 import { SearchFilterBar } from "./SearchFilterBar";
 import { SearchNovelCard } from "./SearchNovelCard";
+import { SEARCH_SITES } from "../constants";
 
 export interface SearchPageProps {
   /** 選択中サイト識別子 */
@@ -238,7 +239,9 @@ export const SearchPage: React.FC<SearchPageProps> = ({
                 キーワードを入力して小説を検索
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                カクヨムに投稿された作品名・著者名・キーワードやジャンルからお好みの小説を見つけることができます。
+                {SEARCH_SITES.find((site) => site.siteType === selectedSite)
+                  ?.label ?? "小説サイト"}
+                に投稿された作品名・著者名・キーワードやジャンルからお好みの小説を見つけることができます。
               </p>
             </div>
           </div>
