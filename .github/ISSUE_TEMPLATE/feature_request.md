@@ -31,10 +31,11 @@ labels: ["feature", "needs-refinement"]
 
 ## 🤖 AI 細分化・マイクロWF進行チェックリスト（AI が自動更新）
 
-- [ ] **Step 1: 要望分析・未確定事項（Open Questions）の確認完了**
-- [ ] **Step 2: 設計更新 PR（差分仕様 `docs/specs/changes/issue-XX-*.md` 作成 ＋ App全体正本 `docs/specs/` 反映 ＋ 実機検証タイミング判断［親Issue完了前 or Milestone完了前］＆ Sub-issue 分割）の合意・マージ（＝設計 `Approved`）**
+- [ ] **Step 1: 要望分析・未確定事項（Open Questions）・リリース種別（Track A: Milestone `vX.Y` / Track B: Hotfix `vX.Y.(Z+1)`）の確認完了**
+  - リリース種別（Step 1 で確定）: <!-- Track A（Milestone vX.Y へ紐付け）または Track B（緊急 Hotfix vX.Y.(Z+1)・Milestone 非作成）を記載 -->
+- [ ] **Step 2: 設計更新 PR（Milestone 紐付け/Hotfix 宣言 ＋ 差分仕様 `docs/specs/changes/issue-XX-*.md` 作成 ＋ App全体正本 `docs/specs/` 反映 ＋ 実機検証タイミング判断［親Issue完了前 or Milestone完了前］＆ Sub-issue 分割）の合意・マージ（＝設計 `Approved`）**
   - 実機検証タイミング（Step 2 で記入）: <!-- 「親 Issue 完了前（対象時: 以下に検証項目を記載）」または「Milestone 完了前（一括実施）」を記載 -->
 - [ ] **Step 3: MK（TDD実装・1対1 Story/UT・C0/C1 100%・縦書き/ルビ VRT）Sub-issue の完了**
-  - Sub-issues: <!-- AIが起票したSub-issue番号をリンク -->
+  - Sub-issues: <!-- AIが起票したSub-issue番号をリンク（Track A 時は同一 Milestone を継承） -->
 - [ ] **Step 4: IT（Playwright 全体回帰シナリオ `SCN-xx` 更新・全件 100% PASS）完了**
-- [ ] **Step 5: 実機検証試験項目表の提示・実機確認（親Issue実施対象時）・申し送り事項（`HO-xx`）精算、および差分仕様の `docs/specs/changes/archive/` への移動完了**
+- [ ] **Step 5: 実機検証試験項目表の提示・実機確認（親Issue実施対象時）・申し送り事項（`HO-xx`）精算、差分仕様の `docs/specs/changes/archive/` 移動（および Track B Hotfix 時は `package.json` `PATCH` 更新）完了**

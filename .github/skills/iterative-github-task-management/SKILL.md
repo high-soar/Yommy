@@ -15,33 +15,37 @@ description: "Use when breaking down a Feature Request Issue into an iterative m
 
 人間が起票した親 Issue（または Phase 3 PoC の検証 Issue）に着手する際、メインエージェント（Orchestrator）はいきなり実装コードを書かず、以下の順序で進行します。
 
-### Step 1: 既存仕様・コード調査と未確定事項（Open Questions）の確認
+### Step 1: 既存仕様・コード調査と未確定事項（Open Questions）・リリース種別の確認
 
 1. 軽量な読み取り専用サブエージェント（`research`）を起動し、関連する `docs/specs/`（`requirements.md`, `architecture.md`, `db-schema.md`, `screen-transitions.md`, `features/*.md`, `parsers/*.md`）および既存コード・テストを調査させる。
 2. 要望に曖昧な点（異常系エラー表示、境界値、レートリミット挙動、キャッシュ削除時のしおり扱い等）があれば、推測で決め打ちせず、選択肢を添えて人間に質問する。
-3. 親 Issue 本文のチェックリスト `Step 1: 要望分析・未確定事項（Open Questions）の確認完了` を更新する。
+3. [docs/guidelines/workflow.md §2.3](../../../docs/guidelines/workflow.md#23-リリース種別milestone-帰属の判断基準track-a-milestone-開発-vs-track-b-緊急-hotfix) に従い、当該親 Issue を **Track A（通常 Milestone `vX.Y` 開発）** とするか **Track B（緊急 Hotfix `vX.Y.(Z+1)`・Milestone 非作成）** とするかを人間に確認・確定する。
+4. 親 Issue 本文のチェックリスト `Step 1: 要望分析・未確定事項（Open Questions）の確認完了`（およびリリース種別）を更新する。
 
-### Step 2: 設計更新 PR（「差分仕様の作成」＋「App 全体正本への反映」＋「実機検証計画の策定」）と Sub-issue 分割
+### Step 2: 設計更新 PR（「差分仕様の作成」＋「App 全体正本への反映」＋「Milestone 紐付け・実機検証計画の策定」）と Sub-issue 分割
 
-1. [docs/index.md](../../../docs/index.md#3-docsspecs-の-2-層管理ルールapp-全体正本--差分仕様) に従い、以下の **2種類の仕様書（OKF YAML フロントマター形式）を同一設計 PR 内でセットで作成・更新** する（いずれもフロントマター `status: Review (#親Issue番号)`）：
+1. [docs/guidelines/workflow.md §2.3](../../../docs/guidelines/workflow.md#23-リリース種別milestone-帰属の判断基準track-a-milestone-開発-vs-track-b-緊急-hotfix) のリリース帰属ゲートを実施する：
+   - **Track A（通常 Milestone 開発）**: GitHub 上に対象の `Milestone vX.Y` が存在するか確認し、未存在なら作成した上で **親 Issue へ Milestone を紐付ける**（未紐付けのまま設計 PR を提出しない）。
+   - **Track B（緊急 Hotfix）**: Milestone は作成せず、親 Issue に `bug`（または `hotfix`）ラベルと対象パッチバージョン `vX.Y.(Z+1)` を明記する。
+2. [docs/index.md](../../../docs/index.md#3-docsspecs-の-2-層管理ルールapp-全体正本--差分仕様) に従い、以下の **2種類の仕様書（OKF YAML フロントマター形式）を同一設計 PR 内でセットで作成・更新** する（いずれもフロントマター `status: Review (#親Issue番号)`）：
    - **① 差分仕様ファイルの新規作成（`docs/specs/changes/issue-XX-<slug>.md`）**:
-     - 今回の要望の背景・目的、変更対象の App 全体正本ファイル一覧、追加・変更・削除する仕様（`AC-xx`, `TR-xx`, 契約, コンポーネント構成）の差分、UT/VRT/IT のテスト計画、実装 Sub-issue 分割リスト、および申し送り事項（`HO-xx`）・Android 実機検証計画を記載する。
+     - 今回の要望の背景・目的、**リリース種別（Track A: Milestone `vX.Y` / Track B: Hotfix `vX.Y.(Z+1)`）**、変更対象の App 全体正本ファイル一覧、追加・変更・削除する仕様（`AC-xx`, `TR-xx`, 契約, コンポーネント構成）の差分、UT/VRT/IT のテスト計画、実装 Sub-issue 分割リスト、および申し送り事項（`HO-xx`）・Android 実機検証計画を記載する。
    - **② App 全体正本の同時更新（`docs/specs/*.md`, `features/*.md`, `parsers/*.md`）**:
      - 差分仕様の内容を App 全体正本へ反映し、常に `docs/specs/` の正本群が最新のアプリ全体仕様を表す状態を維持する。
    - **③ Android 実機検証の実施粒度判断と申し送り事項（`HO-xx`）の登録**:
-     - [docs/guidelines/workflow.md §2.2](../../../docs/guidelines/workflow.md#22-android-実機検証の実施判断基準と試験項目表フォーマット) の基準（①Android ネイティブ層の新設・変更、②タッチ/スワイプ/ハードウェアキー等の物理操作やアニメーション・実機レイアウト計算、③実機確認観点が目安 3 項目以上）に従い、当該要望の実機検証を **「親 Issue 単位で実施（完了ゲート: `親 Issue #XX 完了前`）」** するか、**「Milestone 最終レビュー後に一括実施（完了ゲート: `Milestone v0.X 完了前`）」** するかを判断する。
+     - [docs/guidelines/workflow.md §2.2](../../../docs/guidelines/workflow.md#22-android-実機検証の実施判断基準と試験項目表フォーマット) の基準（①Android ネイティブ層の新設・変更、②タッチ/スワイプ/ハードウェアキー等の物理操作やアニメーション・実機レイアウト計算、③実機確認観点が目安 3 項目以上、④Track B 緊急 Hotfix）に従い、当該要望の実機検証を **「親 Issue 単位で実施（完了ゲート: `親 Issue #XX 完了前`）」** するか、**「Milestone 最終レビュー後に一括実施（完了ゲート: `Milestone vX.Y 完了前`）」** するかを判断する。
      - 判断結果と実機検証観点を以下の **3 箇所** に記載する：
        1. 差分仕様書（`docs/specs/changes/issue-XX-<slug>.md` の「5. 申し送り事項・実機検証計画」）
        2. 親 Issue 本文の進行チェックリスト（親 Issue 単位で実施する場合は確認項目リストも併記）
-       3. [docs/quality/bug-and-handover-log.md](../../../docs/quality/bug-and-handover-log.md) の `HO-xx` 完了ゲート欄（`親 Issue #XX 完了前` または `Milestone v0.X 完了前`）
-2. 実装（MK）および結合テスト（IT）の **Sub-issue 分割案** を策定する。
+       3. [docs/quality/bug-and-handover-log.md](../../../docs/quality/bug-and-handover-log.md) の `HO-xx` 完了ゲート欄（`親 Issue #XX 完了前` または `Milestone vX.Y 完了前`）
+3. 実装（MK）および結合テスト（IT）の **Sub-issue 分割案** を策定する。
    - **推奨分割粒度（1 PR = 200〜400行目安）**:
      - Sub-issue ①: Parser Layer / Storage Layer / Bridge Layer のロジック実装 ＋ 単体テスト（Vitest TDD）
      - Sub-issue ②: 子 UI コンポーネント群の実装 ＋ Storybook（`*.stories.tsx`）＋ Portable Stories UT ＋ VRT（1280px/375px）
      - Sub-issue ③: Page 結合 ＋ ルーティング ＋ Playwright 実ブラウザ IT シナリオ（`SCN-xx`）更新
      - ※小規模な要望の場合は 1〜2 個の Sub-issue に統合してよい。
-3. 設計更新 PR（`Refs #親Issue番号`）を作成し、Task Completion Gate を経て人間がマージした時点で、差分仕様および更新された App 全体正本は **`Approved`（局所的再承認）** となる。
-4. 合意された Sub-issue を `gh issue create` で起票し、親 Issue のチェックリストにリンクする。
+4. 設計更新 PR（`Refs #親Issue番号`）を作成し、Task Completion Gate を経て人間がマージした時点で、差分仕様および更新された App 全体正本は **`Approved`（局所的再承認）** となる。
+5. 合意された Sub-issue を `gh issue create` で起票し、親 Issue のチェックリストにリンクする（**Track A の場合は `--milestone` で親 Issue と同一の GitHub Milestone を必ず継承させる**）。
 
 ### Step 3: MK Sub-issue の直列委託と AI 自律マージによる連続進行
 
@@ -54,17 +58,18 @@ description: "Use when breaking down a Feature Request Issue into an iterative m
 
 1. Playwright 実ブラウザ結合テスト（`test/it/` の `SCN-01`〜）を最新仕様に合わせて進化・追加し、過去機能を含め全シナリオ 100% PASS を確認する。
 2. 最後の Sub-issue PR（または IT PR）において、完了した差分仕様ファイルの状態を `Completed (Archived)` に更新し、**`git mv docs/specs/changes/issue-XX-<slug>.md docs/specs/changes/archive/issue-XX-<slug>.md` でアーカイブディレクトリへ移動** する。
-3. PR に `Closes #親Issue番号`（および該当する場合は `Closes #IT-Sub-issue番号`）を設定し、Task Completion Gate 条件 1〜6（CI / 独立 `pr-reviewer` レビュー収束）を完遂する。
-4. **📱 親 Issue 単位で実機検証を実施する対象の場合（Step 2 で `親 Issue #XX 完了前` と判定した場合）**:
+3. **Track B（緊急 Hotfix）の場合**: 同一の最終 PR（`Closes #親Issue番号`）内で `package.json` の `version` を `X.Y.(Z+1)` へ更新する（人間マージ時に `.github/workflows/release.yml` が `vX.Y.(Z+1)` タグ／GitHub Release を自動発行する）。Track A（通常 Milestone 開発）の場合は `package.json` を変更しない。
+4. PR に `Closes #親Issue番号`（および該当する場合は `Closes #IT-Sub-issue番号`）を設定し、Task Completion Gate 条件 1〜6（CI / 独立 `pr-reviewer` レビュー収束）を完遂する。
+5. **📱 親 Issue 単位で実機検証を実施する対象の場合（Step 2 で `親 Issue #XX 完了前` と判定した場合、および Track B Hotfix）**:
    - 最終 PR が Gate 1〜6 を通過した段階で、[docs/guidelines/workflow.md §2.2](../../../docs/guidelines/workflow.md#22-android-実機検証の実施判断基準と試験項目表フォーマット) に従い **構造化された「Android 実機検証試験項目表」（項番・確認項目・具体的な操作手順・期待される結果・一筆書き確認ルート）** を人間に提示する。
    - 人間による実機検証で問題がなければ、`HO-xx` を `Resolved` に更新（またはマージ前に反映）して人間が最終 PR をマージする。実機検証で不具合が発見された場合は、当該 PR（または追加 PR）で TDD 修正・設計同期・バグ記録追加・Gate 1〜6 再検証を行い、実機再確認 OK となってから人間がマージする。
-5. **人間のレビュー・マージ（出口ゲート）によって親 Issue を同期クローズする**（**AI が `gh issue close` 等で直接 Issue を閉じたり、`Closes #親Issue番号` を含む最終 PR を自己マージすることは厳禁**）。
+6. **人間のレビュー・マージ（出口ゲート）によって親 Issue を同期クローズする**（**AI が `gh issue close` 等で直接 Issue を閉じたり、`Closes #親Issue番号` を含む最終 PR を自己マージすることは厳禁**）。
 
 ---
 
 ## 2. Sub-issue 起票時のテンプレート
 
-AI が Sub-issue を起票する際は以下の形式を使用します。
+AI が Sub-issue を起票する際は以下の形式を使用します（Track A の場合は `--milestone` で親 Issue と同一 Milestone を指定）。
 
 ```markdown
 ## 目的・範囲
@@ -98,4 +103,4 @@ AI が Sub-issue を起票する際は以下の形式を使用します。
      3. 当該 Milestone で完了したバグ記録および解決済み（`Resolved`）申し送り事項の `docs/quality/archive/<milestone>-log.md`（OKF `type: quality-log`, `status: "Completed (Archived)"`）へのアーカイブ移動と `bug-and-handover-log.md` のクリーンアップ（`docs/index.md` への登録含む）
      4. `docs/specs/` 配下の正本仕様書および品質レポートのフロントマター `status` の一括 `Approved` 化
      5. [docs/guidelines/workflow.md §5.1](../../../docs/guidelines/workflow.md#51-バージョン採番semverと-git-tag--github-release-自動化ルール) に従い `package.json` の `version` を `X.Y.0` へ更新（マージ時に GitHub Actions で Git Tag / GitHub Release `vX.Y.0` を自動発行）
-   - PR（`Closes #Milestone承認Issue`）で Gate 1〜6 を完遂し、**人間の最終確認・マージをもって Milestone を完了** する。
+   - PR（`Closes #Milestone承認Issue`）で Gate 1〜6 を完遂し、**人間の最終確認・マージをもって Milestone を完了** する（マージ完了後、GitHub 上の当該 Milestone 自体も `closed` に更新してクローズ漏れを防止する）。
