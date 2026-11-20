@@ -714,6 +714,8 @@ async function setMockRemoteState(
   page: Page,
   params: {
     bookmarkChapterIndex: number;
+    bookmarkScrollProgress?: number;
+    totalChapters?: number;
     lastReadAtIso: string;
     readChapterIndexes?: number[];
   },
@@ -722,6 +724,8 @@ async function setMockRemoteState(
     async ({
       novelId,
       bookmarkChapterIndex,
+      bookmarkScrollProgress,
+      totalChapters,
       lastReadAtIso,
       readChapterIndexes,
     }) => {
@@ -731,7 +735,9 @@ async function setMockRemoteState(
         novels: Record<
           string,
           {
+            totalChapters: number;
             bookmarkChapterIndex: number | null;
+            bookmarkScrollProgress?: number;
             lastReadAt: string | null;
             updatedAt: string;
             readChapterIds: string[];
@@ -741,6 +747,12 @@ async function setMockRemoteState(
       const target = parsed.novels[novelId];
       if (!target) throw new Error(`Novel ${novelId} missing in remote sync`);
       target.bookmarkChapterIndex = bookmarkChapterIndex;
+      if (bookmarkScrollProgress !== undefined) {
+        target.bookmarkScrollProgress = bookmarkScrollProgress;
+      }
+      if (totalChapters !== undefined) {
+        target.totalChapters = totalChapters;
+      }
       target.lastReadAt = lastReadAtIso;
       target.updatedAt = lastReadAtIso;
       if (readChapterIndexes && readChapterIndexes.length > 0) {
@@ -1210,5 +1222,330 @@ test.describe("SCN-05 (Issue #342): 画面ロック・復帰時のクラウド�
       () => (window as MockTimeWindow).__yommyObservedBookshelfLoading ?? false,
     );
     expect(observedLoading).toBe(false);
+  });
+});
+
+test.describe("SCN-05 (Issue #375): クラウド同期進捗率復元・Pull時話末繰り上げ・非競合更新", () => {
+  test.setTimeout(60000);
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await waitForServicesReady(page);
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await waitForServicesReady(page);
+  });
+
+  test("他端末の途中進捗率（bookmarkScrollProgress）の Pull 復元およびリーダーページ再現", async ({
+    page,
+  }) => {
+    // 1. クラウド連携済み作品（4話・初期しおり 第1話 progress=0）をシードして詳細画面（SCR-02）を開く
+    await seedCloudConnectedSampleNovel(page);
+    await page.goto(`/novels/${encodeURIComponent(SAMPLE_NOVEL_ID)}`);
+    await waitForServicesReady(page);
+
+    const resumeButton = page.getByTestId("detail-resume-button");
+    await expect(resumeButton).toHaveText("続きから読む（第1話）");
+
+    await installMockVisibilityClock(page);
+
+    // 2. 他端末で第2話・進捗率 0.75 まで読み進めた状態をリモートに設定し、5分休止復帰 Pull を発火
+    const remoteIso = await page.evaluate(() =>
+      new Date(Date.now() - 60_000).toISOString(),
+    );
+    await setMockRemoteState(page, {
+      bookmarkChapterIndex: 2,
+      bookmarkScrollProgress: 0.75,
+      lastReadAtIso: remoteIso,
+      readChapterIndexes: [1, 2],
+    });
+
+    await triggerVisibilityChange(page, "hidden");
+    await triggerVisibilityChange(page, "visible", 305_000);
+
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(async (novelId) => {
+            const novel =
+              await window.__yommyServices!.novelRepository.getNovelById(
+                novelId,
+              );
+            return {
+              bookmarkChapterIndex: novel?.bookmarkChapterIndex ?? null,
+              bookmarkScrollProgress: novel?.bookmarkScrollProgress ?? -1,
+              lastReadAt: novel?.lastReadAt ?? null,
+            };
+          }, SAMPLE_NOVEL_ID),
+        { timeout: 10000 },
+      )
+      .toEqual({
+        bookmarkChapterIndex: 2,
+        bookmarkScrollProgress: 0.75,
+        lastReadAt: remoteIso,
+      });
+
+    // 3. SCR-02 で「続きから読む（第2話）」へ自動更新された後、リーダーを開いて該当ページ位置が復元されること
+    await expect(resumeButton).toHaveText("続きから読む（第2話）", {
+      timeout: 10000,
+    });
+    await resumeButton.click();
+
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/2$/,
+    );
+    const readerView = page.getByTestId("reader-view");
+    await expect(readerView).toBeVisible();
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "第1話 見知らぬ空",
+    );
+
+    await expect
+      .poll(
+        async () =>
+          readerView.evaluate((el) => {
+            const total = Number(el.getAttribute("data-total-pages"));
+            const current = Number(el.getAttribute("data-current-page"));
+            const expected = Math.round(0.75 * (total - 1)) + 1;
+            return {
+              total,
+              current,
+              expected,
+              ok:
+                Number.isFinite(total) &&
+                total > 1 &&
+                current > 1 &&
+                current === expected,
+            };
+          }),
+        { timeout: 10000 },
+      )
+      .toMatchObject({ ok: true });
+
+    const pageAttrs = await readerView.evaluate((el) => ({
+      current: el.getAttribute("data-current-page"),
+      total: el.getAttribute("data-total-pages"),
+    }));
+    await expect(page.getByTestId("reader-page-indicator")).toHaveText(
+      `${pageAttrs.current} / ${pageAttrs.total}`,
+    );
+  });
+
+  test("他端末で旧最新話末尾（totalChapters=2, bookmark=2, progress=1.0）読了済み＋新着話あり時の Pull 自動進行＆lastReadAt 保持", async ({
+    page,
+  }) => {
+    // 1. ローカルは既に4話目次を取得済み（しおり 第1話 progress=0, lastReadAt=30m前）の状態で SCR-02 を開く
+    await seedCloudConnectedSampleNovel(page);
+    await page.goto(`/novels/${encodeURIComponent(SAMPLE_NOVEL_ID)}`);
+    await waitForServicesReady(page);
+
+    const resumeButton = page.getByTestId("detail-resume-button");
+    await expect(resumeButton).toHaveText("続きから読む（第1話）");
+    const episodeItems = page.getByTestId("episode-item");
+    await expect(episodeItems).toHaveCount(4);
+
+    await installMockVisibilityClock(page);
+
+    // 2. リモートは旧目次2話の最終話末尾（totalChapters=2, bookmark=2, progress=1.0, lastReadAt=新しい時刻）を保持
+    const remoteIso = await page.evaluate(() =>
+      new Date(Date.now() - 60_000).toISOString(),
+    );
+    await setMockRemoteState(page, {
+      totalChapters: 2,
+      bookmarkChapterIndex: 2,
+      bookmarkScrollProgress: 1.0,
+      lastReadAtIso: remoteIso,
+      readChapterIndexes: [1, 2],
+    });
+
+    await triggerVisibilityChange(page, "hidden");
+    await triggerVisibilityChange(page, "visible", 305_000);
+
+    // 3. mergeExistingNovel により第3話先頭へ自動進行し、SCR-02 のボタン・バッジ・DB の lastReadAt が整合すること
+    await expect(resumeButton).toHaveText("続きから読む（第3話）", {
+      timeout: 10000,
+    });
+    await expect(
+      episodeItems.nth(1).getByTestId("episode-read-badge"),
+    ).toBeVisible();
+    await expect(
+      episodeItems.nth(1).getByTestId("episode-bookmark-badge"),
+    ).toHaveCount(0);
+    await expect(
+      episodeItems.nth(2).getByTestId("episode-bookmark-badge"),
+    ).toBeVisible();
+    await expect(
+      episodeItems.nth(2).getByTestId("episode-read-badge"),
+    ).toHaveCount(0);
+
+    const existingMergeDb = await page.evaluate(async (novelId) => {
+      const services = window.__yommyServices!;
+      const novel = await services.novelRepository.getNovelById(novelId);
+      const ch3 = await services.chapterRepository.getChapter(novelId, 3);
+      return {
+        bookmarkChapterIndex: novel?.bookmarkChapterIndex ?? null,
+        bookmarkScrollProgress: novel?.bookmarkScrollProgress ?? -1,
+        lastReadAt: novel?.lastReadAt ?? null,
+        ch3IsRead: ch3?.isRead ?? null,
+      };
+    }, SAMPLE_NOVEL_ID);
+
+    expect(existingMergeDb).toEqual({
+      bookmarkChapterIndex: 3,
+      bookmarkScrollProgress: 0,
+      lastReadAt: remoteIso,
+      ch3IsRead: false,
+    });
+
+    // 4. 新規端末からの初回 Pull（mergeNewNovel）でも同様に最新4話目次取得＋第3話先頭進行＋lastReadAt 維持が行われること
+    await page.evaluate(() => {
+      localStorage.removeItem("yommy_sqlite_db_backup");
+    });
+    await page.goto("/");
+    await waitForServicesReady(page);
+
+    const novelCard = page.getByTestId("novel-card").first();
+    await expect(novelCard.getByTestId("novel-card-bookmark")).toHaveText(
+      "しおり: 第3話",
+      { timeout: 15000 },
+    );
+    await expect(novelCard.getByTestId("novel-card-resume")).toHaveText(
+      "第3話から読む",
+    );
+
+    const newMergeDb = await page.evaluate(async (novelId) => {
+      const services = window.__yommyServices!;
+      const novel = await services.novelRepository.getNovelById(novelId);
+      const ch3 = await services.chapterRepository.getChapter(novelId, 3);
+      return {
+        bookmarkChapterIndex: novel?.bookmarkChapterIndex ?? null,
+        bookmarkScrollProgress: novel?.bookmarkScrollProgress ?? -1,
+        lastReadAt: novel?.lastReadAt ?? null,
+        ch3IsRead: ch3?.isRead ?? null,
+      };
+    }, SAMPLE_NOVEL_ID);
+
+    expect(newMergeDb).toEqual({
+      bookmarkChapterIndex: 3,
+      bookmarkScrollProgress: 0,
+      lastReadAt: remoteIso,
+      ch3IsRead: false,
+    });
+  });
+
+  test("リーダー閲覧中に lastReadAt 未更新の TOC 自動進行が Pull 経由で発生した場合に競合ダイアログが出ず総話数が更新されること", async ({
+    page,
+  }) => {
+    // 1. 2話のみでシードし、第2話をキャッシュ済み・既読・末尾しおり（2, 1.0）・lastReadAt=30m前で同期
+    const thirtyMinAgo = await page.evaluate(async (workUrl) => {
+      const services = window.__yommyServices!;
+      await services.cloudSyncBridge?.signIn();
+      const nowIso = new Date().toISOString();
+      const response = await services.httpClient.getHtml({ url: workUrl });
+      const parser = services.parserRegistry.requireParser(workUrl);
+      const parsedIndex = parser.parseNovelIndex(response.html, workUrl);
+      const novelId = `${parsedIndex.siteType}:${parsedIndex.remoteWorkId}`;
+
+      await services.novelRepository.upsertNovelWithToc(
+        {
+          ...parsedIndex,
+          chapters: parsedIndex.chapters.slice(0, 2),
+        },
+        nowIso,
+      );
+
+      const ep2Res = await services.httpClient.getHtml({
+        url: parsedIndex.chapters[1].url,
+      });
+      const parsedEp2 = parser.parseChapterContent(
+        ep2Res.html,
+        parsedIndex.chapters[1].url,
+      );
+      await services.chapterRepository.saveChapterBody(
+        novelId,
+        2,
+        parsedEp2,
+        nowIso,
+      );
+      await services.chapterRepository.markChapterRead(novelId, 1, true);
+      await services.chapterRepository.markChapterRead(novelId, 2, true);
+      await services.novelRepository.updateBookmark(novelId, 2, 1.0);
+
+      const pastIso = new Date(Date.now() - 30 * 60_000).toISOString();
+      await services.databaseAdapter.execute(
+        "UPDATE novels SET last_read_at = ?, updated_at = ? WHERE id = ?",
+        [pastIso, pastIso, novelId],
+      );
+      await services.syncEngine?.sync();
+      return pastIso;
+    }, SAMPLE_NOVEL_URL);
+
+    // 2. 第2話をリーダーで開き、オーバーレイ上の話数インジケーター（全2話）を確認
+    await page.goto(
+      `/novels/${encodeURIComponent(SAMPLE_NOVEL_ID)}/chapters/2`,
+    );
+    await waitForServicesReady(page);
+    await expect(page.getByTestId("reader-view")).toBeVisible();
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "第1話 見知らぬ空",
+    );
+
+    await page.getByTestId("reader-bottom-touch-zone").click();
+    await expect(page.getByTestId("reader-bottom-overlay")).toHaveClass(
+      /translate-y-0/,
+    );
+    const chapterIndicator = page.getByTestId("reader-chapter-indicator");
+    const nextChapterBtn = page.getByTestId("reader-next-chapter");
+    await expect(chapterIndicator).toHaveText("第 2 話 / 全 2 話");
+    await expect(nextChapterBtn).toBeDisabled();
+
+    await installMockVisibilityClock(page);
+
+    // 3. リモートの lastReadAt は未更新（thirtyMinAgo のまま）で totalChapters のみ 4 に増えた状態で5分復帰 Pull を実行
+    await setMockRemoteState(page, {
+      bookmarkChapterIndex: 2,
+      bookmarkScrollProgress: 1.0,
+      totalChapters: 4,
+      lastReadAtIso: thirtyMinAgo,
+    });
+
+    await triggerVisibilityChange(page, "hidden");
+    await triggerVisibilityChange(page, "visible", 305_000);
+
+    // 4. TOC 補完と DB しおり自動進行（2 -> 3, lastReadAt 保持）が行われても競合ダイアログが出ず、リーダー上の総話数（全4話）が更新されること
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(async (novelId) => {
+            const novel =
+              await window.__yommyServices!.novelRepository.getNovelById(
+                novelId,
+              );
+            return {
+              totalChapters: novel?.totalChapters ?? 0,
+              bookmarkChapterIndex: novel?.bookmarkChapterIndex ?? null,
+              bookmarkScrollProgress: novel?.bookmarkScrollProgress ?? -1,
+              lastReadAt: novel?.lastReadAt ?? null,
+            };
+          }, SAMPLE_NOVEL_ID),
+        { timeout: 10000 },
+      )
+      .toEqual({
+        totalChapters: 4,
+        bookmarkChapterIndex: 3,
+        bookmarkScrollProgress: 0,
+        lastReadAt: thirtyMinAgo,
+      });
+
+    await expect(
+      page.getByTestId("bookmark-conflict-dialog"),
+    ).not.toBeVisible();
+    await expect(chapterIndicator).toHaveText("第 2 話 / 全 4 話", {
+      timeout: 10000,
+    });
+    await expect(nextChapterBtn).toBeEnabled();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/2$/,
+    );
   });
 });
