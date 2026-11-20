@@ -1946,5 +1946,86 @@ describe("ReaderView", () => {
       );
       expect(onSingleScreenContentMeasured).not.toHaveBeenCalled();
     });
+
+    it("chapterIndex のみ変化し同一 bodyHtml / chapterTitle / initialScrollProgress=0 の話遷移時に、スクロール位置が 0 にリセットされ onSingleScreenContentMeasured(true) が再発火すること (R1-20)", () => {
+      const onSingleScreenContentMeasured = vi.fn();
+      const { rerender } = render(
+        <ReaderView
+          bodyHtml="<p>同一の短文休載告知</p>"
+          chapterTitle="休載のお知らせ"
+          writingMode="horizontal-tb"
+          pagingMode="scroll"
+          chapterIndex={1}
+          totalChapters={3}
+          initialScrollProgress={0}
+          onSingleScreenContentMeasured={onSingleScreenContentMeasured}
+        />,
+      );
+
+      const container = screen.getByTestId("reader-view");
+      mockElementDimensions(container, {
+        clientWidth: 800,
+        clientHeight: 600,
+        scrollHeight: 400,
+      });
+      container.scrollTop = 250;
+      onSingleScreenContentMeasured.mockClear();
+
+      rerender(
+        <ReaderView
+          bodyHtml="<p>同一の短文休載告知</p>"
+          chapterTitle="休載のお知らせ"
+          writingMode="horizontal-tb"
+          pagingMode="scroll"
+          chapterIndex={2}
+          totalChapters={3}
+          initialScrollProgress={0}
+          onSingleScreenContentMeasured={onSingleScreenContentMeasured}
+        />,
+      );
+
+      expect(container.scrollTop).toBe(0);
+      expect(onSingleScreenContentMeasured).toHaveBeenCalledTimes(1);
+      expect(onSingleScreenContentMeasured).toHaveBeenCalledWith(true);
+
+      // 縦書き連続スクロールでも同様に scrollLeft が 0 にリセットされ再計測されること
+      mockElementDimensions(container, {
+        clientWidth: 400,
+        clientHeight: 600,
+        scrollWidth: 400,
+      });
+      rerender(
+        <ReaderView
+          bodyHtml="<p>同一の短文休載告知</p>"
+          chapterTitle="休載のお知らせ"
+          writingMode="vertical-rl"
+          pagingMode="scroll"
+          chapterIndex={2}
+          totalChapters={3}
+          initialScrollProgress={0}
+          onSingleScreenContentMeasured={onSingleScreenContentMeasured}
+        />,
+      );
+
+      container.scrollLeft = -200;
+      onSingleScreenContentMeasured.mockClear();
+
+      rerender(
+        <ReaderView
+          bodyHtml="<p>同一の短文休載告知</p>"
+          chapterTitle="休載のお知らせ"
+          writingMode="vertical-rl"
+          pagingMode="scroll"
+          chapterIndex={3}
+          totalChapters={3}
+          initialScrollProgress={0}
+          onSingleScreenContentMeasured={onSingleScreenContentMeasured}
+        />,
+      );
+
+      expect(container.scrollLeft).toBe(0);
+      expect(onSingleScreenContentMeasured).toHaveBeenCalledTimes(1);
+      expect(onSingleScreenContentMeasured).toHaveBeenCalledWith(true);
+    });
   });
 });

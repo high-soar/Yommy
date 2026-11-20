@@ -2114,4 +2114,389 @@ describe("useNovelSearch", () => {
       expect(window.location.pathname).toBe("/search");
     });
   });
+
+  describe("同一ティック連打ガードと残余アンマウント競合保護 (R1-13, R1-19)", () => {
+    it("同一ティック内に addNovelToBookshelf および handleCardSelect を同一作品で連続呼び出しした場合、同期ガードにより多重実行が抑止されること (R1-13)", async () => {
+      const { result } = renderHook(() => useNovelSearch(), {
+        wrapper: createWrapper("/search"),
+      });
+
+      act(() => {
+        result.current.setKeyword("異世界");
+      });
+      await act(async () => {
+        await result.current.search();
+      });
+
+      const targetItem = result.current.items[0];
+      let resolveWork!: (val: HttpResponse) => void;
+      let fetchCount = 0;
+      mockHttpClient.setResponse(
+        /^https:\/\/kakuyomu\.jp\/works\/\d+$/,
+        (options) => {
+          if (options.url === targetItem.workUrl) {
+            fetchCount++;
+            return new Promise<HttpResponse>((resolve) => {
+              resolveWork = resolve;
+            });
+          }
+          return {
+            status: 200,
+            url: options.url,
+            headers: {},
+            html: workIndexHtml,
+          };
+        },
+      );
+
+      let p1!: Promise<string | null>;
+      let p2!: Promise<string | null>;
+      let p3!: Promise<void>;
+      act(() => {
+        p1 = result.current.addNovelToBookshelf(targetItem);
+        p2 = result.current.addNovelToBookshelf(targetItem);
+        p3 = result.current.handleCardSelect(targetItem);
+      });
+
+      expect(fetchCount).toBe(1);
+      await expect(p2).resolves.toBeNull();
+      await expect(p3).resolves.toBeUndefined();
+
+      await act(async () => {
+        resolveWork({
+          status: 200,
+          url: targetItem.workUrl,
+          headers: {},
+          html: workIndexHtml,
+        });
+        await p1;
+      });
+
+      expect(result.current.addingWorkId).toBeNull();
+      expect(
+        result.current.registeredWorkIds.has(targetItem.remoteWorkId),
+      ).toBe(true);
+    });
+
+    it("同一ティック内に未登録作品で handleCardSelect を連続呼び出しした場合、通信・画面遷移ともに1回のみ実行されること (R1-13)", async () => {
+      const { result } = renderHook(() => useNovelSearch(), {
+        wrapper: createWrapper("/search"),
+      });
+
+      act(() => {
+        result.current.setKeyword("異世界");
+      });
+      await act(async () => {
+        await result.current.search();
+      });
+
+      const targetItem = result.current.items[0];
+      let resolveWork!: (val: HttpResponse) => void;
+      let fetchCount = 0;
+      mockHttpClient.setResponse(
+        /^https:\/\/kakuyomu\.jp\/works\/\d+$/,
+        (options) => {
+          if (options.url === targetItem.workUrl) {
+            fetchCount++;
+            return new Promise<HttpResponse>((resolve) => {
+              resolveWork = resolve;
+            });
+          }
+          return {
+            status: 200,
+            url: options.url,
+            headers: {},
+            html: workIndexHtml,
+          };
+        },
+      );
+
+      let p1!: Promise<void>;
+      let p2!: Promise<void>;
+      act(() => {
+        p1 = result.current.handleCardSelect(targetItem);
+        p2 = result.current.handleCardSelect(targetItem);
+      });
+
+      expect(fetchCount).toBe(1);
+      await expect(p2).resolves.toBeUndefined();
+
+      await act(async () => {
+        resolveWork({
+          status: 200,
+          url: targetItem.workUrl,
+          headers: {},
+          html: workIndexHtml,
+        });
+        await p1;
+      });
+
+      expect(window.location.pathname).toBe(
+        `/novels/${encodeURIComponent(`kakuyomu:${targetItem.remoteWorkId}`)}`,
+      );
+    });
+
+    it("登録済み作品の handleCardSelect で listNovels 完了前にアンマウントされた場合、詳細画面への遅延遷移が遮断されること (R1-19)", async () => {
+      let resolveListNovels!: (novels: unknown[]) => void;
+      let isDeferred = false;
+      const mockNovelRepo = {
+        listNovels: vi.fn(() => {
+          if (isDeferred) {
+            return new Promise<unknown[]>((resolve) => {
+              resolveListNovels = resolve;
+            });
+          }
+          return Promise.resolve([]);
+        }),
+        upsertNovelWithToc: vi
+          .fn()
+          .mockImplementation(
+            async (parsedIndex: {
+              siteType: string;
+              remoteWorkId: string;
+            }) => ({
+              id: `${parsedIndex.siteType}:${parsedIndex.remoteWorkId}`,
+            }),
+          ),
+      };
+
+      const { result, unmount } = renderHook(() => useNovelSearch(), {
+        wrapper: createWrapper("/search", {
+          novelRepository: mockNovelRepo as unknown as NovelRepository,
+        }),
+      });
+
+      act(() => {
+        result.current.setKeyword("異世界");
+      });
+      await act(async () => {
+        await result.current.search();
+      });
+
+      const targetItem = result.current.items[0];
+      const sampleItemId = targetItem.remoteWorkId;
+      await act(async () => {
+        await result.current.addNovelToBookshelf(targetItem);
+      });
+      expect(result.current.registeredWorkIds.has(sampleItemId)).toBe(true);
+
+      isDeferred = true;
+      let selectPromise!: Promise<void>;
+      act(() => {
+        selectPromise = result.current.handleCardSelect(targetItem);
+      });
+
+      unmount();
+
+      await act(async () => {
+        resolveListNovels([
+          {
+            id: `kakuyomu:${sampleItemId}`,
+            siteType: "kakuyomu",
+            remoteWorkId: sampleItemId,
+          },
+        ]);
+        await selectPromise;
+      });
+
+      expect(window.location.pathname).toBe("/search");
+    });
+
+    it("loadMore 実行中にアンマウントされた場合（成功・失敗双方）、finally での State 更新を含め安全に中断されること (R1-19)", async () => {
+      // 成功応答時のアンマウント
+      const { result: res1, unmount: unmount1 } = renderHook(
+        () => useNovelSearch(),
+        { wrapper: createWrapper("/search") },
+      );
+      act(() => {
+        res1.current.setKeyword("異世界");
+      });
+      await act(async () => {
+        await res1.current.search();
+      });
+      const countBefore = res1.current.items.length;
+
+      let resolveLoadMore!: (val: HttpResponse) => void;
+      mockHttpClient.setResponse(
+        /^https:\/\/kakuyomu\.jp\/search.*page=2/,
+        () =>
+          new Promise<HttpResponse>((resolve) => {
+            resolveLoadMore = resolve;
+          }),
+      );
+
+      let loadMorePromise1!: Promise<void>;
+      act(() => {
+        loadMorePromise1 = res1.current.loadMore();
+      });
+      await waitFor(() => {
+        expect(res1.current.isLoadingMore).toBe(true);
+      });
+
+      unmount1();
+
+      await act(async () => {
+        resolveLoadMore({
+          status: 200,
+          url: "https://kakuyomu.jp/search?page=2",
+          headers: {},
+          html: searchApolloHtml,
+        });
+        await loadMorePromise1;
+      });
+      expect(res1.current.items.length).toBe(countBefore);
+
+      // 失敗応答時のアンマウント
+      mockHttpClient.setResponse(
+        /^https:\/\/kakuyomu\.jp\/search/,
+        (options) => ({
+          status: 200,
+          url: options.url,
+          headers: {},
+          html: searchApolloHtml,
+        }),
+      );
+      const { result: res2, unmount: unmount2 } = renderHook(
+        () => useNovelSearch(),
+        { wrapper: createWrapper("/search") },
+      );
+      act(() => {
+        res2.current.setKeyword("異世界");
+      });
+      await act(async () => {
+        await res2.current.search();
+      });
+
+      let rejectLoadMore!: (err: Error) => void;
+      mockHttpClient.setResponse(
+        /^https:\/\/kakuyomu\.jp\/search.*page=2/,
+        () =>
+          new Promise<HttpResponse>((_, reject) => {
+            rejectLoadMore = reject;
+          }),
+      );
+
+      let loadMorePromise2!: Promise<void>;
+      act(() => {
+        loadMorePromise2 = res2.current.loadMore();
+      });
+      await waitFor(() => {
+        expect(res2.current.isLoadingMore).toBe(true);
+      });
+
+      unmount2();
+
+      await act(async () => {
+        rejectLoadMore(new Error("LoadMore Unmounted Error"));
+        await loadMorePromise2;
+      });
+      expect(res2.current.error).toBeNull();
+    });
+
+    it("addNovelToBookshelf 失敗前にアンマウントされた場合、catch 内でエラー State 更新が行われないこと (R1-19)", async () => {
+      const { result, unmount } = renderHook(() => useNovelSearch(), {
+        wrapper: createWrapper("/search"),
+      });
+
+      act(() => {
+        result.current.setKeyword("異世界");
+      });
+      await act(async () => {
+        await result.current.search();
+      });
+
+      const targetItem = result.current.items[0];
+      let rejectWork!: (err: Error) => void;
+      mockHttpClient.setResponse(
+        /^https:\/\/kakuyomu\.jp\/works\/\d+$/,
+        () =>
+          new Promise<HttpResponse>((_, reject) => {
+            rejectWork = reject;
+          }),
+      );
+
+      let addPromise!: Promise<string | null>;
+      act(() => {
+        addPromise = result.current.addNovelToBookshelf(targetItem);
+      });
+      await waitFor(() => {
+        expect(result.current.addingWorkId).toBe(targetItem.remoteWorkId);
+      });
+
+      unmount();
+
+      let savedId: string | null = "dummy";
+      await act(async () => {
+        rejectWork(new Error("Search Add Error"));
+        savedId = await addPromise;
+      });
+
+      expect(savedId).toBeNull();
+      expect(result.current.error).toBeNull();
+    });
+
+    it("refreshRegisteredIds 実行中にアンマウントされた場合（成功・失敗双方）、State 更新が行われないこと (R1-19)", async () => {
+      let resolveList!: (novels: unknown[]) => void;
+      const mockRepo1 = {
+        listNovels: vi.fn(
+          () =>
+            new Promise<unknown[]>((resolve) => {
+              resolveList = resolve;
+            }),
+        ),
+      };
+
+      const { result: res1, unmount: unmount1 } = renderHook(
+        () => useNovelSearch(),
+        {
+          wrapper: createWrapper("/search", {
+            novelRepository: mockRepo1 as unknown as NovelRepository,
+          }),
+        },
+      );
+      await waitFor(() => {
+        expect(mockRepo1.listNovels).toHaveBeenCalled();
+      });
+
+      unmount1();
+      await act(async () => {
+        resolveList([
+          {
+            id: "kakuyomu:123",
+            siteType: "kakuyomu",
+            remoteWorkId: "123",
+          },
+        ]);
+      });
+      expect(res1.current.registeredWorkIds.size).toBe(0);
+
+      let rejectList!: (err: Error) => void;
+      const mockRepo2 = {
+        listNovels: vi.fn(
+          () =>
+            new Promise<unknown[]>((_, reject) => {
+              rejectList = reject;
+            }),
+        ),
+      };
+
+      const { result: res2, unmount: unmount2 } = renderHook(
+        () => useNovelSearch(),
+        {
+          wrapper: createWrapper("/search", {
+            novelRepository: mockRepo2 as unknown as NovelRepository,
+          }),
+        },
+      );
+      await waitFor(() => {
+        expect(mockRepo2.listNovels).toHaveBeenCalled();
+      });
+
+      unmount2();
+      await act(async () => {
+        rejectList(new Error("DB Failed"));
+      });
+      expect(res2.current.registeredWorkIds.size).toBe(0);
+    });
+  });
 });
