@@ -558,7 +558,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         <div
           ref={contentRef}
           data-testid="reader-content"
-          className="h-full w-full"
+          className={isVertical ? "h-full w-full" : "w-full"}
         >
           <div
             className={`flex ${
