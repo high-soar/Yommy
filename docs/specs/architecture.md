@@ -2,7 +2,7 @@
 type: spec-architecture
 title: 3層アーキテクチャと共通インターフェース契約（App 全体正本）
 description: Http/Bridge、Parser、Storage、Viewer/UIの3層分離構造、ディレクトリ規約、およびTypeScript基底インターフェース契約の正本。
-status: "Review (#385)"
+status: "Review (#388)"
 updated: "2026-11-20"
 tags:
   - architecture
@@ -295,7 +295,8 @@ Yommy/
     │   └── cloud-sync/                # クラウド同期（Google Drive appDataFolder・SyncEngine）（Issue #120, #342）
     │       ├── types.ts               # YommySyncState, SyncNovelData 等の同期データ型定義
     │       ├── hooks/                 # useBackgroundAutoPull.ts（全画面 5分復帰自動 Pull フック）
-    │       └── services/              # スキーマ検証・競合マージ・デバウンス同期エンジン・完了購読
+    │       └── services/
+    │           └── syncEngine.ts      # スキーマ検証・競合マージ・デバウンス同期エンジン・完了購読
     ├── parsers/                       # 【1. Parser Layer（スクレイピング・DOM解析層）】
     │   ├── types.ts                   # NovelParser, ParsedNovelMetadata, ParsedChapterContent, ParsedSearchResult, ParsedRankingResult 等の型契約
     │   ├── parserRegistry.ts          # URL から対応サイト（kakuyomu / narou 等）を判定・ディスパッチ
@@ -329,7 +330,8 @@ Yommy/
     └── shared/                        # 複数機能で共有する汎用 UI コンポーネント・ユーティリティ
         ├── constants/                 # アプリ基本情報・しおり末尾判定・キャッシュ・レートリミット・タイポグラフィ等の共有定数（app.ts, bookmark.ts, cache.ts, typography.ts）
         ├── utils/                     # キャッシュ判定・容量フォーマット等の共有ユーティリティ（cache.ts, formatByteSize.ts）
-        └── ui/                        # BottomTabBar 等共通コンポーネント（モバイル幅での改行防止縦並び flex-col sm:flex-row ＋ whitespace-nowrap 最適化）
+        └── ui/                        # 共通 UI コンポーネント
+            └── BottomTabBar.tsx       # 下部 4 タブナビゲーションバー（モバイル幅での改行防止縦並び flex-col sm:flex-row ＋ whitespace-nowrap 最適化）
 ├── docs/                              # 【ドキュメント正本（OKF）】
 └── test/                              # 【統合・結合テスト】Playwright 実ブラウザ IT シナリオ
 ```
@@ -585,6 +587,16 @@ export type ChapterSummary = Omit<ChapterRecord, "bodyHtml">;
 export interface NovelRepository {
   listNovels(sortOrder?: BookshelfSortOrder): Promise<NovelSummary[]>;
   getNovelById(novelId: string): Promise<NovelRecord | null>;
+  upsertNovelWithToc(
+    index: ParsedNovelIndex,
+    fetchedAt: string,
+    options: { updateOnly: true },
+  ): Promise<NovelRecord | null>;
+  upsertNovelWithToc(
+    index: ParsedNovelIndex,
+    fetchedAt: string,
+    options?: { updateOnly?: false },
+  ): Promise<NovelRecord>;
   upsertNovelWithToc(
     index: ParsedNovelIndex,
     fetchedAt: string,

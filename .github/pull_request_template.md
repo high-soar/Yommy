@@ -11,6 +11,7 @@ Closes #
 ## 3. 実行した検証（Task Completion Gate 確認）
 
 - [ ] `npm run typecheck` / `npm run lint` / `npm run format:check` PASS
+- [ ] `docs/` 変更・追加時: `npm run lint:okf` PASS
 - [ ] `npm run test:unit` / `npm run test:coverage`（対象ファイル C0/C1/Functions 100%）PASS
 - [ ] UI/Story 変更時: `npm run test:vrt`（1280px / 375px）PASS
 - [ ] IT 変更・対象時: `npm run test:it`（Playwright 全シナリオ）PASS

@@ -46,7 +46,7 @@ git switch -c feat/issue-12-narou-parser
 Phase 3 以降の PR 作業では、[.github/pull_request_template.md](../../pull_request_template.md) の全項目（目的、変更内容、検証チェックリスト、**不備記録ミニテーブル**、**申し送り事項 `HO-xx` ミニテーブル**）を漏れなく記入し、[docs/guidelines/workflow.md](../../../docs/guidelines/workflow.md#4-task-completion-gate7つの完了条件) に定められた以下の **7条件** を順番に完遂します。
 
 1. **ローカル静的検査・自動テスト PASS**:
-   `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run test:coverage`（C0/C1/Functions 100%）を実行し PASS を確認する。
+   `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run test:coverage`（C0/C1/Functions 100%）、および `docs/` 変更・追加時の `npm run lint:okf` を実行し PASS を確認する。
 2. **VRT スナップショット更新・検証 PASS**:
    UI コンポーネント（`*.tsx` / `*.stories.tsx`）の変更時は、`npm run test:vrt:update` および `npm run test:vrt`（1280px / 375px）を実行し PASS を確認する。
 3. **PR 作成と Issue リンク設定**:
@@ -66,8 +66,8 @@ Phase 3 以降の PR 作業では、[.github/pull_request_template.md](../../pul
 7. **PR 種別に応じたマージ実行（👤 人間マージ待機 または 🤖 AI 自律マージ）**:
    上記 1〜6 がすべて完了した時点で、[docs/guidelines/workflow.md §4](../../../docs/guidelines/workflow.md#4-task-completion-gate7つの完了条件) の区分に従い以下のように完了処理を行う：
    - **👤 人間マージ待機とする PR**:
-     - **Step 2（設計更新 PR / `Refs #親Issue`）**、**Step 4（最終 IT PR・親 Issue 完了 PR / `Closes #親Issue`）**、**Milestone Step 3（品質分析 Kaizen・ログアーカイブ・最終承認 PR / `Closes #MilestoneIssue`）**
-     - または [docs/guidelines/workflow.md §4.1](../../../docs/guidelines/workflow.md#41-ai-自律マージの停止人間エスカレーション条件) のエスカレーション条件（外部仕様 `AC-xx` / `TR-xx` / DB スキーマ変更を伴う原因 `D`、新規依存パッケージ / Android 権限 / 外部通信先追加、ガバナンス・CI 定義自体の変更、3ラウンド以上のレビュー未収束、小規模要望での親 Issue クローズ統合 PR）に該当する場合。
+     - **Step 2（設計更新 PR / `Refs #親Issue`）**、**Step 4（最終 IT PR・親 Issue 完了 PR / `Closes #親Issue`、Track B Hotfix 時は `package.json` `version` の `PATCH` 更新含む）**、**Milestone Step 3（品質分析 Kaizen・ログアーカイブ・`package.json` の `version` 更新（`X.Y.0`）・最終承認 PR / `Closes #MilestoneIssue`）**
+     - または [docs/guidelines/workflow.md §4.1](../../../docs/guidelines/workflow.md#41-ai-自律マージの停止人間エスカレーション条件) のエスカレーション条件（外部仕様 `AC-xx` / `TR-xx` / DB スキーマ変更を伴う原因 `D`、新規依存パッケージ / Android 権限 / 外部通信先追加、ガバナンス・CI 定義自体の変更または `package.json` のリリースバージョン（`version`）更新を含む変更、3ラウンド以上のレビュー未収束、小規模要望での親 Issue クローズ統合 PR）に該当する場合。
      - **アクション**: Gate 1〜6 の完了（親 Issue 単位での実機検証対象時は「Android 実機検証試験項目表」、エスカレーション理由がある場合はその内容）を人間に報告し、人間の最終確認・マージを待つ。
    - **🤖 AI（Orchestrator）が自律マージする PR**:
      - **Step 3（MK Sub-issue PR / `Closes #Sub-issue`）** および **Milestone Step 2（横断レビュー指摘是正 PR / `Closes #Sub-issue`、実機不具合追加是正 PR 含む）** であり、上記エスカレーション条件のいずれにも該当しない場合。

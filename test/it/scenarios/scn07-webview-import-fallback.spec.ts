@@ -34,7 +34,7 @@ async function waitForServicesReady(page: Page): Promise<void> {
   );
 }
 
-test.describe("SCN-07: 内蔵ブラウザ画面（SCR-04）による目次・本文DOMインポート・フォールバック・論理階層復帰シナリオ (SYS-REQ-13, SYS-REQ-14, TR-09〜12, SCN-07-01〜03)", () => {
+test.describe("SCN-07: 内蔵ブラウザ画面（SCR-04）による目次・本文DOMインポート・フォールバック・論理階層復帰シナリオ (SYS-REQ-13, SYS-REQ-14, TR-09〜12, SCN-07-01〜04)", () => {
   test.beforeEach(async ({ page }) => {
     // ローカルストレージをクリアして初期状態から開始
     await page.goto("/");
