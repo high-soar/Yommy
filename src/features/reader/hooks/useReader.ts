@@ -134,6 +134,7 @@ export interface UseReaderResult {
   nextPage: () => void;
   prevPage: () => void;
   setTotalPages: (total: number) => void;
+  markSingleScreenContentMeasured: (isSingleScreen: boolean) => void;
   updateScrollProgress: (progress: number) => Promise<void>;
   flushBookmark: () => Promise<void>;
   goToChapter: (
@@ -1422,6 +1423,7 @@ export function useReader(options: UseReaderOptions = {}): UseReaderResult {
     nextPage,
     prevPage,
     setTotalPages,
+    markSingleScreenContentMeasured: () => {},
     updateScrollProgress,
     flushBookmark,
     goToChapter,

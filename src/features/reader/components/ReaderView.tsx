@@ -32,6 +32,7 @@ export interface ReaderViewProps {
   slideOffsetPx?: number;
   isAnimating?: boolean;
   onTotalPagesChange?: (totalPages: number) => void;
+  onSingleScreenContentMeasured?: (isSingleScreen: boolean) => void;
   chapterIndex?: number;
   totalChapters?: number;
   onPrevChapter?: () => void;
@@ -114,7 +115,7 @@ function getPagedSlotContentStyle(
  * マルチカラム要素の scrollHeight とコンテナ高さから総ページ数を算出する純粋関数 (AC-RD-16)
  * （gap = pageMarginPx * 2, pageStride = pageHeight）
  */
-function calculateMeasuredTotalPages(
+export function calculateMeasuredTotalPages(
   scrollHeight: number,
   pageHeight: number,
   pageMarginPx: number = DEFAULT_PAGE_MARGIN_PX,

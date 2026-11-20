@@ -2212,5 +2212,34 @@ describe("ReaderPage", () => {
       expect(touchZone).not.toHaveAttribute("inert");
       expect(touchZone).toHaveAttribute("tabindex", "0");
     });
+
+    it("onSingleScreenContentMeasured コールバックが ReaderView へそのまま委譲されること (Issue #375)", () => {
+      const viewSpy = vi
+        .spyOn(ReaderViewModule, "ReaderView")
+        .mockImplementation(() => null);
+      const onSingleScreenContentMeasured = vi.fn();
+
+      render(
+        <ReaderPage
+          {...createDefaultProps({
+            pagingMode: "scroll",
+            onSingleScreenContentMeasured,
+          })}
+        />,
+      );
+
+      expect(viewSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          onSingleScreenContentMeasured,
+        }),
+        undefined,
+      );
+
+      const passedCallback = viewSpy.mock.lastCall?.[0]
+        ?.onSingleScreenContentMeasured as
+        ((isSingleScreen: boolean) => void) | undefined;
+      passedCallback?.(true);
+      expect(onSingleScreenContentMeasured).toHaveBeenCalledWith(true);
+    });
   });
 });
