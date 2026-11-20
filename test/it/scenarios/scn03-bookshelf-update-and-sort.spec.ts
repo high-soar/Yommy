@@ -12,13 +12,10 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
   test.beforeEach(async ({ page }) => {
     // ローカルストレージをクリアして初期状態から開始
     await page.goto("/");
+    await waitForServicesReady(page);
     await page.evaluate(() => localStorage.clear());
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady === true,
-    );
+    await waitForServicesReady(page);
   });
 
   test("本棚自動更新チェック・NEWバッジ表示と詳細/リーダー遷移時解除・手動一括更新・5種ソート切替/永続化・お気に入りトグル/フィルタ/更新連動が正常に機能する", async ({
@@ -120,11 +117,7 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
 
     // 3. ページをリロードして本棚を開く（自動更新チェックが走り、作品1に NEW バッジが表示される）
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady,
-    );
+    await waitForServicesReady(page);
 
     // 作品カードが2件表示されるのを待つ
     const novelCards = page.getByTestId("novel-card");
@@ -181,11 +174,7 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
       );
     });
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady,
-    );
+    await waitForServicesReady(page);
 
     const novelCardWork2WithNew = page
       .getByTestId("novel-card")
@@ -241,11 +230,7 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
 
     // ページをリロードして永続化（app_settings）と復元を確認
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady,
-    );
+    await waitForServicesReady(page);
     const reloadedSortSelect = page.getByTestId("bookshelf-sort-select");
     await expect(reloadedSortSelect).toBeVisible();
     await expect(reloadedSortSelect).toHaveValue("title");
@@ -533,11 +518,7 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
     // 10. ページリロード後もお気に入りフィルタ状態が復元・維持されること（bookshelf_favorite_only 永続化）
     // =========================================================================
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady === true,
-    );
+    await waitForServicesReady(page);
 
     const reloadedFavFilterBtn = page.getByTestId(
       "bookshelf-favorite-filter-button",
@@ -585,11 +566,7 @@ test.describe("SCN-03: 本棚自動更新チェック・NEW表示/解除・手�
 
     // リロード後もフィルタ解除状態が維持されていることを確認
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady === true,
-    );
+    await waitForServicesReady(page);
     await expect(
       page.getByTestId("bookshelf-favorite-filter-button"),
     ).toHaveAttribute("aria-pressed", "false");
@@ -1073,5 +1050,271 @@ test.describe("SCN-03 (Issue #375): 最新話末尾しおり時の新着話更�
       "data-current-page",
       "1",
     );
+  });
+
+  test("連続スクロール（scroll）モードでの5px端丸め・短文1画面自動完了・完了済み再表示時のlastReadAt保護（AC-RD-36 / AC-RD-34）", async ({
+    page,
+  }) => {
+    const novelId = "kakuyomu:16817330658027210412";
+
+    // 1. 連続スクロール設定（pagingMode: "scroll", writingMode: "horizontal-tb"）へ更新し、
+    //    長文（第1話）と1画面短文（第2話）の2話構成で作品をシード
+    await page.evaluate(async (id) => {
+      const services = window.__yommyServices!;
+      await services.settingsRepository.updateReaderSettings({
+        pagingMode: "scroll",
+        writingMode: "horizontal-tb",
+      });
+
+      const workUrl = "https://kakuyomu.jp/works/16817330658027210412";
+      const nowIso = new Date().toISOString();
+      const indexRes = await services.httpClient.getHtml({ url: workUrl });
+      const parser = services.parserRegistry.requireParser(workUrl);
+      const parsedIndex = parser.parseNovelIndex(indexRes.html, workUrl);
+
+      await services.novelRepository.upsertNovelWithToc(
+        {
+          ...parsedIndex,
+          chapters: parsedIndex.chapters.slice(0, 2),
+        },
+        nowIso,
+      );
+
+      // 第1話: 確実に垂直スクロールが発生する長文を保存
+      const ch1Res = await services.httpClient.getHtml({
+        url: parsedIndex.chapters[0].url,
+      });
+      const parsedCh1 = parser.parseChapterContent(
+        ch1Res.html,
+        parsedIndex.chapters[0].url,
+      );
+      const longBodyHtml = `${parsedCh1.bodyHtml}\n${parsedCh1.bodyHtml}\n${parsedCh1.bodyHtml}`;
+      await services.chapterRepository.saveChapterBody(
+        id,
+        1,
+        {
+          ...parsedCh1,
+          bodyHtml: longBodyHtml,
+          byteSize: new TextEncoder().encode(longBodyHtml).length,
+        },
+        nowIso,
+      );
+
+      // 第2話: 1画面内に収まる短文（maxScroll <= 0）を保存
+      const shortBodyHtml = "<p>短い第2話の本文です。</p>";
+      await services.chapterRepository.saveChapterBody(
+        id,
+        2,
+        {
+          remoteChapterId: parsedIndex.chapters[1].remoteChapterId,
+          title: parsedIndex.chapters[1].title,
+          bodyHtml: shortBodyHtml,
+          byteSize: new TextEncoder().encode(shortBodyHtml).length,
+          prevChapterUrl: parsedIndex.chapters[0].url,
+          nextChapterUrl: null,
+        },
+        nowIso,
+      );
+
+      await services.novelRepository.updateBookmark(id, 1, 0);
+    }, novelId);
+
+    // 2. 第1話（scroll モード長文）を開き、最下部 5px 以内到達（0 < maxScroll - currentScroll <= 5）で progress=1.0 へ丸め保存されること
+    await page.goto(`/novels/${encodeURIComponent(novelId)}/chapters/1`);
+    await waitForServicesReady(page);
+
+    const readerView = page.getByTestId("reader-view");
+    await expect(readerView).toBeVisible();
+    await expect(readerView).toHaveAttribute(
+      "data-effective-paging-mode",
+      "scroll",
+    );
+    await expect(readerView).toHaveAttribute(
+      "data-writing-mode",
+      "horizontal-tb",
+    );
+    await expect(page.getByTestId("reader-chapter-title")).toBeVisible();
+
+    await expect
+      .poll(
+        async () =>
+          readerView.evaluate((el) => el.scrollHeight - el.clientHeight),
+        { timeout: 10000 },
+      )
+      .toBeGreaterThan(20);
+
+    // 初期復元 rAF 完了を待ってから、maxScroll - 3px 地点へスクロールして scroll イベントを発火
+    const snappedDelta = await readerView.evaluate(async (el) => {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      el.scrollTop = maxScroll - 3;
+      const currentScroll = el.scrollTop;
+      el.dispatchEvent(new Event("scroll"));
+      return maxScroll - currentScroll;
+    });
+    expect(snappedDelta).toBeGreaterThan(0);
+    expect(snappedDelta).toBeLessThanOrEqual(5);
+
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(async (id) => {
+            const novel =
+              await window.__yommyServices!.novelRepository.getNovelById(id);
+            return {
+              bookmarkChapterIndex: novel?.bookmarkChapterIndex ?? null,
+              bookmarkScrollProgress: novel?.bookmarkScrollProgress ?? -1,
+            };
+          }, novelId),
+        { timeout: 10000 },
+      )
+      .toEqual({
+        bookmarkChapterIndex: 1,
+        bookmarkScrollProgress: 1,
+      });
+
+    // 3. 連続スクロールモードで第2話（1画面収まり短文: maxScroll <= 0）へ遷移し、自動で progress=1.0 が保存されること
+    await page.getByTestId("reader-bottom-touch-zone").click();
+    const nextChapterBtn = page.getByTestId("reader-next-chapter");
+    await expect(nextChapterBtn).toBeVisible();
+    await nextChapterBtn.click();
+
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/2$/,
+    );
+    await expect(readerView).toHaveAttribute(
+      "data-effective-paging-mode",
+      "scroll",
+    );
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "第1話 見知らぬ空",
+    );
+    await expect(page.getByTestId("reader-body")).toContainText(
+      "短い第2話の本文です。",
+    );
+
+    const isShortSingleScreen = await readerView.evaluate(
+      (el) => el.scrollHeight - el.clientHeight <= 0,
+    );
+    expect(isShortSingleScreen).toBe(true);
+
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(async (id) => {
+            const novel =
+              await window.__yommyServices!.novelRepository.getNovelById(id);
+            const ch2 =
+              await window.__yommyServices!.chapterRepository.getChapter(id, 2);
+            return {
+              bookmarkChapterIndex: novel?.bookmarkChapterIndex ?? null,
+              bookmarkScrollProgress: novel?.bookmarkScrollProgress ?? -1,
+              ch2IsRead: ch2?.isRead ?? false,
+            };
+          }, novelId),
+        { timeout: 10000 },
+      )
+      .toEqual({
+        bookmarkChapterIndex: 2,
+        bookmarkScrollProgress: 1,
+        ch2IsRead: true,
+      });
+
+    // 4. 既に bookmarkScrollProgress === 1.0 が保存されている第2話を再表示しても lastReadAt が上書き更新されないこと（AC-RD-36 / AC-RD-34）
+    await page.goto(`/novels/${encodeURIComponent(novelId)}`);
+    await waitForServicesReady(page);
+    await expect(page.getByTestId("detail-resume-button")).toHaveText(
+      "続きから読む（第2話）",
+    );
+
+    const fixedLastReadAt = new Date(Date.now() - 3_600_000).toISOString();
+    await page.evaluate(
+      async ({ id, pastIso }) => {
+        const services = window.__yommyServices!;
+        await services.databaseAdapter.execute(
+          "UPDATE novels SET last_read_at = ?, updated_at = ? WHERE id = ?",
+          [pastIso, pastIso, id],
+        );
+
+        const win = window as Window & {
+          __yommyUpdateBookmarkCalls?: number;
+        };
+        win.__yommyUpdateBookmarkCalls = 0;
+        const originalUpdateBookmark =
+          services.novelRepository.updateBookmark.bind(
+            services.novelRepository,
+          );
+        services.novelRepository.updateBookmark = async (
+          targetId,
+          chapterIndex,
+          scrollProgress,
+        ) => {
+          win.__yommyUpdateBookmarkCalls =
+            (win.__yommyUpdateBookmarkCalls ?? 0) + 1;
+          return originalUpdateBookmark(targetId, chapterIndex, scrollProgress);
+        };
+      },
+      { id: novelId, pastIso: fixedLastReadAt },
+    );
+
+    // 「続きから読む（第2話）」で第2話を再表示（React Router 遷移でスパイ維持）
+    await page.getByTestId("detail-resume-button").click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/2$/,
+    );
+    await expect(readerView).toBeVisible();
+    await expect(readerView).toHaveAttribute(
+      "data-effective-paging-mode",
+      "scroll",
+    );
+    await expect(page.getByTestId("reader-body")).toContainText(
+      "短い第2話の本文です。",
+    );
+
+    // DOM 計測（rAF + setTimeout(0) + document.fonts.ready）完了後に未保存であることを確認
+    await readerView.evaluate(async () => {
+      if (document.fonts) {
+        await document.fonts.ready;
+      }
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => setTimeout(resolve, 0)),
+        );
+      });
+    });
+
+    // 上部オーバーレイの「← 目次」で未操作離脱（flushBookmark 経路も含め書き込み抑止を検証）
+    await page.getByTestId("reader-bottom-touch-zone").click();
+    await expect(page.getByTestId("reader-top-back-to-toc")).toBeVisible();
+    await page.getByTestId("reader-top-back-to-toc").click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
+    );
+    await expect(page.getByTestId("detail-resume-button")).toHaveText(
+      "続きから読む（第2話）",
+    );
+
+    const revisitResult = await page.evaluate(async (id) => {
+      const win = window as Window & {
+        __yommyUpdateBookmarkCalls?: number;
+      };
+      const novel =
+        await window.__yommyServices!.novelRepository.getNovelById(id);
+      return {
+        updateBookmarkCalls: win.__yommyUpdateBookmarkCalls ?? -1,
+        bookmarkChapterIndex: novel?.bookmarkChapterIndex ?? null,
+        bookmarkScrollProgress: novel?.bookmarkScrollProgress ?? -1,
+        lastReadAt: novel?.lastReadAt ?? null,
+      };
+    }, novelId);
+
+    expect(revisitResult).toEqual({
+      updateBookmarkCalls: 0,
+      bookmarkChapterIndex: 2,
+      bookmarkScrollProgress: 1,
+      lastReadAt: fixedLastReadAt,
+    });
   });
 });

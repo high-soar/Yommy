@@ -1,10 +1,19 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+
+async function waitForServicesReady(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () =>
+      typeof window.__yommyServices !== "undefined" &&
+      window.__yommyServices.isReady === true,
+  );
+}
 
 test.describe("アプリケーションスモーク結合テスト", () => {
   test("トップページが正常に読み込まれ、全画面シェル・下部タブバー・本棚UI（空状態）が表示される", async ({
     page,
   }) => {
     await page.goto("/");
+    await waitForServicesReady(page);
 
     // 全画面シェルおよび本棚ヘッダー表示の確認
     const appRoot = page.getByTestId("app-root");
@@ -49,6 +58,7 @@ test.describe("アプリケーションスモーク結合テスト", () => {
     request,
   }) => {
     await page.goto("/");
+    await waitForServicesReady(page);
 
     // Favicon / Web アイコンの link タグの存在と href 属性の確認
     const faviconLink = page.locator('link[rel="icon"][href="/favicon.ico"]');

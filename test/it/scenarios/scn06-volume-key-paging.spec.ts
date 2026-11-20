@@ -1,16 +1,21 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+
+async function waitForServicesReady(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () =>
+      typeof window.__yommyServices !== "undefined" &&
+      window.__yommyServices.isReady === true,
+  );
+}
 
 test.describe("SCN-06: ハードウェア音量キーによるページ送り・スクロール送り・境界2段階遷移・設定ON/OFF連動シナリオ (SYS-REQ-11, AC-ST-19, AC-RD-26, AC-RD-27)", () => {
   test.beforeEach(async ({ page }) => {
     // ローカルストレージをクリアして初期状態から開始
     await page.goto("/");
+    await waitForServicesReady(page);
     await page.evaluate(() => localStorage.clear());
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady === true,
-    );
+    await waitForServicesReady(page);
 
     // テスト用小説（カクヨム4話構成サンプル）を登録
     await page.evaluate(async () => {
@@ -26,24 +31,12 @@ test.describe("SCN-06: ハードウェア音量キーによるページ送り・
     });
 
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady === true,
-    );
+    await waitForServicesReady(page);
   });
 
   test("設定画面ON/OFFトグル・リーダー画面音量キーページ送り（縦書きスライド）・オーバーレイ自動消去・境界2段階遷移・連続スクロール・無効時抑止の一連の動作が正常に機能する", async ({
     page,
   }) => {
-    const waitForServicesReady = async () => {
-      await page.waitForFunction(
-        () =>
-          typeof window.__yommyServices !== "undefined" &&
-          window.__yommyServices.isReady === true,
-      );
-    };
-
     // 1. 設定画面（/settings）で初期状態で音量キートグルが OFF であることを確認（SYS-REQ-11 / AC-ST-19）
     const tabSettings = page.getByTestId("tab-settings");
     await tabSettings.click();
@@ -55,7 +48,7 @@ test.describe("SCN-06: ハードウェア音量キーによるページ送り・
 
     // 2. 初期状態（OFF）でリーダー画面へ遷移し、音量キーを押下してもページめくりが発生しないことを確認
     await page.goto("/novels/kakuyomu:16817330658027210412/chapters/1");
-    await waitForServicesReady();
+    await waitForServicesReady(page);
     const readerView = page.getByTestId("reader-view");
     await expect(readerView).toBeVisible();
     await expect(readerView).toHaveAttribute("data-current-page", "1");
@@ -77,19 +70,29 @@ test.describe("SCN-06: ハードウェア音量キーによるページ送り・
 
     // 3. 設定画面（/settings）へ戻り、「音量キーでページ送り」トグルを ON に変更・永続化確認（AC-ST-19）
     await page.goto("/settings");
-    await waitForServicesReady();
+    await waitForServicesReady(page);
     await expect(toggleVolumeKey).toBeVisible();
     await toggleVolumeKey.click();
     await expect(toggleVolumeKey).toBeChecked();
+    await expect(toggleVolumeKey).toBeEnabled();
+    await expect
+      .poll(() =>
+        page.evaluate(async () => {
+          const settings =
+            await window.__yommyServices!.settingsRepository.getReaderSettings();
+          return settings.enableVolumeKeyPaging;
+        }),
+      )
+      .toBe(true);
 
     // リロードしても ON が維持されることを確認（永続化検証）
     await page.reload();
-    await waitForServicesReady();
+    await waitForServicesReady(page);
     await expect(page.getByTestId("toggle-volume-key-paging")).toBeChecked();
 
     // 4. リーダー画面（/novels/.../chapters/1）へ遷移し、音量［ー］/［＋］によるページ送り・戻りを検証（AC-RD-26）
     await page.goto("/novels/kakuyomu:16817330658027210412/chapters/1");
-    await waitForServicesReady();
+    await waitForServicesReady(page);
     await expect(readerView).toBeVisible();
     await expect(readerView).toHaveAttribute("data-current-page", "1");
 
@@ -180,13 +183,27 @@ test.describe("SCN-06: ハードウェア音量キーによるページ送り・
     // 8. 連続スクロールモードでの音量キースクロール送り・境界2段階遷移の検証（AC-RD-26, AC-RD-27, R1-18）
     // 設定画面で横書きに変更（横書き時は連続スクロール固定）
     await page.goto("/settings");
-    await waitForServicesReady();
+    await waitForServicesReady(page);
     const toggleOrientation = page.getByTestId("toggle-orientation");
     await toggleOrientation.click();
+    await expect(page.getByTestId("sample-text-preview")).toHaveAttribute(
+      "data-writing-mode",
+      "horizontal-tb",
+    );
+    await expect(toggleOrientation).toBeEnabled();
+    await expect
+      .poll(() =>
+        page.evaluate(async () => {
+          const settings =
+            await window.__yommyServices!.settingsRepository.getReaderSettings();
+          return settings.writingMode;
+        }),
+      )
+      .toBe("horizontal-tb");
 
     // リーダー画面へ戻る
     await page.goto("/novels/kakuyomu:16817330658027210412/chapters/1");
-    await waitForServicesReady();
+    await waitForServicesReady(page);
     await expect(readerView).toBeVisible();
     await expect(readerView).toHaveAttribute(
       "data-effective-paging-mode",
@@ -259,10 +276,11 @@ test.describe("SCN-06: ハードウェア音量キーによるページ送り・
 
     // 9. 設定画面でトグルを OFF に戻した際、音量キー操作が無効化されることの検証
     await page.goto("/settings");
-    await waitForServicesReady();
+    await waitForServicesReady(page);
     const toggleVolumeKeyOff = page.getByTestId("toggle-volume-key-paging");
     await toggleVolumeKeyOff.click();
     await expect(toggleVolumeKeyOff).not.toBeChecked();
+    await expect(toggleVolumeKeyOff).toBeEnabled();
 
     // 縦書きに戻す
     const orientationToggle = page.getByTestId("toggle-orientation");
@@ -271,10 +289,26 @@ test.describe("SCN-06: ハードウェア音量キーによるページ送り・
       "data-writing-mode",
       "vertical-rl",
     );
+    await expect(orientationToggle).toBeEnabled();
+    await expect
+      .poll(() =>
+        page.evaluate(async () => {
+          const settings =
+            await window.__yommyServices!.settingsRepository.getReaderSettings();
+          return {
+            enableVolumeKeyPaging: settings.enableVolumeKeyPaging,
+            writingMode: settings.writingMode,
+          };
+        }),
+      )
+      .toEqual({
+        enableVolumeKeyPaging: false,
+        writingMode: "vertical-rl",
+      });
 
     // リーダーへ戻る
     await page.goto("/novels/kakuyomu:16817330658027210412/chapters/1");
-    await waitForServicesReady();
+    await waitForServicesReady(page);
     await expect(page.getByTestId("reader-chapter-title")).toHaveText(
       "プロローグ：目覚め",
     );

@@ -21,18 +21,22 @@ async function triggerBackButton(page: Page): Promise<void> {
   });
 }
 
+async function waitForServicesReady(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () =>
+      typeof window.__yommyServices !== "undefined" &&
+      window.__yommyServices.isReady === true,
+  );
+}
+
 test.describe("SCN-02: 検索・ランキング探索・その場追加・目次確認・リーダー読書・4タブ/OSバックキー論理階層遷移シナリオ", () => {
   test.beforeEach(async ({ page }) => {
     // ローカルストレージをクリアして初期状態から開始
     await page.goto("/");
+    await waitForServicesReady(page);
     await page.evaluate(() => localStorage.clear());
     await page.reload();
-    await page.waitForFunction(() =>
-      Boolean(
-        (window as unknown as { __yommyServices?: { isReady?: boolean } })
-          .__yommyServices?.isReady,
-      ),
-    );
+    await waitForServicesReady(page);
   });
 
   test("下部4タブ・検索・ランキング探索・その場追加・目次確認・リーダー読書・探索元復帰（TR-06, TR-07, TR-12）および本棚反映までの一連の動作が正常に機能する", async ({
@@ -273,40 +277,291 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     await expect(tabBookshelf).toHaveAttribute("aria-selected", "true");
   });
 
-  test("ランキング集計期間・ジャンル切替時および検索条件変更時に、一覧の再取得・更新が正常に行われること (AC-RK-02, AC-RK-03, AC-SE-03, AC-SE-04)", async ({
+  test("ランキング集計期間・ジャンル切替時および検索条件変更時の再取得・順位バッジ・ローディング表示・操作抑止・入力維持が正常に機能すること (AC-RK-02, AC-RK-03, AC-RK-04, AC-RK-08, AC-SE-03, AC-SE-04, AC-SE-09)", async ({
     page,
   }) => {
-    // Note: 通信中の一時的なローディング表示（ranking-loading / search-loading）および
-    // 各種操作無効化（AC-RK-08, AC-SE-09）は、インメモリ MockHttpClient による即時解決環境のため
-    // UT (RankingPage.test.tsx / SearchPage.test.tsx) および Storybook VRT で 100% 担保されており、
-    // 本結合テストでは各条件切替に伴う再取得・一覧更新の実ブラウザ E2E 連携を検証する。
+    // 0. ランキング（1〜4位）・検索リクエストの遅延／エラー応答をテスト側から制御できるよう httpClient モックを準備
+    await page.evaluate(async () => {
+      const services = window.__yommyServices!;
+      const client = services.httpClient as unknown as {
+        getHtml: (options: { url: string; signal?: AbortSignal }) => Promise<{
+          status: number;
+          url: string;
+          headers: Record<string, string>;
+          html: string;
+        }>;
+        setResponse: (
+          pattern: string | RegExp,
+          handler: (options: { url: string; signal?: AbortSignal }) => Promise<{
+            status: number;
+            url: string;
+            headers: Record<string, string>;
+            html: string;
+          }>,
+        ) => void;
+      };
 
-    // 1. ランキング画面へ移動
+      const baseRankRes = await client.getHtml({
+        url: "https://kakuyomu.jp/rankings/all/weekly?work_variation=long",
+      });
+      // 4位作品を追加したランキング HTML（AC-RK-04 の1〜3位強調スタイルと4位通常スタイル比較用）
+      const rankDoc = new DOMParser().parseFromString(
+        baseRankRes.html,
+        "text/html",
+      );
+      const rankNextData = rankDoc.querySelector("script#__NEXT_DATA__");
+      if (rankNextData?.textContent) {
+        const parsed = JSON.parse(rankNextData.textContent);
+        const apollo = parsed.props.pageProps.__APOLLO_STATE__;
+        const rootKey = Object.keys(apollo.ROOT_QUERY).find((k) =>
+          k.startsWith("rankedWorks"),
+        );
+        if (rootKey) {
+          apollo.ROOT_QUERY[rootKey].nodes.push({
+            __ref: "Work:16817330658027210104",
+          });
+          apollo["UserAccount:rankUser4"] = {
+            __typename: "UserAccount",
+            id: "rankUser4",
+            activityName: "ランキング4位作家",
+          };
+          apollo["Work:16817330658027210104"] = {
+            __typename: "Work",
+            id: "16817330658027210104",
+            title: "ランキング4位作品：平凡商人の旅",
+            author: { __ref: "UserAccount:rankUser4" },
+            introduction: "旅する商人の日常ファンタジー。",
+            genre: "FANTASY",
+            serialStatus: "RUNNING",
+            publicEpisodeCount: 25,
+            totalCharacterCount: 72000,
+            tagLabels: ["商人", "旅"],
+            totalReviewPoint: 5400,
+            lastEpisodePublishedAt: "2026-10-26T10:00:00Z",
+          };
+          rankNextData.textContent = JSON.stringify(parsed);
+        }
+      }
+      const rankHtml4Items =
+        "<!doctype html>" + rankDoc.documentElement.outerHTML;
+
+      const baseSearchRes = await client.getHtml({
+        url: "https://kakuyomu.jp/search?q=%E7%95%B0%E4%B8%96%E7%95%8C",
+      });
+      const searchHtml = baseSearchRes.html;
+
+      let rankingHold = false;
+      let rankingShouldFail = false;
+      const pendingRankingResolvers: Array<{
+        resolve: (res: {
+          status: number;
+          url: string;
+          headers: Record<string, string>;
+          html: string;
+        }) => void;
+        reject: (err: Error) => void;
+        url: string;
+      }> = [];
+
+      let searchHold = false;
+      const pendingSearchResolvers: Array<{
+        resolve: (res: {
+          status: number;
+          url: string;
+          headers: Record<string, string>;
+          html: string;
+        }) => void;
+        url: string;
+      }> = [];
+
+      client.setResponse(/^https:\/\/kakuyomu\.jp\/rankings\//, (options) => {
+        if (rankingHold) {
+          return new Promise((resolve, reject) => {
+            pendingRankingResolvers.push({ resolve, reject, url: options.url });
+          });
+        }
+        if (rankingShouldFail) {
+          return Promise.reject(new Error("ランキング通信エラー"));
+        }
+        return Promise.resolve({
+          status: 200,
+          url: options.url,
+          headers: {},
+          html: rankHtml4Items,
+        });
+      });
+
+      client.setResponse(/^https:\/\/kakuyomu\.jp\/search/, (options) => {
+        if (searchHold) {
+          return new Promise((resolve) => {
+            pendingSearchResolvers.push({ resolve, url: options.url });
+          });
+        }
+        return Promise.resolve({
+          status: 200,
+          url: options.url,
+          headers: {},
+          html: searchHtml,
+        });
+      });
+
+      (
+        window as unknown as {
+          __scn02Gate?: {
+            holdRanking: () => void;
+            resolveRanking: () => void;
+            setRankingFail: (fail: boolean) => void;
+            holdSearch: () => void;
+            resolveSearch: () => void;
+          };
+        }
+      ).__scn02Gate = {
+        holdRanking: () => {
+          rankingHold = true;
+        },
+        resolveRanking: () => {
+          rankingHold = false;
+          for (const entry of pendingRankingResolvers.splice(0)) {
+            if (rankingShouldFail) {
+              entry.reject(new Error("ランキング通信エラー"));
+            } else {
+              entry.resolve({
+                status: 200,
+                url: entry.url,
+                headers: {},
+                html: rankHtml4Items,
+              });
+            }
+          }
+        },
+        setRankingFail: (fail: boolean) => {
+          rankingShouldFail = fail;
+        },
+        holdSearch: () => {
+          searchHold = true;
+        },
+        resolveSearch: () => {
+          searchHold = false;
+          for (const entry of pendingSearchResolvers.splice(0)) {
+            entry.resolve({
+              status: 200,
+              url: entry.url,
+              headers: {},
+              html: searchHtml,
+            });
+          }
+        },
+      };
+    });
+
+    // 1. ランキング画面へ移動し、1〜3位強調バッジおよび4位通常バッジを検証（AC-RK-04）
     const tabRanking = page.getByTestId("tab-ranking");
     await tabRanking.click();
     await expect(page).toHaveURL("/ranking");
     const rankingList = page.getByTestId("ranking-results-list");
     await expect(rankingList).toBeVisible();
 
-    // 2. 集計期間を「月間」へ切り替え（AC-RK-02, AC-RK-08）
+    const rank1Badge = page
+      .getByTestId("ranking-novel-card-16817330658027210101")
+      .getByTestId("ranking-card-rank-badge");
+    const rank2Badge = page
+      .getByTestId("ranking-novel-card-16817330658027210102")
+      .getByTestId("ranking-card-rank-badge");
+    const rank3Badge = page
+      .getByTestId("ranking-novel-card-16817330658027210103")
+      .getByTestId("ranking-card-rank-badge");
+    const rank4Badge = page
+      .getByTestId("ranking-novel-card-16817330658027210104")
+      .getByTestId("ranking-card-rank-badge");
+
+    await expect(rank1Badge).toHaveText("1位");
+    await expect(rank1Badge).toHaveClass(/bg-amber-400/);
+    await expect(rank2Badge).toHaveText("2位");
+    await expect(rank2Badge).toHaveClass(/bg-slate-300/);
+    await expect(rank3Badge).toHaveText("3位");
+    await expect(rank3Badge).toHaveClass(/bg-amber-700/);
+    await expect(rank4Badge).toHaveText("4位");
+    await expect(rank4Badge).toHaveClass(/bg-slate-100/);
+
+    // 2. 集計期間を「月間」へ切り替え、遅延モック応答中に ranking-loading 表示・旧一覧消去・操作抑止（disabled）を検証（AC-RK-02, AC-RK-08）
+    await page.evaluate(() => {
+      (
+        window as unknown as { __scn02Gate: { holdRanking: () => void } }
+      ).__scn02Gate.holdRanking();
+    });
+
     const monthlyPeriodBtn = page.getByTestId("ranking-period-monthly");
+    const dailyPeriodBtn = page.getByTestId("ranking-period-daily");
+    const shortVariationBtn = page.getByTestId("ranking-variation-short");
+    const fantasyGenreBtn = page.getByTestId("ranking-genre-fantasy");
+    const rankingSiteKakuyomu = page
+      .getByTestId("ranking-page")
+      .getByTestId("site-selector-kakuyomu");
+    const rankingSiteNarou = page
+      .getByTestId("ranking-page")
+      .getByTestId("site-selector-narou");
+
     await expect(monthlyPeriodBtn).toBeVisible();
     await monthlyPeriodBtn.click();
     await expect(monthlyPeriodBtn).toHaveAttribute("aria-pressed", "true");
+
+    const rankingLoading = page.getByTestId("ranking-loading");
+    await expect(rankingLoading).toBeVisible();
+    await expect(rankingList).toHaveCount(0);
+    await expect(dailyPeriodBtn).toBeDisabled();
+    await expect(monthlyPeriodBtn).toBeDisabled();
+    await expect(shortVariationBtn).toBeDisabled();
+    await expect(fantasyGenreBtn).toBeDisabled();
+    await expect(rankingSiteKakuyomu).toBeDisabled();
+    await expect(rankingSiteNarou).toBeDisabled();
+
+    await page.evaluate(() => {
+      (
+        window as unknown as { __scn02Gate: { resolveRanking: () => void } }
+      ).__scn02Gate.resolveRanking();
+    });
+
+    await expect(rankingLoading).not.toBeVisible();
     await expect(rankingList).toBeVisible();
+    await expect(dailyPeriodBtn).toBeEnabled();
+    await expect(shortVariationBtn).toBeEnabled();
+    await expect(fantasyGenreBtn).toBeEnabled();
+    await expect(rankingSiteKakuyomu).toBeEnabled();
+    await expect(rankingSiteNarou).toBeEnabled();
 
     // 作品種別を「短編」へ切り替え（AC-RK-10, Issue #265）
-    const shortVariationBtn = page.getByTestId("ranking-variation-short");
     await expect(shortVariationBtn).toBeVisible();
     await shortVariationBtn.click();
     await expect(shortVariationBtn).toHaveAttribute("aria-pressed", "true");
     await expect(rankingList).toBeVisible();
 
-    // 3. ジャンルを切り替え（AC-RK-03, AC-RK-08）
-    const fantasyGenreBtn = page.getByTestId("ranking-genre-fantasy");
+    // 3. ジャンル切り替え時の通信エラーによる ranking-error 表示（旧データ非残留）および再試行復旧を検証（AC-RK-03, AC-RK-08）
+    await page.evaluate(() => {
+      const gate = (
+        window as unknown as {
+          __scn02Gate: { setRankingFail: (fail: boolean) => void };
+        }
+      ).__scn02Gate;
+      gate.setRankingFail(true);
+    });
     await expect(fantasyGenreBtn).toBeVisible();
     await fantasyGenreBtn.click();
     await expect(fantasyGenreBtn).toHaveAttribute("aria-pressed", "true");
+
+    const rankingError = page.getByTestId("ranking-error");
+    await expect(rankingError).toBeVisible();
+    await expect(rankingList).toHaveCount(0);
+
+    await page.evaluate(() => {
+      const gate = (
+        window as unknown as {
+          __scn02Gate: { setRankingFail: (fail: boolean) => void };
+        }
+      ).__scn02Gate;
+      gate.setRankingFail(false);
+    });
+    await page.getByTestId("ranking-error-retry-button").click();
+    await expect(rankingError).not.toBeVisible();
     await expect(rankingList).toBeVisible();
 
     // 4. 検索画面へ移動（AC-SE-03, AC-SE-04, AC-SE-09）
@@ -314,7 +569,12 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     await tabSearch.click();
     await expect(page).toHaveURL("/search");
 
-    // 初回検索実行
+    // 除外キーワード入力欄も開いた状態で初回検索実行
+    const excludeToggle = page.getByTestId("search-exclude-toggle-button");
+    await excludeToggle.click();
+    const excludeInput = page.getByTestId("search-exclude-input");
+    await expect(excludeInput).toBeVisible();
+
     const searchInput = page.getByTestId("search-input");
     await searchInput.fill("異世界");
     const searchSubmit = page.getByTestId("search-submit-button");
@@ -322,25 +582,76 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
     const searchList = page.getByTestId("search-results-list");
     await expect(searchList).toBeVisible();
 
-    // 並び順変更による再取得（AC-SE-03, AC-SE-09, R1-24）
+    // 並び順変更による再取得中の search-loading 表示・旧一覧消去・ボタン/フィルタ無効化・キーワード入力維持を検証（AC-SE-03, AC-SE-09）
+    await page.evaluate(() => {
+      (
+        window as unknown as { __scn02Gate: { holdSearch: () => void } }
+      ).__scn02Gate.holdSearch();
+    });
+
     const orderSelect = page.getByTestId("search-order-select");
+    const serialAllBtn = page.getByTestId("search-serial-all");
+    const serialCompleteBtn = page.getByTestId("search-serial-completed");
+    const serialShortBtn = page.getByTestId("search-serial-short");
+    const searchAllGenreBtn = page.getByTestId("search-genre-all");
+    const fantasyPill = page.getByTestId("search-genre-fantasy");
+    const searchSiteKakuyomu = page
+      .getByTestId("search-page")
+      .getByTestId("site-selector-kakuyomu");
+    const searchSiteNarou = page
+      .getByTestId("search-page")
+      .getByTestId("site-selector-narou");
+
     await orderSelect.selectOption("popular");
     await expect(orderSelect).toHaveValue("popular");
+
+    const searchLoading = page.getByTestId("search-loading");
+    await expect(searchLoading).toBeVisible();
+    await expect(searchList).toHaveCount(0);
+    await expect(searchSubmit).toBeDisabled();
+    await expect(orderSelect).toBeDisabled();
+    await expect(serialAllBtn).toBeDisabled();
+    await expect(serialCompleteBtn).toBeDisabled();
+    await expect(searchAllGenreBtn).toBeDisabled();
+    await expect(fantasyPill).toBeDisabled();
+    await expect(searchSiteKakuyomu).toBeDisabled();
+    await expect(searchSiteNarou).toBeDisabled();
+
+    // 通信中もキーワード入力および除外キーワード入力は有効かつフォーカス・入力内容が維持されること（AC-SE-09）
+    await expect(searchInput).toBeEnabled();
+    await expect(excludeInput).toBeEnabled();
+    await expect(searchInput).toHaveValue("異世界");
+    await searchInput.focus();
+    await page.keyboard.type("冒険");
+    await expect(searchInput).toBeFocused();
+    await expect(searchInput).toHaveValue("異世界冒険");
+
+    await page.evaluate(() => {
+      (
+        window as unknown as { __scn02Gate: { resolveSearch: () => void } }
+      ).__scn02Gate.resolveSearch();
+    });
+
+    await expect(searchLoading).not.toBeVisible();
     await expect(searchList).toBeVisible();
+    await expect(searchInput).toHaveValue("異世界冒険");
+    await expect(searchSubmit).toBeEnabled();
+    await expect(orderSelect).toBeEnabled();
+    await expect(serialCompleteBtn).toBeEnabled();
+    await expect(fantasyPill).toBeEnabled();
+    await expect(searchSiteKakuyomu).toBeEnabled();
+    await expect(searchSiteNarou).toBeEnabled();
 
     // 連載状態フィルタ変更による再取得（AC-SE-04, AC-SE-09, R1-24, Issue #265）
-    const serialCompleteBtn = page.getByTestId("search-serial-completed");
     await serialCompleteBtn.click();
     await expect(serialCompleteBtn).toHaveAttribute("aria-pressed", "true");
     await expect(searchList).toBeVisible();
 
-    const serialShortBtn = page.getByTestId("search-serial-short");
     await serialShortBtn.click();
     await expect(serialShortBtn).toHaveAttribute("aria-pressed", "true");
     await expect(searchList).toBeVisible();
 
     // ジャンルピル変更による再取得（AC-SE-05, AC-SE-09, R1-24）
-    const fantasyPill = page.getByTestId("search-genre-fantasy");
     await fantasyPill.click();
     await expect(fantasyPill).toHaveAttribute("aria-pressed", "true");
     await expect(searchList).toBeVisible();
@@ -949,5 +1260,215 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
         return url ? new URL(url).searchParams.get("type") : null;
       })
       .toBe("er");
+  });
+
+  test("検索画面での次ページ読み込み（search-load-more-button）および直近確定クエリ保持が正常に機能すること (AC-SE-08)", async ({
+    page,
+  }) => {
+    // 0. 1ページ目・2ページ目応答および URL 記録用モックを設定
+    await page.evaluate(async () => {
+      const services = window.__yommyServices!;
+      const client = services.httpClient as unknown as {
+        getHtml: (options: { url: string }) => Promise<{
+          status: number;
+          url: string;
+          headers: Record<string, string>;
+          html: string;
+        }>;
+        setResponse: (
+          pattern: string | RegExp,
+          handler: (options: { url: string }) => Promise<{
+            status: number;
+            url: string;
+            headers: Record<string, string>;
+            html: string;
+          }>,
+        ) => void;
+      };
+
+      const baseRes = await client.getHtml({
+        url: "https://kakuyomu.jp/search?q=%E7%95%B0%E4%B8%96%E7%95%8C",
+      });
+      const page1Html = baseRes.html;
+
+      const doc2 = new DOMParser().parseFromString(page1Html, "text/html");
+      const nextData2 = doc2.querySelector("script#__NEXT_DATA__");
+      if (nextData2?.textContent) {
+        const parsed2 = JSON.parse(nextData2.textContent);
+        const apollo2 = parsed2.props.pageProps.__APOLLO_STATE__;
+        const rootKey = Object.keys(apollo2.ROOT_QUERY).find((k) =>
+          k.startsWith("searchWorks"),
+        );
+        if (rootKey) {
+          apollo2.ROOT_QUERY[rootKey].pageInfo = {
+            __typename: "PageInfo",
+            hasNextPage: false,
+            hasPreviousPage: true,
+          };
+          apollo2.ROOT_QUERY[rootKey].nodes = [
+            { __ref: "Work:16817330658027210003" },
+            { __ref: "Work:16817330658027210004" },
+          ];
+          apollo2["UserAccount:author3"] = {
+            __typename: "UserAccount",
+            id: "author3",
+            name: "saburo_user",
+            activityName: "三郎丸",
+          };
+          apollo2["Work:16817330658027210003"] = {
+            __typename: "Work",
+            id: "16817330658027210003",
+            title: "次ページ作品A：星界の錬金術師",
+            author: { __ref: "UserAccount:author3" },
+            introduction: "2ページ目で取得される錬金術ファンタジー。",
+            genre: "FANTASY",
+            serialStatus: "RUNNING",
+            publicEpisodeCount: 30,
+            totalCharacterCount: 95000,
+            tagLabels: ["錬金術", "星界"],
+            totalReviewPoint: 4100,
+            lastEpisodePublishedAt: "2026-10-22T12:00:00Z",
+          };
+          apollo2["Work:16817330658027210004"] = {
+            __typename: "Work",
+            id: "16817330658027210004",
+            title: "次ページ作品B：迷宮都市の鍛冶屋",
+            author: { __ref: "UserAccount:author3" },
+            introduction: "2ページ目で取得される鍛冶職人スローライフ。",
+            genre: "ACTION",
+            serialStatus: "COMPLETED",
+            publicEpisodeCount: 55,
+            totalCharacterCount: 180000,
+            tagLabels: ["鍛冶", "迷宮"],
+            totalReviewPoint: 6200,
+            lastEpisodePublishedAt: "2026-10-19T09:00:00Z",
+          };
+          nextData2.textContent = JSON.stringify(parsed2);
+        }
+      }
+      const page2Html = "<!doctype html>" + doc2.documentElement.outerHTML;
+
+      const capturedUrls: string[] = [];
+      const pendingPage2Resolvers: Array<
+        (res: {
+          status: number;
+          url: string;
+          headers: Record<string, string>;
+          html: string;
+        }) => void
+      > = [];
+
+      client.setResponse(/^https:\/\/kakuyomu\.jp\/search/, (options) => {
+        capturedUrls.push(options.url);
+        const parsedUrl = new URL(options.url);
+        if (parsedUrl.searchParams.get("page") === "2") {
+          return new Promise((resolve) => {
+            pendingPage2Resolvers.push(resolve);
+          });
+        }
+        return Promise.resolve({
+          status: 200,
+          url: options.url,
+          headers: {},
+          html: page1Html,
+        });
+      });
+
+      (
+        window as unknown as {
+          __scn02Pagination?: {
+            getCapturedUrls: () => string[];
+            resolvePage2: () => void;
+          };
+        }
+      ).__scn02Pagination = {
+        getCapturedUrls: () => capturedUrls,
+        resolvePage2: () => {
+          const page2Url =
+            capturedUrls.find(
+              (u) => new URL(u).searchParams.get("page") === "2",
+            ) ?? "https://kakuyomu.jp/search?page=2";
+          for (const resolve of pendingPage2Resolvers.splice(0)) {
+            resolve({
+              status: 200,
+              url: page2Url,
+              headers: {},
+              html: page2Html,
+            });
+          }
+        },
+      };
+    });
+
+    // 1. 検索画面へ移動して初回検索（"異世界"）を実行
+    await page.getByTestId("tab-search").click();
+    await expect(page).toHaveURL("/search");
+
+    const searchInput = page.getByTestId("search-input");
+    await searchInput.fill("異世界");
+    await page.getByTestId("search-submit-button").click();
+
+    await expect(page.getByTestId("search-results-list")).toBeVisible();
+    await expect(
+      page.getByTestId("search-novel-card-16817330658027210001"),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("search-novel-card-16817330658027210002"),
+    ).toBeVisible();
+
+    const loadMoreBtn = page.getByTestId("search-load-more-button");
+    await expect(loadMoreBtn).toBeVisible();
+    await expect(loadMoreBtn).toContainText("さらに読み込む");
+
+    // 2. 検索バーを未確定文字列へ編集（送信はしない）した上で「さらに読み込む」を押下
+    await searchInput.fill("未送信の編集キーワード");
+    await loadMoreBtn.click();
+
+    // 2ページ目通信中は読み込み中表示かつボタン無効化、既存1ページ目カードは保持されること
+    await expect(loadMoreBtn).toBeDisabled();
+    await expect(loadMoreBtn).toContainText("読み込み中...");
+    await expect(
+      page.getByTestId("search-novel-card-16817330658027210001"),
+    ).toBeVisible();
+
+    // 3. 2ページ目遅延モック応答を解決
+    await page.evaluate(() => {
+      (
+        window as unknown as {
+          __scn02Pagination: { resolvePage2: () => void };
+        }
+      ).__scn02Pagination.resolvePage2();
+    });
+
+    // 4. 1ページ目＋2ページ目の全4作品が追記表示され、次ページ無しのためボタンが消滅すること
+    await expect(
+      page.getByTestId("search-novel-card-16817330658027210003"),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("search-novel-card-16817330658027210004"),
+    ).toBeVisible();
+    await expect(loadMoreBtn).toHaveCount(0);
+
+    // 5. 2ページ目リクエスト URL が未送信編集値ではなく直近確定クエリ（"異世界"）を保持していたことを検証（AC-SE-08）
+    const page2QueryInfo = await page.evaluate(() => {
+      const urls = (
+        window as unknown as {
+          __scn02Pagination: { getCapturedUrls: () => string[] };
+        }
+      ).__scn02Pagination.getCapturedUrls();
+      const p2 = urls.find((u) => new URL(u).searchParams.get("page") === "2");
+      if (!p2) return null;
+      const parsed = new URL(p2);
+      return {
+        q: parsed.searchParams.get("q"),
+        page: parsed.searchParams.get("page"),
+        order: parsed.searchParams.get("order"),
+      };
+    });
+    expect(page2QueryInfo).toEqual({
+      q: "異世界",
+      page: "2",
+      order: "weekly_ranking",
+    });
   });
 });
