@@ -1465,4 +1465,330 @@ describe("useNovelRanking", () => {
       expect(result.current.error).toBeNull();
     });
   });
+
+  describe("同一ティック連打ガードとアンマウント競合保護 (R1-13, R1-19)", () => {
+    it("同一ティック内に addNovelToBookshelf を同一作品で連続呼び出しした場合、2回目は同期ガードにより null を返し通信は1回のみ実行されること (R1-13)", async () => {
+      let resolveWork!: (val: HttpResponse) => void;
+      let fetchCount = 0;
+      mockHttpClient.setResponse(
+        /^https:\/\/kakuyomu\.jp\/works\/\d+$/,
+        (options) => {
+          if (options.url === sampleRankingItem1.workUrl) {
+            fetchCount++;
+            return new Promise<HttpResponse>((resolve) => {
+              resolveWork = resolve;
+            });
+          }
+          return {
+            status: 200,
+            url: options.url,
+            headers: {},
+            html: workIndexHtml,
+          };
+        },
+      );
+
+      const { result } = renderHook(() => useNovelRanking(), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(result.current.items.length).toBeGreaterThan(0);
+      });
+
+      let p1!: Promise<string | null>;
+      let p2!: Promise<string | null>;
+      let p3!: Promise<void>;
+      act(() => {
+        p1 = result.current.addNovelToBookshelf(sampleRankingItem1);
+        p2 = result.current.addNovelToBookshelf(sampleRankingItem1);
+        p3 = result.current.handleCardSelect(sampleRankingItem1);
+      });
+
+      expect(fetchCount).toBe(1);
+      await expect(p2).resolves.toBeNull();
+      await expect(p3).resolves.toBeUndefined();
+
+      await act(async () => {
+        resolveWork({
+          status: 200,
+          url: sampleRankingItem1.workUrl,
+          headers: {},
+          html: workIndexHtml,
+        });
+        await p1;
+      });
+
+      expect(result.current.addingWorkId).toBeNull();
+      expect(
+        result.current.registeredWorkIds.has(sampleRankingItem1.remoteWorkId),
+      ).toBe(true);
+    });
+
+    it("同一ティック内に未登録作品で handleCardSelect を連続呼び出しした場合、通信・画面遷移ともに1回のみ実行されること (R1-13)", async () => {
+      let resolveWork!: (val: HttpResponse) => void;
+      let fetchCount = 0;
+      mockHttpClient.setResponse(
+        /^https:\/\/kakuyomu\.jp\/works\/\d+$/,
+        (options) => {
+          if (options.url === sampleRankingItem1.workUrl) {
+            fetchCount++;
+            return new Promise<HttpResponse>((resolve) => {
+              resolveWork = resolve;
+            });
+          }
+          return {
+            status: 200,
+            url: options.url,
+            headers: {},
+            html: workIndexHtml,
+          };
+        },
+      );
+
+      const { result } = renderHook(() => useNovelRanking(), {
+        wrapper: createWrapper("/ranking"),
+      });
+
+      await waitFor(() => {
+        expect(result.current.items.length).toBeGreaterThan(0);
+      });
+
+      let p1!: Promise<void>;
+      let p2!: Promise<void>;
+      act(() => {
+        p1 = result.current.handleCardSelect(sampleRankingItem1);
+        p2 = result.current.handleCardSelect(sampleRankingItem1);
+      });
+
+      expect(fetchCount).toBe(1);
+      await expect(p2).resolves.toBeUndefined();
+
+      await act(async () => {
+        resolveWork({
+          status: 200,
+          url: sampleRankingItem1.workUrl,
+          headers: {},
+          html: workIndexHtml,
+        });
+        await p1;
+      });
+
+      expect(window.location.pathname).toBe(
+        `/novels/${encodeURIComponent(`kakuyomu:${sampleRankingItem1.remoteWorkId}`)}`,
+      );
+    });
+
+    it("未登録作品の handleCardSelect 実行中にアンマウントされた場合、DB 保存・syncEngine 通知は完遂しつつ詳細画面への遅延遷移および State 更新が遮断されること (R1-19)", async () => {
+      let resolveWork!: (val: HttpResponse) => void;
+      mockHttpClient.setResponse(
+        /^https:\/\/kakuyomu\.jp\/works\/\d+$/,
+        () =>
+          new Promise<HttpResponse>((resolve) => {
+            resolveWork = resolve;
+          }),
+      );
+      const mockSyncEngine = {
+        notifyChanged: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const { result, unmount } = renderHook(() => useNovelRanking(), {
+        wrapper: createWrapper("/ranking", {
+          syncEngine: mockSyncEngine as unknown as SyncEngine,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.items.length).toBeGreaterThan(0);
+      });
+
+      const targetItem = result.current.items[0];
+      let selectPromise!: Promise<void>;
+      act(() => {
+        selectPromise = result.current.handleCardSelect(targetItem);
+      });
+
+      await waitFor(() => {
+        expect(result.current.addingWorkId).toBe(targetItem.remoteWorkId);
+      });
+
+      unmount();
+
+      await act(async () => {
+        resolveWork({
+          status: 200,
+          url: targetItem.workUrl,
+          headers: {},
+          html: workIndexHtml,
+        });
+        await selectPromise;
+      });
+
+      expect(mockSyncEngine.notifyChanged).toHaveBeenCalledTimes(1);
+      expect(window.location.pathname).toBe("/ranking");
+    });
+
+    it("addNovelToBookshelf が失敗する前にアンマウントされた場合、エラー State 更新が行われず安全に終了すること (R1-19)", async () => {
+      let rejectWork!: (err: Error) => void;
+      mockHttpClient.setResponse(
+        /^https:\/\/kakuyomu\.jp\/works\/\d+$/,
+        () =>
+          new Promise<HttpResponse>((_, reject) => {
+            rejectWork = reject;
+          }),
+      );
+
+      const { result, unmount } = renderHook(() => useNovelRanking(), {
+        wrapper: createWrapper("/ranking"),
+      });
+
+      await waitFor(() => {
+        expect(result.current.items.length).toBeGreaterThan(0);
+      });
+
+      let addPromise!: Promise<string | null>;
+      act(() => {
+        addPromise = result.current.addNovelToBookshelf(sampleRankingItem1);
+      });
+
+      await waitFor(() => {
+        expect(result.current.addingWorkId).toBe(
+          sampleRankingItem1.remoteWorkId,
+        );
+      });
+
+      unmount();
+
+      let savedId: string | null = "dummy";
+      await act(async () => {
+        rejectWork(new Error("Unmounted Add Error"));
+        savedId = await addPromise;
+      });
+
+      expect(savedId).toBeNull();
+      expect(result.current.error).toBeNull();
+    });
+
+    it("登録済み作品の handleCardSelect で listNovels 完了前にアンマウントされた場合、詳細画面への遅延遷移が遮断されること (R1-19)", async () => {
+      let resolveListNovels!: (novels: unknown[]) => void;
+      let isDeferred = false;
+      const mockNovelRepo = {
+        listNovels: vi.fn(() => {
+          if (isDeferred) {
+            return new Promise<unknown[]>((resolve) => {
+              resolveListNovels = resolve;
+            });
+          }
+          return Promise.resolve([]);
+        }),
+        upsertNovelWithToc: vi.fn().mockResolvedValue({
+          id: `kakuyomu:${sampleRankingItem1.remoteWorkId}`,
+        }),
+      };
+
+      const { result, unmount } = renderHook(() => useNovelRanking(), {
+        wrapper: createWrapper("/ranking", {
+          novelRepository: mockNovelRepo as unknown as NovelRepository,
+        }),
+      });
+
+      await waitFor(() => {
+        expect(result.current.items.length).toBeGreaterThan(0);
+      });
+
+      await act(async () => {
+        await result.current.addNovelToBookshelf(sampleRankingItem1);
+      });
+      expect(
+        result.current.registeredWorkIds.has(sampleRankingItem1.remoteWorkId),
+      ).toBe(true);
+
+      isDeferred = true;
+      let selectPromise!: Promise<void>;
+      act(() => {
+        selectPromise = result.current.handleCardSelect(sampleRankingItem1);
+      });
+
+      unmount();
+
+      await act(async () => {
+        resolveListNovels([
+          {
+            id: `kakuyomu:${sampleRankingItem1.remoteWorkId}`,
+            siteType: "kakuyomu",
+            remoteWorkId: sampleRankingItem1.remoteWorkId,
+          },
+        ]);
+        await selectPromise;
+      });
+
+      expect(window.location.pathname).toBe("/ranking");
+    });
+
+    it("refreshRegisteredIds 実行中にアンマウントされた場合（成功・失敗双方）、State 更新が行われないこと (R1-19)", async () => {
+      let resolveList!: (novels: unknown[]) => void;
+      const mockRepo1 = {
+        listNovels: vi.fn(
+          () =>
+            new Promise<unknown[]>((resolve) => {
+              resolveList = resolve;
+            }),
+        ),
+      };
+
+      const { result: res1, unmount: unmount1 } = renderHook(
+        () => useNovelRanking(),
+        {
+          wrapper: createWrapper("/ranking", {
+            novelRepository: mockRepo1 as unknown as NovelRepository,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(mockRepo1.listNovels).toHaveBeenCalled();
+      });
+
+      unmount1();
+      await act(async () => {
+        resolveList([
+          {
+            id: `kakuyomu:${sampleRankingItem1.remoteWorkId}`,
+            siteType: "kakuyomu",
+            remoteWorkId: sampleRankingItem1.remoteWorkId,
+          },
+        ]);
+      });
+      expect(res1.current.registeredWorkIds.size).toBe(0);
+
+      let rejectList!: (err: Error) => void;
+      const mockRepo2 = {
+        listNovels: vi.fn(
+          () =>
+            new Promise<unknown[]>((_, reject) => {
+              rejectList = reject;
+            }),
+        ),
+      };
+
+      const { result: res2, unmount: unmount2 } = renderHook(
+        () => useNovelRanking(),
+        {
+          wrapper: createWrapper("/ranking", {
+            novelRepository: mockRepo2 as unknown as NovelRepository,
+          }),
+        },
+      );
+
+      await waitFor(() => {
+        expect(mockRepo2.listNovels).toHaveBeenCalled();
+      });
+
+      unmount2();
+      await act(async () => {
+        rejectList(new Error("DB Read Failed"));
+      });
+      expect(res2.current.registeredWorkIds.size).toBe(0);
+    });
+  });
 });

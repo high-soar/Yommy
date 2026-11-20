@@ -2,7 +2,7 @@
 type: spec-feature
 title: "小説リーダー画面仕様書（SCR-03: Novel Reader）"
 description: "小説本文の全画面（100dvh）縦書き・横書き組版表示、ページめくり（タップ/Kindle様式スワイプ送り）と連続スクロール切替、ハードウェア音量キー操作連携、エピソード端シームレス遷移、上下連動オーバーレイ（ReaderTopOverlay: 作品名・サブタイトル1行固定省略・目次導線 / ReaderBottomOverlay: RTLページシークバー・前後話ナビ・下部タブ）、ルビ・傍点描画、4カラーテーマ・文字サイズ・行間設定の永続化、前後エピソード遷移、未キャッシュ話のオンデマンド取得、既読・しおり・進捗率の自動保存/復元、およびSCN-01統合シナリオの正本仕様。"
-status: "Approved"
+status: "Review (#385)"
 updated: "2026-11-20"
 tags:
   - reader
@@ -348,7 +348,7 @@ src/features/reader/
     - 紙の本と同じように **左から右へのスワイプ（`dx > 0`, `slideOffsetPx > 0`）または画面左端約 20% タップで左側の次ページが画面内に水平スライドイン** する。スライドアニメーション中（`isAnimating === true`）は `transition: left 200ms ease-out` で滑らかに遷移し、ドラッグ中およびアニメーション完了時のリセット時（`isAnimating === false`）は `transition: none` とすることで、逆戻りアニメーションや視覚的ジャンプを排除して滑らかに中央スロットへ引き継ぐ（R1-28, R1-29, v0.6 Issue #201）。
     - 画面隅に控えめなページインジケーター（`data-testid="reader-page-indicator"`、例: `3 / 12`）を表示する。組み方向に関わらず常に水平表記とするため `writing-mode: horizontal-tb` を固定適用し、縦書き時における画面外クリップ・テキスト途切れを防止する。
     - 総ページ数 `totalPages` は、マルチカラム要素の `scrollHeight`（`Math.max(1, Math.round((scrollHeight + pageMarginPx * 2) / pageHeight))`）から算出し、話数遷移直後・しおり復元時・2ページ目以降のリサイズ時にも総ページ数が縮小しないことを保証する（R1-28, R1-29）。
-    - 画面回転やウィンドウリサイズ発生時は、`window.addEventListener("resize", ...)` に連動して総ページ数（`totalPages`）の再計測（`onTotalPagesChange`）を自動実行し、レイアウト変更に即座に追従する。また、初回マウント時（`containerRef` 接続直後の初回計測時）には実 DOM の `clientWidth` / `clientHeight` からスロット本文の幅・高さ（`width: Math.max(1, currentWidth - pageMarginPx * 2)px`, `height: Math.max(1, currentHeight - pageMarginPx * 2)px`）を即座に適用した上で `scrollHeight` を計測して 0px 幅レイアウトによる過大ページ数算出を防ぎ、さらに `bodyHtml`・`chapterTitle`・`initialScrollProgress`・`writingMode`・`fontSizePx`・`lineHeight`・`fontFamily`・`pageMarginPx`・`containerWidth`・`containerHeight` の変化時にも総ページ数を再評価し、エピソード遷移や別画面からのリーダー再遷移直後のページ位置復元を確実に発火させる（R2-04, R1-23, R1-26）。
+    - 画面回転やウィンドウリサイズ発生時は、`window.addEventListener("resize", ...)` に連動して総ページ数（`totalPages`）の再計測（`onTotalPagesChange`）を自動実行し、レイアウト変更に即座に追従する。また、初回マウント時（`containerRef` 接続直後の初回計測時）には実 DOM の `clientWidth` / `clientHeight` からスロット本文の幅・高さ（`width: Math.max(1, currentWidth - pageMarginPx * 2)px`, `height: Math.max(1, currentHeight - pageMarginPx * 2)px`）を即座に適用した上で `scrollHeight` を計測して 0px 幅レイアウトによる過大ページ数算出を防ぎ、さらに `chapterIndex`・`bodyHtml`・`chapterTitle`・`initialScrollProgress`・`writingMode`・`fontSizePx`・`lineHeight`・`fontFamily`・`pageMarginPx`・`containerWidth`・`containerHeight` の変化時にも総ページ数（`onTotalPagesChange`）および 1 画面短文判定（`onSingleScreenContentMeasured`）を再評価し、別話へ遷移したにもかかわらず本文・題名・進捗率が同一であるケースを含め、エピソード遷移や別画面からのリーダー再遷移直後の計測・ページ位置復元を確実に発火させる（R2-04, R1-23, R1-26, R1-20）。
     - 実効 `paged` モードで再開・ページ遷移した際は、スクロール位置（`scrollLeft` / `scrollTop`）を `0` にリセットし、`restoreScrollPosition` は実効 `!isPaged`（連続スクロールモード）のみに限定して実行することで、`scrollLeft` とスライドによる二重変位バグを防止する。
 - **連続スクロール仕様（実効 `"scroll"` 時）**:
   - 縦書き時: CSS `writing-mode: vertical-rl`、`text-orientation: mixed`、水平スクロール（`overflow-x-auto overflow-y-hidden`）。
@@ -378,8 +378,8 @@ src/features/reader/
      - 実効 `paged` の `measure()`（`onTotalPagesChange`）および連続スクロール（`!isPaged`）の計測（`onSingleScreenContentMeasured`）の双方において、コンテナ寸法が未確定（`currentWidth <= 0 || currentHeight <= 0`）の間はコールバックを発火しない。
      - 連続スクロールモード（`!isPaged`）において本文（`bodyHtml !== null`）のレイアウト計測が完了しコンテナ寸法が正のとき、`maxScroll <= 0` かどうかを `onSingleScreenContentMeasured?.(isSingleScreen)` で親（`useReader`）へ通知する。
      - ページめくりモード（`isPaged`）ではコンテナ寸法が正のときに `onTotalPagesChange?.(measuredPages)` により `measuredPages === 1` を `useReader` へ通知する。
-  5. **位置復元の発火トリガー条件（`R1-18`）**:
-     - マウント時、および `initialScrollProgress`・`bodyHtml`（エピソード切替時）・`writingMode`（縦書き/横書き切替時）・`pagingMode`（ページ送りモード切替時）のいずれかが変化したタイミングで、進捗率に基づく位置復元を実行する。
+  5. **位置復元の発火トリガー条件（`R1-18`, `R1-20`）**:
+     - マウント時、および `chapterIndex`・`initialScrollProgress`・`bodyHtml`（エピソード切替時）・`writingMode`（縦書き/横書き切替時）・`pagingMode`（ページ送りモード切替時）のいずれかが変化したタイミングで、進捗率に基づく位置復元を実行する（別話でも `bodyHtml`・`chapterTitle`・`initialScrollProgress` が同一となるケースで確実にスクロール位置・ページ位置を復元するため `chapterIndex` を依存配列に含める）。
      - なお、連続スクロールモード（`!isPaged`）で初期表示直後（`scroll` イベント未発火時）や 1 画面内に全文が収まる短文（`maxScroll <= 0`）の場合でも端での 2 段階遷移が確実に動作するよう、`useReaderGestures` 側の `syncScrollBoundaryState()` により各操作開始時（ポインター・タッチ・ホイール・音量キー）に実 DOM のスクロール位置および `maxScroll <= 0` から先頭・末尾到達フラグ（`reachedStartRef` / `reachedEndRef`）を同期評価する。
 
 ---

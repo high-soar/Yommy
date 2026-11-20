@@ -79,17 +79,21 @@ export function useNovelRanking(): UseNovelRankingResult {
   const [error, setError] = useState<string | null>(null);
 
   // 通信中重複リクエストガードおよび非同期競合（Race Condition）防止用 ref
+  const isMountedRef = useRef<boolean>(true);
   const isFetchingRef = useRef<boolean>(false);
   const requestIdRef = useRef<number>(0);
   const selectedSiteRef = useRef<NovelSiteType>(selectedSite);
+  const addingWorkIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     selectedSiteRef.current = selectedSite;
   }, [selectedSite]);
 
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
-      // アンマウント時に世代を進め、完了後のステート更新を防止 (R1-08)
+      // アンマウント時にマウント状態を false にし世代を進め、完了後のステート更新・遷移を防止 (R1-08, R1-19)
+      isMountedRef.current = false;
       requestIdRef.current += 1;
     };
   }, []);
@@ -103,6 +107,7 @@ export function useNovelRanking(): UseNovelRankingResult {
       const siteToQuery = targetSite ?? selectedSite;
       try {
         const novels = await novelRepository.listNovels();
+        if (!isMountedRef.current) return;
         const ids = new Set(
           novels
             .filter((n) => n.siteType === siteToQuery)
@@ -110,6 +115,7 @@ export function useNovelRanking(): UseNovelRankingResult {
         );
         setRegisteredWorkIds(ids);
       } catch {
+        if (!isMountedRef.current) return;
         setRegisteredWorkIds(new Set());
       }
     },
@@ -241,12 +247,14 @@ export function useNovelRanking(): UseNovelRankingResult {
 
   const addNovelToBookshelf = useCallback(
     async (item: NovelRankingResultItem): Promise<string | null> => {
-      if (addingWorkId === item.remoteWorkId) return null;
+      if (addingWorkIdsRef.current.has(item.remoteWorkId)) return null;
+      addingWorkIdsRef.current.add(item.remoteWorkId);
 
       const siteAtStart = selectedSite;
       setAddingWorkId(item.remoteWorkId);
       setError(null);
 
+      let savedId: string | null = null;
       try {
         const parser = parserRegistry.requireParser(item.workUrl);
 
@@ -261,32 +269,33 @@ export function useNovelRanking(): UseNovelRankingResult {
           new Date().toISOString(),
         );
 
-        if (selectedSiteRef.current === siteAtStart) {
-          setRegisteredWorkIds((prev) => new Set(prev).add(item.remoteWorkId));
+        if (isMountedRef.current) {
+          if (selectedSiteRef.current === siteAtStart) {
+            setRegisteredWorkIds((prev) =>
+              new Set(prev).add(item.remoteWorkId),
+            );
+          }
+          setAddingWorkId((prev) => (prev === item.remoteWorkId ? null : prev));
         }
-        setAddingWorkId((prev) => (prev === item.remoteWorkId ? null : prev));
         syncEngine?.notifyChanged().catch(() => {});
-        return savedNovel.id;
+        savedId = savedNovel.id;
       } catch (err) {
-        setAddingWorkId((prev) => (prev === item.remoteWorkId ? null : prev));
-        const message = err instanceof Error ? err.message : String(err);
-        setError(message);
-        return null;
+        if (isMountedRef.current) {
+          setAddingWorkId((prev) => (prev === item.remoteWorkId ? null : prev));
+          const message = err instanceof Error ? err.message : String(err);
+          setError(message);
+        }
+      } finally {
+        addingWorkIdsRef.current.delete(item.remoteWorkId);
       }
+      return savedId;
     },
-    [
-      addingWorkId,
-      httpClient,
-      novelRepository,
-      parserRegistry,
-      selectedSite,
-      syncEngine,
-    ],
+    [httpClient, novelRepository, parserRegistry, selectedSite, syncEngine],
   );
 
   const handleCardSelect = useCallback(
     async (item: NovelRankingResultItem): Promise<void> => {
-      if (addingWorkId === item.remoteWorkId) return;
+      if (addingWorkIdsRef.current.has(item.remoteWorkId)) return;
 
       if (registeredWorkIds.has(item.remoteWorkId)) {
         const fallbackSiteType =
@@ -305,17 +314,17 @@ export function useNovelRanking(): UseNovelRankingResult {
         } catch {
           // listNovels 取得失敗時は決定論的 ID をフォールバックとして使用
         }
+        if (!isMountedRef.current) return;
         router.navigateToNovelDetail(novelId, "/ranking");
         return;
       }
 
       const novelId = await addNovelToBookshelf(item);
-      if (novelId) {
+      if (novelId && isMountedRef.current) {
         router.navigateToNovelDetail(novelId, "/ranking");
       }
     },
     [
-      addingWorkId,
       registeredWorkIds,
       addNovelToBookshelf,
       novelRepository,

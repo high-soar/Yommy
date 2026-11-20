@@ -207,6 +207,9 @@ describe("SearchPage コンポーネント", () => {
         expect.objectContaining({ selectedSite: "narou" }),
         undefined,
       );
+      expect(screen.getByTestId("search-initial-state")).toHaveTextContent(
+        "小説家になろうに投稿された作品名・著者名・キーワードやジャンルからお好みの小説を見つけることができます。",
+      );
     } finally {
       siteSelectorSpy.mockRestore();
       filterBarSpy.mockRestore();
@@ -582,5 +585,57 @@ describe("SearchPage コンポーネント", () => {
 
     inputBarSpy.mockRestore();
     filterBarSpy.mockRestore();
+  });
+
+  it("未知の selectedSite（generic）指定時は初期未検索案内文言が汎用表記「小説サイト」へフォールバックすること (R1-14)", () => {
+    const siteSelectorSpy = vi
+      .spyOn(siteSelectorModule, "SiteSelector")
+      .mockImplementation(() => null);
+    const inputBarSpy = vi
+      .spyOn(searchInputBarModule, "SearchInputBar")
+      .mockImplementation(() => null);
+    const filterBarSpy = vi
+      .spyOn(searchFilterBarModule, "SearchFilterBar")
+      .mockImplementation(() => null);
+
+    render(
+      <SearchPage
+        selectedSite="generic"
+        onSelectSite={vi.fn()}
+        keyword=""
+        onChangeKeyword={vi.fn()}
+        onSubmitSearch={vi.fn()}
+        selectedOrder="weekly_ranking"
+        onSelectOrder={vi.fn()}
+        selectedSerialStatus="all"
+        onSelectSerialStatus={vi.fn()}
+        selectedGenre={undefined}
+        onSelectGenre={vi.fn()}
+        items={[]}
+        registeredWorkIds={new Set()}
+        addingWorkId={null}
+        isLoading={false}
+        isLoadingMore={false}
+        hasNextPage={false}
+        onLoadMore={vi.fn()}
+        error={null}
+        onRetry={vi.fn()}
+        onAddNovel={vi.fn()}
+        onSelectCard={vi.fn()}
+      />,
+    );
+
+    expect(siteSelectorSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedSite: "generic" }),
+      undefined,
+    );
+    expect(inputBarSpy).toHaveBeenCalled();
+    expect(filterBarSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedSite: "generic" }),
+      undefined,
+    );
+    expect(screen.getByTestId("search-initial-state")).toHaveTextContent(
+      "小説サイトに投稿された作品名・著者名・キーワードやジャンルからお好みの小説を見つけることができます。",
+    );
   });
 });

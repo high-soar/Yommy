@@ -2,8 +2,8 @@
 type: spec-feature
 title: "検索画面仕様書（SCR-06: Novel Search）"
 description: "複数小説サイト（カクヨム・小説家になろう）のサイト切替、キーワード・除外キーワード検索、並び順・連載状態（すべて/連載中/完結済/短編）・サイト別複数ジャンル（OR）フィルタ、作品カード一覧およびその場での本棚追加を提供する検索画面（SCR-06）の正本仕様。"
-status: "Approved"
-updated: "2026-11-15"
+status: "Review (#385)"
+updated: "2026-11-20"
 tags:
   - search
   - scr-06
@@ -290,8 +290,11 @@ export interface UseNovelSearchResult {
 - **直近検索実行条件の確定保持（`committedQueryRef`, R1-07 / R2-15）**:
   - 1 ページ目の検索実行（`executeSearch(..., 1, false)`）時に、その時点で確定した検索条件（`site`, `keyword`, `excludeKeyword`, `order`, `serialStatus`, `genres`）を `committedQueryRef` に保持する。
   - 次ページ追加読み込み（`loadMore`）時は、未送信の入力欄編集値（`keyword`, `excludeKeyword` state）ではなく、`committedQueryRef.current` に保持された確定済み検索条件を使用して 2 ページ目以降の URL を構築する。
-- **アンマウント時クリーンアップと世代ガード（`isMountedRef` / `searchGenerationRef`, R2-17）**:
-  - コンポーネントアンマウント時に `isMountedRef.current = false` および `searchGenerationRef.current += 1` を実行し、進行中の検索リクエストや作品登録・画面遷移（`addNovelToBookshelf` / `handleCardSelect`）の非同期完了後に State 更新や遅延 `navigateToNovelDetail` が発火しないようガードする。
+- **アンマウント時クリーンアップと世代・マウントガード（`isMountedRef` / `searchGenerationRef`, R2-17 / R1-19）**:
+  - コンポーネントアンマウント時に `isMountedRef.current = false` および `searchGenerationRef.current += 1` を実行し、進行中の非同期処理完了後に State 更新や遅延画面遷移が発火しないようガードする。
+  - 具体的には、`refreshRegisteredIds`、`executeSearch` / `loadMore`（`finally` ブロックの `setIsLoadingMore(false)` を含む）、`addNovelToBookshelf`（成功時および `catch` 時の `setAddingWorkId(null)` / `setError` State 更新。ただし DB 保存および `syncEngine?.notifyChanged()` は完遂する）、および `handleCardSelect`（登録済み分岐の `listNovels()` 完了後 `router.navigateToNovelDetail`、および未登録分岐の `addNovelToBookshelf` 完了後 `router.navigateToNovelDetail`）のすべてで `isMountedRef.current` を確認する。
+- **同一作品への連打・多重登録抑止ガード（`addingWorkIdsRef`, R1-13）**:
+  - `addingWorkIdsRef = useRef<Set<string>>(new Set())` を保持し、`addNovelToBookshelf` および `handleCardSelect` の入口で `addingWorkIdsRef.current.has(item.remoteWorkId)` を同期チェックして同一ティック内の連続呼び出し（二重登録・二重遷移）を抑止し、`finally` ブロックで確実に解放する（別作品同士の並行追加を阻害しないよう作品単位の `Set<string>` で管理する）。
 
 ---
 

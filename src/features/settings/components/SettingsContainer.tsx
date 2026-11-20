@@ -16,7 +16,7 @@ export interface SettingsContainerProps {
  * useSettings および useCloudSync フックを呼び出し、SettingsPage に組版設定（組み方向・ページ送り・テーマ・文字サイズ・行間・フォント種別・画面余白・音量キー送り）
  * および Google Drive クラウド同期状態・操作コールバックを注入する。
  *
- * @see docs/specs/features/settings.md §3.4
+ * @see docs/specs/features/settings.md §3.5
  */
 export const SettingsContainer: React.FC<SettingsContainerProps> = ({
   className,
