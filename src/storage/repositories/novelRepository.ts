@@ -7,6 +7,7 @@ import type {
   NovelSummary,
 } from "../types";
 import type { ParsedNovelIndex, ParsedTocItem } from "../../parsers/types";
+import { isBookmarkAtEnd } from "../../shared/constants/bookmark";
 
 interface NovelRow {
   id: string;
@@ -238,7 +239,11 @@ export class SqlNovelRepository implements NovelRepository {
       } else {
         const existingChapterRows = await tx.query<{
           remote_chapter_id: string;
-        }>(`SELECT remote_chapter_id FROM chapters WHERE novel_id = ?;`, [id]);
+          chapter_index: number;
+        }>(
+          `SELECT remote_chapter_id, chapter_index FROM chapters WHERE novel_id = ?;`,
+          [id],
+        );
         const existingRemoteIds = new Set(
           existingChapterRows.map((r) => r.remote_chapter_id),
         );
@@ -253,11 +258,54 @@ export class SqlNovelRepository implements NovelRepository {
               ? 1
               : 0;
 
+        let nextBookmarkChapterIndex = existing.bookmarkChapterIndex;
+        let nextBookmarkScrollProgress = existing.bookmarkScrollProgress;
+
+        if (
+          existing.totalChapters > 0 &&
+          existing.bookmarkChapterIndex === existing.totalChapters &&
+          isBookmarkAtEnd(existing.bookmarkScrollProgress)
+        ) {
+          const prevLastChapter = existingChapterRows.find(
+            (c) => c.chapter_index === existing.totalChapters,
+          );
+          const sortedChapters = [...index.chapters].sort(
+            (a, b) => a.chapterIndex - b.chapterIndex,
+          );
+          const foundIdx = prevLastChapter
+            ? sortedChapters.findIndex(
+                (c) => c.remoteChapterId === prevLastChapter.remote_chapter_id,
+              )
+            : -1;
+
+          if (foundIdx >= 0) {
+            const newLastPos = foundIdx + 1;
+            if (newLastPos < sortedChapters.length) {
+              nextBookmarkChapterIndex =
+                sortedChapters[foundIdx + 1].chapterIndex;
+              nextBookmarkScrollProgress = 0;
+            } else {
+              nextBookmarkChapterIndex = sortedChapters[foundIdx].chapterIndex;
+              nextBookmarkScrollProgress = existing.bookmarkScrollProgress;
+            }
+          } else if (sortedChapters.length === 0) {
+            nextBookmarkChapterIndex = null;
+            nextBookmarkScrollProgress = 0;
+          } else if (sortedChapters.length > existing.totalChapters) {
+            nextBookmarkChapterIndex = existing.totalChapters + 1;
+            nextBookmarkScrollProgress = 0;
+          } else if (existing.bookmarkChapterIndex > sortedChapters.length) {
+            nextBookmarkChapterIndex =
+              sortedChapters[sortedChapters.length - 1].chapterIndex;
+            nextBookmarkScrollProgress = existing.bookmarkScrollProgress;
+          }
+        }
+
         await tx.execute(
           `UPDATE novels
            SET site_type = ?, remote_work_id = ?, canonical_url = ?, title = ?, author = ?, synopsis = ?,
                total_chapters = ?, has_new_update = ?, latest_episode_published_at = ?,
-               last_checked_at = ?
+               last_checked_at = ?, bookmark_chapter_index = ?, bookmark_scroll_progress = ?
            WHERE id = ?;`,
           [
             index.siteType,
@@ -270,6 +318,8 @@ export class SqlNovelRepository implements NovelRepository {
             hasNewUpdate,
             latestEpisodePublishedAt,
             fetchedAt,
+            nextBookmarkChapterIndex,
+            nextBookmarkScrollProgress,
             id,
           ],
         );
