@@ -2,7 +2,7 @@
 type: spec-feature
 title: "小説リーダー画面仕様書（SCR-03: Novel Reader）"
 description: "小説本文の全画面（100dvh）縦書き・横書き組版表示、ページめくり（タップ/Kindle様式スワイプ送り）と連続スクロール切替、ハードウェア音量キー操作連携、エピソード端シームレス遷移、上下連動オーバーレイ（ReaderTopOverlay: 作品名・サブタイトル1行固定省略・目次導線 / ReaderBottomOverlay: RTLページシークバー・前後話ナビ・下部タブ）、ルビ・傍点描画、4カラーテーマ・文字サイズ・行間設定の永続化、前後エピソード遷移、未キャッシュ話のオンデマンド取得、既読・しおり・進捗率の自動保存/復元、およびSCN-01統合シナリオの正本仕様。"
-status: "Review (#385)"
+status: "Review (#387)"
 updated: "2026-11-20"
 tags:
   - reader
@@ -754,6 +754,7 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
   10. 設定画面（`SCR-05`）で「連続スクロール」を選択してリーダーに戻り、連続スクロール表示へ切り替わること、オーバーレイ展開時にページシークバー領域が表示されないこと、本文末尾の「次の話へ」ボタン（`reader-scroll-next-chapter`）または末尾到達後の 2 段階スワイプ・ホイール操作（1回目ヒント表示、2回目遷移）で次話へ遷移できることを確認（`AC-RD-15`, `AC-RD-19`, `AC-RD-25`）。
   11. 第2話でオーバーレイを表示し、「前の話へ」（`reader-prev-chapter`）をクリックして第1話へ戻る遷移（`TR-05`）を確認した後、再度第2話へ進む。
   12. オーバーレイを表示して下部タブ「本棚」をタップし、しおり進捗率が DB 保存（`flushBookmark`）された上で本棚画面（`/`）へ遷移（`TR-01b`）することを確認。本棚の作品カードに `しおり: 第2話` が表示され、「第2話から読む」（`novel-card-resume`）で第2話の位置が復元されること、および最後に `SCR-02` から作品を削除して本棚が空状態になることを確認（`TR-07`）。
+  13. （別テストケース `AC-RD-28`: 遅延 `httpClient` モック制御）未キャッシュ第2話への「次の話へ」遷移中に `reader-loading` が表示され本文領域（`reader-view` / `reader-chapter-title`）が非表示であること、遅延応答解決後に新本文へ切り替わること、第1話へ戻った後の再遷移（キャッシュ済み）では `reader-loading` が出ず追加 HTTP 通信なしで即時切替されること、および未キャッシュ第3話取得失敗時に `reader-error` が表示されることを確認。
 
 ### 7.2 `SCN-06` 結合シナリオ仕様（`test/it/scenarios/scn06-volume-key-paging.spec.ts`）
 
@@ -780,7 +781,7 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
 ### 7.4 `SCN-05` 関連検証観点（`test/it/scenarios/scn05-cloud-sync.spec.ts`、`v1.1` Issue #342 / `v1.3` Issue #375）
 
 - リーダー画面（`SCR-03`）表示中の画面ロック（5分経過モック→復帰）による自動 Pull 発動、他端末しおり競合確認ダイアログ（`bookmark-conflict-dialog`）の 2 択操作（「第N話へ移動する」/「第M話のまま読む」）および背景タップ・`Escape`・戻る操作抑止、画面ロック移行時の未保存進捗即時フラッシュ、ならびに未操作離脱時の他端末しおり保護を一気通貫で回帰検証する（`AC-RD-30`〜`34`）。
-- あわせて他端末で保存された `bookmarkScrollProgress`（途中進捗率）の自動 Pull 復元とリーダー表示ページ位置の正確な再現、ならびにリーダー閲覧中に `lastReadAt` 未更新のまま自動 Pull 経由で目次追加・しおり自動進行（`totalChapters` 増加）が発生した際に競合確認モーダルを誤表示せず総話数のみ更新することを検証する（`AC-RD-36`）。
+- あわせて他端末で保存された `bookmarkScrollProgress`（途中進捗率）の自動 Pull 復元とリーダー表示ページ位置の正確な再現、実効 `paged` モードでのページ移動（次ページタップ／復元ページからの前ページ戻し操作）に伴う自動 Push ペイロード（`bookmarkScrollProgress > 0` および期待進捗値一致）と端末 B での復元ページ位置再現、ローカル旧最新話末尾（`progress = 1.0`）・最新 `lastReadAt` 保持状態での Push マージ（`buildMergedSyncNovels`）による新着第3話先頭への自動進行（`totalChapters` 更新・`lastReadAt` 保持）、ならびにリーダー閲覧中に `lastReadAt` 未更新のまま自動 Pull 経由で目次追加・しおり自動進行（`totalChapters` 増加）が発生した際に競合確認モーダルを誤表示せず総話数のみ更新することを検証する（`AC-RD-20`, `AC-RD-36`）。
 
 ### 7.5 `SCN-04` 関連検証観点（`test/it/scenarios/scn04-prefetch-and-cache.spec.ts`、`v1.2` Issue #344）
 
@@ -789,3 +790,4 @@ Web ブラウザおよび開発環境では、Capacitor ネイティブ SQLite �
 ### 7.6 `SCN-03` 関連検証観点（`test/it/scenarios/scn03-bookshelf-update-and-sort.spec.ts`、`v1.3` Issue #375）
 
 - 1ページで完結する短文エピソードを開いた際に DOM 計測後に自動で `bookmarkScrollProgress = 1.0` が保存され、本棚更新チェックでの新着話追加に伴い新着第3話先頭へしおりが自動進行し、「第N話から読む」で第3話の先頭が開いて既読化されることを検証する（`AC-RD-36`）。
+- さらに連続スクロール（`scroll`）モードにおいて、最下部 5px 以内到達（`0 < maxScroll - currentScroll <= 5`）での `1.0` 丸め保存、1 画面収まり短文（`maxScroll <= 0`）の自動 `1.0` 保存、ならびに既に `bookmarkScrollProgress === 1.0` 保存済みの短文を再表示して離脱しても `updateBookmark` を再実行せず `lastReadAt` を上書き保護することも検証する（`AC-RD-34`, `AC-RD-36`）。

@@ -159,14 +159,32 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     await expect(ch2Title).toBeVisible();
     await expect(ch2Title).toHaveText("第1話 見知らぬ空");
 
-    // 7. リーダーでスクロールし、第2話のしおり進捗を保存
-    await page.evaluate(() => {
-      const el = document.querySelector('[data-testid="reader-view"]');
-      if (el) {
-        el.scrollLeft = -100;
-        el.dispatchEvent(new Event("scroll"));
-      }
-    });
+    // 7. 実効 paged モードで左端20%タップによるページ送り（1→2）を行い、第2話のしおり進捗を保存
+    await expect(readerView).toHaveAttribute(
+      "data-effective-paging-mode",
+      "paged",
+    );
+    await expect(readerView).toHaveAttribute("data-current-page", "1");
+    await expect
+      .poll(async () =>
+        Number(await readerView.getAttribute("data-total-pages")),
+      )
+      .toBeGreaterThanOrEqual(2);
+
+    const totalPages = Number(
+      await readerView.getAttribute("data-total-pages"),
+    );
+    const expectedProgress = 1 / (totalPages - 1);
+
+    const readerBox = await readerView.boundingBox();
+    expect(readerBox).not.toBeNull();
+    if (readerBox) {
+      await page.mouse.click(
+        readerBox.x + readerBox.width * 0.1,
+        readerBox.y + readerBox.height * 0.4,
+      );
+    }
+    await expect(readerView).toHaveAttribute("data-current-page", "2");
 
     // 8. ブラウザ戻る操作で作品詳細へ戻る
     await page.goBack();
@@ -177,9 +195,9 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     await expect(resumeButton).toBeVisible();
     await expect(resumeButton).toContainText("続きから読む（第2話）");
 
-    // 9. 2.5秒のデバウンス auto-push が発火し、モック Drive のリモートデータにカクヨム（isFavorite: 1, 更新された updatedAt, 第2話しおり）およびなろう作品（isFavorite: 0, 第4話しおり）が記録されるのを待機 (AC-BS-13, AC-BS-14, R2-11)
+    // 9. 2.5秒のデバウンス auto-push が発火し、モック Drive のリモートデータにカクヨム（isFavorite: 1, 更新された updatedAt, 第2話・実進捗しおり）およびなろう作品（isFavorite: 0, 第4話しおり）が記録されるのを待機 (AC-BS-13, AC-BS-14, R2-11)
     await page.waitForFunction(
-      (prevUpdatedAt) => {
+      ({ prevUpdatedAt, expected }) => {
         const raw = localStorage.getItem("yommy_mock_gdrive_file");
         if (!raw) return false;
         try {
@@ -190,6 +208,9 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
           return (
             Boolean(kakuyomuNovel) &&
             kakuyomuNovel.bookmarkChapterIndex === 2 &&
+            typeof kakuyomuNovel.bookmarkScrollProgress === "number" &&
+            kakuyomuNovel.bookmarkScrollProgress > 0 &&
+            Math.abs(kakuyomuNovel.bookmarkScrollProgress - expected) < 1e-9 &&
             kakuyomuNovel.isFavorite === 1 &&
             typeof kakuyomuNovel.updatedAt === "string" &&
             Date.parse(kakuyomuNovel.updatedAt) > Date.parse(prevUpdatedAt) &&
@@ -204,7 +225,7 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
           return false;
         }
       },
-      initialKakuyomuUpdatedAt,
+      { prevUpdatedAt: initialKakuyomuUpdatedAt, expected: expectedProgress },
       { timeout: 10000 },
     );
 
@@ -346,6 +367,10 @@ test.describe("SCN-05: Google Drive appDataFolder によるクラウド同期・
     );
     await expect(page.getByTestId("reader-chapter-title")).toHaveText(
       "第1話 見知らぬ空",
+    );
+    await expect(page.getByTestId("reader-view")).toHaveAttribute(
+      "data-current-page",
+      "2",
     );
 
     // =========================================================================
@@ -1329,6 +1354,72 @@ test.describe("SCN-05 (Issue #375): クラウド同期進捗率復元・Pull時�
     await expect(page.getByTestId("reader-page-indicator")).toHaveText(
       `${pageAttrs.current} / ${pageAttrs.total}`,
     );
+
+    // 4. 復元ページから右端20%タップで1ページ戻り（current - 1）、作品詳細へ戻って自動 Push 後のリモート進捗率一致を検証
+    const currentPageNum = Number(pageAttrs.current);
+    const totalPagesNum = Number(pageAttrs.total);
+    expect(currentPageNum).toBeGreaterThan(1);
+    const prevPageNum = currentPageNum - 1;
+    const expectedUpdatedProgress = (prevPageNum - 1) / (totalPagesNum - 1);
+
+    const readerBox = await readerView.boundingBox();
+    expect(readerBox).not.toBeNull();
+    if (readerBox) {
+      await page.mouse.click(
+        readerBox.x + readerBox.width * 0.85,
+        readerBox.y + readerBox.height * 0.4,
+      );
+    }
+    await expect(readerView).toHaveAttribute(
+      "data-current-page",
+      String(prevPageNum),
+    );
+    await expect(page.getByTestId("reader-page-indicator")).toHaveText(
+      `${prevPageNum} / ${totalPagesNum}`,
+    );
+
+    await page.goBack();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
+    );
+
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(
+            ({ novelId, expected }) => {
+              const raw = localStorage.getItem("yommy_mock_gdrive_file");
+              if (!raw) return null;
+              const parsed = JSON.parse(raw) as {
+                novels?: Record<
+                  string,
+                  {
+                    bookmarkChapterIndex?: number | null;
+                    bookmarkScrollProgress?: number;
+                  }
+                >;
+              };
+              const target = parsed?.novels?.[novelId];
+              if (
+                !target ||
+                typeof target.bookmarkScrollProgress !== "number"
+              ) {
+                return null;
+              }
+              return {
+                bookmarkChapterIndex: target.bookmarkChapterIndex ?? null,
+                matchesExpectedProgress:
+                  Math.abs(target.bookmarkScrollProgress - expected) < 1e-9,
+              };
+            },
+            { novelId: SAMPLE_NOVEL_ID, expected: expectedUpdatedProgress },
+          ),
+        { timeout: 10000 },
+      )
+      .toEqual({
+        bookmarkChapterIndex: 2,
+        matchesExpectedProgress: true,
+      });
   });
 
   test("他端末で旧最新話末尾（totalChapters=2, bookmark=2, progress=1.0）読了済み＋新着話あり時の Pull 自動進行＆lastReadAt 保持", async ({
@@ -1547,5 +1638,104 @@ test.describe("SCN-05 (Issue #375): クラウド同期進捗率復元・Pull時�
     await expect(page).toHaveURL(
       /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/2$/,
     );
+  });
+
+  test("Push 時の buildMergedSyncNovels による話末しおり自動進行（ローカル第2話末尾・最新lastReadAt vs リモート4話構成）", async ({
+    page,
+  }) => {
+    // 1. ローカルを2話構成・第2話末尾しおり（progress=1.0）・lastReadAt=T1 でシードし初回同期
+    const timeline = await page.evaluate(async (workUrl) => {
+      const services = window.__yommyServices!;
+      const novelId = "kakuyomu:16817330658027210412";
+      await services.cloudSyncBridge?.signIn();
+
+      const nowIso = new Date().toISOString();
+      const indexRes = await services.httpClient.getHtml({ url: workUrl });
+      const parser = services.parserRegistry.requireParser(workUrl);
+      const parsedIndex = parser.parseNovelIndex(indexRes.html, workUrl);
+
+      await services.novelRepository.upsertNovelWithToc(
+        {
+          ...parsedIndex,
+          chapters: parsedIndex.chapters.slice(0, 2),
+        },
+        nowIso,
+      );
+      await services.chapterRepository.markChapterRead(novelId, 1, true);
+      await services.chapterRepository.markChapterRead(novelId, 2, true);
+      await services.novelRepository.updateBookmark(novelId, 2, 1.0);
+
+      const t1 = new Date(Date.now() - 60_000).toISOString();
+      const t0 = new Date(Date.now() - 120_000).toISOString();
+      await services.databaseAdapter.execute(
+        "UPDATE novels SET last_read_at = ?, updated_at = ? WHERE id = ?",
+        [t1, t1, novelId],
+      );
+      await services.syncEngine?.sync();
+      return { t0, t1 };
+    }, SAMPLE_NOVEL_URL);
+
+    // 2. 本棚画面をリロードして初回マウント同期を完了させ、第2話末尾しおり表示を確認
+    await page.reload();
+    await waitForServicesReady(page);
+    await expect(page.getByTestId("novel-card")).toHaveCount(1);
+    await expect(page.getByTestId("novel-card-bookmark")).toHaveText(
+      "しおり: 第2話",
+    );
+    await page.evaluate(async () => {
+      await window.__yommyServices!.syncEngine?.sync();
+    });
+
+    // 3. リモートを「4話構成・第1話先頭しおり・より古い時刻 T0」へ差し替え
+    await setMockRemoteState(page, {
+      bookmarkChapterIndex: 1,
+      bookmarkScrollProgress: 0,
+      totalChapters: 4,
+      lastReadAtIso: timeline.t0,
+    });
+
+    // 4. お気に入りトグル操作で notifyChanged() -> 2.5秒 auto-push（push のみ）を発火
+    const favButton = page.getByTestId("novel-card-favorite-button");
+    await favButton.click();
+    await expect(favButton).toHaveAttribute("aria-pressed", "true");
+
+    // 5. Push 後のリモートペイロード（yommy_mock_gdrive_file）で totalChapters=4, bookmarkChapterIndex=3, progress=0, lastReadAt=T1 へ自動進行していること
+    await expect
+      .poll(
+        async () =>
+          page.evaluate((novelId) => {
+            const raw = localStorage.getItem("yommy_mock_gdrive_file");
+            if (!raw) return null;
+            const parsed = JSON.parse(raw) as {
+              novels?: Record<
+                string,
+                {
+                  totalChapters?: number;
+                  bookmarkChapterIndex?: number | null;
+                  bookmarkScrollProgress?: number;
+                  lastReadAt?: string | null;
+                  isFavorite?: number;
+                }
+              >;
+            };
+            const target = parsed?.novels?.[novelId];
+            if (!target || target.isFavorite !== 1) return null;
+            return {
+              totalChapters: target.totalChapters ?? 0,
+              bookmarkChapterIndex: target.bookmarkChapterIndex ?? null,
+              bookmarkScrollProgress: target.bookmarkScrollProgress ?? -1,
+              lastReadAt: target.lastReadAt ?? null,
+              isFavorite: target.isFavorite,
+            };
+          }, SAMPLE_NOVEL_ID),
+        { timeout: 10000 },
+      )
+      .toEqual({
+        totalChapters: 4,
+        bookmarkChapterIndex: 3,
+        bookmarkScrollProgress: 0,
+        lastReadAt: timeline.t1,
+        isFavorite: 1,
+      });
   });
 });

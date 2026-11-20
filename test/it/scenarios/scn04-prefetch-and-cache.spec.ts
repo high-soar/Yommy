@@ -44,6 +44,14 @@ type LatchWindow = Window & {
   __rewindSnapshots?: Array<{ status: string; retryCount: number }>;
 };
 
+async function waitForServicesReady(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () =>
+      typeof window.__yommyServices !== "undefined" &&
+      window.__yommyServices.isReady === true,
+  );
+}
+
 async function openNovelDetailMenu(page: Page): Promise<void> {
   const menuButton = page.getByTestId("novel-detail-menu-button");
   await expect(menuButton).toBeVisible();
@@ -94,11 +102,7 @@ async function seedKakuyomuNovelAndOpenDetail(
   );
 
   await page.reload();
-  await page.waitForFunction(
-    () =>
-      typeof window.__yommyServices !== "undefined" &&
-      window.__yommyServices.isReady,
-  );
+  await waitForServicesReady(page);
 
   const novelCardSelect = page.getByTestId("novel-card-select");
   await expect(novelCardSelect).toBeVisible();
@@ -224,13 +228,10 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
   test.beforeEach(async ({ page }) => {
     // ローカルストレージをクリアして初期状態から開始
     await page.goto("/");
+    await waitForServicesReady(page);
     await page.evaluate(() => localStorage.clear());
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady,
-    );
+    await waitForServicesReady(page);
   });
 
   test("作品詳細画面で『未取得話を一括キャッシュ』を実行し、進捗表示と各話バッジの順次更新を経て全話キャッシュ完了状態になること (HO-21, AC-ND-11, AC-ND-12, AC-ND-13)", async ({
@@ -249,11 +250,7 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
       );
     });
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady,
-    );
+    await waitForServicesReady(page);
 
     // 2. 本棚から作品詳細画面へ遷移
     const novelCardSelect = page.getByTestId("novel-card-select");
@@ -374,11 +371,7 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
 
     // 5. 画面リロード後も download_queue の永続状態から「キャッシュを再開（残り3話）」が復元されること
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady,
-    );
+    await waitForServicesReady(page);
     await openNovelDetailMenu(page);
     await expect(batchButton).toBeVisible();
     await expect(batchButton).toBeEnabled();
@@ -419,11 +412,7 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
       );
     });
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady,
-    );
+    await waitForServicesReady(page);
 
     // 2. 作品詳細画面へ遷移
     await page.getByTestId("novel-card-select").click();
@@ -563,11 +552,7 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
       );
     });
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady,
-    );
+    await waitForServicesReady(page);
 
     // 2. 作品詳細画面から第1話リーダーを開く（SPA ナビゲーション）
     await page.getByTestId("novel-card-select").click();
@@ -679,13 +664,9 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
       { oldDate: oldDateStr, bodyHtml: staleContentHtml },
     );
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady,
-    );
+    await waitForServicesReady(page);
 
-    // 2. HTTP クライアントのエピソード取得をモックし、SHORT_TIMEOUT_MS（3秒）を超える遅延（3500ms）を発生させる
+    // 2. HTTP クライアントのエピソード取得をモックし、SHORT_TIMEOUT_MS（3秒）を超える遅延（5000ms）を発生させる
     await page.evaluate(() => {
       const services = window.__yommyServices!;
       const client = services.httpClient as unknown as {
@@ -735,11 +716,7 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
       );
     });
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady,
-    );
+    await waitForServicesReady(page);
 
     // 2. 本棚から作品詳細画面へ遷移し、初期容量（0 B）およびボタン状態を確認 (AC-ND-20, AC-ND-21)
     const novelCardSelect = page.getByTestId("novel-card-select");
@@ -798,11 +775,7 @@ test.describe("SCN-04: 読書中5話自動先読み・未取得話一括キャ�
       );
     });
     await page.reload();
-    await page.waitForFunction(
-      () =>
-        typeof window.__yommyServices !== "undefined" &&
-        window.__yommyServices.isReady,
-    );
+    await waitForServicesReady(page);
     await expect(novelDetailPage).toBeVisible();
 
     const readBadges = page.getByTestId("episode-read-badge");

@@ -26,18 +26,22 @@ async function triggerBackButton(page: Page): Promise<void> {
   });
 }
 
+async function waitForServicesReady(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () =>
+      typeof window.__yommyServices !== "undefined" &&
+      window.__yommyServices.isReady === true,
+  );
+}
+
 test.describe("SCN-07: 内蔵ブラウザ画面（SCR-04）による目次・本文DOMインポート・フォールバック・論理階層復帰シナリオ (SYS-REQ-13, SYS-REQ-14, TR-09〜12, SCN-07-01〜03)", () => {
   test.beforeEach(async ({ page }) => {
     // ローカルストレージをクリアして初期状態から開始
     await page.goto("/");
+    await waitForServicesReady(page);
     await page.evaluate(() => localStorage.clear());
     await page.reload();
-    await page.waitForFunction(() =>
-      Boolean(
-        (window as unknown as { __yommyServices?: { isReady?: boolean } })
-          .__yommyServices?.isReady,
-      ),
-    );
+    await waitForServicesReady(page);
   });
 
   test("SCN-07-01: 作品詳細（SCR-02）→「内蔵ブラウザで開く」（TR-09）→ SCR-04 で目次 DOM インポート → SCR-02 へ自動遷移（TR-11）し、目次・作品情報が更新反映される E2E 検証", async ({
@@ -79,12 +83,7 @@ test.describe("SCN-07: 内蔵ブラウザ画面（SCR-04）による目次・本
 
     // 本棚をリロードして登録作品を表示
     await page.reload();
-    await page.waitForFunction(() =>
-      Boolean(
-        (window as unknown as { __yommyServices?: { isReady?: boolean } })
-          .__yommyServices?.isReady,
-      ),
-    );
+    await waitForServicesReady(page);
 
     // 2. 本棚から作品詳細画面 (SCR-02) へ遷移
     const novelCard = page.getByTestId("novel-card-select");
@@ -259,12 +258,7 @@ test.describe("SCN-07: 内蔵ブラウザ画面（SCR-04）による目次・本
 
     // 本棚をリロードして登録作品を同期
     await page.reload();
-    await page.waitForFunction(() =>
-      Boolean(
-        (window as unknown as { __yommyServices?: { isReady?: boolean } })
-          .__yommyServices?.isReady,
-      ),
-    );
+    await waitForServicesReady(page);
 
     // リロード後の MockHttpClient でエピソード取得時に Cloudflare/Bot 対策エラー (HTTP 403) をシミュレートし、
     // 事前に download_queue に当該話の failed 行およびスケジューラ進捗が存在する状態を作成 (AC-WV-05, AC-WV-06)
@@ -480,12 +474,7 @@ test.describe("SCN-07: 内蔵ブラウザ画面（SCR-04）による目次・本
 
     // 本棚をリロードして登録作品を同期
     await page.reload();
-    await page.waitForFunction(() =>
-      Boolean(
-        (window as unknown as { __yommyServices?: { isReady?: boolean } })
-          .__yommyServices?.isReady,
-      ),
-    );
+    await waitForServicesReady(page);
 
     // 作品詳細画面 (SCR-02) へ遷移
     const novelCard = page.getByTestId("novel-card-select");
@@ -537,12 +526,7 @@ test.describe("SCN-07: 内蔵ブラウザ画面（SCR-04）による目次・本
 
     // 直接 /browser へ非対応 URL でアクセス
     await page.goto("/browser?url=https%3A%2F%2Fexample.com%2Fportal");
-    await page.waitForFunction(() =>
-      Boolean(
-        (window as unknown as { __yommyServices?: { isReady?: boolean } })
-          .__yommyServices?.isReady,
-      ),
-    );
+    await waitForServicesReady(page);
     await expect(page.getByTestId("webview-import-page")).toBeVisible();
     await expect(page.getByTestId("browser-unsupported-warning")).toBeVisible();
     await expect(page.getByTestId("import-dom-button")).toBeDisabled();
@@ -594,12 +578,7 @@ test.describe("SCN-07: 内蔵ブラウザ画面（SCR-04）による目次・本
 
     // 本棚をリロードして登録作品を同期
     await page.reload();
-    await page.waitForFunction(() =>
-      Boolean(
-        (window as unknown as { __yommyServices?: { isReady?: boolean } })
-          .__yommyServices?.isReady,
-      ),
-    );
+    await waitForServicesReady(page);
 
     // エピソード取得時に通信エラー (HTTP 500) をシミュレート
     await page.evaluate(

@@ -2027,5 +2027,20 @@ describe("ReaderView", () => {
       expect(onSingleScreenContentMeasured).toHaveBeenCalledTimes(1);
       expect(onSingleScreenContentMeasured).toHaveBeenCalledWith(true);
     });
+
+    it("横書き（horizontal-tb）scroll モードの reader-content には h-full が付与されず w-full のみが適用され、短文1画面収まり判定を阻害する高さ強制が生じないこと", () => {
+      render(
+        <ReaderView
+          bodyHtml="<p>短い第2話の本文です。</p>"
+          writingMode="horizontal-tb"
+          pagingMode="scroll"
+          chapterIndex={2}
+          totalChapters={2}
+        />,
+      );
+      const content = screen.getByTestId("reader-content");
+      expect(content).toHaveClass("w-full");
+      expect(content).not.toHaveClass("h-full");
+    });
   });
 });

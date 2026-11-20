@@ -107,11 +107,13 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       "data-writing-mode",
       "horizontal-tb",
     );
+    await expect(toggleOrientation).toBeEnabled();
     await toggleOrientation.click();
     await expect(samplePreview).toHaveAttribute(
       "data-writing-mode",
       "vertical-rl",
     );
+    await expect(toggleOrientation).toBeEnabled();
 
     // (b) カラーテーマをセピアに変更
     const themeSepia = page.getByTestId("theme-sepia");
@@ -144,6 +146,31 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(samplePreview).toHaveAttribute("data-page-margin", "28");
     const marginPreviewStyle = await samplePreview.getAttribute("style");
     expect(marginPreviewStyle).toContain("padding: 28px");
+
+    // 楽観的UI更新後の DB 永続化完了待機（R1-03）
+    await expect
+      .poll(() =>
+        page.evaluate(async () => {
+          const s =
+            await window.__yommyServices!.settingsRepository.getReaderSettings();
+          return {
+            writingMode: s.writingMode,
+            theme: s.theme,
+            fontSizePx: s.fontSizePx,
+            lineHeight: s.lineHeight,
+            fontFamily: s.fontFamily,
+            pageMarginPx: s.pageMarginPx,
+          };
+        }),
+      )
+      .toEqual({
+        writingMode: "vertical-rl",
+        theme: "sepia",
+        fontSizePx: 20,
+        lineHeight: 2,
+        fontFamily: "klee",
+        pageMarginPx: 28,
+      });
 
     // 選択中の「設定」タブを再タップしても重複履歴が追加されず、戻り先が破壊されないことを確認（R1-21）
     await tabSettings.click();
@@ -761,6 +788,15 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(pagingModeSelect).toHaveValue("paged");
     await pagingModeSelect.selectOption("scroll");
     await expect(pagingModeSelect).toHaveValue("scroll");
+    await expect
+      .poll(() =>
+        page.evaluate(async () => {
+          const s =
+            await window.__yommyServices!.settingsRepository.getReaderSettings();
+          return s.pagingMode;
+        }),
+      )
+      .toBe("scroll");
 
     // 設定画面で選択中の「設定」タブを再タップしても重複履歴が追加されないことを確認（R1-21）
     await tabSettings.click();
@@ -914,10 +950,21 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(page.getByTestId("paging-mode-note")).toHaveText(
       "※横書き表示時は連続スクロール固定となります",
     );
+    await expect(toggleOrientation).toBeEnabled();
 
     // 縦書きへ戻す
     await toggleOrientation.click();
     await expect(page.getByTestId("paging-mode-select")).toBeEnabled();
+    await expect(toggleOrientation).toBeEnabled();
+    await expect
+      .poll(() =>
+        page.evaluate(async () => {
+          const s =
+            await window.__yommyServices!.settingsRepository.getReaderSettings();
+          return s.writingMode;
+        }),
+      )
+      .toBe("vertical-rl");
 
     // リーダーへ復帰
     await page.goBack();
@@ -1315,6 +1362,21 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       "biz-ud-gothic",
     );
     await expect(samplePreview).toHaveAttribute("data-page-margin", "32");
+    await expect
+      .poll(() =>
+        page.evaluate(async () => {
+          const s =
+            await window.__yommyServices!.settingsRepository.getReaderSettings();
+          return {
+            fontFamily: s.fontFamily,
+            pageMarginPx: s.pageMarginPx,
+          };
+        }),
+      )
+      .toEqual({
+        fontFamily: "biz-ud-gothic",
+        pageMarginPx: 32,
+      });
 
     // 4. 設定の永続化確認（リロード後も維持されていること）
     await page.reload();
@@ -1464,6 +1526,16 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
       "data-writing-mode",
       "horizontal-tb",
     );
+    await expect(toggleOrientation).toBeEnabled();
+    await expect
+      .poll(() =>
+        page.evaluate(async () => {
+          const s =
+            await window.__yommyServices!.settingsRepository.getReaderSettings();
+          return s.writingMode;
+        }),
+      )
+      .toBe("horizontal-tb");
 
     // リーダーへ戻る
     await page.goto("/novels/kakuyomu:16817330658027210412/chapters/1");
@@ -1486,5 +1558,302 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     // 横書きスクロール時は container の padding が 32px
     const horizReaderStyle = await readerView.getAttribute("style");
     expect(horizReaderStyle).toContain("padding: 32px");
+  });
+
+  test("未キャッシュ話への前後話遷移時に直前本文を消去して reader-loading を表示し、完了後描画・失敗時エラー・キャッシュ済み即時切替が行われること (AC-RD-28)", async ({
+    page,
+  }) => {
+    const novelId = "kakuyomu:16817330658027210412";
+    const sampleUrl = "https://kakuyomu.jp/works/16817330658027210412";
+
+    // 1. 作品を4話構成でシードし、第1話のみキャッシュ済み、第2〜4話は未キャッシュ状態で準備
+    const chapterUrls = await page.evaluate(
+      async ({ targetNovelId, workUrl }) => {
+        const services = window.__yommyServices!;
+        const response = await services.httpClient.getHtml({ url: workUrl });
+        const parser = services.parserRegistry.requireParser(workUrl);
+        const parsedIndex = parser.parseNovelIndex(response.html, workUrl);
+        await services.novelRepository.upsertNovelWithToc(
+          parsedIndex,
+          new Date().toISOString(),
+        );
+
+        const chapters =
+          await services.chapterRepository.listChaptersByNovelId(targetNovelId);
+        const ch1 = chapters.find((c) => c.chapterIndex === 1)!;
+        const ch2 = chapters.find((c) => c.chapterIndex === 2)!;
+        const ch3 = chapters.find((c) => c.chapterIndex === 3)!;
+
+        await services.chapterRepository.saveChapterBody(
+          targetNovelId,
+          1,
+          {
+            remoteChapterId: ch1.remoteChapterId,
+            title: "プロローグ：目覚め",
+            bodyHtml: "<p>キャッシュ済み第1話の本文です。</p>",
+            byteSize: 48,
+            prevChapterUrl: null,
+            nextChapterUrl: ch2.url,
+          },
+          new Date().toISOString(),
+        );
+
+        return { ch1Url: ch1.url, ch2Url: ch2.url, ch3Url: ch3.url };
+      },
+      { targetNovelId: novelId, workUrl: sampleUrl },
+    );
+
+    await page.reload();
+    await waitForServicesReady(page);
+    await expect(page.getByTestId("novel-card")).toHaveCount(1);
+
+    // 2. 第2話・第3話の HTTP 応答を遅延 Promise で制御できるようモック設定
+    await page.evaluate(({ ch2Url, ch3Url }) => {
+      type PendingGate = {
+        resolveSuccess: (html: string) => void;
+        rejectWithError: (message: string) => void;
+        isAborted: () => boolean;
+      };
+      const services = window.__yommyServices!;
+      const client = services.httpClient as unknown as {
+        setResponse: (
+          pattern: string | RegExp,
+          handler: (options: { url: string; signal?: AbortSignal }) => Promise<{
+            status: number;
+            url: string;
+            headers: Record<string, string>;
+            html: string;
+          }>,
+        ) => void;
+      };
+
+      const ch2Pending: PendingGate[] = [];
+      const ch3Pending: PendingGate[] = [];
+      let ch2CallCount = 0;
+
+      const registerDelayedRoute = (
+        targetUrl: string,
+        pendingList: PendingGate[],
+        onCall?: () => void,
+      ) => {
+        client.setResponse(targetUrl, (options) => {
+          onCall?.();
+          return new Promise((resolve, reject) => {
+            pendingList.push({
+              resolveSuccess: (html: string) =>
+                resolve({
+                  status: 200,
+                  url: options.url,
+                  headers: {},
+                  html,
+                }),
+              rejectWithError: (message: string) => reject(new Error(message)),
+              isAborted: () => Boolean(options.signal?.aborted),
+            });
+          });
+        });
+      };
+
+      registerDelayedRoute(ch2Url, ch2Pending, () => {
+        ch2CallCount += 1;
+      });
+      registerDelayedRoute(ch3Url, ch3Pending);
+
+      (
+        window as unknown as {
+          __acRd28Control?: {
+            resolveCh2: (html: string) => void;
+            rejectCh3: (message: string) => void;
+            getCh2CallCount: () => number;
+            resetCh2CallCount: () => void;
+            getPendingCh2Count: () => number;
+            getPendingCh3Count: () => number;
+          };
+        }
+      ).__acRd28Control = {
+        resolveCh2: (html: string) => {
+          for (const gate of ch2Pending.splice(0)) {
+            if (!gate.isAborted()) {
+              gate.resolveSuccess(html);
+            }
+          }
+        },
+        rejectCh3: (message: string) => {
+          for (const gate of ch3Pending.splice(0)) {
+            if (!gate.isAborted()) {
+              gate.rejectWithError(message);
+            }
+          }
+        },
+        getCh2CallCount: () => ch2CallCount,
+        resetCh2CallCount: () => {
+          ch2CallCount = 0;
+        },
+        getPendingCh2Count: () =>
+          ch2Pending.filter((gate) => !gate.isAborted()).length,
+        getPendingCh3Count: () =>
+          ch3Pending.filter((gate) => !gate.isAborted()).length,
+      };
+    }, chapterUrls);
+
+    // 3. 本棚から作品詳細 → 第1話（キャッシュ済み）を SPA 遷移で開く（httpClient モック保持）
+    await page.getByTestId("novel-card-select").first().click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412$/,
+    );
+    await page.getByTestId("episode-item").first().click();
+    await expect(page).toHaveURL(
+      /\/novels\/kakuyomu(%3A|:)16817330658027210412\/chapters\/1$/,
+    );
+    const readerView = page.getByTestId("reader-view");
+    await expect(readerView).toBeVisible();
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "プロローグ：目覚め",
+    );
+    await expect(page.getByTestId("reader-body")).toContainText(
+      "キャッシュ済み第1話の本文です。",
+    );
+
+    // 4. 下部オーバーレイから未キャッシュの第2話へ遷移し、通信中の reader-loading 表示と旧本文の非表示を検証
+    await page.getByTestId("reader-bottom-touch-zone").click();
+    await expect(page.getByTestId("reader-bottom-overlay")).toHaveClass(
+      /translate-y-0/,
+    );
+    await page.getByTestId("reader-next-chapter").click();
+
+    const readerLoading = page.getByTestId("reader-loading");
+    await expect(readerLoading).toBeVisible();
+    await expect(readerView).not.toBeVisible();
+    await expect(page.getByTestId("reader-chapter-title")).toHaveCount(0);
+
+    // 5. 第2話の遅延モックへリクエスト到達後、応答を解決しローディング消去後に新本文へ切り替わることを検証
+    await expect
+      .poll(async () =>
+        page.evaluate(() => {
+          const ctrl = (
+            window as unknown as {
+              __acRd28Control: { getPendingCh2Count: () => number };
+            }
+          ).__acRd28Control;
+          return ctrl.getPendingCh2Count();
+        }),
+      )
+      .toBeGreaterThan(0);
+
+    await page.evaluate(() => {
+      const ctrl = (
+        window as unknown as {
+          __acRd28Control: { resolveCh2: (html: string) => void };
+        }
+      ).__acRd28Control;
+      ctrl.resolveCh2(
+        '<div id="contentMain"><h1 class="widget-episodeTitle">第1話 見知らぬ空</h1><div class="widget-episodeBody js-episode-body"><p>第2話の本文（遅延取得完了）。</p></div></div>',
+      );
+    });
+
+    await expect(readerLoading).not.toBeVisible();
+    await expect(readerView).toBeVisible();
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "第1話 見知らぬ空",
+    );
+    await expect(page.getByTestId("reader-body")).toContainText(
+      "第2話の本文（遅延取得完了）。",
+    );
+
+    // 6. キャッシュ済みの第2話 → 第1話 → 第2話への前後話遷移では通信・reader-loading を挟まず即座に切り替わることを検証
+    await page.evaluate(() => {
+      const w = window as unknown as {
+        __acRd28Control: { resetCh2CallCount: () => void };
+        __observedReaderLoading?: boolean;
+        __acRd28Observer?: MutationObserver;
+      };
+      w.__acRd28Control.resetCh2CallCount();
+      w.__observedReaderLoading = false;
+      const observer = new MutationObserver(() => {
+        if (document.querySelector('[data-testid="reader-loading"]')) {
+          w.__observedReaderLoading = true;
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      w.__acRd28Observer = observer;
+    });
+
+    await page.getByTestId("reader-bottom-touch-zone").click();
+    await expect(page.getByTestId("reader-bottom-overlay")).toHaveClass(
+      /translate-y-0/,
+    );
+    await page.getByTestId("reader-prev-chapter").click();
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "プロローグ：目覚め",
+    );
+    await expect(page.getByTestId("reader-body")).toContainText(
+      "キャッシュ済み第1話の本文です。",
+    );
+
+    await page.getByTestId("reader-bottom-touch-zone").click();
+    await expect(page.getByTestId("reader-bottom-overlay")).toHaveClass(
+      /translate-y-0/,
+    );
+    await page.getByTestId("reader-next-chapter").click();
+    await expect(page.getByTestId("reader-chapter-title")).toHaveText(
+      "第1話 見知らぬ空",
+    );
+    await expect(page.getByTestId("reader-body")).toContainText(
+      "第2話の本文（遅延取得完了）。",
+    );
+
+    const cachedTransitionCheck = await page.evaluate(() => {
+      const w = window as unknown as {
+        __acRd28Control: { getCh2CallCount: () => number };
+        __observedReaderLoading?: boolean;
+        __acRd28Observer?: MutationObserver;
+      };
+      w.__acRd28Observer?.disconnect();
+      return {
+        ch2NetworkCalls: w.__acRd28Control.getCh2CallCount(),
+        observedLoading: Boolean(w.__observedReaderLoading),
+      };
+    });
+    expect(cachedTransitionCheck).toEqual({
+      ch2NetworkCalls: 0,
+      observedLoading: false,
+    });
+
+    // 7. 未キャッシュの第3話へ遷移し、通信中 reader-loading を経て失敗時に reader-error が表示されることを検証
+    await page.getByTestId("reader-bottom-touch-zone").click();
+    await expect(page.getByTestId("reader-bottom-overlay")).toHaveClass(
+      /translate-y-0/,
+    );
+    await page.getByTestId("reader-next-chapter").click();
+
+    await expect(readerLoading).toBeVisible();
+    await expect(readerView).not.toBeVisible();
+
+    await expect
+      .poll(async () =>
+        page.evaluate(() => {
+          const ctrl = (
+            window as unknown as {
+              __acRd28Control: { getPendingCh3Count: () => number };
+            }
+          ).__acRd28Control;
+          return ctrl.getPendingCh3Count();
+        }),
+      )
+      .toBeGreaterThan(0);
+
+    await page.evaluate(() => {
+      const ctrl = (
+        window as unknown as {
+          __acRd28Control: { rejectCh3: (message: string) => void };
+        }
+      ).__acRd28Control;
+      ctrl.rejectCh3("第3話の取得に失敗しました");
+    });
+
+    await expect(readerLoading).not.toBeVisible();
+    const readerError = page.getByTestId("reader-error");
+    await expect(readerError).toBeVisible();
+    await expect(readerError).toContainText("第3話の取得に失敗しました");
   });
 });
