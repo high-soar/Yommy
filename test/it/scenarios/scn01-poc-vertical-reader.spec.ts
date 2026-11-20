@@ -1666,6 +1666,8 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
             rejectCh3: (message: string) => void;
             getCh2CallCount: () => number;
             resetCh2CallCount: () => void;
+            getPendingCh2Count: () => number;
+            getPendingCh3Count: () => number;
           };
         }
       ).__acRd28Control = {
@@ -1687,6 +1689,10 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
         resetCh2CallCount: () => {
           ch2CallCount = 0;
         },
+        getPendingCh2Count: () =>
+          ch2Pending.filter((gate) => !gate.isAborted()).length,
+        getPendingCh3Count: () =>
+          ch3Pending.filter((gate) => !gate.isAborted()).length,
       };
     }, chapterUrls);
 
@@ -1720,7 +1726,20 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
     await expect(readerView).not.toBeVisible();
     await expect(page.getByTestId("reader-chapter-title")).toHaveCount(0);
 
-    // 5. 第2話の遅延モック応答を解決し、ローディング消去後に新本文へ切り替わることを検証
+    // 5. 第2話の遅延モックへリクエスト到達後、応答を解決しローディング消去後に新本文へ切り替わることを検証
+    await expect
+      .poll(async () =>
+        page.evaluate(() => {
+          const ctrl = (
+            window as unknown as {
+              __acRd28Control: { getPendingCh2Count: () => number };
+            }
+          ).__acRd28Control;
+          return ctrl.getPendingCh2Count();
+        }),
+      )
+      .toBeGreaterThan(0);
+
     await page.evaluate(() => {
       const ctrl = (
         window as unknown as {
@@ -1809,6 +1828,19 @@ test.describe("SCN-01: 小説リーダー縦貫通・組版設定・前後話遷
 
     await expect(readerLoading).toBeVisible();
     await expect(readerView).not.toBeVisible();
+
+    await expect
+      .poll(async () =>
+        page.evaluate(() => {
+          const ctrl = (
+            window as unknown as {
+              __acRd28Control: { getPendingCh3Count: () => number };
+            }
+          ).__acRd28Control;
+          return ctrl.getPendingCh3Count();
+        }),
+      )
+      .toBeGreaterThan(0);
 
     await page.evaluate(() => {
       const ctrl = (

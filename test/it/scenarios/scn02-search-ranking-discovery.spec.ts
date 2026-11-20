@@ -1442,11 +1442,20 @@ test.describe("SCN-02: 検索・ランキング探索・その場追加・目次
 
     // 4. 1ページ目＋2ページ目の全4作品が追記表示され、次ページ無しのためボタンが消滅すること
     await expect(
+      page.getByTestId("search-novel-card-16817330658027210001"),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("search-novel-card-16817330658027210002"),
+    ).toBeVisible();
+    await expect(
       page.getByTestId("search-novel-card-16817330658027210003"),
     ).toBeVisible();
     await expect(
       page.getByTestId("search-novel-card-16817330658027210004"),
     ).toBeVisible();
+    await expect(
+      page.locator('[data-testid^="search-novel-card-"]'),
+    ).toHaveCount(4);
     await expect(loadMoreBtn).toHaveCount(0);
 
     // 5. 2ページ目リクエスト URL が未送信編集値ではなく直近確定クエリ（"異世界"）を保持していたことを検証（AC-SE-08）
