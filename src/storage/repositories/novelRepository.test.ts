@@ -522,6 +522,490 @@ describe("SqlNovelRepository", () => {
       );
       expect(remainingQueues).toHaveLength(0);
     });
+
+    describe("最新話末尾しおり自動進行 (Issue #375)", () => {
+      const novelWorkId = "bookmark-advance-work";
+      const novelId = `kakuyomu:${novelWorkId}`;
+      const novelCanonicalUrl = `https://kakuyomu.jp/works/${novelWorkId}`;
+
+      const buildChapters = (remoteIds: string[], startOffsetHours = 0) =>
+        remoteIds.map((remoteChapterId, idx) => ({
+          chapterIndex: idx + 1,
+          remoteChapterId,
+          partTitle: "第1章",
+          title: `エピソード ${remoteChapterId}`,
+          url: `${novelCanonicalUrl}/episodes/${remoteChapterId}`,
+          publishedAt: new Date(
+            Date.parse("2026-01-01T00:00:00.000Z") +
+              (idx + startOffsetHours) * 3_600_000,
+          ).toISOString(),
+        }));
+
+      const buildIndex = (
+        chapters: ReturnType<typeof buildChapters>,
+      ): ParsedNovelIndex => ({
+        siteType: "kakuyomu",
+        remoteWorkId: novelWorkId,
+        canonicalUrl: novelCanonicalUrl,
+        title: "自動進行テスト作品",
+        author: "テスト作者",
+        synopsis: "テストあらすじ",
+        nextTocPageUrl: null,
+        chapters,
+      });
+
+      const initialRemoteIds = Array.from(
+        { length: 10 },
+        (_, i) => `ep${i + 1}`,
+      );
+
+      it("最新話末尾 (progress = 1.0) にしおりがあり1話追加された場合、第11話先頭へ進行し lastReadAt・updatedAt 不変かつ第11話は未読のままであること (Issue #375)", async () => {
+        const createdAt = "2026-01-01T00:00:00.000Z";
+        const lastReadAt = "2026-01-10T15:00:00.000Z";
+        const updatedAt = "2026-01-05T09:00:00.000Z";
+
+        await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(initialRemoteIds)),
+          createdAt,
+        );
+
+        const adapter = await initTestDb();
+        await adapter.execute(
+          `UPDATE novels
+           SET bookmark_chapter_index = 10,
+               bookmark_scroll_progress = 1.0,
+               last_read_at = ?,
+               updated_at = ?
+           WHERE id = ?;`,
+          [lastReadAt, updatedAt, novelId],
+        );
+
+        const updated = await repository.upsertNovelWithToc(
+          buildIndex(buildChapters([...initialRemoteIds, "ep11"])),
+          "2026-01-11T12:00:00.000Z",
+        );
+
+        expect(updated.totalChapters).toBe(11);
+        expect(updated.hasNewUpdate).toBe(true);
+        expect(updated.bookmarkChapterIndex).toBe(11);
+        expect(updated.bookmarkScrollProgress).toBe(0);
+        expect(updated.lastReadAt).toBe(lastReadAt);
+        expect(updated.updatedAt).toBe(updatedAt);
+
+        const ch11 = await adapter.query<{ is_read: number }>(
+          "SELECT is_read FROM chapters WHERE novel_id = ? AND chapter_index = 11;",
+          [novelId],
+        );
+        expect(ch11).toHaveLength(1);
+        expect(ch11[0].is_read).toBe(0);
+      });
+
+      it("最新話末尾境界値 (progress = 0.99) にしおりがあり1話追加された場合も第11話先頭へ自動進行すること (Issue #375)", async () => {
+        const lastReadAt = "2026-01-10T15:00:00.000Z";
+        const updatedAt = "2026-01-05T09:00:00.000Z";
+
+        await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(initialRemoteIds)),
+          "2026-01-01T00:00:00.000Z",
+        );
+
+        const adapter = await initTestDb();
+        await adapter.execute(
+          `UPDATE novels
+           SET bookmark_chapter_index = 10,
+               bookmark_scroll_progress = 0.99,
+               last_read_at = ?,
+               updated_at = ?
+           WHERE id = ?;`,
+          [lastReadAt, updatedAt, novelId],
+        );
+
+        const updated = await repository.upsertNovelWithToc(
+          buildIndex(buildChapters([...initialRemoteIds, "ep11"])),
+          "2026-01-11T12:00:00.000Z",
+        );
+
+        expect(updated.bookmarkChapterIndex).toBe(11);
+        expect(updated.bookmarkScrollProgress).toBe(0);
+        expect(updated.lastReadAt).toBe(lastReadAt);
+        expect(updated.updatedAt).toBe(updatedAt);
+      });
+
+      it("最新話末尾にしおりがあり複数話（第11〜13話）追加された場合、追加分の先頭話 (第11話, progress = 0) へ進行すること (Issue #375)", async () => {
+        await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(initialRemoteIds)),
+          "2026-01-01T00:00:00.000Z",
+        );
+        await repository.updateBookmark(novelId, 10, 1.0);
+
+        const updated = await repository.upsertNovelWithToc(
+          buildIndex(
+            buildChapters([...initialRemoteIds, "ep11", "ep12", "ep13"]),
+          ),
+          "2026-01-11T12:00:00.000Z",
+        );
+
+        expect(updated.totalChapters).toBe(13);
+        expect(updated.bookmarkChapterIndex).toBe(11);
+        expect(updated.bookmarkScrollProgress).toBe(0);
+
+        const adapter = await initTestDb();
+        const newChapters = await adapter.query<{
+          chapter_index: number;
+          is_read: number;
+        }>(
+          "SELECT chapter_index, is_read FROM chapters WHERE novel_id = ? AND chapter_index >= 11 ORDER BY chapter_index ASC;",
+          [novelId],
+        );
+        expect(newChapters).toEqual([
+          { chapter_index: 11, is_read: 0 },
+          { chapter_index: 12, is_read: 0 },
+          { chapter_index: 13, is_read: 0 },
+        ]);
+      });
+
+      it("入力目次の chapters が chapterIndex 昇順でなくても chapterIndex 昇順で直後の新着話先頭へ進行すること (Issue #375)", async () => {
+        await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(initialRemoteIds)),
+          "2026-01-01T00:00:00.000Z",
+        );
+        await repository.updateBookmark(novelId, 10, 1.0);
+
+        const reversedChapters = buildChapters([
+          ...initialRemoteIds,
+          "ep11",
+          "ep12",
+        ]).reverse();
+
+        const updated = await repository.upsertNovelWithToc(
+          buildIndex(reversedChapters),
+          "2026-01-11T12:00:00.000Z",
+        );
+
+        expect(updated.bookmarkChapterIndex).toBe(11);
+        expect(updated.bookmarkScrollProgress).toBe(0);
+      });
+
+      it("最新話の途中 (progress = 0.5 および境界値 0.98) にしおりがある場合は新着話が追加されても自動進行せず維持されること (Issue #375)", async () => {
+        await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(initialRemoteIds)),
+          "2026-01-01T00:00:00.000Z",
+        );
+        await repository.updateBookmark(novelId, 10, 0.5);
+
+        const afterHalf = await repository.upsertNovelWithToc(
+          buildIndex(buildChapters([...initialRemoteIds, "ep11"])),
+          "2026-01-11T12:00:00.000Z",
+        );
+        expect(afterHalf.bookmarkChapterIndex).toBe(10);
+        expect(afterHalf.bookmarkScrollProgress).toBe(0.5);
+
+        // 11話の境界値 0.98 でさらに12話追加されたケース
+        await repository.updateBookmark(novelId, 11, 0.98);
+        const afterNearEnd = await repository.upsertNovelWithToc(
+          buildIndex(buildChapters([...initialRemoteIds, "ep11", "ep12"])),
+          "2026-01-12T12:00:00.000Z",
+        );
+        expect(afterNearEnd.bookmarkChapterIndex).toBe(11);
+        expect(afterNearEnd.bookmarkScrollProgress).toBe(0.98);
+      });
+
+      it("過去話（第5話）にしおりがある場合は末尾 (progress = 1.0) でも新着話追加時に自動進行せず第5話が維持されること (Issue #375)", async () => {
+        await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(initialRemoteIds)),
+          "2026-01-01T00:00:00.000Z",
+        );
+        await repository.updateBookmark(novelId, 5, 1.0);
+
+        const updated = await repository.upsertNovelWithToc(
+          buildIndex(buildChapters([...initialRemoteIds, "ep11"])),
+          "2026-01-11T12:00:00.000Z",
+        );
+
+        expect(updated.bookmarkChapterIndex).toBe(5);
+        expect(updated.bookmarkScrollProgress).toBe(1.0);
+      });
+
+      it("未読 (bookmarkChapterIndex === null) または旧総話数 0 話の場合は新着話追加時もしおりが null のまま維持されること (Issue #375)", async () => {
+        // 10話未読状態からの新着追加
+        await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(initialRemoteIds)),
+          "2026-01-01T00:00:00.000Z",
+        );
+        const updatedUnread = await repository.upsertNovelWithToc(
+          buildIndex(buildChapters([...initialRemoteIds, "ep11"])),
+          "2026-01-11T12:00:00.000Z",
+        );
+        expect(updatedUnread.bookmarkChapterIndex).toBeNull();
+        expect(updatedUnread.bookmarkScrollProgress).toBe(0);
+
+        // 0話作品に初話が追加されたケース
+        const emptyWorkId = "empty-work";
+        const emptyIndex = {
+          ...buildIndex([]),
+          remoteWorkId: emptyWorkId,
+          canonicalUrl: `https://kakuyomu.jp/works/${emptyWorkId}`,
+        };
+        await repository.upsertNovelWithToc(
+          emptyIndex,
+          "2026-01-01T00:00:00.000Z",
+        );
+        const updatedFromZero = await repository.upsertNovelWithToc(
+          {
+            ...emptyIndex,
+            chapters: buildChapters(["ep1"]),
+          },
+          "2026-01-02T00:00:00.000Z",
+        );
+        expect(updatedFromZero.totalChapters).toBe(1);
+        expect(updatedFromZero.bookmarkChapterIndex).toBeNull();
+        expect(updatedFromZero.bookmarkScrollProgress).toBe(0);
+      });
+
+      it("第1〜9話に未読がある飛ばし読み状態で第10話末尾にしおりがある場合、過去未読話に戻さず第11話先頭へ進行すること (Issue #375)", async () => {
+        await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(initialRemoteIds)),
+          "2026-01-01T00:00:00.000Z",
+        );
+
+        const adapter = await initTestDb();
+        // 第1〜9話は is_read = 0 のまま、第10話のみ既読にし第10話末尾にしおりを設定
+        await adapter.execute(
+          "UPDATE chapters SET is_read = 1 WHERE novel_id = ? AND chapter_index = 10;",
+          [novelId],
+        );
+        await repository.updateBookmark(novelId, 10, 1.0);
+
+        const updated = await repository.upsertNovelWithToc(
+          buildIndex(buildChapters([...initialRemoteIds, "ep11"])),
+          "2026-01-11T12:00:00.000Z",
+        );
+
+        expect(updated.bookmarkChapterIndex).toBe(11);
+        expect(updated.bookmarkScrollProgress).toBe(0);
+      });
+
+      it("途中話挿入（改稿）により元の最終話 ep10 が後ろに新着なしで第11話へ繰り下がった場合、第11話へ追従し末尾進捗を維持して 0 に巻き戻さないこと (Issue #375)", async () => {
+        const lastReadAt = "2026-01-10T15:00:00.000Z";
+        const updatedAt = "2026-01-05T09:00:00.000Z";
+
+        await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(initialRemoteIds)),
+          "2026-01-01T00:00:00.000Z",
+        );
+
+        const adapter = await initTestDb();
+        await adapter.execute(
+          `UPDATE novels
+           SET bookmark_chapter_index = 10,
+               bookmark_scroll_progress = 0.995,
+               last_read_at = ?,
+               updated_at = ?
+           WHERE id = ?;`,
+          [lastReadAt, updatedAt, novelId],
+        );
+
+        // 第5話と第6話の間に幕間エピソード ep_interlude を挿入（ep10 が第11話のまま最終話）
+        const insertedIds = [
+          ...initialRemoteIds.slice(0, 5),
+          "ep_interlude",
+          ...initialRemoteIds.slice(5),
+        ];
+
+        const updated = await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(insertedIds)),
+          "2026-01-11T12:00:00.000Z",
+        );
+
+        expect(updated.totalChapters).toBe(11);
+        expect(updated.bookmarkChapterIndex).toBe(11);
+        expect(updated.bookmarkScrollProgress).toBe(0.995);
+        expect(updated.lastReadAt).toBe(lastReadAt);
+        expect(updated.updatedAt).toBe(updatedAt);
+      });
+
+      it("過去話削除により元の最終話 ep10 が後ろに新着なしで第9話へ繰り上がった場合、新第9話へ追従し末尾進捗が維持されること (Issue #375)", async () => {
+        await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(initialRemoteIds)),
+          "2026-01-01T00:00:00.000Z",
+        );
+        await repository.updateBookmark(novelId, 10, 0.995);
+
+        // 第3話 (ep3) が削除され、ep10 が第9話のまま最終話になった目次
+        const deletedPastIds = initialRemoteIds.filter((id) => id !== "ep3");
+
+        const updated = await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(deletedPastIds)),
+          "2026-01-11T12:00:00.000Z",
+        );
+
+        expect(updated.totalChapters).toBe(9);
+        expect(updated.bookmarkChapterIndex).toBe(9);
+        expect(updated.bookmarkScrollProgress).toBe(0.995);
+      });
+
+      it("話数不変の再取得（改稿のみ）で最新話末尾にしおりがある場合、進捗率が 0 に巻き戻らず維持されること (Issue #375)", async () => {
+        await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(initialRemoteIds)),
+          "2026-01-01T00:00:00.000Z",
+        );
+        await repository.updateBookmark(novelId, 10, 1.0);
+
+        const updated = await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(initialRemoteIds)),
+          "2026-01-11T12:00:00.000Z",
+        );
+
+        expect(updated.bookmarkChapterIndex).toBe(10);
+        expect(updated.bookmarkScrollProgress).toBe(1.0);
+      });
+
+      it("途中話挿入と新着話追加が同時に発生した場合、元の最終話 ep10 の直後の新着話先頭 (第12話, progress = 0) へ進行すること (Issue #375)", async () => {
+        const lastReadAt = "2026-01-10T15:00:00.000Z";
+        const updatedAt = "2026-01-05T09:00:00.000Z";
+
+        await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(initialRemoteIds)),
+          "2026-01-01T00:00:00.000Z",
+        );
+
+        const adapter = await initTestDb();
+        await adapter.execute(
+          `UPDATE novels
+           SET bookmark_chapter_index = 10,
+               bookmark_scroll_progress = 1.0,
+               last_read_at = ?,
+               updated_at = ?
+           WHERE id = ?;`,
+          [lastReadAt, updatedAt, novelId],
+        );
+
+        // 幕間挿入により ep10 が新第11話になり、さらに新着 ep11 (新第12話), ep12 (新第13話) が追加
+        const insertedAndAddedIds = [
+          ...initialRemoteIds.slice(0, 5),
+          "ep_interlude",
+          ...initialRemoteIds.slice(5),
+          "ep11",
+          "ep12",
+        ];
+
+        const updated = await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(insertedAndAddedIds)),
+          "2026-01-11T12:00:00.000Z",
+        );
+
+        expect(updated.totalChapters).toBe(13);
+        expect(updated.bookmarkChapterIndex).toBe(12);
+        expect(updated.bookmarkScrollProgress).toBe(0);
+        expect(updated.lastReadAt).toBe(lastReadAt);
+        expect(updated.updatedAt).toBe(updatedAt);
+      });
+
+      it("元の最終話 ep10 が削除され総話数が増加した場合 (12話)、existing.totalChapters + 1 (第11話, progress = 0) へフォールバック進行すること (Issue #375)", async () => {
+        await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(initialRemoteIds)),
+          "2026-01-01T00:00:00.000Z",
+        );
+        await repository.updateBookmark(novelId, 10, 1.0);
+
+        const replacedAndAddedIds = [
+          ...initialRemoteIds.slice(0, 9), // ep1..ep9 (ep10 削除)
+          "ep11",
+          "ep12",
+          "ep13",
+        ];
+
+        const updated = await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(replacedAndAddedIds)),
+          "2026-01-11T12:00:00.000Z",
+        );
+
+        expect(updated.totalChapters).toBe(12);
+        expect(updated.bookmarkChapterIndex).toBe(11);
+        expect(updated.bookmarkScrollProgress).toBe(0);
+      });
+
+      it("元の最終話 ep10 が削除され総話数が減少した場合 (8話)、新最終話 (第8話) へクランプされ末尾進捗が維持されること (Issue #375)", async () => {
+        await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(initialRemoteIds)),
+          "2026-01-01T00:00:00.000Z",
+        );
+        await repository.updateBookmark(novelId, 10, 0.995);
+
+        const shrunkIds = initialRemoteIds.slice(0, 8); // ep1..ep8
+
+        const updated = await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(shrunkIds)),
+          "2026-01-11T12:00:00.000Z",
+        );
+
+        expect(updated.totalChapters).toBe(8);
+        expect(updated.bookmarkChapterIndex).toBe(8);
+        expect(updated.bookmarkScrollProgress).toBe(0.995);
+      });
+
+      it("元の最終話を含め全話が削除され 0 話になった場合、しおりが null・progress = 0 になること (Issue #375)", async () => {
+        await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(initialRemoteIds)),
+          "2026-01-01T00:00:00.000Z",
+        );
+        await repository.updateBookmark(novelId, 10, 1.0);
+
+        const updated = await repository.upsertNovelWithToc(
+          buildIndex([]),
+          "2026-01-11T12:00:00.000Z",
+        );
+
+        expect(updated.totalChapters).toBe(0);
+        expect(updated.bookmarkChapterIndex).toBeNull();
+        expect(updated.bookmarkScrollProgress).toBe(0);
+      });
+
+      it("元の最終話 ep10 が削除され総話数が同数 (10話) の別エピソードに置換された場合、従来のしおり位置と進捗が維持されること (Issue #375)", async () => {
+        await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(initialRemoteIds)),
+          "2026-01-01T00:00:00.000Z",
+        );
+        await repository.updateBookmark(novelId, 10, 1.0);
+
+        const sameCountReplacedIds = [
+          ...initialRemoteIds.slice(0, 9),
+          "ep10_revised",
+        ];
+
+        const updated = await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(sameCountReplacedIds)),
+          "2026-01-11T12:00:00.000Z",
+        );
+
+        expect(updated.totalChapters).toBe(10);
+        expect(updated.bookmarkChapterIndex).toBe(10);
+        expect(updated.bookmarkScrollProgress).toBe(1.0);
+      });
+
+      it("chapters テーブルに旧最終話行が欠落している不整合状態でも例外なく Case 3 フォールバックで進行すること (Issue #375)", async () => {
+        await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(["ep1", "ep2"])),
+          "2026-01-01T00:00:00.000Z",
+        );
+        await repository.updateBookmark(novelId, 2, 1.0);
+
+        const adapter = await initTestDb();
+        await adapter.execute(
+          "DELETE FROM chapters WHERE novel_id = ? AND chapter_index = 2;",
+          [novelId],
+        );
+
+        const updated = await repository.upsertNovelWithToc(
+          buildIndex(buildChapters(["ep1", "ep2", "ep3"])),
+          "2026-01-02T00:00:00.000Z",
+        );
+
+        expect(updated.totalChapters).toBe(3);
+        expect(updated.bookmarkChapterIndex).toBe(3);
+        expect(updated.bookmarkScrollProgress).toBe(0);
+      });
+    });
   });
 
   describe("clearNewUpdate", () => {
