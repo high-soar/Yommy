@@ -105,13 +105,13 @@ related_tests: []
 > - **Milestone `v1.0`（リリース準備 ＆ システム全体横断品質監査、No. 307〜388）**: [docs/quality/archive/v1.0-release-audit-log.md](archive/v1.0-release-audit-log.md)
 > - **Milestone `v1.1`（クラウド同期しおり保護 ＆ 作品詳細ヘッダーUX改善、No. 389〜446）**: [docs/quality/archive/v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md](archive/v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md)
 > - **Milestone `v1.2`（非ブロッキング一括キャッシュ ＆ 優先度スケジューラ統合、No. 447〜490）**: [docs/quality/archive/v1.2-non-blocking-priority-cache-scheduler-log.md](archive/v1.2-non-blocking-priority-cache-scheduler-log.md)
-> - **Milestone `v1.3`（リリース自動化 ＆ 最新話末尾しおり新着自動進行、No. 491〜542）**: [docs/quality/archive/v1.3-release-automation-and-bookmark-advance-log.md](archive/v1.3-release-automation-and-bookmark-advance-log.md)
+> - **Milestone `v1.3`（リリース自動化 ＆ 最新話末尾しおり新着自動進行、No. 491〜545）**: [docs/quality/archive/v1.3-release-automation-and-bookmark-advance-log.md](archive/v1.3-release-automation-and-bookmark-advance-log.md)
 
-次期作業中の **Milestone `v1.4`** で検出されたバグ記録は、本表へ No. 543 より連番で記入します。
+次期作業中の **Milestone `v1.4`** で検出されたバグ記録は、本表へ No. 546 より連番で記入します。
 
 | No. | Issue / PR | 検出フェーズ・手段 | 成果物区分 (`製品コード` / `支援成果物`) | 対象箇所 | 原因 (`L`/`S`/`D`/`B`/`A`) | 不備の概要と是正内容（原因 `D` は設計書同期コミット併記） |
 | :-: | :--------: | :----------------- | :--------------------------------------: | :------- | :------------------------: | :-------------------------------------------------------- |
-| 543 |     -      | -                  |                    -                     | -        |             -              | （Milestone `v1.4` 以降の不備を No. 543 より連番で記入）  |
+| 546 |     -      | -                  |                    -                     | -        |             -              | （Milestone `v1.4` 以降の不備を No. 546 より連番で記入）  |
 
 ---
 
@@ -324,17 +324,17 @@ related_tests: []
   - **`tsconfig.app.json` による `test/` 常時型検査、Playwright ワークツリー排他ポート分離・`isReady` 待機、および境界・競合モック条件一致（`No. 465, 479, 481, 482, 485, 488`: `R1-04, R1-18, R1-20, R1-21, R1-24` 再発防止）**: `"include": ["src", "test"]` による IT 型検査常時化（`ChapterSummary` と `ChapterRecord` 混同防止）、FNV-1a 固有ポート＋`reuseExistingServer: false`、`page.goto()`／`page.reload()` 直後の `waitForServicesReady(page)`、および境界・競合テストモック（`deletedNovels` マップ等）での対象エンティティ ID・現行分岐条件（`createdAt > deletedAt` 等）・`Date.now()` 相対時刻の一致確認を義務化。
   - **PR クローズ前 1 対 1 仕様・契約・双方向トレーサビリティ完全照合（`No. 463, 464, 471, 478, 480, 486, 487`: `R1-02, R1-03, R1-10, R1-17, R1-19, R1-25, R1-26` 再発防止）**: Hook Options/Result 型、`db-schema.md` 遷移、公開型名、および `SYS-REQ-xx` ⇔ `AC-xx`／OKF `related_specs` 双方向対称性の PR 前照合を定着。
 
-### Milestone `v1.3`: リリース自動化 ＆ 最新話末尾しおり新着自動進行（対象 Issue: #371, #375, #384, #385〜#388、記録 No. 491〜542）
+### Milestone `v1.3`: リリース自動化 ＆ 最新話末尾しおり新着自動進行（対象 Issue: #371, #375, #384, #385〜#388、記録 No. 491〜545）
 
 - **アーカイブ記録**: [docs/quality/archive/v1.3-release-automation-and-bookmark-advance-log.md](archive/v1.3-release-automation-and-bookmark-advance-log.md)
 - **詳細分析レポート**: [docs/quality/reports/v1.3-release-automation-and-bookmark-advance.md](reports/v1.3-release-automation-and-bookmark-advance.md)
 - **製品コード不備件数**: **8 件**（うち MK PR 独立レビュー検出: 2 件［`No. 503, 505` on PR `#382`］、Milestone 横断レビュー Round 1 検出: 5 件［`No. 511, 512, 513, 515, 516`］、Step 2 結合テスト検証中検出: 1 件［`No. 525` on PR `#391`］、CI 検出・Android 実機検証（`HO-40`, `HO-41`: `2026-11-20` `DEV-01〜DEV-08`）・リリース後流出: 0 件 → **実機前（自動検証・AI レビュー）段階 DRE: 100%（8/8）、Milestone 完了前 DRE: 100%（8/8）**／**Phase 3〜`v1.3` 累計 DRE: $186/194 \approx 95.9\%$（完了前 DRE 100%: 194/194）**）
-- **支援成果物不備件数**: **44 件**（要望 PR 独立レビュー検出: 16 件［`No. 491〜495, 497〜501, 504, 506, 507〜510`］、実装時ローカルテスト / `pre-push` 検出: 2 件［`No. 496, 502`］、Milestone 横断レビュー Round 1 検出: 19 件［`No. 514, 517〜519, 520〜524, 529〜538`］、Step 2 PR 独立レビュー検出: 7 件［`No. 526〜528, 539〜542`］）
-- **原因分類内訳（Milestone `v1.3` 単体 52 件）**: `D`: 25 件（製品 4 / 支援 21） / `L`: 17 件（製品 2 / 支援 15） / `A`: 6 件（製品 1 / 支援 5） / `B`: 2 件（製品 1 / 支援 1） / `S`: 2 件（製品 0 / 支援 2）（計 52 件、Phase 3 からの累計 542 件：製品 194 件 / 支援 348 件）
+- **支援成果物不備件数**: **47 件**（要望 PR 独立レビュー検出: 16 件［`No. 491〜495, 497〜501, 504, 506, 507〜510`］、実装時ローカルテスト / `pre-push` 検出: 2 件［`No. 496, 502`］、Milestone 横断レビュー Round 1 検出: 19 件［`No. 514, 517〜519, 520〜524, 529〜538`］、Step 2 PR 独立レビュー検出: 7 件［`No. 526〜528, 539〜542`］、Step 3 PR 独立レビュー検出: 3 件［`No. 543〜545`］）
+- **原因分類内訳（Milestone `v1.3` 単体 55 件）**: `D`: 25 件（製品 4 / 支援 21） / `L`: 20 件（製品 2 / 支援 18） / `A`: 6 件（製品 1 / 支援 5） / `B`: 2 件（製品 1 / 支援 1） / `S`: 2 件（製品 0 / 支援 2）（計 55 件、Phase 3 からの累計 545 件：製品 194 件 / 支援 351 件）
 - **申し送り事項（`HO-40`, `HO-41`）清算**: `HO-40`（`#371` Android 実機 APK `versionName` ＆ `SCR-05` フッター表示一致）および `HO-41`（`#375` 高 DPI 連続スクロール 5px 丸め・1 画面短文完了＆再訪保護・新着追加時しおり自動進行・Google Drive 進捗率同期・Push 末尾自動進行マージ）は `2026-11-20` Android 実機検証（`DEV-01〜DEV-08` 全 8 項目 OK・不具合 0 件）で `Resolved`・アーカイブ化完了（残 `Open` 0 件）。
 - **プロセス・ガイドライン・スキル改善アクション（Kaizen 5 施策、`testing.md` §3.11 / `c-ut-workflow` へ反映）**:
   - **連続スクロール実ブラウザレイアウト計測・`chapterIndex` 再計測依存配列・`updateBookmark` DB 時刻同期（`No. 503, 505, 513, 525`: `R1-20` 再発防止）**: `ReaderView` 横書き時 `reader-content` への不要な `h-full` 排除（`w-full` のみ）と実ブラウザ 1 画面短文 `maxScroll <= 0` 計測確認、組版・初期復元 `useEffect` 依存配列への `chapterIndex` 追加、`updateBookmark` 後 `getNovelById` 実値同期＋`isMountedRef` 保護、および `Date.parse` `NaN` 境界ガードを規約化。
   - **クラウド同期 Push/Pull 対称マージ・データ型整合（`No. 504, 511`: `R1-18` 再発防止）**: `SyncEngine.buildMergedSyncNovels` Push マージと Pull マージ双方での `mergedTotalChapters > winner.totalChapters` 末尾読了自動進行（`lastReadAt` 維持）の対称実装、および後方互換オプショナルフィールドの旧形式フォールバック 1 対 1 明文化を標準化。
   - **一覧・探索フックのアンマウント後遷移遮断 ＆ `useRef` 連打排他ガード・動的サイト表示（`No. 512, 515, 516`: `R1-13, R1-14, R1-19` 再発防止）**: `useNovelRanking` / `useNovelSearch` 全非同期分岐での `isMountedRef.current` 保護（アンマウント後 State 更新・強制詳細遷移遮断）、`addingWorkIdsRef`（`Set<string>` ref）による同期連打排他、および `SEARCH_SITES` 連動の動的案内文出し分けを義務化。
-  - **親テスト `.mockImplementation(() => null)` 全件分離・`act(...)` 警告ゼロ・楽観更新後の DB 永続化待機・静的配信境界防御（`No. 502, 506, 507, 517〜521, 523, 526, 527`: `R1-02〜04, R1-15, R1-16, R1-21` 再発防止）**: 親 UT 直下子スパイへの `.mockImplementation(() => null)` 全数適用、UT `act(...)` 警告 0 件・実時間スリープ排除・`scripts/*.test.ts` 含む `afterEach(vi.restoreAllMocks)`、IT 全 `goto`/`reload` 直後 `waitForServicesReady` と楽観更新後 `isUpdating` 解除＋DB 反映待機、宣言 `AC` の E2E 実装、および `serve-storybook.mjs` 厳格境界遮断を徹底。
-  - **正本・スキル・PR テンプレート・バグ台帳の双方向トレーサビリティと厳格分類（`No. 491〜495, 500, 501, 508〜510, 514, 522, 524, 528〜542`: `R1-01, R1-06〜12, R1-17, R1-22〜24` 再発防止）**: ガイドライン・PR テンプレ・スキル要約・`docs/specs/`・`docs/index.md`・アーカイブ参照の双方向一体同期、台帳の `main` 確定祖先 SHA のみ記載、および原因 `D` の `docs/specs/` 修正限定を定着。
+  - **親テスト `.mockImplementation(() => null)` 全件分離・`act(...)` 警告ゼロ・楽観更新後の DB 永続化待機・静的配信境界防御（`No. 502, 506, 507, 517〜521, 523, 526, 527, 545`: `R1-02〜04, R1-15, R1-16, R1-21` 再発防止）**: 親 UT 直下子スパイへの `.mockImplementation(() => null)` 全数適用、UT `act(...)` 警告 0 件・実時間スリープ排除・`vi.spyOn` を使用する全テストファイル（`scripts/*.test.ts` を含む）への `afterEach(vi.restoreAllMocks)`、IT 全 `goto`/`reload` 直後 `waitForServicesReady` と楽観更新後 `isUpdating` 解除＋DB 反映待機、宣言 `AC` の E2E 実装、および `serve-storybook.mjs` 厳格境界遮断を徹底。
+  - **正本・スキル・PR テンプレート・バグ台帳の双方向トレーサビリティと厳格分類（`No. 491〜495, 500, 501, 508〜510, 514, 522, 524, 528〜544`: `R1-01, R1-06〜12, R1-17, R1-22〜24` 再発防止）**: ガイドライン・PR テンプレ・スキル要約・`docs/specs/`・`docs/index.md`・アーカイブ参照の双方向一体同期、台帳の `main` 確定祖先 SHA のみ記載、および原因 `D` の `docs/specs/` 修正限定を定着。

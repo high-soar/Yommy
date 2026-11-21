@@ -85,7 +85,7 @@ docs/
     │   ├── v1.0-release-audit-log.md          # Milestone v1.0 リリース準備/システム全体横断品質監査 バグ記録（No. 307〜388）＆ 申し送りアーカイブ
     │   ├── v1.1-cloud-sync-bookmark-and-detail-header-ux-log.md # Milestone v1.1 クラウド同期しおり保護/作品詳細ヘッダーUX バグ記録（No. 389〜446）＆ 申し送りアーカイブ
     │   ├── v1.2-non-blocking-priority-cache-scheduler-log.md # Milestone v1.2 非ブロッキング一括キャッシュ/優先度スケジューラ バグ記録（No. 447〜490）＆ 申し送りアーカイブ
-    │   └── v1.3-release-automation-and-bookmark-advance-log.md # Milestone v1.3 リリース自動化/最新話末尾しおり新着自動進行 バグ記録（No. 491〜542）＆ 申し送りアーカイブ
+    │   └── v1.3-release-automation-and-bookmark-advance-log.md # Milestone v1.3 リリース自動化/最新話末尾しおり新着自動進行 バグ記録（No. 491〜545）＆ 申し送りアーカイブ
     └── reports/                       # ミニリリース Milestone ごとの品質分析・改善（Kaizen）レポート格納先
         ├── phase3-poc.md              # Phase 3 PoC 品質分析・改善レポート
         ├── v0.1-mvp.md                # Milestone v0.1（カクヨム MVP）品質分析・改善レポート
