@@ -3,7 +3,7 @@ type: guideline
 title: テスト・実装規律の正本（SSOT）
 description: Yommyの3層テスト体系（Parser/Storage/Viewer）、TDDコミット規約、1対1 Story/UT、親子分離、C0/C1 100%、縦書きVRT、および原因D設計同期ルールの正本。
 status: "Approved"
-updated: "2026-11-15"
+updated: "2026-11-20"
 tags: [testing, tdd, vrt, storybook, vitest, playwright, coverage]
 related_specs:
   - docs/index.md
@@ -271,6 +271,27 @@ Milestone `v1.2`（Issue `#344`, `#367`, `#368`）で検出された非同期ス
    - 境界・競合テスト（`syncEngine.test.ts` の `deletedNovels` マップ等）のモックデータでは、対象エンティティ ID・現行分岐条件（`createdAt > deletedAt` 等）・`Date.now()` 相対時刻を一致させ、対象外キーや旧条件による分岐空振りを防ぐこと。
 5. **PR クローズ前 1対1 仕様・契約・双方向トレーサビリティ完全照合（`No. 463, 464, 471, 478, 480, 486, 487`: `R1-02, R1-03, R1-10, R1-17, R1-19, R1-25, R1-26` 再発防止）**:
    - 実装完了後（PR クローズ前）は、変更モジュールの Hook Options / Result 型（`GoToChapterOptions` や WebView インポート DI 契約等）、`docs/specs/db-schema.md` の状態遷移・削除契機、公開型名、および `docs/specs/requirements.md`（`SYS-REQ-xx`）と機能別仕様書（`AC-xx` / `related_specs` / `related_tests`）の双方向対称性を 1対1 で漏れなく照合すること。
+
+### 3.11 連続スクロール実ブラウザレイアウト計測・Push/Pull 対称マージ・一覧フック離脱保護・テスト完全分離/IT 決定的待機・正本/台帳トレーサビリティ規約（v1.3 Kaizen）
+
+Milestone `v1.3`（Issue `#371`, `#375`, `#384`, `#385〜#388`）で検出された実ブラウザ連続スクロール計測誤差・Push/Pull マージ非対称・一覧フックアンマウント漏れ・テスト分離/IT 待機・正本/台帳同期の不備（`No. 491〜545`）を再発防止するため、以下を実装・テスト標準として義務付けます。
+
+1. **連続スクロール実ブラウザレイアウト計測・`chapterIndex` 再計測依存配列・`updateBookmark` DB 時刻同期（`No. 503, 505, 513, 525`: `R1-20` 再発防止）**:
+   - 横書き（`horizontal-tb`）および縦書き連続スクロール（`scroll`）において、スクロール対象内側コンテナ（`reader-content` 等）へ不要な `h-full` を強制して子要素上下マージン（`my-6` 等）のマージン相殺や固定高コンテナ超過（`scrollHeight > clientHeight`）を引き起こさないこと（縦書き時のみ `h-full w-full`、横書き時は `w-full` とし、1 画面短文 `maxScroll <= 0` 自動完了を実ブラウザ Playwright IT で検証すること）。
+   - キャッシュ済みエピソード間遷移（`TR-05`）では `<ReaderView>` がアンマウントされず同一 `bodyHtml` / `initialScrollProgress` で話数のみ変化するケースがあるため、組版・短文計測 `useEffect` および初期スクロール位置復元 `useEffect` の依存配列に必ず `chapterIndex` を含めること。
+   - `useReader` の `updateBookmark` 実行後は `new Date().toISOString()` の別生成（`T_mem > T_db` スキュー）を避け、`novelRepository.getNovelById` の DB 実値へ同期（`await` 後の `isMountedRef.current` ガード維持）し、`Date.parse` を用いる時刻比較には `Number.isFinite` / `Number.isNaN` による `NaN` 境界ガードを設けること。
+2. **クラウド同期 Push/Pull 対称マージ・データ型整合（`No. 504, 511`: `R1-18` 再発防止）**:
+   - `SyncEngine.mergeNewNovel` / `mergeExistingNovel` / `buildMergedSyncNovels` の双方向マージ処理では、Pull 側と Push 側の双方で同一のビジネス不変条件（`mergedTotalChapters > winner.totalChapters` かつ勝者が旧最終話末尾到達済みなら `winner.totalChapters + 1`・`progress = 0.0` へ自動進行、かつ勝者の `lastReadAt` を維持）を対称実装し、片側経路欠落による旧最終話末尾へのしおり張り付きを防止すること。
+   - `SyncNovelData` 等へ後方互換オプショナルフィールドを追加する際は、旧形式（`undefined`）のフォールバック規則（別話数時 `0.0` vs 同一話数時ローカル進捗維持）を実装・単体テスト・設計正本（`architecture.md`）で 1対1 に定義すること。
+3. **一覧・探索フックのアンマウント後遷移遮断 ＆ `useRef` 連打排他ガード・動的サイト表示（`No. 512, 515, 516`: `R1-13, R1-14, R1-19` 再発防止）**:
+   - `useNovelSearch`・`useNovelRanking` など非同期登録＋画面自動遷移を伴うすべての Hook において、全非同期継続箇所（`finally` / `catch` / 登録済み遷移分岐を含む）を `isMountedRef.current` でガードし、画面離脱後の State 更新および遅延 `router.navigateToNovelDetail` を遮断すること（DB 保存および `syncEngine?.notifyChanged()` 自体は完遂）。
+   - 同一作品の連打・多重登録抑止は React State のクロージャ参照に頼らず作品単位の `Set<string>` ref（`addingWorkIdsRef` 等）で同期判定・`finally` 解放を行うこと（異なる作品の並行追加は維持）。また複数サイト対応画面（`SearchPage` 等）の初期案内文は選択サイト定数（`SEARCH_SITES` 等）から動的に出し分け、特定サイト名のハードコードを排除すること。
+4. **親テスト `.mockImplementation(() => null)` 全件分離・`act(...)` 警告ゼロ・楽観更新後の DB 永続化待機・静的配信境界防御（`No. 502, 506, 507, 517〜521, 523, 526, 527, 545`: `R1-02〜04, R1-15, R1-16, R1-21` 再発防止）**:
+   - 親コンポーネント UT で直下の子 React コンポーネントへ `vi.spyOn` を適用する際は全ファイル・全箇所で `.mockImplementation(() => null)` を徹底し、非同期 Hook UT では `waitFor` / `await act(async () => ...)` 収束により全テスト実行時の React `not wrapped in act(...)` 警告 **0 件** および実時間 `setTimeout` 排除（`updateSyncMetadata` 等の決定的更新）を義務付けること。`vi.spyOn` を使用する全テストファイル（`scripts/*.test.ts` を含む）へ `afterEach(() => { vi.restoreAllMocks(); })` を統一配置すること。
+   - Playwright IT では初回 `page.goto("/")` を含む全 `goto` / `reload` 直後に `waitForServicesReady(page)` を呼び出し、さらに設定変更等の楽観 UI 更新後に `page.reload()` / `page.goBack()` を行う場合は `isUpdating` 解除（`toBeEnabled()`）および `expect.poll` による DB 反映確認（遅延モック時はバックエンド到達ゲート確認含む）を挟むこと。また仕様書で E2E 対象と宣言した `AC-xx` は実テストへ漏れなく実装し、`serve-storybook.mjs` 等のテスト支援 HTTP サーバでも先頭セパレータ除去・`path.resolve`・`path.relative` による厳格なディレクトリ境界遮断（`403 Forbidden`）を実装すること。
+5. **正本・スキル・PR テンプレート・バグ台帳の双方向トレーサビリティと厳格分類（`No. 491〜495, 500, 501, 508〜510, 514, 522, 524, 528〜544`: `R1-01, R1-06〜12, R1-17, R1-22〜24` 再発防止）**:
+   - 開発ルール変更・機能追加時は、① ガイドライン（`workflow.md` / `testing.md`）・PR テンプレート・AI スキル要約（`lint:okf` チェック・Track A/B・`version` エスカレーション条件）、② `requirements.md`（§3/§4/tags）・`screen-transitions.md`（`SCR`/`TR`/`SCN`）・各正本仕様書（`Props` 表・Hook 契約・`AC`・`related_tests`）・`docs/index.md` の双方向一致、③ アーカイブ移動後の `changes/archive/` パス参照更新（JSDoc・台帳含む）を一体で同期すること。
+   - バグ記録台帳（`bug-and-handover-log.md`）には `main` 統合後の実在・祖先確定 SHA のみを記録し、原因分類 `D` は `docs/specs/` 仕様書の修正を伴う不備のみに厳格限定して設計同期コミット SHA を併記（ドキュメント/スキル/テストのみ是正は `L` 等へ分類）するとともに、Markdown 表末尾の列数崩れ（余剰 `|`）を残さないこと。
 
 ---
 
